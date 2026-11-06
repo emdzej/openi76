@@ -8,9 +8,9 @@ matters) or inferred. The census of what exists is in [../re/inventory.md](../re
 | ZFS archive | `I76.ZFS` | [zfs.md](zfs.md) | confirmed; reader in `src/vfs_zfs.c` |
 | ZIX file index | `I76MIN.ZIX`, `I76MAX.ZIX` (installed as `i76.zix`) | [zix.md](zix.md) | confirmed layout; how the game finds every file |
 | PCX | `LOADSCR.PCX`, `LOADGAME.PCX` | (`src/pcx.h`) | standard 8-bit RLE; matches ffmpeg |
-| BWD2 container | `.msn .sdf .vdf .vcf .wdf .gdf .xdf .vtf .cdf` | | to do (step 2) |
-| Palettes and tables | `.act`, `.lum`, `.tbl` | | to do |
-| Textures | `.map`, `.vqm` + `.cbk`, `.pak` + `.pix`, `.msk` | | to do |
+| BWD2 container | `.msn .sdf .vdf .vcf .wdf .gdf .xdf .vtf .cdf` | [bwd2.md](bwd2.md) | container confirmed; payloads to do |
+| Palettes and images | `.act`, `.map`, `.cbk` + `.vqm` | [textures.md](textures.md) | confirmed; decoders in `src/fmt/image.c` |
+| Texture sets, tables | `.pak` + `.pix`, `.lum`, `.tbl`, `.tmt`, `.msk` | [textures.md](textures.md) | to do |
 | Meshes | `.geo` (and inside `.sdf`/`.vdf`) | | to do |
 | Terrain | `.ter` | | to do |
 | Sound | `.wav` (RIFF PCM), `.gpw` (`GAS0`) | | to do |
