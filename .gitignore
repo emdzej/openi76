@@ -1,0 +1,34 @@
+# Original data and anything derived from it: never commit (AGENTS.md, hard rule 1).
+/cd/
+/cd2/
+/i76.exe
+/i76shell.dll
+*.exe
+*.EXE
+*.dll
+*.DLL
+*.iso
+*.ISO
+*.bin
+*.BIN
+*.cue
+*.CUE
+*.zfs
+*.ZFS
+*.smk
+*.SMK
+/re/
+/out/
+
+# Builds and fetched toolchains.
+build*/
+.deps
+__pycache__/
+
+# Docs site.
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/public/play/vendor/
+docs/public/play/*.wasm
+.scratch/

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Interstate '76 (gasm)
+GenericName=Vehicular combat game
+Comment=OpenI76, a reimplementation of Interstate '76 (1997), on gasm. Needs your Interstate '76 CD.
+Exec="@DIR@/openi76.sh"
+Icon=@DIR@/openi76.png
+Terminal=false
+Categories=Game;ActionGame;

@@ -1,0 +1,55 @@
+name: CI
+
+# Builds the native core and every test program, and the gasm module openi76.wasm, on each push / PR.
+# The gasm bundles (per-OS packaging) and the release workflow come with the first playable release.
+# The tests need the original game data (not redistributable): without it they skip, so CI runs them as a
+# smoke test only. Run them locally with your copy of the game (OPENI76_DATA, default ./cd).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: build (core + tests)
+        run: cmake --build build -j
+      - name: tests (skip without game data)
+        run: ctest --test-dir build --output-on-failure
+      - name: check Python tools compile
+        run: find tools -name '*.py' -exec python3 -m py_compile {} +
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The SDK version lives in tools/fetch-gasm-sdk.sh (GASM_VERSION).
+      - name: fetch wasi-sdk and the gasm C SDK
+        run: tools/fetch-gasm-sdk.sh
+      - name: configure (gasm)
+        run: >-
+          cmake -S . -B build-gasm -DOPENI76_PLATFORM=gasm -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=.deps/gasm-c-sdk/cmake/gasm-toolchain.cmake
+          -DWASI_SDK_PREFIX="$PWD/.deps/wasi-sdk"
+      - name: build openi76.wasm
+        run: |
+          cmake --build build-gasm -j
+          ls -l build-gasm/openi76.wasm
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openi76-wasm
+          path: build-gasm/openi76.wasm
+          retention-days: 14
