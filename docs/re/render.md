@@ -6,6 +6,10 @@ hand-written x87 assembly.
 
 ## How the port is checked
 
+`tools/ghidra/x87trace.py` follows the x87 stack through a path of the hand-scheduled code and prints each
+operation as an assignment, with register forms decoded from the bytes (Ghidra lists `d8 ca` and `dc ca`
+alike as `fmul ST2`). The ports follow its operation order exactly.
+
 `tools/emu/` runs the original's functions in Unicorn (`x86.py`: the exe's image at its addresses, a
 stack, a heap, a sentinel return). `diff_*.py` feed the same inputs to the original and to the port (the
 core as a shared library, `-DOPENI76_SHARED=ON`, through ctypes) and compare the output byte for byte.
@@ -138,3 +142,23 @@ Arguments on the stack: surface, vertices, count, texture record. No shading: th
   reads the record's nearest byte instead. This is the one difference, and tools/emu/diff_poly.py detects
   these cases and skips them. Under DrawPoly's round-up mode none turned up in 2,000 random polygons;
   under round-to-nearest they are 3-6 % of cases.
+
+## Poly_FillTexPersp 0x44aaf0, mode 0x14 (ported, diffed in both rounding modes)
+
+The same frame as the affine filler: row table, walks, top vertex. The vertices carry w = 1/z, u·w and
+v·w. In place, u is multiplied by `w_tex - 1` and v by `h_tex - 1`. The 65536 comes in through the
+reciprocal instead.
+
+- **Edges** interpolate x, w, u·w and v·w. The steps are rounded to floats *first*, and the start values
+  are computed from the rounded steps (like the Gouraud filler, unlike the affine one).
+- **Span slopes** (of w, u·w and v·w across the row) are computed from the left end, or from the right
+  end when the ends are swapped. The two agree except for the rounding of the reciprocal, `1 / (x_r - x_l)`
+  versus `1 / (x_l - x_r)`. The slopes and the slopes times 16 are rounded to floats.
+- **16-pixel runs.** `65536 / w` gives the exact 16.16 u, v at the span's first pixel. Each run then
+  advances u·w, v·w and w by 16 steps. The exact u, v at the run's end use the reciprocal computed one run
+  ahead (the division overlaps the previous run's pixels, as in Quake). The per-pixel step is
+  `(end - start) >> 4`.
+- **The rest.** With `r` = 1 to 15 pixels left (the count excludes the last pixel), w is recovered as
+  `w - 16 dw` and moved on by `r * dw`. u·w and v·w move on by `r` steps. The step is
+  `(exact end - current) * (1 / r)`, using a table of `{r, 1/r}` floats at 0x4d6c10.
+- **The last pixel** is drawn on its own, at wherever the steps ended.

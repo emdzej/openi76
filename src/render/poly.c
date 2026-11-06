@@ -274,3 +274,120 @@ void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *t
         y++;
     }
 }
+
+/* An edge of the perspective textured filler: x, w (1/z), u * w and v * w at the start vertex's rounded y and
+   their steps per row. Here the steps are rounded to floats first and the start values computed from them. */
+typedef struct { float x, w, u, v, dx, dw, du, dv; } PerspEdge;
+
+static void edge_setup_persp(const ScreenVert *a, const ScreenVert *b, PerspEdge *e)
+{
+    double inv = DIV(1.0, SUB(b->y, a->y));
+    e->dv = F32(MUL(SUB(b->v, a->v), inv));
+    e->du = F32(MUL(SUB(b->u, a->u), inv));
+    e->dw = F32(MUL(SUB(b->w, a->w), inv));
+    e->dx = F32(MUL(inv, SUB(b->x, a->x)));
+    double t = SUB((double)round_magic((double)a->y), a->y);
+    e->w = F32(ADD(MUL(e->dw, t), a->w));
+    e->u = F32(ADD(MUL(e->du, t), a->u));
+    e->v = F32(ADD(MUL(e->dv, t), a->v));
+    e->x = F32(ADD(MUL(t, e->dx), a->x));
+}
+
+static void edge_step_persp(PerspEdge *e)
+{
+    e->w = F32(ADD(e->w, e->dw)), e->v = F32(ADD(e->v, e->dv)), e->u = F32(ADD(e->u, e->du));
+    e->x = F32(ADD(e->x, e->dx));
+}
+
+/* Poly_FillTexPersp 0x44aaf0 */
+void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex)
+{
+    int next[64], prev[64];
+    if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
+    tex_rows_build(tex);
+    /* here only times (size - 1): the 65536 comes in with the reciprocal of w */
+    double sv = SUB((double)tex->h, 1.0), su = SUB((double)tex->w, 1.0);
+    int top = 0, ymin = 100000;
+    for (int i = 0; i < n; i++) {
+        next[i] = i + 1 < n ? i + 1 : 0;
+        prev[i] = i ? i - 1 : n - 1;
+        int32_t y = round_magic((double)v[i].y);
+        v[i].u = F32(MUL(v[i].u, su));
+        v[i].v = F32(MUL(v[i].v, sv));
+        if (y <= ymin) ymin = y, top = i;   /* ties: the later vertex */
+    }
+    uint8_t *row = s->pixels + (s->y0 + ymin) * s->pitch + s->x0;
+    int l = top, r = top, y = ymin;
+    PerspEdge L = {0}, R = {0};
+    for (;;) {
+        if (round_magic((double)v[l].y) <= y) {   /* the left edge, along next; done when it is back at the top */
+            int a;
+            do {
+                a = l;
+                l = next[a];
+                if (l == top) return;
+            } while (round_magic((double)v[l].y) <= y);
+            edge_setup_persp(&v[a], &v[l], &L);
+        }
+        if (round_magic((double)v[r].y) <= y) {   /* the right edge, along prev */
+            int a;
+            do {
+                a = r;
+                r = prev[a];
+            } while (round_magic((double)v[r].y) <= y);
+            edge_setup_persp(&v[a], &v[r], &R);
+        }
+        int xl = round_magic((double)L.x), xr = round_magic((double)R.x);
+        if (xl != xr) {
+            /* the slopes from the left end to the right one, or from the right end when they are swapped (the
+               same values but for the rounding of the reciprocal) */
+            const PerspEdge *e = xl < xr ? &L : &R, *f = xl < xr ? &R : &L;
+            int x1 = xl < xr ? xl : xr, count = (xl < xr ? xr : xl) - x1;
+            double inv = DIV(1.0, SUB(f->x, e->x));
+            float dv = F32(MUL(SUB(f->v, e->v), inv)), du = F32(MUL(SUB(f->u, e->u), inv));
+            float dw = F32(MUL(SUB(f->w, e->w), inv));
+            double t = SUB((double)x1, e->x);
+            double uw = ADD(MUL(du, t), e->u), ww = ADD(MUL(dw, t), e->w), vw = ADD(MUL(dv, t), e->v);
+            float du16 = F32(MUL(du, 16.0)), dv16 = F32(MUL(dv, 16.0)), dw16 = F32(MUL(dw, 16.0));
+            /* runs of 16 pixels, affine between exact points; the next run's reciprocal is started ahead */
+            double rcp = DIV(65536.0, ww);
+            uint32_t uu = (uint32_t)magic_lo(ADD(MUL(rcp, uw), MAGIC));
+            uint32_t vv = (uint32_t)magic_lo(ADD(MUL(vw, rcp), MAGIC));
+            ww = ADD(ww, dw16);
+            rcp = DIV(65536.0, ww);
+            uint8_t *p = row + x1;
+            int left = count - 1;   /* the last pixel is drawn on its own, at the end */
+            for (; left >= 16; left -= 16) {
+                uw = ADD(uw, du16), vw = ADD(vw, dv16);
+                uint32_t ue = (uint32_t)magic_lo(ADD(MUL(uw, rcp), MAGIC));
+                uint32_t ve = (uint32_t)magic_lo(ADD(MUL(rcp, vw), MAGIC));
+                ww = ADD(ww, dw16);
+                rcp = DIV(65536.0, ww);
+                uint32_t ust = (uint32_t)((int32_t)(ue - uu) >> 4), vst = (uint32_t)((int32_t)(ve - vv) >> 4);
+                for (int k = 0; k < 16; k++) {
+                    *p++ = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+                    uu += ust, vv += vst;
+                }
+                uu = ue, vv = ve;
+            }
+            if (left > 0) {   /* the rest: to the exact point `left` pixels on, the step through 1 / left */
+                float rf = (float)left, rinv = (float)(1.0 / left);
+                double we = ADD(SUB(ww, dw16), MUL(dw, rf));
+                double ue = ADD(uw, MUL(du, rf)), ve = ADD(vw, MUL(dv, rf));
+                double rc = DIV(65536.0, we);
+                double uex = MUL(ue, rc), vex = MUL(rc, ve);
+                uint32_t ust = (uint32_t)magic_lo(ADD(MUL(SUB(uex, (double)(int32_t)uu), rinv), MAGIC));
+                uint32_t vst = (uint32_t)magic_lo(ADD(MUL(SUB(vex, (double)(int32_t)vv), rinv), MAGIC));
+                for (int k = 0; k < left; k++) {
+                    *p++ = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+                    uu += ust, vv += vst;
+                }
+            }
+            *p = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+        }
+        edge_step_persp(&R);
+        edge_step_persp(&L);
+        row += s->pitch;
+        y++;
+    }
+}

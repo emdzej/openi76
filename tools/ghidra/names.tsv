@@ -23,3 +23,4 @@
 0043d390	DrawPoint	render	med	DrawPoly with one vertex
 0043d4c0	DrawLine	render	med	DrawPoly with two vertices
 0044a570	Poly_FillTexAffine	render	high	a convex polygon textured with u, v linear in screen space (mode 0x04); scales the vertices' u, v to 16.16 texels in place; ported, diffed
+0044aaf0	Poly_FillTexPersp	render	high	a convex polygon textured perspective-correct (mode 0x14): exact u, v every 16 pixels, linear between; ported, diffed

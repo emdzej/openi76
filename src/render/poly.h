@@ -15,3 +15,8 @@ void Poly_FillGouraud(const Surface *s, ScreenVert *v, int n, uint8_t colour);
    interpolated linearly in screen space, no shading. Scales every vertex's u by (w - 1) * 65536 and v by
    (h - 1) * 65536 in place, as the original does to its caller's vertices. */
 void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+
+/* Poly_FillTexPersp 0x44aaf0: as Poly_FillTexAffine with perspective-correct u, v (the vertices carry u * w,
+   v * w and w = 1/z): exact at every 16th pixel and at the span's end, linear in between. Scales the
+   vertices' u by (w - 1) and v by (h - 1) in place. */
+void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex);
