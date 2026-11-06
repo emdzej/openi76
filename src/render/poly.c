@@ -169,8 +169,9 @@ void Poly_FillGouraud(const Surface *s, ScreenVert *v, int n, uint8_t colour)
 static const uint8_t *tex_row_buf[4 + TEX_ROWS_MAX + 8];
 static const uint8_t *const *const tex_rows = tex_row_buf + 4;
 static const Texture *tex_rows_of;
+int g_poly_stale_row;
 
-static void tex_rows_build(const Texture *t)
+static void tex_rows_build(const Texture *t, int last)
 {
     if (t == tex_rows_of) return;
     tex_rows_of = t;
@@ -181,7 +182,10 @@ static void tex_rows_build(const Texture *t)
     int i = 0;
     for (int c = t->h + 3; c >= 0; c -= 3, i += 3)
         for (int k = 0; k < 3; k++) rows[i + k] = t->pixels + (size_t)(i + k) * (size_t)t->w;
-    for (int k = 0; k < 4; k++) rows[t->h + k] = rows[t->h - 1];
+    /* the copies go after row `last`, which is h but in the tiled affine filler (g_poly_stale_row); the port
+       skips them where the original would write outside its table */
+    if (last >= -3 && last + 3 < TEX_ROWS_MAX + 8)
+        for (int k = 0; k < 4; k++) rows[last + k] = rows[last - 1];
 }
 
 /* rows[v][u], as the original reads it: u past a row's end reads into the next row, just before row 0 into
@@ -193,6 +197,14 @@ static inline const uint8_t *tex_texel(const Texture *t, int32_t v, int32_t u)
     const uint8_t *lo = (const uint8_t *)t, *hi = t->pixels + (size_t)t->w * (size_t)t->h - 1;
     const uint8_t *p = tex_rows[v < -4 ? -4 : v > t->h + 3 ? t->h + 3 : v] + u;
     return p < lo ? lo : p > hi ? hi : p;
+}
+
+/* The tiled fillers (mode bit 1) mask the texel indices with size - 1 instead (power-of-two textures), so
+   their reads stay inside the texture. */
+static inline uint8_t tex_fetch(const Texture *t, int tiled, uint32_t vv, uint32_t uu)
+{
+    if (tiled) return tex_rows[((int32_t)vv >> 16) & (t->h - 1)][((int32_t)uu >> 16) & (t->w - 1)];
+    return *tex_texel(t, (int32_t)vv >> 16, (int32_t)uu >> 16);
 }
 
 #define MAGIC 6755399441055744.0   /* 1.5 * 2^52: added in the current rounding mode, its low dword is the integer */
@@ -216,7 +228,7 @@ static void edge_setup_tex(const ScreenVert *a, const ScreenVert *b, TexEdge *e)
 
 /* What the textured fillers write for a texel t over the destination pixel d. The variants are copies of one
    routine with a different pixel line (the index is t << 8 | d in a byte register pair). */
-enum { PIX_COPY, PIX_REMAP, PIX_TBL, PIX_TBL_REV, PIX_GLOW };
+enum { PIX_COPY, PIX_REMAP, PIX_TBL, PIX_TBL_REV, PIX_GLOW, PIX_KEY };
 
 static inline void tex_put(uint8_t *p, int op, uint8_t t)
 {
@@ -226,6 +238,7 @@ static inline void tex_put(uint8_t *p, int op, uint8_t t)
     case PIX_TBL: *p = g_rtab[RT_TBL + (t << 8 | *p)]; break;
     case PIX_TBL_REV: *p = g_rtab[RT_TBL + (*p << 8 | t)]; break;
     case PIX_GLOW: *p = g_rtab[RT_GLOW + (t << 8 | *p)]; break;
+    case PIX_KEY: if (t != 0xff) *p = t; break;   /* colour 0xff is see-through */
     }
 }
 
@@ -240,12 +253,14 @@ static void tbl_key_restore(const uint8_t save[256])
     for (int r = 0; r < 256; r++) g_rtab[RT_TBL + (r << 8 | 0xff)] = save[r];
 }
 
-static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op)
+static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op, int tiled)
 {
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
-    tex_rows_build(tex);
-    double su = MUL(SUB((double)tex->w, 1.0), 65536.0), sv = MUL(SUB((double)tex->h, 1.0), 65536.0);
+    tex_rows_build(tex, tiled ? g_poly_stale_row : tex->h);
+    /* 0..1 to the texture's last texel (to its size, tiled) in 16.16 */
+    double su = tiled ? MUL((double)tex->w, 65536.0) : MUL(SUB((double)tex->w, 1.0), 65536.0);
+    double sv = tiled ? MUL((double)tex->h, 65536.0) : MUL(SUB((double)tex->h, 1.0), 65536.0);
     int top = 0, ymin = 100000;
     for (int i = 0; i < n; i++) {
         next[i] = i + 1 < n ? i + 1 : 0;
@@ -259,6 +274,7 @@ static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *te
     int l = top, r = top, y = ymin;
     TexEdge L = {0}, R = {0};
     for (;;) {
+        if (tiled) g_poly_stale_row = y;   /* the row counter's stack slot (see poly.h) */
         if (round_magic((double)v[l].y) <= y) {   /* the left edge, along next; done when it is back at the top */
             int a;
             do {
@@ -289,7 +305,7 @@ static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *te
             uint32_t ust = (uint32_t)magic_lo(ADD(du, MAGIC)), vst = (uint32_t)magic_lo(ADD(dv, MAGIC));
             uint8_t *p = row + x1;
             for (int k = x2 - x1; k > 0; k--) {
-                tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
+                tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
                 uu += ust, vv += vst;
             }
         }
@@ -324,13 +340,13 @@ static void edge_step_persp(PerspEdge *e)
     e->x = F32(ADD(e->x, e->dx));
 }
 
-static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op)
+static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op, int tiled)
 {
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
-    tex_rows_build(tex);
-    /* here only times (size - 1): the 65536 comes in with the reciprocal of w */
-    double sv = SUB((double)tex->h, 1.0), su = SUB((double)tex->w, 1.0);
+    tex_rows_build(tex, tex->h);
+    /* here only times (size - 1), or the size tiled: the 65536 comes in with the reciprocal of w */
+    double sv = tiled ? (double)tex->h : SUB((double)tex->h, 1.0), su = tiled ? (double)tex->w : SUB((double)tex->w, 1.0);
     int top = 0, ymin = 100000;
     for (int i = 0; i < n; i++) {
         next[i] = i + 1 < n ? i + 1 : 0;
@@ -389,7 +405,7 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
                 rcp = DIV(65536.0, ww);
                 uint32_t ust = (uint32_t)((int32_t)(ue - uu) >> 4), vst = (uint32_t)((int32_t)(ve - vv) >> 4);
                 for (int k = 0; k < 16; k++) {
-                    tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
+                    tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
                     uu += ust, vv += vst;
                 }
                 uu = ue, vv = ve;
@@ -403,11 +419,11 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
                 uint32_t ust = (uint32_t)magic_lo(ADD(MUL(SUB(uex, (double)(int32_t)uu), rinv), MAGIC));
                 uint32_t vst = (uint32_t)magic_lo(ADD(MUL(SUB(vex, (double)(int32_t)vv), rinv), MAGIC));
                 for (int k = 0; k < left; k++) {
-                    tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
+                    tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
                     uu += ust, vv += vst;
                 }
             }
-            tex_put(p, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
+            tex_put(p, op, tex_fetch(tex, tiled, vv, uu));
         }
         edge_step_persp(&R);
         edge_step_persp(&L);
@@ -423,7 +439,7 @@ static void tex_affine_rev(const Surface *s, ScreenVert *v, int n, const Texture
     uint8_t save[256];
     tbl_key_save(save);
     tex_rows_of = NULL;
-    tex_affine(s, v, n, tex, PIX_TBL_REV);
+    tex_affine(s, v, n, tex, PIX_TBL_REV, 0);
     tbl_key_restore(save);
 }
 static void tex_persp_rev(const Surface *s, ScreenVert *v, int n, const Texture *tex)
@@ -431,25 +447,31 @@ static void tex_persp_rev(const Surface *s, ScreenVert *v, int n, const Texture 
     uint8_t save[256];
     tbl_key_save(save);
     tex_rows_of = NULL;
-    tex_persp(s, v, n, tex, PIX_TBL_REV);
+    tex_persp(s, v, n, tex, PIX_TBL_REV, 0);
     tbl_key_restore(save);
 }
 
 /* Poly_FillTexAffine 0x44a570 */
-void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_COPY); }
+void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_COPY, 0); }
 /* Poly_FillTexRemap 0x4470b0 */
-void Poly_FillTexRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_REMAP); }
+void Poly_FillTexRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_REMAP, 0); }
 /* Poly_FillTexTbl 0x442d90 */
-void Poly_FillTexTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_TBL); }
+void Poly_FillTexTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_TBL, 0); }
 /* Poly_FillTexTblRev 0x443320 */
 void Poly_FillTexTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine_rev(s, v, n, tex); }
 /* Poly_FillTexGlow 0x4424e0 */
-void Poly_FillTexGlow(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_GLOW); }
+void Poly_FillTexGlow(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_GLOW, 0); }
 /* Poly_FillTexPersp 0x44aaf0 */
-void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY); }
+void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, 0); }
 /* Poly_FillTexPerspRemap 0x447640 */
-void Poly_FillTexPerspRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_REMAP); }
+void Poly_FillTexPerspRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_REMAP, 0); }
 /* Poly_FillTexPerspTbl 0x443910 */
-void Poly_FillTexPerspTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_TBL); }
+void Poly_FillTexPerspTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_TBL, 0); }
 /* Poly_FillTexPerspTblRev 0x444150 */
 void Poly_FillTexPerspTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp_rev(s, v, n, tex); }
+/* Poly_FillTexTiled 0x448870 (also at 0x4453a0, mode 0x46: no remap) */
+void Poly_FillTexTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_COPY, 1); }
+/* Poly_FillTexPerspTiled 0x448e00 */
+void Poly_FillTexPerspTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, 1); }
+/* Poly_FillTexPerspTiledKey 0x445930 */
+void Poly_FillTexPerspTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_KEY, 1); }

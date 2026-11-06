@@ -23,6 +23,10 @@ W, H = 640, 480
 RTAB, RTAB_SIZE = 0x5AF150, 0x31300   # the colour tables' block (g_rtab)
 TEX_CACHE = 0x5AD310   # the textured fillers' last texture record (their row table is rebuilt when it differs)
 
+# The tiled affine filler reads the row-table copies' position from a stack slot it never set (see
+# g_poly_stale_row): where it does, so the port can be given the same value.
+STALE_ROW = {0x448870: 0x4488CB, 0x4453A0: 0x4453FB}
+
 # name: (address, port function, kind, texel reads). The reads, for the textured ones: each "mov eax,
 # [index * 4 + rows]" (address, index register) and each "mov al, [eax + reg]" (address, register holding u).
 AFFINE_READ = lambda r, t: ([(r, "EAX")], [(t, "EDX")])  # noqa: E731
@@ -36,6 +40,10 @@ FILLERS = {
     "tbl": (0x442D90, "Poly_FillTexTbl", "tex", AFFINE_READ(0x44324E, 0x44325C)),
     "tblrev": (0x443320, "Poly_FillTexTblRev", "tex", AFFINE_READ(0x4437EA, 0x4437F8)),
     "glow": (0x4424E0, "Poly_FillTexGlow", "tex", AFFINE_READ(0x4429A0, 0x4429AE)),
+    "tex-05": (0x449640, "Poly_FillTexAffine", "tex", AFFINE_READ(0x449AFE, 0x449B0C)),
+    "tex-45": (0x446180, "Poly_FillTexAffine", "tex", AFFINE_READ(0x44663E, 0x44664C)),
+    "tiled": (0x448870, "Poly_FillTexTiled", "tiled", ([], [])),
+    "tiled-46": (0x4453A0, "Poly_FillTexTiled", "tiled", ([], [])),
     "persp": (0x44AAF0, "Poly_FillTexPersp", "persp",
               PERSP_READ(0x44B114, 0x44B208, 0x44B229, 0x44B122, 0x44B216, 0x44B232)),
     "persp-remap": (0x447640, "Poly_FillTexPerspRemap", "persp",
@@ -44,6 +52,8 @@ FILLERS = {
                   PERSP_READ(0x443F32, 0x44402D, 0x444059, 0x443F40, 0x44403B, 0x444062)),
     "persp-tblrev": (0x444150, "Poly_FillTexPerspTblRev", "persp",
                      PERSP_READ(0x44477E, 0x444879, 0x4448A5, 0x44478C, 0x444887, 0x4448AE)),
+    "persp-tiled": (0x448E00, "Poly_FillTexPerspTiled", "persp", ([], [])),
+    "persp-tiledkey": (0x445930, "Poly_FillTexPerspTiledKey", "persp", ([], [])),
 }
 
 
@@ -112,6 +122,14 @@ def run(name, count, seed, up, verbose):
             exe.uc.hook_add(UC_HOOK_CODE, row, r, begin=a, end=a)
         for a, r in reads[1]:
             exe.uc.hook_add(UC_HOOK_CODE, texel, r, begin=a, end=a)
+    stale = [None]
+    if addr in STALE_ROW:
+        from unicorn import UC_HOOK_CODE
+        from unicorn.x86_const import UC_X86_REG_ESP
+
+        def slot(uc, a, size, user):
+            stale[0] = struct.unpack("<i", uc.mem_read(uc.reg_read(UC_X86_REG_ESP) + 4, 4))[0]
+        exe.uc.hook_add(UC_HOOK_CODE, slot, None, begin=STALE_ROW[addr], end=STALE_ROW[addr])
     bad = skipped = 0
     keep = []   # the port's textures stay alive, so no two share an address (its row table is cached by address)
     for i in range(count):
@@ -147,6 +165,9 @@ def run(name, count, seed, up, verbose):
         buf = ctypes.create_string_buffer(dest, W * H)
         s = Surface(W, 0, ctypes.cast(buf, ctypes.c_void_p), 0, W, H)
         vbuf = ctypes.create_string_buffer(verts)
+        if stale[0] is not None:
+            ctypes.c_int.in_dll(lib, "g_poly_stale_row").value = stale[0]
+            stale[0] = None
         fn(ctypes.byref(s), vbuf, n, colour)
         problems = []
         if vbuf.raw[:len(verts)] != want_v:
@@ -157,6 +178,10 @@ def run(name, count, seed, up, verbose):
             got = buf.raw
             diff = [k for k in range(W * H) if got[k] != want[k]]
             problems.append(f"{len(diff)} pixels differ, first at ({diff[0] % W},{diff[0] // W})")
+            if verbose:
+                rows = sorted({k // W for k in diff})
+                print(f"   rows {rows[0]}..{rows[-1]} ({len(rows)}); first got {got[diff[0]]} want {want[diff[0]]}",
+                      [(k % W, got[k], want[k]) for k in diff if k // W == diff[0] // W])
         if problems:
             bad += 1
             print(f"#{i}: {'; '.join(problems)}; n={n}")

@@ -192,3 +192,19 @@ is built in a byte register pair (t = texel, d = destination).
 - TblRev calls Tbl_KeySave 0x4438c0 first: tbl's column for texel 0xff becomes the destination itself
   (see-through), and Tbl_KeyRestore 0x4438f0 puts it back afterwards. The call clobbers EAX, which held
   the last texture's address, so these two fillers rebuild the row table every time.
+
+## Copies without their variant, and the tiled fillers
+
+- **Bit 0 does nothing on affine textures.** 0x449640 (mode 0x05) and 0x446180 (0x45) are the plain affine
+  filler, instruction for instruction (only the stack offsets differ). Their larger frames have unused
+  slots, perhaps for a shading pass that was never finished. Mode 0x45 drops the remap too.
+- **Tiled (bit 1).** u and v are scaled by the texture's size rather than size - 1, and the texel indices
+  are masked with `size - 1` (power-of-two textures), so the reads stay inside the texture. The affine one
+  is 0x448870 (0x06), and 0x4453a0 (0x46) is the same code. The perspective ones are 0x448e00 (0x16) and
+  0x445930 (0x56), which skips texel 0xff (see-through) instead of remapping.
+- **The tiled affine filler's bug.** Its row-table build reads the texture height from a stack slot it
+  never stored it in. That slot is where the filler keeps its row counter, so the four copies of the last
+  row land after row `stale`, the last screen row of the previous polygon it drew: rows `stale` to
+  `stale + 3` of a new texture repeat row `stale - 1`. When `stale` is below the texture's height, that is a
+  visible band of four repeated texture rows. The port keeps the slot as `g_poly_stale_row`. The harness
+  reads the original's slot at 0x4488cb, so both get the same value.

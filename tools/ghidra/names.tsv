@@ -39,3 +39,9 @@
 0043c0c0	Remap_Set	render	high	remap[t] row: all one colour
 0043c050	Palette_Nearest	render	high	nearest palette colour to an RGB (the float palette at 0x5ae550)
 00492fd0	World_LoadColours	world	medium	loads the world's .act, .lum and .tbl (WRLD names at +0x1e, +0x2b, +0x38) into the colour tables
+00449640	Poly_FillTexAffine_05	render	high	mode 0x05: the same code as Poly_FillTexAffine (no shading); diffed against the port's
+00446180	Poly_FillTexAffine_45	render	high	mode 0x45: the same code as Poly_FillTexAffine (no remap, no shading); diffed
+00448870	Poly_FillTexTiled	render	high	affine textured, tiled (mode 0x06): scaled by the size, indices masked; forgets to store h (stale row-table copies); ported, diffed
+004453a0	Poly_FillTexTiled_46	render	high	mode 0x46: the same code as Poly_FillTexTiled; diffed
+00448e00	Poly_FillTexPerspTiled	render	high	perspective textured, tiled (mode 0x16); ported, diffed
+00445930	Poly_FillTexPerspTiledKey	render	high	perspective textured, tiled, texel 0xff see-through (mode 0x56); ported, diffed
