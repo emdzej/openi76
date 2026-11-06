@@ -76,9 +76,10 @@ class Exe:
         return struct.unpack("<I", self.read(addr, 4))[0]
 
     # ---- calls ----
-    def call(self, addr, *args, conv="cdecl", ecx=0, edx=0, limit=50_000_000):
+    def call(self, addr, *args, conv="cdecl", ecx=0, edx=0, limit=50_000_000, fpcw=0x027F):
         """Calls addr with integer args (cdecl/stdcall: all on the stack; fastcall: the first two in ECX, EDX).
-        Returns EAX. The FPU is reset (round to nearest, 64-bit precision, as Windows starts a thread)."""
+        Returns EAX. The FPU control word is fpcw (default 0x27f: round to nearest, 53-bit precision, as
+        Windows starts a thread)."""
         uc = self.uc
         if conv == "fastcall":
             args = list(args)
@@ -94,7 +95,7 @@ class Exe:
         uc.reg_write(X.UC_X86_REG_EBP, 0)
         uc.reg_write(X.UC_X86_REG_ECX, ecx)
         uc.reg_write(X.UC_X86_REG_EDX, edx)
-        uc.reg_write(X.UC_X86_REG_FPCW, 0x027F)
+        uc.reg_write(X.UC_X86_REG_FPCW, fpcw)
         self.fault = None
         try:
             uc.emu_start(addr, SENTINEL, count=limit)

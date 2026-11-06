@@ -19,3 +19,6 @@
 004873a0	Vtf_RegisterRegion	vehicle	high	binds a region's six side slots (FT BK RT LF TP UN) to "<prefix><side>.map"
 0043ea00	Poly_FillFlat	render	high	a convex polygon in one colour, shaded once through the lum table from vertex 0's depth; ported (src/render/poly.c), diffed against the original
 0043ecd0	Poly_FillGouraud	render	high	a convex polygon in one colour, Gouraud-shaded through the lum table; rewrites the vertices' q as 16.16 shades; ported, diffed
+0043d730	DrawPoly	render	high	points, lines, polygons: clip[mode] (0x4d7488) then fill[mode] (0x4d6c88) with the x87 rounding up
+0043d390	DrawPoint	render	med	DrawPoly with one vertex
+0043d4c0	DrawLine	render	med	DrawPoly with two vertices

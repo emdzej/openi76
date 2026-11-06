@@ -5,7 +5,7 @@ endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
 project(OpenI76 VERSION 0.0.1 LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
-set(I76_WARN -Wall -Wextra -Wno-unused-parameter)
+set(I76_WARN -Wall -Wextra -Wno-unused-parameter -ffp-contract=off)   # no fused multiply-adds: the x87 rounds each op
 
 # The portable core: everything except host backends (no platform headers).
 file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c src/render/*.c)

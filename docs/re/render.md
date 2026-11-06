@@ -10,6 +10,27 @@ hand-written x87 assembly.
 stack, a heap, a sentinel return). `diff_*.py` feed the same inputs to the original and to the port (the
 core as a shared library, `-DOPENI76_SHARED=ON`, through ctypes) and compare the output byte for byte.
 
+## DrawPoly 0x43d730: the entry point
+
+`DrawPoly(ctx, verts, count, colour, mode)`. The mode has 9 bits (512 combinations).
+
+- Count 1 draws a point (0x43d390) and count 2 a line (0x43d4c0).
+- Otherwise it clips and projects: `clip[mode](ctx, out, verts, count, mode)` through the table at
+  0x4d7488 (the routines 0x43fbf0-0x441340, with 0x441470 "Error in clipping function" for invalid modes).
+  This returns the screen polygon's vertex count.
+- Then it fills: `fill[mode](*(ctx + 0x38), out, n, colour)` through the table at 0x4d6c88. There are two
+  copies of the untextured table, at 0x4d6c88 and 0x4d7088.
+- **Around the fill, the x87 rounds up** (towards +infinity): the control word becomes
+  `(cw & ~0xc00) | 0x800`, and the old one is restored after. The magic-constant rounding is therefore a
+  ceiling (the top-left fill rule), and every float operation inside the fillers rounds up too.
+
+The port reproduces the rounding without changing the host's mode (WebAssembly has none):
+`src/render/fpu.h` does each operation in round-to-nearest and corrects it with its exact error (TwoSum,
+fma). The core builds with `-ffp-contract=off`. `tools/emu/diff_poly.py` checks both modes; the default is
+up.
+
+The terrain renderer (0x48f7b0, 0x48ffa0) indexes the clip table directly.
+
 ## Surface
 
 The span code reads only these fields: +0 pitch, +0x10 x origin, +0x18 the pixels, +0x1c y origin. A
@@ -25,11 +46,11 @@ pixel lives at `pixels + (y + y0) * pitch + x0 + x`.
   computed as `round((1 - q) * 7936) & 0xff00`.
 - `tbl` (the world's `.tbl`): translucency (to do).
 
-## Poly_FillFlat 0x43ea00 (ported, diffed: 3,300 random polygons identical)
+## Poly_FillFlat 0x43ea00 (ported, diffed in both rounding modes)
 
 Arguments on the stack: surface, vertices, count, colour.
 
-1. Each vertex's y is rounded to nearest-even (`fadd 1.5 * 2^52`, then the low dword). The vertices form a
+1. Each vertex's y is rounded (`fadd 1.5 * 2^52`, then the low dword: up under DrawPoly). The vertices form a
    circular list. The top vertex is the one with the least rounded y; ties go to the later vertex.
 2. Two edges start from the top: the left one along `next`, the right one along `prev`.
    - An edge runs from vertex a to vertex b. It starts at x = x_a + (round(y_a) - y_a) * slope, where
@@ -42,7 +63,7 @@ Arguments on the stack: surface, vertices, count, colour.
 The original writes single bytes up to a 32-byte boundary, then 32 bytes at a time; the result is the
 same as a byte fill.
 
-## Poly_FillGouraud 0x43ecd0 (ported, diffed: 3,500 random polygons identical)
+## Poly_FillGouraud 0x43ecd0 (ported, diffed in both rounding modes)
 
 Arguments on the stack: surface, vertices, count, colour. The x87 runs at 53-bit precision (Windows'
 default), so double arithmetic reproduces it.

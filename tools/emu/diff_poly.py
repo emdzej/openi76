@@ -3,7 +3,9 @@
 random lum table; the pixels must be identical.
 
   cmake -S . -B build -DOPENI76_SHARED=ON && cmake --build build --target i76core
-  .deps/emu-venv/bin/python tools/emu/diff_poly.py [flat|gouraud] [count] [seed]
+  .deps/emu-venv/bin/python tools/emu/diff_poly.py [flat|gouraud] [count] [seed] [--nearest]
+
+By default both run with the rounding mode DrawPoly 0x43d730 sets around the fillers (up).
 """
 import ctypes
 import glob
@@ -54,6 +56,9 @@ GOURAUD = False
 
 def main():
     global GOURAUD
+    up = "--nearest" not in sys.argv
+    if not up:
+        sys.argv.remove("--nearest")
     which = sys.argv.pop(1) if len(sys.argv) > 1 and sys.argv[1] in FILLERS else "flat"
     GOURAUD = which == "gouraud"
     addr, fname = FILLERS[which]
@@ -63,6 +68,7 @@ def main():
     lum = bytes(rng.randrange(256) for _ in range(65536))
     exe.write(LUM, lum)
     ctypes.memmove(lib.g_lum, lum, 65536) if hasattr(lib, "g_lum") else None
+    ctypes.c_int.in_dll(lib, "g_fpu_round").value = 1 if up else 0
     g_lum = (ctypes.c_uint8 * 65536).in_dll(lib, "g_lum")
     ctypes.memmove(g_lum, lum, 65536)
     bad = 0
@@ -72,7 +78,7 @@ def main():
         bits = exe.put(bytes(W * H))
         surf = exe.put(struct.pack("<IIIIIIII", W, 0, 0, 0, 0, 0, bits, 0))
         vp = exe.put(verts)
-        exe.call(addr, surf, vp, n, colour)
+        exe.call(addr, surf, vp, n, colour, fpcw=0x0A7F if up else 0x027F)   # DrawPoly's round-up
         want = exe.read(bits, W * H)
         want_v = exe.read(vp, len(verts))
         buf = ctypes.create_string_buffer(W * H)
@@ -89,7 +95,7 @@ def main():
             print(f"#{i}: {len(diff)} pixels differ, first at ({diff[0] % W},{diff[0] // W}); n={n}")
             if bad > 5:
                 break
-    print(f"diff_poly {which}: {count - bad}/{count} identical")
+    print(f"diff_poly {which} ({'round up' if up else 'nearest'}): {count - bad}/{count} identical")
     sys.exit(1 if bad else 0)
 
 
