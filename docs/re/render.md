@@ -41,3 +41,21 @@ Arguments on the stack: surface, vertices, count, colour.
 
 The original writes single bytes up to a 32-byte boundary, then 32 bytes at a time; the result is the
 same as a byte fill.
+
+## Poly_FillGouraud 0x43ecd0 (ported, diffed: 3,500 random polygons identical)
+
+Arguments on the stack: surface, vertices, count, colour. The x87 runs at 53-bit precision (Windows'
+default), so double arithmetic reproduces it.
+
+- **Shades.** Each vertex's q is rewritten in the caller's array as its shade in 16.16:
+  `(1 - q) * 7936 * 256`, so the integer part runs from 0 to 31.
+- **The top vertex.** It is the one with the least y (as a float, not rounded); ties go to the later one.
+- **Termination.** The walk along `next` stops at the right edge's current start vertex, not at the top.
+- **Edges.** The steps are `(x_b - x_a) / (y_b - y_a)` and the same for the shade, each rounded to a float.
+  The start values are computed from the rounded steps, at the start vertex's rounded y.
+- **Spans.** The shade's slope across the row is the unrounded quotient `(s_r - s_l) / (x_r - x_l)`. The
+  fixed-point step is its rounding. The start value uses the slope rounded to a float, at the span's first
+  pixel (from the left end, or from the right end when the ends are swapped).
+- **Pixels.** Each one is `lum[(v & 0xff) << 8 | colour]`, where v is the 16.16 value rotated by 16 bits.
+  v advances by `add; adc 0`: the fraction's carry goes round into the integer, and a negative step's
+  integer half carries into the fraction.

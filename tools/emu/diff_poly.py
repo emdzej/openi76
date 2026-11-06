@@ -1,9 +1,9 @@
 """Differential test of the polygon fillers (src/render/poly.c) against the original's (Poly_FillFlat
-0x43ea00): random convex polygons, both windings, drawn by both into a 640 x 480 surface with the same
+0x43ea00, Poly_FillGouraud 0x43ecd0): random convex polygons, both windings, drawn by both into a 640 x 480 surface with the same
 random lum table; the pixels must be identical.
 
   cmake -S . -B build -DOPENI76_SHARED=ON && cmake --build build --target i76core
-  .deps/emu-venv/bin/python tools/emu/diff_poly.py [count] [seed]
+  .deps/emu-venv/bin/python tools/emu/diff_poly.py [flat|gouraud] [count] [seed]
 """
 import ctypes
 import glob
@@ -27,7 +27,8 @@ class Surface(ctypes.Structure):
 
 def port():
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
-    lib.Poly_FillFlat.argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
+    for name in ("Poly_FillFlat", "Poly_FillGouraud"):
+        getattr(lib, name).argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
     return lib
 
 
@@ -42,11 +43,20 @@ def polygon(rng):
     if rng.random() < 0.2:   # some on exact pixel centres / integers, where rounding ties happen
         pts = [(round(x * 2) / 2, round(y * 2) / 2) for x, y in pts]
     q = rng.random()
-    verts = b"".join(struct.pack("<6f", x, y, 0, 0, 0, q) for x, y in pts)
+    verts = b"".join(struct.pack("<6f", x, y, 0, 0, 0, q if rng.random() < 0.0 else rng.random() if GOURAUD else q)
+                     for x, y in pts)
     return n, verts, rng.randrange(256)
 
 
+FILLERS = {"flat": (0x43EA00, "Poly_FillFlat"), "gouraud": (0x43ECD0, "Poly_FillGouraud")}
+GOURAUD = False
+
+
 def main():
+    global GOURAUD
+    which = sys.argv.pop(1) if len(sys.argv) > 1 and sys.argv[1] in FILLERS else "flat"
+    GOURAUD = which == "gouraud"
+    addr, fname = FILLERS[which]
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 300
     rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
     exe, lib = x86.Exe(), port()
@@ -62,20 +72,24 @@ def main():
         bits = exe.put(bytes(W * H))
         surf = exe.put(struct.pack("<IIIIIIII", W, 0, 0, 0, 0, 0, bits, 0))
         vp = exe.put(verts)
-        exe.call(0x43EA00, surf, vp, n, colour)
+        exe.call(addr, surf, vp, n, colour)
         want = exe.read(bits, W * H)
+        want_v = exe.read(vp, len(verts))
         buf = ctypes.create_string_buffer(W * H)
         s = Surface(W, 0, ctypes.cast(buf, ctypes.c_void_p), 0, W, H)
         vbuf = ctypes.create_string_buffer(verts)
-        lib.Poly_FillFlat(ctypes.byref(s), vbuf, n, colour)
+        getattr(lib, fname)(ctypes.byref(s), vbuf, n, colour)
         got = buf.raw
+        if vbuf.raw[:len(verts)] != want_v:
+            print(f"#{i}: the vertices differ after the call")
+            bad += 1
         if got != want:
             bad += 1
             diff = [k for k in range(W * H) if got[k] != want[k]]
             print(f"#{i}: {len(diff)} pixels differ, first at ({diff[0] % W},{diff[0] // W}); n={n}")
             if bad > 5:
                 break
-    print(f"diff_poly: {count - bad}/{count} identical")
+    print(f"diff_poly {which}: {count - bad}/{count} identical")
     sys.exit(1 if bad else 0)
 
 

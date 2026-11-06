@@ -18,3 +18,4 @@
 00487060	Vtfc_Load	vehicle	high	VTFC handler: registers the paint's slots of parts V1, V3, V5, the bumpers, the chunk names
 004873a0	Vtf_RegisterRegion	vehicle	high	binds a region's six side slots (FT BK RT LF TP UN) to "<prefix><side>.map"
 0043ea00	Poly_FillFlat	render	high	a convex polygon in one colour, shaded once through the lum table from vertex 0's depth; ported (src/render/poly.c), diffed against the original
+0043ecd0	Poly_FillGouraud	render	high	a convex polygon in one colour, Gouraud-shaded through the lum table; rewrites the vertices' q as 16.16 shades; ported, diffed
