@@ -40,5 +40,6 @@ In v1.0 names are unique, and none collides with a file in disc 1's root.
 ## Lookup
 
 The layer resolves a bare name to a member, case-insensitively, after the
-medium. Whether the original prefers loose files or the archive is still to
-be confirmed in the exe (the file-open path).
+medium. That rule is provisional. The original does not search: its file
+index (`i76.zix`, [zix.md](zix.md)) lists every member under root 1
+(`DIR: i76.zfs`). Following the index is step 1's remaining work.

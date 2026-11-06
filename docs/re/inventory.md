@@ -28,9 +28,10 @@ Most of the file count is `DEMO/` (third-party demos) and `DIRECTX/` (DX3 redist
 | Path | Size | Contents |
 |---|---|---|
 | `I76.ZFS` | 63.8 MB | Main archive, 3847 entries, **uncompressed** (v1.0; later patches compress). |
-| `I76MIN.ZIX` / `I76MAX.ZIX` | 60 KB | Install manifests (text): which files go to HD for min/max install. |
+| `I76MIN.ZIX` / `I76MAX.ZIX` | 60 KB | The file index (one becomes `i76.zix` on install): every data file and the root holding it (docs/formats/zix.md). |
 | `MISSIONS/*.MSN` + `*.TER` | 33.8 MB | 40 missions: `T01..T17` (Trip, the story), `S01..S07` (scenarios), `M01..M15` (melee), `A01` (attract?). |
 | `DATABASE.MW2` | 8.2 MB | Offset table (0x53 = 83 entries) followed by blobs. Probably shell/UI resources; to be identified. |
+| `I76SHELL.DLL` entry | | The exe looks up `ShellMain` / `ShellWindowProc` (`Shell_Load` 0x401000) and hands over to the front end. |
 | `CDROM.SPD` | 1.4 MB | `VCPCH0` magic, "Sep 27 1995" timestamp; to be identified (patch/speech data?). |
 | `CUTSCENE/INTROF01.SMK`, `CREDF01.SMK` | 59 MB | Intro and credits. Smacker 2, 640x480 pal8, 22 kHz mono u8 audio. ffmpeg decodes. |
 | `AVI/*.AVI` | 20 MB | Trailers; out of scope. |

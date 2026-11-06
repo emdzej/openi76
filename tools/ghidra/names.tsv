@@ -1,1 +1,15 @@
 # addr	name	module	confidence	description
+00401000	Shell_Load	shell	med	looks up ShellMain / ShellWindowProc in the front-end DLL with GetProcAddress
+004031d0	Fatal_Message	app	med	message box with the game title; default text "not enough memory"
+00407070	Opponents_Load	world	med	reads multicar.def and the NVCL*.vcf opponent vehicle files
+0041e5e0	Objectives_LoadText	mission	med	the mission's objective text file (.npt) for the Notepad
+0041e950	Notepad_Init	hud	med	the Notepad device context and font; loads cnote.wav
+0041f0b0	Objective_Reveal	mission	med	un-hides an objective
+0041f130	Objective_Succeed	mission	med	marks an objective succeeded
+0041f1e0	Objective_Fail	mission	med	marks an objective failed
+00439c80	Font_AddResource	gfx	med	installs ee_____.ttf through a .fot font resource
+00484c20	Cd_FindByLabel	files	med	finds the CD drive by volume label (I76_CD)
+00484db0	Files_Init	files	high	start-up: the CD by label, the xyzzy probe, then i76.zix (fatal without it)
+0048b830	Zix_ReadRoots	files	med	reads a ZIX's root lines (disc label lines, DIR:, CD<n>:) up to the separator
+0048bbe0	Zix_Load	files	high	loads the file index: count, roots, "<root> <name>" lines into 48-byte records, sorted, duplicates merged
+0048c1f0	Zix_CompareName	files	med	qsort comparison of index records: case-insensitive name

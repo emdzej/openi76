@@ -65,7 +65,12 @@ Findings so far are in [inventory.md](inventory.md).
 - Bring over `platform.h`, `platform_gasm.c`, `app.h` (state-machine loop, no
   blocking loops), `vfs.*` (case-insensitive, ISO 9660 + raw 2352) and `exe.c` from opencmr2.
 - `vfs_zfs.c`: mount `I76.ZFS` as a directory layer. Lookup is
-  case-insensitive. The format is simple and stored, so this is a small job.
+  case-insensitive. The format is simple and stored, so this is a small job
+  (done).
+- `vfs_zix.c`: resolve names as the original does, through the file index
+  (`Zix_Load` 0x48bbe0, docs/formats/zix.md). An installed game has
+  `i76.zix`. Running from the disc uses `I76MAX.ZIX`, whose roots resolve
+  against the disc's root just as they would against an install.
 - `vfs_cue.c` (new, no sibling has it): parse the CUE, expose track 1 as the
   data image and tracks 2-17 as raw 44.1 kHz s16 stereo PCM ranges.
   Alternatively, accept `cd2/audio/TrackNN.{ogg,flac,wav}`. See below.

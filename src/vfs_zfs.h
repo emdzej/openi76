@@ -2,9 +2,10 @@
    sounds) is stored in one archive, I76.ZFS, under flat 8.3 names ("t05.act", "vgoon.vdf").
 
    vfs_zfs_layer puts the archive's members on top of the current mount: a path is looked up on the
-   medium first, then, if it has no directory part, in the archive (case-insensitively). Which of the two
-   the original prefers is still to be confirmed in the exe; the members are not on the disc, so the
-   order only matters for an installed game with loose files.
+   medium first, then, if it has no directory part, in the archive (case-insensitively). That is the
+   port's provisional rule. The original looks every name up in its file index, i76.zix, which names the
+   root holding the file (docs/formats/zix.md), and the file layer will follow it. On a v1.0 disc both
+   rules give the same files: the members are not on the disc.
 
    Layout (docs/formats/zfs.md): "ZFSF", u32 version (1), u32 name length (16), u32 entries per directory
    block (100), u32 entry count, u32 0, u32 offset of the first block. A block is u32 offset of the next
