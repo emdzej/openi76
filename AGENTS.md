@@ -83,8 +83,9 @@ files share the `BWD2` tagged-chunk container (docs/formats/index.md).
 
 **One at a time, niced** (the machine is shared; parallel runs have frozen it):
 
-- Never run two game runs (gasm-run) or tests at once. That includes ctest or a one-off run while a
-  background run or regression is going.
+- This session runs one thing at a time: never two of its own game runs (gasm-run) or tests at once,
+  and no ctest or one-off run while its own background run or regression is going.
+- One run of ours next to another session's single run is fine, niced. Don't stack more than that.
 - Before starting one, `pgrep -fl gasm-run`. Kill stray or hung runs (a log that stopped growing) right away.
 - Everything under `nice -n 19`:
   - native build: `nice -n 19 cmake --build build -j2`
