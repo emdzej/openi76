@@ -193,6 +193,23 @@ Write one page per format under `docs/formats/` (internal; not published).
 - Replace Activenet (`anetdll`'s `dp*` API, 9 functions) with `gasm:net` +
   `gasm-relay`. Melee missions `M01..M15` come first.
 
+## 13. Theory of operation (after the port)
+
+- A published guide to how the game works, written from the finished port.
+  It is for someone who wants to learn how to build a game like this, not a
+  reverse-engineering log. It covers:
+  - the program: start-up, the file index and archives, the frame loop, the
+    shell and the game, memory;
+  - the world: terrain tiles, roads, objects, the mission file and how a
+    mission is put together (zones, paths, spawn points, objectives);
+  - the gameplay: the mission script machine (FSM) and its actions, the AI
+    drivers, the vehicle simulation and damage, weapons, the radio and
+    story flow of the Trip;
+  - the presentation: the 8-bit software renderer (the lum/tbl tables, the
+    spans), the HUD and cockpit, sound and CD music, the movies.
+- It is written in prose with diagrams and the formats as examples, and draws
+  on `docs/re/` and `docs/formats/` without copying from the exe (rule 4).
+
 ## Disc 2 and CD audio
 
 The BIN carries the data track **and** the 16-track soundtrack. Converting
