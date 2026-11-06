@@ -10,8 +10,10 @@ matters) or inferred. The census of what exists is in [../re/inventory.md](../re
 | PCX | `LOADSCR.PCX`, `LOADGAME.PCX` | (`src/pcx.h`) | standard 8-bit RLE; matches ffmpeg |
 | BWD2 container | `.msn .sdf .vdf .vcf .wdf .gdf .xdf .vtf .cdf` | [bwd2.md](bwd2.md) | container confirmed; payloads to do |
 | Palettes and images | `.act`, `.map`, `.cbk` + `.vqm` | [textures.md](textures.md) | confirmed; decoders in `src/fmt/image.c` |
-| Texture sets, tables | `.pak` + `.pix`, `.lum`, `.tbl`, `.tmt`, `.msk` | [textures.md](textures.md) | to do |
-| Meshes | `.geo` (and inside `.sdf`/`.vdf`) | | to do |
+| Bundles | `.pak` + `.pix` (meshes, textures, tables) | [textures.md](textures.md) | confirmed: 884 bundles, 13,585 members |
+| Meshes | `.geo` | [geo.md](geo.md) | confirmed; decoder in `src/fmt/geo.c` |
+| Vehicles | `.vdf` (VGEO), `.vtf`, `.tmt` | [vehicles.md](vehicles.md) | VGEO, paint slots and tables confirmed; other chunks to do |
+| Tables | `.lum`, `.tbl`, `.msk` | [textures.md](textures.md) | to do |
 | Terrain | `.ter` | | to do |
 | Sound | `.wav` (RIFF PCM), `.gpw` (`GAS0`) | | to do |
 | Text | `.npt`, `.rtm`, `.fsi`, `*.map`/`*.def` key bindings | | to do |

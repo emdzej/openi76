@@ -13,3 +13,7 @@
 0048b830	Zix_ReadRoots	files	med	reads a ZIX's root lines (disc label lines, DIR:, CD<n>:) up to the separator
 0048bbe0	Zix_Load	files	high	loads the file index: count, roots, "<root> <name>" lines into 48-byte records, sorted, duplicates merged
 0048c1f0	Zix_CompareName	files	med	qsort comparison of index records: case-insensitive name
+00483ec0	Bwd2_Walk	files	high	walks a BWD2 chunk list against a descriptor table {tag, 0, handler, flags}: unknown, mandatory, count and repeat chunks
+004843f0	Bwd2_IsExit	files	high	true for an EXIT chunk
+00487060	Vtfc_Load	vehicle	high	VTFC handler: registers the paint's slots of parts V1, V3, V5, the bumpers, the chunk names
+004873a0	Vtf_RegisterRegion	vehicle	high	binds a region's six side slots (FT BK RT LF TP UN) to "<prefix><side>.map"
