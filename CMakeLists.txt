@@ -8,7 +8,7 @@ set(CMAKE_C_STANDARD 11)
 set(I76_WARN -Wall -Wextra -Wno-unused-parameter)
 
 # The portable core: everything except host backends (no platform headers).
-file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c)
+file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c src/render/*.c)
 set(HOST_SRC src/vfs_host.c src/platform_host.c)
 foreach(f ${HOST_SRC} src/platform_gasm.c src/app.c)
   list(REMOVE_ITEM CORE_SRC "${CMAKE_SOURCE_DIR}/${f}")
@@ -45,3 +45,12 @@ foreach(src ${TEST_SRC})
   target_compile_options(${t} PRIVATE ${I76_WARN})
   add_test(NAME ${t} COMMAND ${t} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endforeach()
+
+# The core as a shared library, for the differential tests against the original's machine code
+# (tools/emu/diff_*.py load it with ctypes): -DOPENI76_SHARED=ON.
+option(OPENI76_SHARED "Build libi76core (shared) for tools/emu" OFF)
+if(OPENI76_SHARED)
+  add_library(i76core SHARED ${CORE_SRC} ${HOST_SRC})
+  target_include_directories(i76core PRIVATE src)
+  target_compile_options(i76core PRIVATE ${I76_WARN})
+endif()
