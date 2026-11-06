@@ -22,3 +22,4 @@
 0043d730	DrawPoly	render	high	points, lines, polygons: clip[mode] (0x4d7488) then fill[mode] (0x4d6c88) with the x87 rounding up
 0043d390	DrawPoint	render	med	DrawPoly with one vertex
 0043d4c0	DrawLine	render	med	DrawPoly with two vertices
+0044a570	Poly_FillTexAffine	render	high	a convex polygon textured with u, v linear in screen space (mode 0x04); scales the vertices' u, v to 16.16 texels in place; ported, diffed

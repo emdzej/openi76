@@ -46,6 +46,11 @@ table) maps camera space `{x, y, z, u, v, q}` to screen space `{X, Y, w, u', v',
   affine u, v.
 - q (+0x14) is the light term in [0, 1]: 1 is full light, and the fillers shade by `1 - q`.
 
+In memory: x +0, y +4, w +8, u +0xc, v +0x10, q +0x14 (`ScreenVert` in src/render/surface.h).
+
+The textured fillers take a texture record as their fourth argument: u32 width, u32 height, then the
+pixels row by row (`Texture`). u and v run from 0 to 1 across it.
+
 ## The 9-bit mode
 
 The clip table (0x4d7488) and the fill table (0x4d6c88) have 512 entries each; DrawPoly indexes both by
@@ -105,3 +110,31 @@ default), so double arithmetic reproduces it.
 - **Pixels.** Each one is `lum[(v & 0xff) << 8 | colour]`, where v is the 16.16 value rotated by 16 bits.
   v advances by `add; adc 0`: the fraction's carry goes round into the integer, and a negative step's
   integer half carries into the fraction.
+
+## Poly_FillTexAffine 0x44a570, mode 0x04 (ported, diffed in both rounding modes)
+
+Arguments on the stack: surface, vertices, count, texture record. No shading: the texel is the pixel.
+
+- **The row table** (0x5ad328) holds a pointer to each texture row. It is rebuilt only when the record's
+  address differs from the last one (0x5ad310), and all the textured fillers share it. Its four entries
+  before row 0 repeat row 0, and its four after the last row repeat the last row. The build writes three
+  rows per pass and runs one pass past the end, which those four copies then mostly overwrite.
+- **u, v to texels.** Each vertex's u is multiplied by `(w - 1) * 65536` and its v by `(h - 1) * 65536`,
+  in place in the caller's array (as floats), giving 16.16 texel coordinates.
+- **The top vertex and the walks** are as in the flat filler: the least rounded y, ties to the later one.
+  The walk along `next` stops at the top.
+- **Edges.** x, u and v are interpolated down each edge. The steps (`d / (y_b - y_a)`, through one
+  reciprocal) are stored as floats. The start values at the start vertex's rounded y are computed from the
+  unrounded steps.
+- **Spans.** The slopes across the row are `(u_r - u_l) * (1 / (x_r - x_l))`, the same for v, kept as
+  doubles. The 16.16 start is the edge's u **rounded to an integer first** (the `1.5 * 2^52` constant added
+  before the product), then `slope * (x_first - x_edge)` added and rounded again. The step is the rounded
+  slope. Each pixel is `rows[v >> 16][u >> 16]` (arithmetic shifts), then u and v advance by plain 32-bit
+  adds.
+- **Outside the texture.** u past a row's end reads into the next row, and just before row 0 the read lands
+  in the record's own header. On a sliver of a polygon, or an edge that is nearly horizontal, the
+  extrapolated start can fall far outside the texture. The original then reads whatever memory lies
+  there: entries of the row table left over from earlier textures, or the heap beyond the record. The port
+  reads the record's nearest byte instead. This is the one difference, and tools/emu/diff_poly.py detects
+  these cases and skips them. Under DrawPoly's round-up mode none turned up in 2,000 random polygons;
+  under round-to-nearest they are 3-6 % of cases.

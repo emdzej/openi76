@@ -14,13 +14,20 @@ typedef struct {
     int w, h;        /* the port's: the buffer's size, for clipping checks in debug builds */
 } Surface;
 
-/* A screen-space vertex as the polygon fillers take them (24 bytes in the original): x, y in pixels, then
-   four more floats; +0x14 (q) is the depth term the flat filler shades with. */
+/* A screen-space vertex as the polygon fillers take them (24 bytes in the original): x, y in pixels, w = 1/z
+   (+8), the texture coordinates u, v (+0xc, +0x10; times w for the perspective fillers), and q (+0x14), the
+   shade term. */
 typedef struct {
     float x, y;
-    float u, v;      /* to be confirmed by the textured fillers */
-    float w;
+    float w;         /* +8 */
+    float u, v;      /* +0xc, +0x10 */
     float q;         /* +0x14 */
 } ScreenVert;
+
+/* A texture as the textured fillers take it: u32 width, u32 height, then the 8-bit pixels row by row. */
+typedef struct {
+    int32_t w, h;
+    uint8_t pixels[];
+} Texture;
 
 extern uint8_t g_lum[256 * 256];   /* 0x5c0450: [shade << 8 | colour] */

@@ -10,3 +10,8 @@ void Poly_FillFlat(const Surface *s, const ScreenVert *v, int n, uint8_t colour)
    through the lum table. Rewrites every vertex's q as its shade in 16.16 ((1 - q) * 7936 * 256), as the
    original does to its caller's vertices. */
 void Poly_FillGouraud(const Surface *s, ScreenVert *v, int n, uint8_t colour);
+
+/* Poly_FillTexAffine 0x44a570: a convex polygon textured with tex, u and v (0..1 across the texture)
+   interpolated linearly in screen space, no shading. Scales every vertex's u by (w - 1) * 65536 and v by
+   (h - 1) * 65536 in place, as the original does to its caller's vertices. */
+void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex);
