@@ -20,3 +20,16 @@ void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *t
    v * w and w = 1/z): exact at every 16th pixel and at the span's end, linear in between. Scales the
    vertices' u by (w - 1) and v by (h - 1) in place. */
 void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+
+/* The same two fillers with another pixel (t the texel, d the destination; tables in surface.h):
+   Remap 0x4470b0 / 0x447640 (modes 0x44, 0x54): remap[t << 8 | d], opaque but for keyed colours.
+   Tbl 0x442d90 / 0x443910 (0x84, 0x94): tbl[t << 8 | d], translucent.
+   TblRev 0x443320 / 0x444150 (0xa4, 0xb4): tbl[d << 8 | t], with texel 0xff see-through for the call.
+   Glow 0x4424e0 (0xc4, affine only): glow[t << 8 | d], t an intensity 0..15. */
+void Poly_FillTexRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexGlow(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex);

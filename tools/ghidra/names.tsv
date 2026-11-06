@@ -24,3 +24,18 @@
 0043d4c0	DrawLine	render	med	DrawPoly with two vertices
 0044a570	Poly_FillTexAffine	render	high	a convex polygon textured with u, v linear in screen space (mode 0x04); scales the vertices' u, v to 16.16 texels in place; ported, diffed
 0044aaf0	Poly_FillTexPersp	render	high	a convex polygon textured perspective-correct (mode 0x14): exact u, v every 16 pixels, linear between; ported, diffed
+004470b0	Poly_FillTexRemap	render	high	affine textured (mode 0x44): remap[texel << 8 | dest], opaque but keyed colours; ported, diffed
+00442d90	Poly_FillTexTbl	render	high	affine textured (mode 0x84): tbl[texel << 8 | dest], translucent; ported, diffed
+00443320	Poly_FillTexTblRev	render	high	affine textured (mode 0xa4): tbl[dest << 8 | texel], texel 0xff see-through; ported, diffed
+004424e0	Poly_FillTexGlow	render	high	affine textured (mode 0xc4): glow[intensity << 8 | dest]; ported, diffed
+00447640	Poly_FillTexPerspRemap	render	high	perspective textured (mode 0x54), remap pixel; ported, diffed
+00443910	Poly_FillTexPerspTbl	render	high	perspective textured (modes 0x94, 0xd4), tbl pixel; ported, diffed
+00444150	Poly_FillTexPerspTblRev	render	high	perspective textured (mode 0xb4), reversed tbl pixel; ported, diffed
+004438c0	Tbl_KeySave	render	high	saves the tbl column of texel 0xff and makes it the destination (see-through)
+004438f0	Tbl_KeyRestore	render	high	puts the saved tbl column back
+0043b690	Glow_Build	render	medium	builds the 16 x 256 glow table at 0x5af150 from the palette (nearest colours); called from WinMain
+0043b5a0	Remap_Reset	render	high	remap table 0x5d0450 to identity rows (row t all t), 0x5c0150 to 0..255, 0x5c0250 to 0xff
+0043c100	Remap_Key	render	high	makes a colour see-through in the remap and tbl tables (its row = the destination)
+0043c0c0	Remap_Set	render	high	remap[t] row: all one colour
+0043c050	Palette_Nearest	render	high	nearest palette colour to an RGB (the float palette at 0x5ae550)
+00492fd0	World_LoadColours	world	medium	loads the world's .act, .lum and .tbl (WRLD names at +0x1e, +0x2b, +0x38) into the colour tables

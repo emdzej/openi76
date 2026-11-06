@@ -1,10 +1,10 @@
-"""Differential test of the polygon fillers (src/render/poly.c) against the original's (Poly_FillFlat
-0x43ea00, Poly_FillGouraud 0x43ecd0, Poly_FillTexAffine 0x44a570, Poly_FillTexPersp 0x44aaf0): random convex polygons, both windings, drawn
-by both into a 640 x 480 surface with the same random lum table (or random texture); the pixels, and the
-vertices the fillers rewrite, must be identical.
+"""Differential test of the polygon fillers (src/render/poly.c) against the original's: random convex
+polygons, both windings, drawn by both into a 640 x 480 surface of random pixels with the same random colour
+tables (and a random texture for the textured ones). The pixels, the vertices the fillers rewrite and the
+colour tables must be identical.
 
   cmake -S . -B build -DOPENI76_SHARED=ON && cmake --build build --target i76core
-  .deps/emu-venv/bin/python tools/emu/diff_poly.py [flat|gouraud|tex|persp] [count] [seed] [--nearest]
+  .deps/emu-venv/bin/python tools/emu/diff_poly.py <filler|all> [count] [seed] [--nearest] [-v]
 
 By default both run with the rounding mode DrawPoly 0x43d730 sets around the fillers (up).
 """
@@ -20,7 +20,31 @@ sys.path.insert(0, os.path.dirname(__file__))
 import x86  # noqa: E402
 
 W, H = 640, 480
-LUM = 0x5C0450
+RTAB, RTAB_SIZE = 0x5AF150, 0x31300   # the colour tables' block (g_rtab)
+TEX_CACHE = 0x5AD310   # the textured fillers' last texture record (their row table is rebuilt when it differs)
+
+# name: (address, port function, kind, texel reads). The reads, for the textured ones: each "mov eax,
+# [index * 4 + rows]" (address, index register) and each "mov al, [eax + reg]" (address, register holding u).
+AFFINE_READ = lambda r, t: ([(r, "EAX")], [(t, "EDX")])  # noqa: E731
+PERSP_READ = lambda r0, r1, r2, t0, t1, t2: ([(r0, "EAX"), (r1, "EAX"), (r2, "EBP")],  # noqa: E731
+                                             [(t0, "EDX"), (t1, "EDX"), (t2, "ESI")])
+FILLERS = {
+    "flat": (0x43EA00, "Poly_FillFlat", "flat", None),
+    "gouraud": (0x43ECD0, "Poly_FillGouraud", "gouraud", None),
+    "tex": (0x44A570, "Poly_FillTexAffine", "tex", AFFINE_READ(0x44AA2E, 0x44AA3C)),
+    "remap": (0x4470B0, "Poly_FillTexRemap", "tex", AFFINE_READ(0x44756E, 0x44757C)),
+    "tbl": (0x442D90, "Poly_FillTexTbl", "tex", AFFINE_READ(0x44324E, 0x44325C)),
+    "tblrev": (0x443320, "Poly_FillTexTblRev", "tex", AFFINE_READ(0x4437EA, 0x4437F8)),
+    "glow": (0x4424E0, "Poly_FillTexGlow", "tex", AFFINE_READ(0x4429A0, 0x4429AE)),
+    "persp": (0x44AAF0, "Poly_FillTexPersp", "persp",
+              PERSP_READ(0x44B114, 0x44B208, 0x44B229, 0x44B122, 0x44B216, 0x44B232)),
+    "persp-remap": (0x447640, "Poly_FillTexPerspRemap", "persp",
+                    PERSP_READ(0x447C62, 0x447D5D, 0x447D89, 0x447C70, 0x447D6B, 0x447D92)),
+    "persp-tbl": (0x443910, "Poly_FillTexPerspTbl", "persp",
+                  PERSP_READ(0x443F32, 0x44402D, 0x444059, 0x443F40, 0x44403B, 0x444062)),
+    "persp-tblrev": (0x444150, "Poly_FillTexPerspTblRev", "persp",
+                     PERSP_READ(0x44477E, 0x444879, 0x4448A5, 0x44478C, 0x444887, 0x4448AE)),
+}
 
 
 class Surface(ctypes.Structure):
@@ -28,16 +52,7 @@ class Surface(ctypes.Structure):
                 ("w", ctypes.c_int), ("h", ctypes.c_int)]
 
 
-def port():
-    lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
-    for name in ("Poly_FillFlat", "Poly_FillGouraud"):
-        getattr(lib, name).argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int, ctypes.c_uint8]
-    for name in ("Poly_FillTexAffine", "Poly_FillTexPersp"):
-        getattr(lib, name).argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
-    return lib
-
-
-def polygon(rng):
+def polygon(rng, kind):
     n = rng.randint(3, 9)
     cx, cy = rng.uniform(60, W - 60), rng.uniform(60, H - 60)
     rx, ry = rng.uniform(0.5, min(cx, W - cx) - 1), rng.uniform(0.5, min(cy, H - cy) - 1)
@@ -48,60 +63,43 @@ def polygon(rng):
     if rng.random() < 0.2:   # some on exact pixel centres / integers, where rounding ties happen
         pts = [(round(x * 2) / 2, round(y * 2) / 2) for x, y in pts]
     q = rng.random()
+
     def vert(x, y):
-        u, v, w = rng.random(), rng.random(), 1 / rng.uniform(1, 60) if PERSP else 0
-        if PERSP:
+        u, v, w = rng.random(), rng.random(), 1 / rng.uniform(1, 60) if kind == "persp" else 0
+        if kind == "persp":
             u, v = u * w, v * w
-        return struct.pack("<6f", x, y, w, u, v, rng.random() if GOURAUD else q)
-    verts = b"".join(vert(x, y) for x, y in pts)
-    return n, verts, rng.randrange(256)
+        return struct.pack("<6f", x, y, w, u, v, rng.random() if kind == "gouraud" else q)
+    return n, b"".join(vert(x, y) for x, y in pts), rng.randrange(256)
 
 
 def texture(rng):
     w, h = rng.choice((1, 2, 8, 16, 32, 64, 128, 256)), rng.choice((1, 2, 8, 16, 32, 64, 128, 256))
     if rng.random() < 0.3:
         w, h = rng.randint(1, 300), rng.randint(1, 300)
-    return struct.pack("<ii", w, h) + bytes(rng.randrange(256) for _ in range(w * h))
+    return struct.pack("<ii", w, h) + rng.randbytes(w * h)
 
 
-FILLERS = {"flat": (0x43EA00, "Poly_FillFlat"), "gouraud": (0x43ECD0, "Poly_FillGouraud"),
-           "tex": (0x44A570, "Poly_FillTexAffine"), "persp": (0x44AAF0, "Poly_FillTexPersp")}
-TEX_CACHE = 0x5AD310   # the textured fillers' last texture record (their row table is rebuilt when it differs)
-# each filler's reads: "mov eax, [index * 4 + rows]" (address, index register) and "mov al, [eax + reg]" (the
-# texel: address, the register holding u)
-TEXEL_READ = {0x44A570: ([(0x44AA2E, "EAX")], [(0x44AA3C, "EDX")]),
-              0x44AAF0: ([(0x44B114, "EAX"), (0x44B208, "EAX"), (0x44B229, "EBP")],
-                         [(0x44B122, "EDX"), (0x44B216, "EDX"), (0x44B232, "ESI")])}
-GOURAUD = PERSP = False
-TEXTURED = ("tex", "persp")
-
-
-def main():
-    global GOURAUD, PERSP
-    up = "--nearest" not in sys.argv
-    if not up:
-        sys.argv.remove("--nearest")
-    which = sys.argv.pop(1) if len(sys.argv) > 1 and sys.argv[1] in FILLERS else "flat"
-    GOURAUD, PERSP = which == "gouraud", which == "persp"
-    addr, fname = FILLERS[which]
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 300
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
-    exe, lib = x86.Exe(), port()
-    lum = bytes(rng.randrange(256) for _ in range(65536))
-    exe.write(LUM, lum)
-    ctypes.memmove(lib.g_lum, lum, 65536) if hasattr(lib, "g_lum") else None
+def run(name, count, seed, up, verbose):
+    addr, fname, kind, reads = FILLERS[name]
+    rng = random.Random(seed)
+    exe = x86.Exe()
+    lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    fn = getattr(lib, fname)
+    fn.argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int,
+                   ctypes.c_uint8 if reads is None else ctypes.c_void_p]
     ctypes.c_int.in_dll(lib, "g_fpu_round").value = 1 if up else 0
-    g_lum = (ctypes.c_uint8 * 65536).in_dll(lib, "g_lum")
-    ctypes.memmove(g_lum, lum, 65536)
-    bad = faults = 0
+    rtab = rng.randbytes(RTAB_SIZE)
+    exe.write(RTAB, rtab)
+    port_rtab = (ctypes.c_uint8 * RTAB_SIZE).in_dll(lib, "g_rtab")
+    ctypes.memmove(port_rtab, rtab, RTAB_SIZE)
     outside = [False]
     texrec = [0, 0, 0]
-    if addr in TEXEL_READ:
+    if reads:
         from unicorn import UC_HOOK_CODE
         from unicorn import x86_const
 
-        def reg(uc, name):
-            return uc.reg_read(getattr(x86_const, "UC_X86_REG_" + name))
+        def reg(uc, r):
+            return uc.reg_read(getattr(x86_const, "UC_X86_REG_" + r))
 
         def row(uc, a, size, r):   # past the table's copies of the edge rows: stale entries of earlier textures
             v = reg(uc, r)
@@ -110,24 +108,25 @@ def main():
         def texel(uc, a, size, r):
             p = (reg(uc, "EAX") + reg(uc, r)) & 0xFFFFFFFF
             outside[0] |= not texrec[0] <= p < texrec[1]
-        rows, texels = TEXEL_READ[addr]
-        for a, r in rows:
+        for a, r in reads[0]:
             exe.uc.hook_add(UC_HOOK_CODE, row, r, begin=a, end=a)
-        for a, r in texels:
+        for a, r in reads[1]:
             exe.uc.hook_add(UC_HOOK_CODE, texel, r, begin=a, end=a)
+    bad = skipped = 0
     keep = []   # the port's textures stay alive, so no two share an address (its row table is cached by address)
     for i in range(count):
-        n, verts, colour = polygon(rng)
+        n, verts, colour = polygon(rng, kind)
+        dest = rng.randbytes(W * H) if reads else bytes(W * H)
         exe.reset_heap()
-        bits = exe.put(bytes(W * H))
+        bits = exe.put(dest)
         surf = exe.put(struct.pack("<IIIIIIII", W, 0, 0, 0, 0, 0, bits, 0))
         vp = exe.put(verts)
         arg4 = colour
-        if which in TEXTURED:
+        if reads:
             tex = texture(rng)
             exe.write(TEX_CACHE, bytes(4))
             arg4 = exe.put(tex)
-            texrec[:] = [arg4, arg4 + len(tex), struct.unpack_from('<i', tex, 4)[0]]
+            texrec[:] = [arg4, arg4 + len(tex), struct.unpack_from("<i", tex, 4)[0]]
             outside[0] = False
             colour = ctypes.create_string_buffer(tex)
             keep.append(colour)
@@ -137,31 +136,46 @@ def main():
                 raise x86.Fault("a texel outside the texture record")
         except x86.Fault as e:
             # the original read outside its texture record (a coordinate extrapolated far off the texture on a
-            # near-horizontal edge or a sliver): what it reads there is whatever memory follows, not
-            # reproducible; the port reads the record's nearest byte
-            faults += 1
-            if "-v" in sys.argv:
-                print(f"#{i}: skipped, the original reads outside ({e}); n={n} tex={struct.unpack_from('<ii', tex)}")
+            # near-horizontal edge or a sliver), or a blend table with a negative u's sign bits: what it reads
+            # there is whatever memory follows, not reproducible; the port reads the record's nearest byte
+            skipped += 1
+            if verbose:
+                print(f"#{i}: skipped, the original reads outside ({e}); n={n}")
+            exe.write(RTAB, rtab)   # a fault can leave the tables half changed (the reversed tbl's key column)
             continue
-        want = exe.read(bits, W * H)
-        want_v = exe.read(vp, len(verts))
-        buf = ctypes.create_string_buffer(W * H)
+        want, want_v = exe.read(bits, W * H), exe.read(vp, len(verts))
+        buf = ctypes.create_string_buffer(dest, W * H)
         s = Surface(W, 0, ctypes.cast(buf, ctypes.c_void_p), 0, W, H)
         vbuf = ctypes.create_string_buffer(verts)
-        getattr(lib, fname)(ctypes.byref(s), vbuf, n, colour)
-        got = buf.raw
+        fn(ctypes.byref(s), vbuf, n, colour)
+        problems = []
         if vbuf.raw[:len(verts)] != want_v:
-            print(f"#{i}: the vertices differ after the call")
-            bad += 1
-        if got != want:
-            bad += 1
+            problems.append("the vertices differ")
+        if exe.read(RTAB, RTAB_SIZE) != bytes(port_rtab):
+            problems.append("the colour tables differ")
+        if buf.raw != want:
+            got = buf.raw
             diff = [k for k in range(W * H) if got[k] != want[k]]
-            print(f"#{i}: {len(diff)} pixels differ, first at ({diff[0] % W},{diff[0] // W}); n={n}")
+            problems.append(f"{len(diff)} pixels differ, first at ({diff[0] % W},{diff[0] // W})")
+        if problems:
+            bad += 1
+            print(f"#{i}: {'; '.join(problems)}; n={n}")
             if bad > 5:
                 break
-    print(f"diff_poly {which} ({'round up' if up else 'nearest'}): {count - bad - faults}/{count} identical"
-          + (f", {faults} skipped (the original reads outside its tables)" if faults else ""))
-    sys.exit(1 if bad else 0)
+    print(f"diff_poly {name} ({'round up' if up else 'nearest'}): {count - bad - skipped}/{count} identical"
+          + (f", {skipped} skipped (the original reads outside its tables)" if skipped else ""))
+    return bad == 0
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    up, verbose = "--nearest" not in sys.argv, "-v" in sys.argv
+    which = args.pop(0) if args else "flat"
+    count = int(args[0]) if args else 300
+    seed = int(args[1]) if len(args) > 1 else 76
+    names = list(FILLERS) if which == "all" else [which]
+    ok = all([run(n, count, seed, up, verbose) for n in names])
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

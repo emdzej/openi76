@@ -76,9 +76,19 @@ page's history, lists every mode.
 
 ## Tables
 
-- `lum` (the world's `.lum`, 64 KB at 0x5c0450): `lum[shade << 8 | colour]`. Shades run from 0 to 31,
-  computed as `round((1 - q) * 7936) & 0xff00`.
-- `tbl` (the world's `.tbl`): translucency (to do).
+One block, 0x5af150-0x5e0450 (`g_rtab`). The port keeps the layout, because an index can run from one table
+into the next.
+
+| Address | Size | Table |
+|---|---|---|
+| 0x5af150 | 16 x 256 | glow: `[intensity << 8 \| dest]`. Built at start-up by Glow_Build 0x43b690 from the palette's nearest colours. A texel of 16 or more reads into tbl's first rows. |
+| 0x5b0150 | 64 KB | tbl: the world's `.tbl` (World_LoadColours 0x492fd0), translucency `[texel << 8 \| dest]` |
+| 0x5c0150 | 256 | 0..255 |
+| 0x5c0250 | 256 | one colour (0xff), set with the key |
+| 0x5c0450 | 64 KB | lum: the world's `.lum`, `[shade << 8 \| colour]`. Shades run from 0 to 31, computed as `round((1 - q) * 7936) & 0xff00`. |
+| 0x5d0450 | 64 KB | remap: `[texel << 8 \| dest]`. Remap_Reset 0x43b5a0 makes row t all t (opaque). Remap_Key 0x43c100 makes a colour's row the destination (see-through) in remap and tbl alike. Remap_Set 0x43c0c0 fills a row with one colour. |
+
+The float RGB palette for the nearest-colour searches is just below, at 0x5ae550 (256 x 12 bytes).
 
 ## Poly_FillFlat 0x43ea00 (ported, diffed in both rounding modes)
 
@@ -162,3 +172,23 @@ reciprocal instead.
   `w - 16 dw` and moved on by `r * dw`. u·w and v·w move on by `r` steps. The step is
   `(exact end - current) * (1 / r)`, using a table of `{r, 1/r}` floats at 0x4d6c10.
 - **The last pixel** is drawn on its own, at wherever the steps ended.
+
+## The pixel variants
+
+Each textured routine is a copy of the affine or perspective filler with a different pixel line. The index
+is built in a byte register pair (t = texel, d = destination).
+
+| Affine | Perspective | Modes | Pixel |
+|---|---|---|---|
+| 0x44a570 | 0x44aaf0 | 0x04 / 0x14 | t |
+| 0x4470b0 Remap | 0x447640 | 0x44 / 0x54 | `remap[t << 8 \| d]` |
+| 0x442d90 Tbl | 0x443910 | 0x84 / 0x94 | `tbl[t << 8 \| d]` |
+| 0x443320 TblRev | 0x444150 | 0xa4 / 0xb4 | `tbl[d << 8 \| t]` |
+| 0x4424e0 Glow | (0x443910) | 0xc4 / 0xd4 | `glow[t << 8 \| d]`. The perspective glow mode uses the Tbl filler. |
+
+- The byte pair leaves the upper half of the index register as `u >> 16` left it. For a negative u that
+  is 0xffff, and the original reads far outside the table. The harness skips those cases, like other
+  reads outside the texture.
+- TblRev calls Tbl_KeySave 0x4438c0 first: tbl's column for texel 0xff becomes the destination itself
+  (see-through), and Tbl_KeyRestore 0x4438f0 puts it back afterwards. The call clobbers EAX, which held
+  the last texture's address, so these two fillers rebuild the row table every time.

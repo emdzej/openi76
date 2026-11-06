@@ -5,7 +5,7 @@
 #include "render/fpu.h"
 #include <string.h>
 
-uint8_t g_lum[256 * 256];
+uint8_t g_rtab[RT_SIZE];
 int g_fpu_round = FPU_NEAREST;
 
 #define round_magic fpu_int
@@ -214,8 +214,33 @@ static void edge_setup_tex(const ScreenVert *a, const ScreenVert *b, TexEdge *e)
     e->x = F32(ADD(MUL(t, dx), a->x));
 }
 
-/* Poly_FillTexAffine 0x44a570 */
-void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex)
+/* What the textured fillers write for a texel t over the destination pixel d. The variants are copies of one
+   routine with a different pixel line (the index is t << 8 | d in a byte register pair). */
+enum { PIX_COPY, PIX_REMAP, PIX_TBL, PIX_TBL_REV, PIX_GLOW };
+
+static inline void tex_put(uint8_t *p, int op, uint8_t t)
+{
+    switch (op) {
+    case PIX_COPY: *p = t; break;
+    case PIX_REMAP: *p = g_rtab[RT_REMAP + (t << 8 | *p)]; break;
+    case PIX_TBL: *p = g_rtab[RT_TBL + (t << 8 | *p)]; break;
+    case PIX_TBL_REV: *p = g_rtab[RT_TBL + (*p << 8 | t)]; break;
+    case PIX_GLOW: *p = g_rtab[RT_GLOW + (t << 8 | *p)]; break;
+    }
+}
+
+/* Tbl_KeySave 0x4438c0 / Tbl_KeyRestore 0x4438f0: around the reversed-translucency fillers, the tbl column
+   for texel 0xff is saved and set to the destination itself, so that texel is see-through. */
+static void tbl_key_save(uint8_t save[256])
+{
+    for (int r = 0; r < 256; r++) save[r] = g_rtab[RT_TBL + (r << 8 | 0xff)], g_rtab[RT_TBL + (r << 8 | 0xff)] = (uint8_t)r;
+}
+static void tbl_key_restore(const uint8_t save[256])
+{
+    for (int r = 0; r < 256; r++) g_rtab[RT_TBL + (r << 8 | 0xff)] = save[r];
+}
+
+static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op)
 {
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
@@ -264,7 +289,7 @@ void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *t
             uint32_t ust = (uint32_t)magic_lo(ADD(du, MAGIC)), vst = (uint32_t)magic_lo(ADD(dv, MAGIC));
             uint8_t *p = row + x1;
             for (int k = x2 - x1; k > 0; k--) {
-                *p++ = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+                tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
                 uu += ust, vv += vst;
             }
         }
@@ -299,8 +324,7 @@ static void edge_step_persp(PerspEdge *e)
     e->x = F32(ADD(e->x, e->dx));
 }
 
-/* Poly_FillTexPersp 0x44aaf0 */
-void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex)
+static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op)
 {
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
@@ -365,7 +389,7 @@ void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *te
                 rcp = DIV(65536.0, ww);
                 uint32_t ust = (uint32_t)((int32_t)(ue - uu) >> 4), vst = (uint32_t)((int32_t)(ve - vv) >> 4);
                 for (int k = 0; k < 16; k++) {
-                    *p++ = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+                    tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
                     uu += ust, vv += vst;
                 }
                 uu = ue, vv = ve;
@@ -379,11 +403,11 @@ void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *te
                 uint32_t ust = (uint32_t)magic_lo(ADD(MUL(SUB(uex, (double)(int32_t)uu), rinv), MAGIC));
                 uint32_t vst = (uint32_t)magic_lo(ADD(MUL(SUB(vex, (double)(int32_t)vv), rinv), MAGIC));
                 for (int k = 0; k < left; k++) {
-                    *p++ = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+                    tex_put(p++, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
                     uu += ust, vv += vst;
                 }
             }
-            *p = *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16);
+            tex_put(p, op, *tex_texel(tex, (int32_t)vv >> 16, (int32_t)uu >> 16));
         }
         edge_step_persp(&R);
         edge_step_persp(&L);
@@ -391,3 +415,41 @@ void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *te
         y++;
     }
 }
+
+/* The reversed-translucency variants call Tbl_KeySave first, which clobbers the register holding the last
+   texture's address: their comparison never matches and they rebuild the row table every time. */
+static void tex_affine_rev(const Surface *s, ScreenVert *v, int n, const Texture *tex)
+{
+    uint8_t save[256];
+    tbl_key_save(save);
+    tex_rows_of = NULL;
+    tex_affine(s, v, n, tex, PIX_TBL_REV);
+    tbl_key_restore(save);
+}
+static void tex_persp_rev(const Surface *s, ScreenVert *v, int n, const Texture *tex)
+{
+    uint8_t save[256];
+    tbl_key_save(save);
+    tex_rows_of = NULL;
+    tex_persp(s, v, n, tex, PIX_TBL_REV);
+    tbl_key_restore(save);
+}
+
+/* Poly_FillTexAffine 0x44a570 */
+void Poly_FillTexAffine(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_COPY); }
+/* Poly_FillTexRemap 0x4470b0 */
+void Poly_FillTexRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_REMAP); }
+/* Poly_FillTexTbl 0x442d90 */
+void Poly_FillTexTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_TBL); }
+/* Poly_FillTexTblRev 0x443320 */
+void Poly_FillTexTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine_rev(s, v, n, tex); }
+/* Poly_FillTexGlow 0x4424e0 */
+void Poly_FillTexGlow(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_GLOW); }
+/* Poly_FillTexPersp 0x44aaf0 */
+void Poly_FillTexPersp(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY); }
+/* Poly_FillTexPerspRemap 0x447640 */
+void Poly_FillTexPerspRemap(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_REMAP); }
+/* Poly_FillTexPerspTbl 0x443910 */
+void Poly_FillTexPerspTbl(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_TBL); }
+/* Poly_FillTexPerspTblRev 0x444150 */
+void Poly_FillTexPerspTblRev(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp_rev(s, v, n, tex); }
