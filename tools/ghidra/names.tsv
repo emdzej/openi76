@@ -58,3 +58,9 @@
 0043e940	Poly_Outline	render	high	draws each edge with the line rasterizer 0x44b310 (rounded ends)
 0044b310	Line_Draw	render	high	Cohen-Sutherland clip to the surface viewport, Bresenham via a two-entry step table, end point excluded; ported, diffed
 0043d4c0	DrawLine	render	high	3D segment: near/far z clip (in place), project through the view, Line_Draw; a second line above 480 rows
+004412e0	Proj_Untextured	render	high	mode bit 8: camera to screen space, no clipping (x * sx / z + cx); ported, diffed
+00441340	Proj_Textured	render	high	as Proj_Untextured with u * w, v * w; affine modes divide back by w; ported, diffed
+00440350	Clip_Screen	render	high	mode bit 3: screen-space Sutherland-Hodgman against the view's float rectangle; ported, diffed
+0043fbf0	Clip_ScreenTex	render	high	the textured Clip_Screen (u, v interpolated too); ported, diffed
+004409c0	Clip_Camera	render	high	near/far z passes, projection, then Clip_Screen; ported, diffed
+00440d90	Clip_CameraTex	render	high	near/far, projection (untiled: u, v clamped to 0..1 in place), Clip_ScreenTex, affine fix-up; ported, diffed

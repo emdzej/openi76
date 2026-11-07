@@ -252,3 +252,32 @@ is built in a byte register pair (t = texel, d = destination).
 - **Stepping.** Bresenham over `max(|dx|, |dy|)` pixels, so the end point is left out. The error starts at
   `2 minor - major`. Its sign picks the step and the increment from two-entry tables (`{both axes, 2 minor
   - 2 major}`, `{the major axis, 2 minor}`). The pixel is written before the step.
+
+## Clipping and projection (ported, diffed)
+
+Each routine is called as `(view, out, in, n, mode)` through the clip table and returns the output count.
+The view record holds `cx, cy, sx, sy` (+0..+0xc), the 2D rectangle as floats (+0x1c xmin, +0x20 ymin,
++0x24 xmax, +0x28 ymax), the surface (+0x38), znear (+0x108) and zfar (+0x138). Camera-space vertices are
+`x, y, z, u, v, q`. Everything runs in the default rounding (to nearest).
+
+| Mode | Untextured | Textured | What |
+|---|---|---|---|
+| bit 8 set | 0x4412e0 | 0x441340 | Project only: `w = 1/z`, `X = x * sx * w + cx`; textured: `u * w`, `w * v` |
+| bit 3 set | 0x440350 | 0x43fbf0 | Already in screen space: clip to the rectangle |
+| neither | 0x4409c0 | 0x440d90 | Clip to near and far, project, then clip to the rectangle |
+
+- **Passes.** Sutherland-Hodgman, one per plane in the OR of the outcodes, and none at all when their AND is
+  nonzero. The 2D order is x < xmin, y < ymin, x >= xmax, y >= ymax; the 3D order is near, then far. An
+  intersection takes the plane's own value on its axis and `prev + (cur - prev) * t`, with
+  `t = (p - prev) / (cur - prev)`, on the listed fields:
+  - 2D: the other axis, w and q, plus u and v when textured;
+  - 3D: x, y and q, plus u and v when textured.
+  
+  Its other fields keep whatever the stack buffer held, which the fillers that would read them never see.
+- **Buffer.** The passes append to one 72-vertex buffer, and the result is copied to `out`.
+- **Compare forms.** The x87 compares are of two forms: `fld a; fcomp p` and, for the previous vertex of
+  some passes, `fld p; fcomp a`. They agree except for NaN, and the port follows each pass's form.
+- **The textured camera-space clipper, untiled** (mode bit 1 clear), first clamps u and v to [0, 1] by
+  their bit patterns, in place. Negative values become 0 (-0.0 survives) and values above 1 become 1. When
+  no z clipping was needed, "in place" is the caller's array. That path also rounds `1/z` to a float before
+  using it. After the 2D clip, affine modes (bit 4 clear) multiply u and v back by `1/w`.
