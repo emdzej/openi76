@@ -449,3 +449,6 @@
 00409bc0	AI_PressUser	ai	med	0x505494 = 1 for the users node
 00409b50	AI_FrameFlags	ai	med	0x505490 = 0x505494, 0x505494 = 0
 00409b70	AI_UserPressed	ai	med	returns 0x505494
+00474bf0	Vehicle_Force	physics	high	the drive or brake acceleration along the forward axis, limited by the grip; ported, diffed
+0042d650	Vehicle_Brakes	vehicle	high	the brakes node data (0x3cc)
+0042fad0	Engine_Torque	engine	high	the engine data +0x10

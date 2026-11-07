@@ -361,6 +361,21 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 5: {   /* the force at 15 m/s: throttle 0.8, -0.6, and -0.6 upside down */
+            static const float sp = 15.0f, thr[3] = {0.8f, -0.6f, -0.6f};
+            memcpy(n->data + 0xac, &sp, 4);
+            for (int j = 0; j < 3; j++) {   /* moving at 10 along its forward axis, then backward */
+                float v[3];
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * (j == 1 ? -10.0f : 10.0f);
+                memcpy(n->data + 0xbc, v, sizeof v);
+                uint32_t fl;
+                memcpy(&fl, n->data + 0x454, 4);
+                struct { float acc; int32_t slide; } r = {0, 0};
+                Vehicle_Force(n, thr[j], j == 2, n->frame.m + 6, fl, &r.acc, &r.slide);
+                call_line(&r, sizeof r);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

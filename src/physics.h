@@ -33,3 +33,7 @@ void Integrate_Turn(float out[3], float w[3], const float a[3], float dt);
 /* Vehicle_Grip 0x4759b0: the yaw rate for the steering at speed sp, limited by the wheels' loads and the
    ground's grip; *slide = 1 beyond twice the limit, else *grip the fraction past it */
 void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip);
+/* Vehicle_Force 0x474bf0: the acceleration along the forward axis f for the throttle: braking on the four
+   wheels' grip, driving on the rear's with the engine's torque (the peak when locked); *slide = 1 when it
+   is over the grip */
+void Vehicle_Force(Node *n, float thr, int upside, const float f[3], uint32_t flags, float *acc, int32_t *slide);

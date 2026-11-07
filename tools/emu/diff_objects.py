@@ -106,8 +106,21 @@ def call_grip(exe, n, fpcw):
         CALL_OUT.append(exe.read(r, 12).hex())
 
 
+def call_force(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    exe.write(d + 0xAC, struct.pack("<f", 15.0))
+    for j, thr in enumerate((0.8, -0.6, -0.6)):
+        fw = struct.unpack("<fff", exe.read(n + 0x30, 12))
+        exe.write(d + 0xBC, struct.pack("<fff", *(x * (-10.0 if j == 1 else 10.0) for x in fw)))
+        fl = struct.unpack("<I", exe.read(d + 0x454, 4))[0]
+        r = exe.put(struct.pack("<fi", 0, 0))
+        exe.call(0x474BF0, n, struct.unpack("<I", struct.pack("<f", thr))[0], int(j == 2), n + 0x18 + 0x18, fl, r,
+                 r + 4, fpcw=fpcw)
+        CALL_OUT.append(exe.read(r, 8).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

@@ -304,3 +304,69 @@ void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip)
     else if (!below_eq(af, lim)) *grip = F32(DIV(SUB(af, lim2), SUB(lim, lim2)));
     *yaw = st;
 }
+
+void Vehicle_Force(Node *n, float thr, int upside, const float f[3], uint32_t flags, float *acc, int32_t *slide)
+{
+    uint8_t *d = n->data;
+    int32_t tb;
+    memcpy(&tb, &thr, 4);
+    if (tb > 0 && (!(flags & 1) || rd32(d + 0x104) == 2)) {   /* no drive with the engine off, or in mode 2 */
+        *acc = 0;
+        return;
+    }
+    float dir = rdf(d + 0xe8), sp = rdf(d + 0xac), a = 0;
+    uint8_t *brakes = wheel_data(d, 0x3cc), *fl = wheel_data(d, 0x3ac), *fr = wheel_data(d, 0x3a8);
+    uint8_t *rl = wheel_data(d, 0x3bc), *rr = wheel_data(d, 0x3b8);
+    float k = F32(MUL(rdf(d + 0x46c), 0.25f));
+    double vf = ADD(ADD(MUL(rdf(d + 0xc0), f[1]), MUL(rdf(d + 0xc4), f[2])), MUL(rdf(d + 0xbc), f[0]));
+    float vff = F32(vf);
+    int back = below(vf, 0);
+    float lim = F32(MUL(terrain_grip(d), k));
+    int locked;
+    if (upside) {
+        thr = -1.0f;
+        locked = 1;
+    } else {
+        locked = flags & 2;
+    }
+    memcpy(&tb, &thr, 4);
+    int32_t spb;
+    memcpy(&spb, &sp, 4);
+    if ((uint32_t)tb >= 0xb8d1b717u) {   /* braking: the four wheels' grip */
+        lim = F32(-MUL(ADD(ADD(ADD(rdf(rr + 0xc), rdf(rl + 0xc)), rdf(fr + 0xc)), rdf(fl + 0xc)), lim));
+        if (spb > 0x3f800000) {
+            a = F32(MUL(MUL(rdf(brakes + 0x10), thr), exe_f32(0x4a67f0)));   /* 8 */
+            if (locked) {
+                double x = MUL(MUL(rdf(d + 0xb0), vff), lim);
+                lim = back ? F32(-x) : F32(x);
+            }
+            if (rd32(d + 0xf0)) lim = F32(MUL(lim, 0.5f));
+            if (upside) {
+                a = F32(MUL(lim, 2.0f));
+            } else if (!below_eq(lim, a)) {
+                a = lim;
+                *slide = 1;
+            }
+            if (back) a = F32(-a);
+        }
+    } else if (tb >= 0x38d1b717) {   /* driving: the rear wheels' grip */
+        lim = F32(MUL(ADD(rdf(rr + 0xc), rdf(rl + 0xc)), lim));
+        uint8_t *e = wheel_data(d, 0x3c4);
+        double t = locked ? MUL(rdf(e + 0x14), rdf(e + 0x18)) : rdf(e + 0x10);   /* the peak or the torque (0x42fad0) */
+        a = F32(MUL(t, rdf(d + 0xa8)));
+        a = F32(MUL(rdf(d + 0x128), a));
+        if (rd32(d + 0x454) & 0x800) a = F32(MUL(a, exe_f32(0x4a67f4)));   /* 5 */
+        if (spb > 0x3f800000) a = F32(MUL(rdf(d + 0xb0), a));
+        int32_t ab;
+        memcpy(&ab, &a, 4);
+        if (ab < 0x38d1b717) ab = 0x38d1b717, memcpy(&a, &ab, 4);
+        double y = MUL(thr, a);
+        a = F32(y);
+        if (!below_eq(y, lim)) {
+            a = lim;
+            *slide = 1;
+        }
+        a = F32(MUL(dir, a));
+    }
+    *acc = a;
+}
