@@ -728,6 +728,101 @@ static int fly_homing(Node *s, float t)
     return !hit;
 }
 
+/* 0x45fce0: type 8's flight (the guided rounds): a target the radar loses (0x421e30), or a vehicle no longer
+   to be aimed at (0x42d340), is dropped; while it lies more than about 3.6 degrees off the shot's axis
+   (the axes' cosine under 0.998) the shot turns towards it about their cross product, by up to 3, 15 or
+   20 degrees' sine a frame as it has flown under 15 m, under 150 m or past 150 m (at exactly 150 m
+   without a limit: quirk). Then as types 4 and 7, held half a metre above the ground; off the terrain
+   it is spent at once, without the trail. Only the last sweep counts */
+static int fly_guided(Node *s, float t)
+{
+    uint8_t *r = s->data;
+    float *trav = (float *)(r + 0x40);
+    ShotState st;
+    gather(&st, s);
+    Node **tg = (Node **)Data_Ptr(r, 0x10);
+    if (st.target) {
+        if (Radar_Hidden(st.target) == 1) st.target = *tg = NULL;
+        if (!st.target) goto fly;
+        if ((st.target->cls == 1 || st.target->cls == 8 || st.target->cls == 9) && !Vehicle_Targetable(st.target)) st.target = *tg = NULL;
+    }
+    if (st.target) {
+        float q[3], d[3], u[3];
+        Shot_Target(q, st.target);   /* 0x45d710 */
+        for (int i = 0; i < 3; i++) d[i] = F32(SUB(q[i], st.p[i]));
+        double k = Fast_InvSqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0])));
+        u[0] = F32(MUL(d[0], k));
+        u[1] = F32(MUL(d[1], k));
+        double u2 = MUL(k, d[2]);
+        u[2] = F32(u2);
+        if (ADD(ADD(MUL(st.z[1], u[1]), MUL(u2, st.z[2])), MUL(st.z[0], u[0])) < 0.9980000257492065f) {   /* 0x4a6370 */
+            float c[3];
+            c[0] = F32(SUB(MUL(st.z[1], u[2]), MUL(st.z[2], u[1])));
+            c[1] = F32(SUB(MUL(st.z[2], u[0]), MUL(st.z[0], u[2])));
+            c[2] = F32(SUB(MUL(st.z[0], u[1]), MUL(st.z[1], u[0])));
+            double len = fpu_sqrt(ADD(ADD(MUL(c[1], c[1]), MUL(c[2], c[2])), MUL(c[0], c[0])));
+            float lenf = F32(len), a = F32(MUL(len, 0.75f));   /* 0x4a6374 */
+            int32_t tb = fbits(*trav);
+            if (tb < 0x41700000 && fbits(a) > 0x3d565e2b) a = 0.0523359f;                     /* 15 m: sin 3 */
+            if (tb >= 0x41700000 && tb < 0x43160000 && fbits(a) > 0x3e8483ee) a = 0.25881904f;  /* 150 m: sin 15 */
+            if (tb > 0x43160000 && fbits(a) > 0x3eaf1d44) a = 0.34202015f;                     /* sin 20 */
+            double inv = fpu_div(1.0f, lenf);   /* 0x4a638c */
+            Frame rot, f;
+            Frame_AxisAngle(&rot, -a, F32(MUL(c[0], inv)), F32(MUL(c[1], inv)), F32(MUL(c[2], inv)));   /* 0x451e40 */
+            Frame_Mul(&f, &s->frame, &rot);   /* 0x4527c0 */
+            s->frame = f;
+            memcpy(st.z, &s->frame.m[6], 12);
+            for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        }
+    }
+fly:
+    if ((uint32_t)fbits(t) > 0x80000000u || fbits(t) > 0x3f733333) st.v[2] = st.speed;
+    else {
+        double e = SUB(st.speed, st.v[2]);
+        float ef = F32(e);
+        if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6360 */
+        else st.v[2] = F32(ADD(MUL(t, ef), st.v[2]));
+    }
+    const float *m = s->frame.m;
+    float w[3];
+    w[0] = F32(ADD(ADD(MUL(m[0], st.v[0]), MUL(m[3], st.v[1])), MUL(m[6], st.v[2])));
+    w[1] = F32(ADD(ADD(MUL(m[4], st.v[1]), MUL(m[1], st.v[0])), MUL(m[7], st.v[2])));
+    w[2] = F32(ADD(ADD(MUL(m[5], st.v[1]), MUL(m[8], st.v[2])), MUL(m[2], st.v[0])));
+    Integrate_F(st.p, w, st.g, t);   /* 0x471730 */
+    float l[3];
+    l[0] = F32(ADD(ADD(MUL(m[0], w[0]), MUL(m[1], w[1])), MUL(m[2], w[2])));
+    l[1] = F32(ADD(ADD(MUL(m[3], w[0]), MUL(m[5], w[2])), MUL(m[4], w[1])));
+    l[2] = F32(ADD(ADD(MUL(m[8], w[2]), MUL(m[6], w[0])), MUL(m[7], w[1])));
+    if (!Terrain_Inside(st.p[0], st.p[2])) return 0;   /* 0x48e210 */
+    double h = ADD(Terrain_Height(st.p[0], st.p[2]), 0.5f);   /* 0x491f00, 0x4a6350 */
+    if (h > st.p[1]) st.p[1] = F32(h);
+    int hit = 0;
+    int32_t cls = -1;
+    for (; st.n > 0; st.n--)   /* past 70 m the owner too; only the last counts */
+        hit = Shot_Sweep(s, fbits(*trav) <= 0x428c0000 ? st.owner : NULL, st.p, &st.who, &cls);
+    if (!hit && Terrain_Line(s->frame.pos, st.p)) {   /* 0x45cfd0 */
+        hit = 1;
+        st.who = NULL;
+        cls = -1;
+    }
+    float d[3];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
+    double l2 = ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]));
+    *trav = F32(ADD(fpu_sqrt(l2), *trav));
+    if (!hit) {
+        Frame_FromDir(&s->frame, st.p, d);   /* 0x4522e0 */
+        memcpy(r + 0x14, l, 12);
+    } else {
+        if (!(fpu_sqrt(l2) <= 0.009999999776482582f)) Frame_FromDir(&s->frame, st.p, d);   /* 0x4a636c */
+        else
+            for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memset(r + 0x14, 0, 12);
+        hit_effect(s, st.p, st.who, cls);   /* 0x45c950 */
+    }
+    trail_step(s);   /* 0x46f170 */
+    return !hit;
+}
+
 /* 0x45f100 (type 0xc) and 0x45f260 (type 0x11): the dropped, which stay where they lie: each of the
    shot's n sweeps a metre upwards from its place, its owner spared for its first 2 s. Once one has met
    something, every sweep after it hits again (quirk), at the place; 0xc also spins a vehicle it hits
@@ -775,11 +870,12 @@ int Shot_Fly(Node *s, float t)
     case 0x12: return fly_gun(s, t);
     case 0xc: return fly_dropped(s, 1);    /* 0x45f100 */
     case 0x11: return fly_dropped(s, 0);   /* 0x45f260 */
-    case 2: case 3: case 4: case 5: case 7: case 8:   /* 8 not ported yet */
+    case 2: case 3: case 4: case 5: case 7: case 8:
         if (ty == 2) alive = fly_rocket(s, t, 0);
         else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */
         else if (ty == 5) alive = fly_rocket(s, t, 2);              /* 0x461340 */
         else if (ty == 3) alive = fly_homing(s, t);                 /* 0x460480 */
+        else if (ty == 8) alive = fly_guided(s, t);                 /* 0x45fce0 */
         if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
             g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
         break;

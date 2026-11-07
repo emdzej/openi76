@@ -810,7 +810,7 @@ def call_fly(exe, n, fpcw):
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
-        for a in (0x45FCE0, 0x45E720):
+        for a in (0x45E720,):
             exe.stub(a, lambda *x: 1, 2)
         FLY["on"] = 1
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -823,15 +823,16 @@ def call_fly(exe, n, fpcw):
         exe.call(0x458710, w, d, 1, 0x3C23D70A, limit=2_000_000_000, fpcw=rd)
         for _ in range(3):
             for k in range(struct.unpack("<i", exe.read(0x4DC3F4, 4))[0]):
-                s = u(0x5E1A40 + k * 200 + 0x10)
-                while s:
-                    alive = exe.call(0x459B50, s, 0x3CF5C28F, limit=2_000_000_000, fpcw=rd)
-                    r = bytearray(exe.read(u(s + 0x70), 0x48))
-                    r[0xC:0x10] = struct.pack("<i", int(struct.unpack_from("<I", r, 0xC)[0] == n))
-                    r[0x10:0x14] = struct.pack("<i", int(struct.unpack_from("<I", r, 0x10)[0] != 0))
-                    CALL_OUT.append((exe.read(s + 0x18, 0x24) + exe.read(s + 0x40, 24) + bytes(r)
-                                     + struct.pack("<i", alive) + exe.read(0x4EBC90, 4)).hex())
-                    s = u(s + 0x60)
+                rec = 0x5E1A40 + k * 200
+                for s in (u(u(rec + 0xC) + 0x64) if u(rec + 0xC) else 0, u(rec + 0x10)):
+                    while s:
+                        alive = exe.call(0x459B50, s, 0x3CF5C28F, limit=2_000_000_000, fpcw=rd)
+                        r = bytearray(exe.read(u(s + 0x70), 0x48))
+                        r[0xC:0x10] = struct.pack("<i", int(struct.unpack_from("<I", r, 0xC)[0] == n))
+                        r[0x10:0x14] = struct.pack("<i", int(struct.unpack_from("<I", r, 0x10)[0] != 0))
+                        CALL_OUT.append((exe.read(s + 0x18, 0x24) + exe.read(s + 0x40, 24) + bytes(r)
+                                         + struct.pack("<i", alive) + exe.read(0x4EBC90, 4)).hex())
+                        s = u(s + 0x60)
 
 
 def call_raze(exe, n, fpcw):

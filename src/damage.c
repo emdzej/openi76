@@ -19,6 +19,7 @@
 #include "math3d.h"
 #include "tex.h"
 #include "effects.h"
+#include "clock.h"
 #include <string.h>
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -194,14 +195,62 @@ void Vehicle_State(Node *n, float dt)
 static int special_kind(const Node *s) { return s ? rd32(s->data) : 0; }
 static int special_works(const Node *s) { return s && (rd32(s->data + 4) >= 1 || rd32(s->data + 0x10) != 0); }
 
-/* a working special of the kind among the three (+0x3ec, +0x3f0, +0x3f4) */
-static int has_special(uint8_t *d, int kind)
+static bool is_vehicle(const Node *n) { return n->cls == 1 || n->cls == 8 || n->cls == 9; }   /* 0x42e570 */
+
+/* 0x42d460: the first working special of the kind among the three (+0x3ec, +0x3f0, +0x3f4) */
+static Node *special_of(uint8_t *d, int kind)
 {
     for (uint32_t o = 0x3ec; o <= 0x3f4; o += 4) {
         Node *s = slot(d, o);
-        if (special_kind(s) == kind && special_works(s)) return 1;
+        if (special_kind(s) == kind && special_works(s)) return s;
     }
+    return NULL;
+}
+static int has_special(uint8_t *d, int kind) { return special_of(d, kind) != NULL; }
+
+/* 0x42d980: a special with charges (+4) switched on (+0x10, at the game's time +0x14) or off */
+static void special_toggle(Node *s)
+{
+    if (!s) return;
+    if (rd32(s->data + 4) < 1) {
+        put32(s->data + 0x10, 0);
+        return;
+    }
+    if (rd32(s->data + 0x10)) {
+        put32(s->data + 0x10, 0);
+        return;
+    }
+    put32(s->data + 0x10, 1);
+    putf(s->data + 0x14, g_clock_game);
+}
+
+int Radar_Hidden(Node *n)
+{
+    if (!n || !is_vehicle(n)) return 0;
+    uint8_t *d = n->data;
+    uint32_t f = (uint32_t)rd32(d + 0x454);
+    if (!(f & 0x40000)) return 0;
+    /* in a network game anyone's but the user's own stays hidden */
+    if (g_net_game && (!g_user_entity || g_user_entity->node != n)) return 1;
+    Node *s = special_of(d, 1);
+    if (!s) return g_net_game != 0;
+    if (rd32(s->data + 0x10)) {
+        if (!(s->flags & 0x200) && rd32(s->data + 8) >= 1 &&
+            !(fpu_add(rdf(s->data + 0x14), exe_f32(0x4a5884)) < g_clock_game))
+            return 1;
+        put32(d + 0x454, (int32_t)(f & 0xfffbffffu));   /* its time is up: off */
+        special_toggle(s);
+        return 0;
+    }
+    put32(d + 0x454, (int32_t)(f & 0xfffbffffu));
     return 0;
+}
+
+int Vehicle_Targetable(const Node *n)
+{
+    if (!is_vehicle(n) || (n->flags & 0x200)) return 0;
+    if (n->cls != 1) return 1;
+    return rd32(n->data + 0x454) & 1;
 }
 
 static uint32_t rdu(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }

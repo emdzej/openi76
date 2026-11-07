@@ -1033,8 +1033,8 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 34: {   /* the guns' flight (0x459b50: 0x4609d0, the hit's effect and the tracer stubbed): each of n's
-                        weapons fired once 0.01 s late, then every live shot flown three steps of 0.03 s; at each,
+        case 34: {   /* the shots' flight (0x459b50, the effects and sounds stubbed): each of n's weapons fired once
+                        0.01 s late, then every live shot of both lists flown three steps of 0.03 s; at each,
                         the shot's frame, its record (the vehicle as whether it is n, the target as whether there
                         is one), whether it flies on and the rand seed */
             for (int i = 0; i < g_weapon_count; i++) {
@@ -1044,7 +1044,8 @@ int Dump_CallVehicles(int which, int upside)
                 Weapon_Fire(w, &g_weapon_defs[w->def], 1, 0.01f);
                 for (int k = 0; k < 3; k++)
                     for (int o = 0; o < g_ordnance_count; o++)
-                        for (Node *sh = g_ordnance[o].list1; sh; sh = sh->next) {
+                        for (int L = 0; L < 2; L++)   /* list 0 (the kind's node's children), then list 1 */
+                        for (Node *sh = L ? g_ordnance[o].list1 : g_ordnance[o].node ? g_ordnance[o].node->child : NULL; sh; sh = sh->next) {
                             g_fpu_round = FPU_DOWN;
                             int32_t alive = Shot_Fly(sh, 0.03f);
                             uint8_t b[0x24 + 24 + 0x48 + 8], r[0x48];

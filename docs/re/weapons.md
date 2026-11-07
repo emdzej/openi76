@@ -571,7 +571,35 @@ Each frame, before the shots fly, 0x45e620 walks the records:
 - Type 0xc also spins out a class 1 vehicle it hits (0x42d3e0): +0x450 = 2 s, +0x454 gets
   0x80000400.
 
-The flights of type 8 and the beams (0xe-0x10, 0x13) are not ported yet.
+**Type 8 (0x45fce0), the guided rockets** (the radar-guided ones, gsradar and gscherub):
+- **Losing the target.** The target is dropped (the record's +0x10 cleared, not unreferenced):
+  - when the radar loses it (0x421e30, below);
+  - or when it is a vehicle that may no longer be aimed at (0x42d340): one that is off (0x200), or a car
+    without +0x454 bit 1.
+- **Steering.** While the target lies off the shot's axis (the cosine between them under 0.998, about 3.6
+  degrees), the shot turns towards it:
+  - The turn is about the cross product of the axis and the unit direction to the target.
+  - Its angle is 0.75 times the cross product's length, a sine taken as radians.
+  - It is limited by how far the shot has flown (+0x40): to 0.0523 (sin 3) under 15 m, to 0.2588
+    (sin 15) from 15 m to under 150 m, and to 0.342 (sin 20) past 150 m.
+  - At exactly 150 m there is no limit (a quirk).
+  - The new frame is the rotation applied after the old one (0x451e40, 0x4527c0), kept at the place.
+- **Flight.** As types 4 and 7: the speed eased by the flight's time, and gravity.
+- **The ground.** Off the terrain (0x48e210) the shot is spent at once, without the trail. On it, it is
+  held at least half a metre above the ground (0x491f00 + 0.5).
+- **Hits.** Only the last of the sweeps counts, then the ground line, as type 3. A hit leaves the
+  explosion where it hit.
+
+**The radar's hiding (0x421e30).** A vehicle is hidden from the radar and the guided rockets when:
+- its +0x454 bit 0x40000 is set,
+- and its special of kind 1 (0x42d460, the first working one among +0x3ec-+0x3f4) is on (+0x10),
+  has ammunition (+8), is not off (0x200), and was switched on (+0x14) no more than 8 s ago (0x4a5884).
+
+When the 8 s are up, or the special is no longer on, the bit is cleared; in the first case the special
+is also switched off (0x42d980). In a network game, every vehicle with the bit is hidden except the
+user's own, including one without the special.
+
+The beams' flights (0xe-0x10, 0x13) are not ported yet.
 
 Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4, s01 type 5).
 The delayed hits' walk is not covered by the harness.

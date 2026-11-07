@@ -85,3 +85,10 @@ int Chunk_Spawn(Node *n);
 /* Splash 0x46a3e0: explosion src's damage (Impact_Damage, at rest, against the direction to it) on each
    collision entity but except whose sphere reaches within radius of (x, z) seen from above */
 void Splash(float x, float z, float radius, int32_t force, Node *src, Node *except);
+/* Radar_Hidden 0x421e30: a vehicle hidden from the radar and the homing shots: its +0x454 bit 0x40000 set
+   and its special of kind 1 (0x42d460) on, with ammunition (+8), not off (0x200), for a time (0x4a5884)
+   from its start; past it the bit is cleared and the special switched off (0x42d980). In a network game
+   any vehicle but the user's with the bit is hidden, and one without the special too */
+int Radar_Hidden(Node *n);
+/* Vehicle_Targetable 0x42d340: a vehicle not off (0x200); a car (class 1) only with +0x454 bit 1 */
+int Vehicle_Targetable(const Node *n);

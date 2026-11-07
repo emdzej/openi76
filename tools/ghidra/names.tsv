@@ -935,3 +935,8 @@
 0045f100	Shot_FlyDropped	weapons	high	type 0xc: swept a metre up at its place each frame; spins a vehicle hit (0x42d3e0)
 0045f260	Shot_FlyDropped2	weapons	high	type 0x11: the same without the spin
 0042d3e0	Vehicle_SpinOut	vehicles	med	a class 1 vehicle: +0x450 = 2 s, +0x454 |= 0x80000400
+0045fce0	Shot_FlyGuided	weapons	high	type 8: turns towards the target (by up to sin 3/15/20 by distance flown), then as types 4/7; held 0.5 m above ground
+00421e30	Radar_Hidden	weapons	high	a vehicle hidden from radar: +0x454 bit 0x40000 with its kind 1 special on for 8 s
+0042d340	Vehicle_Targetable	vehicles	high	a vehicle not off; a car only with +0x454 bit 1
+0042d460	Special_Of	vehicles	high	the first working special of a kind among +0x3ec-+0x3f4
+0042d980	Special_Toggle	vehicles	high	a special with charges switched on (+0x10, time +0x14) or off
