@@ -30,6 +30,8 @@ void Frame_Yaw(Frame *out, float a);
 /* Integrate 0x471860: one step of p (doubles) and v under the acceleration a: v + a dt / 2 for dt, then
    v += a dt */
 void Integrate(double p[3], float v[3], const float a[3], float dt);
+/* Integrate_F 0x471730: the same with a float place, the half step's velocity unrounded */
+void Integrate_F(float p[3], float v[3], const float a[3], float dt);
 /* Integrate_Turn 0x4719f0: the same for a rotation: out the step's angles (w + a dt / 2) dt, w += a dt */
 void Integrate_Turn(float out[3], float w[3], const float a[3], float dt);
 /* Vehicle_Grip 0x4759b0: the yaw rate for the steering at speed sp, limited by the wheels' loads and the

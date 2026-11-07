@@ -1305,8 +1305,7 @@ int View_Distance(const Node *n, float r)
     return 0;
 }
 
-/* 0x471730: Integrate with a float place, the half step's velocity unrounded */
-static void integrate_f(float p[3], float v[3], const float a[3], float dt)
+void Integrate_F(float p[3], float v[3], const float a[3], float dt)
 {
     float ad[3];
     double h[3];
@@ -1353,7 +1352,7 @@ static void far_drive(Node *n, uint32_t *flags, float vel[3], float *speed, floa
     a[0] = F32(ADD(MUL(n->frame.m[0], k), MUL(fwd[0], acc)));
     a[1] = F32(ADD(MUL(n->frame.m[1], k), MUL(fwd[1], acc)));
     a[2] = F32(ADD(MUL(k, n->frame.m[2]), MUL(fwd[2], acc)));
-    integrate_f(p, v, a, dt);
+    Integrate_F(p, v, a, dt);
     if (fbits(thr) > 0x80000000u && below(dot_v(v0, v), 0.0f)) {   /* braked round: stop where it was */
         v[0] = v[1] = v[2] = 0;
         sp = 0;

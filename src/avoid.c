@@ -238,7 +238,7 @@ static int vehicles_ahead(Node *n, const float p[3], const float v[3], Node **wh
 /* 0x46a1d0: a sphere at p moving v against one at q moving w (all of them nearly still: 0): the time of
    the closest approach within [0, tmax], 0 when not ahead; within r then, 1 with the offset between
    them (*t written either way) */
-static int sphere_sweep(const float p[3], const float v[3], const float q[3], const float w[3], float r,
+int Sphere_Sweep(const float p[3], const float v[3], const float q[3], const float w[3], float r,
                         float tmax, float *t, float off[3])
 {
     const float k = 9.99999905104687e-09f;   /* 0x4a64e0 */
@@ -362,7 +362,7 @@ static int tree_sweep(const float p[3], const float v[3], Node *node, const Fram
             Point_Velocity(w, zero, node);
             float rad = node->radius;
             if (type == 0x5000) rad = F32(MUL(rad, 0.75f));   /* 0x4a6838 */
-            if (sphere_sweep(p, v, c, w, F32(ADD(rad, r)), g_clock_dt, &tt, lv3)) {
+            if (Sphere_Sweep(p, v, c, w, F32(ADD(rad, r)), g_clock_dt, &tt, lv3)) {
                 if (type == 0x4000 || type == 0x5000) {
                     hit = 1;
                     if (!below_eq(best, tt)) best = tt, memcpy(bn, lv3, sizeof bn), bw = node;
@@ -410,7 +410,7 @@ static int tree_sweep(const float p[3], const float v[3], Node *node, const Fram
 
 /* 0x476610: the segment against an entity by its collision kind (+0x14): 1 its COLP box, 2 always, 3 its
    node tree (0x476870, from the identity frame 0x4db298) */
-static int sweep(const float p[3], const float v[3], Entity *e, Node **who, float *t, float nrm[3], float r,
+int Entity_Sweep(const float p[3], const float v[3], Entity *e, Node **who, float *t, float nrm[3], float r,
                  int faces)
 {
     switch (e->has_a) {
@@ -455,14 +455,14 @@ static int objects_ahead(Node *n, float *slow, float *factor, Node **who, const 
         float oc[3], ov[3], osp, tt, off[3];
         Frame_Points(&oc, (const float(*)[3])e->c, 1, &o->frame);   /* 0x4240e0 */
         Class_Velocity(o, ov, &osp);
-        if (!sphere_sweep(seg, seg + 3, oc, ov, r, dt, &tt, off)) continue;
+        if (!Sphere_Sweep(seg, seg + 3, oc, ov, r, dt, &tt, off)) continue;
         if (o->cls == 0xb || o->cls == 0xc) {
             const float *g = &o->frame.m[6];
             double dot = ADD(ADD(MUL(g[0], z[0]), MUL(g[1], z[1])), MUL(g[2], z[2]));
             if (o->cls == 0xb ? !below_eq(dot, 0.800000011920929f) : !below_eq(fabs(dot), 0.8999999761581421))   /* 0x4a54e4, 0x4a54e8 */
                 continue;
         }
-        if (!sweep(seg, seg + 3, e, who, t, off, 3.0f, 0)) continue;
+        if (!Entity_Sweep(seg, seg + 3, e, who, t, off, 3.0f, 0)) continue;
         *slow = 1.0f;
         float mv[3], ms, wv[3], ws;
         Class_Velocity(n, mv, &ms);
@@ -707,9 +707,9 @@ int AI_Blocked(Node *n)
         float r = F32(ADD(e->r, 3.0f)), oc[3], ov[3], osp, t, off[3];
         Frame_Points(&oc, (const float(*)[3])e->c, 1, &e->node->frame);   /* 0x471b30 */
         Class_Velocity(e->node, ov, &osp);
-        if (!sphere_sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
+        if (!Sphere_Sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
         Node *who;
-        if (sweep(seg, seg + 3, e, &who, &t, off, 0, 0)) return 1;
+        if (Entity_Sweep(seg, seg + 3, e, &who, &t, off, 0, 0)) return 1;
     }
     return 0;
 }
@@ -738,8 +738,8 @@ int AI_CanSee(Node *a, Node *b)
         float oc[3], ov[3], osp, t, off[3];
         Frame_Points(&oc, (const float(*)[3])e->c, 1, &o->frame);   /* 0x471b30 */
         Class_Velocity(o, ov, &osp);
-        if (!sphere_sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
-        if (sweep(seg, seg + 3, e, &who, &t, off, 3.0f, 0)) return 0;
+        if (!Sphere_Sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
+        if (Entity_Sweep(seg, seg + 3, e, &who, &t, off, 3.0f, 0)) return 0;
     }
     return 1;
 }

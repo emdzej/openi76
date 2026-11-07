@@ -265,3 +265,71 @@ Every step along the axis normalises the z axis (0x45ac50), rounds the place to 
 Checked: `diff_objects --call launch` (each weapon fired once 0.01 s late, the first flight stubbed:
 the shot's frame and record, the kind's counts and the rand seed) on t01, t05, s04 and s07. That covers
 types 1, 2, 3, 6, 0xc, 0xf, 0x10 and 0x11.
+
+## The flight (0x459b50)
+
+Each frame (and once at the launch, for the late time), a live shot flies by its type:
+
+| Type | Flight |
+|---|---|
+| 1, 6, 0x12 | 0x4609d0, the guns (ported) |
+| 2 | 0x45f8b0 |
+| 3 | 0x460480 |
+| 4, 7 | 0x460f40 |
+| 5 | 0x461340 |
+| 8 | 0x45fce0 |
+| 0xc | 0x45f100 |
+| 0xe, 0xf, 0x10, 0x13 | 0x45e720 |
+| 0x11 | 0x45f260 |
+
+It returns 0 when the shot is spent. When a shot of types 2-5, 7 or 8 is spent and its vehicle is the
+user's, it stops being the followed shot (0x45c8f0 clears 0x573484 if it is that one).
+
+**The state (0x45cb60, 0x7c bytes).** Every flight starts by gathering this state:
+- the vehicle and target refreshed (0x41f890, written back);
+- the type and kind;
+- the place twice (floats), the z axis, and the gravity `(0, kind +0x38 x -9.8, 0)`;
+- the record's local velocity, speed, shot count and life;
+- the target's point, new into the record's +0x20, with its move since the last one;
+- with a target, the distance to it.
+
+**The guns (0x4609d0).**
+1. The local forward speed eases to the record's speed by the step: `v += (speed - v) x step`. It jumps
+   straight to the speed if the step is negative or above 0.95, or if the gap is under 0.005.
+2. The local velocity goes to the world through the shot's frame. One motion step (0x471730) runs under
+   the gravity, and the result comes back to local.
+3. The move is swept once per shot the record carries (+0x3c). Up to 70 m travelled (+0x40), the vehicle
+   is skipped; past that it can hit itself. Without an entity hit, the ground line (0x45cfd0) counts as
+   a hit with no one.
+4. The distance moved is added to +0x40.
+5. **No hit:** the shot moves and keeps its local velocity.
+6. **A hit:**
+   - The shot is turned along its move (if the move is over 0.01) and stopped there, with its velocity
+     zeroed.
+   - The hit's effect is put 2 m back along the move (0x45c950, not ported yet: the effects).
+7. The tracer is updated in every case (0x46c220, not ported yet).
+8. A hit spends the shot.
+
+**The sweep (0x46a9b0).**
+1. The move is a segment from the shot's place at the velocity `move x g_clock_inv` for g_clock_dt.
+2. It is tested against the moving entities, then the static ones. The owner is skipped, and so is any
+   entity whose ground box misses the move's (0x469f30's test).
+3. Each candidate gets a sphere sweep against its moving radius (no margin), then a close sweep of its
+   faces (0x46a280, the faces included).
+4. **On the first hit:**
+   - The move is cut there.
+   - A helicopter (class 8) counts as the one hit, whatever part was struck.
+   - The impact's damage runs (0x45d7c0) with the velocity relative to the entity and the point in the
+     hit node's own frame. If the impact kills, no one is reported hit.
+
+**A structure's damage (0x430900).** The data's first word holds the structure's points. Class 0xc
+ignores the third damage kind. For each kind in the mask:
+- On a crash, at class 2 only, the crash's amount (+0x14) is quartered again for every kind (quirk).
+- The kind's amount comes off the points.
+- If it is more than the points left, the structure is destroyed (not ported yet: the children, the
+  explosion, the rubble, the smoke and the collision's refit).
+
+Checked: `diff_objects --call fly` on t01, t05, s04, s07 and t12. Each weapon fires once 0.01 s late,
+then every live shot flies three steps of 0.03 s, with the hit's effect and the tracer stubbed. It
+compares the shot's frame and record, the return, the rand seed and the whole tree, including t01's
+building hit by a gun.

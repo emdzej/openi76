@@ -799,8 +799,42 @@ def call_launch(exe, n, fpcw):
         CALL_OUT.append(exe.read(0x4EBC90, 4).hex())
 
 
+FLY = {}
+
+
+def call_fly(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not FLY:
+        # the launch's effects as in call_launch; the hit's effect, and the flights not ported yet
+        for a, k in ((0x454940, 1), (0x433B70, 2), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+                     (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6), (0x45C950, 4)):
+            exe.stub(a, lambda *x: 0, k)
+        for a in (0x45F8B0, 0x460480, 0x460F40, 0x461340, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
+            exe.stub(a, lambda *x: 1, 2)
+        FLY["on"] = 1
+    cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
+    for i in range(cnt):
+        w = 0x55F9C0 + i * 0x50
+        hp = u(w + 0x10)
+        if not hp or u(hp) != n:
+            continue
+        d = 0x56F730 + u(w + 0x28) * 0x88
+        exe.call(0x458710, w, d, 1, 0x3C23D70A, limit=2_000_000_000, fpcw=rd)
+        for _ in range(3):
+            for k in range(struct.unpack("<i", exe.read(0x4DC3F4, 4))[0]):
+                s = u(0x5E1A40 + k * 200 + 0x10)
+                while s:
+                    alive = exe.call(0x459B50, s, 0x3CF5C28F, limit=2_000_000_000, fpcw=rd)
+                    r = bytearray(exe.read(u(s + 0x70), 0x48))
+                    r[0xC:0x10] = struct.pack("<i", int(struct.unpack_from("<I", r, 0xC)[0] == n))
+                    r[0x10:0x14] = struct.pack("<i", int(struct.unpack_from("<I", r, 0x10)[0] != 0))
+                    CALL_OUT.append((exe.read(s + 0x18, 0x24) + exe.read(s + 0x40, 24) + bytes(r)
+                                     + struct.pack("<i", alive) + exe.read(0x4EBC90, 4)).hex())
+                    s = u(s + 0x60)
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

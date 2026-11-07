@@ -4,6 +4,7 @@
    and at random the shots. In the current rounding mode (render/fpu.h). */
 #pragma once
 #include "scene.h"
+#include "entity.h"
 #include <stdint.h>
 
 /* AI_Avoid 0x416a80: with steering steer and throttle throttle, 1 when something is ahead: *who what
@@ -33,3 +34,11 @@ int AI_TerrainAhead(Node *n, const float p[3], float *slow, float *t);
    cut by the ground (Terrain_Line) nor by any static entity but b, each swept as the look ahead's objects
    over the frame (the line as a segment moving through it, a sphere 3 m wider, then closely) */
 int AI_CanSee(Node *a, Node *b);
+/* Sphere_Sweep 0x46a1d0: a sphere at p moving v against one at q moving w: within r at the closest approach
+   within [0, tmax] (*t, the offset in off); 0 when all of them are nearly still or not ahead */
+int Sphere_Sweep(const float p[3], const float v[3], const float q[3], const float w[3], float r, float tmax,
+                 float *t, float off[3]);
+/* Entity_Sweep 0x476610: the segment p + v against e by its collision kind (1 its COLP box, 2 always, 3 its
+   node tree within r, faces as asked): *who what was met, *t when, nrm its normal */
+int Entity_Sweep(const float p[3], const float v[3], Entity *e, Node **who, float *t, float nrm[3], float r,
+                 int faces);

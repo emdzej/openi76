@@ -1,5 +1,6 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "ordnance.h"
 #include "classes.h"
 #include "entity.h"
 #include "exe.h"
@@ -440,6 +441,37 @@ static int damage_gun(Node *n, uint8_t *p)
     return r;
 }
 
+/* not ported yet: a structure's destruction (0x430900's lethal branch: the entity's sphere dropped, the
+   points to 0, 0x200 on the tree, the children's own (0x430e40), the parent's explosion and sound, the
+   rubble (0x45b0a0), the smoke (0x431320), the state (0x47db20) and the collision's refit (0x46b280)) */
+static void structure_destroy(Node *n) { (void)n; }
+
+/* 0x430900: a structure's damage, from its points (data +0); 1 when destroyed */
+static int damage_structure(Node *n, uint8_t *p)
+{
+    if (!p || (n->flags & 0x200)) return 0;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    if (n->cls == 0xc && (m & 4)) {   /* 0xc is not hurt by the third kind */
+        put32(p + 0x10, 0);
+        m &= ~4;
+        memcpy(p + 4, &m, 2);
+    }
+    for (int i = 0; i < 4; i++) {
+        memcpy(&m, p + 4, 2);
+        if (!(m & (1u << i))) continue;
+        if ((m & 8) && n->cls == 2)   /* the crash's share quartered again at each kind */
+            put32(p + 0x14, (int32_t)((uint32_t)rd32(p + 0x14) >> 2));
+        int32_t d = rd32(p + 8 + 4 * i), hp = rd32(n->data);
+        if (hp < d) {
+            structure_destroy(n);
+            return 1;
+        }
+        put32(n->data, hp - d);
+    }
+    return 0;
+}
+
 int Class_Damage(Node *n, uint8_t *p, const float *at)
 {
     int cls = n->cls;
@@ -453,7 +485,8 @@ int Class_Damage(Node *n, uint8_t *p, const float *at)
     case 0x18: return damage_18(n, p);
     case 0x32: return damage_gun(n, p);
     case 1: return Vehicle_Damage(n, p, at);
-    /* not ported yet: 2 0x430900 (structures), 4 0x434950, 9 0x431c60,
+    case 2: return damage_structure(n, p);
+    /* not ported yet: 4 0x434950, 9 0x431c60,
        8 0x4289f0, 7 0x432ed0, 0xa 0x4346b0 */
     default: return 0;
     }
@@ -850,15 +883,42 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
    and the HUD's damage arrows (0x468a70) */
 static void knock(Node *n, const float nv[3], float k) { (void)n, (void)nv, (void)k; }
 
+/* 0x45ced0: a shot's packet: its kind's mask (+0x60) at +4, and the shot's damage (its record's +0x44)
+   shared out evenly (unsigned) among the mask's four kinds at +8-+0x14 */
+static void shot_packet(uint8_t p[0x1c], const Node *s)
+{
+    memset(p, 0, 0x1c);
+    if (!s->data) return;
+    int32_t ty;
+    memcpy(&ty, s->data, 4);
+    int k = Ordnance_Index(ty);
+    if (k < 0) return;   /* the original reads before the table */
+    uint32_t mask = (uint32_t)g_ordnance[k].w24 & 0xffff, dmg, n = 0;
+    memcpy(&dmg, s->data + 0x44, 4);
+    uint16_t m16 = (uint16_t)mask;
+    memcpy(p + 4, &m16, 2);
+    for (int i = 0; i < 4; i++)
+        if (mask & (1u << i)) n++;
+    if ((int32_t)n > 1) dmg /= n;
+    for (int i = 0; i < 4; i++) {
+        uint32_t v = (mask & (1u << i)) ? dmg : 0;
+        memcpy(p + 8 + 4 * i, &v, 4);
+    }
+}
+
 int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at)
 {
     /* 0x45dbb0 (0x4dc464) is never set: the user is never spared */
     uint8_t p[0x1c];
     memset(p, 0, sizeof p);
     int kind = 0;
-    if (src && (src->cls == 0x33 || src->cls == 0x34)) {
-        /* a projectile's (0x45ced0, 0x45ce90 kind 0x12 adds +6 bit 0) or a 0x34's (0x4543a0) packet: the
-           weapons are not ported yet, so none */
+    if (src && src->cls == 0x33) {
+        shot_packet(p, src);   /* 0x45ced0 */
+        int32_t ty = 0;
+        if (src->data) memcpy(&ty, src->data, 4);   /* 0x45ce90 */
+        if (ty == 0x12) p[6] |= 1;
+    } else if (src && src->cls == 0x34) {
+        /* a 0x34's packet (0x4543a0) is not ported yet: none */
     } else {
         uint16_t eight = 8;
         memcpy(p + 4, &eight, 2);

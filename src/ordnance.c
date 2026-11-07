@@ -2,7 +2,9 @@
    (render/fpu.h). */
 #include "ordnance.h"
 #include "clock.h"
+#include "avoid.h"
 #include "collide.h"
+#include "damage.h"
 #include "combat.h"
 #include "crt.h"
 #include "entity.h"
@@ -10,6 +12,7 @@
 #include "lod.h"
 #include "math3d.h"
 #include "physics.h"
+#include "terrain.h"
 #include "tex.h"
 #include "render/fpu.h"
 #include "render/light.h"
@@ -342,7 +345,7 @@ Node *Shot_Launch(Launch *l, float late)
             if (Node_IsUser(*(Node **)Data_Ptr(d, 0xc)) && g_user_shot == s) g_user_shot = NULL;   /* 0x45c8f0 */
             alive = 0;
         } else
-            alive = g_shot_fly ? g_shot_fly(s, late) : 1;
+            alive = (g_shot_fly ? g_shot_fly : Shot_Fly)(s, late);
         if (!alive) {
             Node *veh = *(Node **)Data_Ptr(d, 0xc), *tg = *(Node **)Data_Ptr(d, 0x10);
             if (veh) Node_Unref(veh);
@@ -352,4 +355,182 @@ Node *Shot_Launch(Launch *l, float late)
         }
     }
     return s;
+}
+
+/* ---- the flight's pieces (0x45cb60, 0x46a9b0) ---- */
+
+typedef struct {          /* 0x45cb60's 0x7c bytes */
+    Node *owner;          /* +0: the record's +0xc, live (0x41f890) */
+    Node *target;         /* +4: its +0x10, live */
+    Node *who;            /* +8: what was hit */
+    int32_t type;         /* +0xc */
+    int32_t kind;         /* +0x10 */
+    float p0[3];          /* +0x14: the place at the start */
+    float p[3];           /* +0x20: the place, moved */
+    float z[3];           /* +0x2c: the frame's z axis */
+    float g[3];           /* +0x38: (0, the kind's +0x38 x -9.8, 0) */
+    float v[3];           /* +0x44: the velocity in the shot's frame (record +0x14) */
+    float dt[3];          /* +0x50: the target's point's move since the last */
+    float speed;          /* +0x5c: record +0x38 */
+    int32_t n;            /* +0x60: record +0x3c */
+    float life, life0;    /* +0x64, +0x68: record +4, +8 */
+    float dist;           /* +0x6c: to the target's point */
+    float tp[3];          /* +0x70: the target's point */
+} ShotState;
+
+static void gather(ShotState *st, Node *s)   /* 0x45cb60 */
+{
+    uint8_t *r = s->data;
+    Node **ow = (Node **)Data_Ptr(r, 0xc), **tg = (Node **)Data_Ptr(r, 0x10);
+    memset(st, 0, sizeof *st);
+    st->owner = *ow = *ow ? Node_Live(*ow) : NULL;
+    st->target = *tg = *tg ? Node_Live(*tg) : NULL;
+    memcpy(&st->type, r, 4);
+    st->kind = Ordnance_Index(st->type);
+    for (int i = 0; i < 3; i++) st->p0[i] = st->p[i] = F32(s->frame.pos[i]);
+    memcpy(st->z, &s->frame.m[6], 12);
+    float gk;
+    memcpy(&gk, &g_ordnance[st->kind].w14, 4);
+    st->g[1] = F32(MUL(gk, -9.800000190734863f));   /* 0x4a62ac */
+    memcpy(st->v, r + 0x14, 12);
+    memcpy(&st->speed, r + 0x38, 4);
+    memcpy(&st->n, r + 0x3c, 4);
+    memcpy(&st->life, r + 4, 4);
+    memcpy(&st->life0, r + 8, 4);
+    float old[3], tp[3] = {0, 0, 0};
+    memcpy(old, r + 0x20, 12);
+    if (st->target) Shot_Target(tp, st->target);
+    memcpy(r + 0x20, tp, 12);
+    for (int i = 0; i < 3; i++) st->dt[i] = F32(SUB(tp[i], old[i]));
+    if (st->target) {
+        memcpy(st->tp, tp, 12);
+        double dx = SUB(st->p0[0], tp[0]), dz = SUB(st->p0[2], tp[2]), dy = SUB(st->p0[1], tp[1]);
+        st->dist = F32(fpu_sqrt(ADD(ADD(MUL(dx, dx), MUL(dz, dz)), MUL(dy, dy))));
+    }
+}
+
+int Shot_Sweep(Node *s, Node *owner, float p1[3], Node **who, int32_t *cls)
+{
+    float dt = g_clock_dt, inv = g_clock_inv;
+    float p0[3] = {F32(s->frame.pos[0]), F32(s->frame.pos[1]), F32(s->frame.pos[2])}, d[3], seg[6], box[6];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(p1[i], p0[i]));
+    memcpy(seg, p0, 12);
+    seg[3] = F32(MUL(d[0], inv));
+    seg[4] = F32(MUL(d[1], inv));
+    seg[5] = F32(MUL(inv, d[2]));
+    memset(box, 0, sizeof box);
+    if (p1[0] < p0[0]) box[0] = p1[0], box[3] = p0[0];
+    else box[0] = p0[0], box[3] = p1[0];
+    if (!(p1[2] > p0[2])) box[2] = p1[2], box[5] = p0[2];
+    else box[2] = p0[2], box[5] = p1[2];
+    for (int list = 0; list < 2; list++)   /* 0x46b1e0, 0x46b230 */
+        for (Cell *c = list ? g_coll_static : g_coll_moving; c; c = c->next) {
+            Entity *e = c->value;
+            if (e->node == owner) continue;
+            const float *eb = (const float *)&e->rest[(0x50 - 0x34) / 4];   /* 0x469f30 */
+            if (eb[3] < box[0] || eb[3] != eb[3] || box[3] < eb[0] || eb[5] < box[2] || box[5] < eb[2]) continue;
+            float oc[3], ov[3], osp, t, nrm[3];
+            Frame_Points(&oc, (const float(*)[3])e->c, 1, &e->node->frame);   /* 0x471b30 */
+            Class_Velocity(e->node, ov, &osp);
+            if (!Sphere_Sweep(seg, seg + 3, oc, ov, e->r, dt, &t, nrm)) continue;
+            if (!Entity_Sweep(seg, seg + 3, e, who, &t, nrm, 0, 1)) continue;
+            for (int i = 0; i < 3; i++) p1[i] = F32(ADD(MUL(t, seg[3 + i]), p0[i]));
+            float rel[3], at[3] = {0, 0, 0};
+            for (int i = 0; i < 3; i++) rel[i] = F32(SUB(seg[3 + i], ov[i]));
+            if (e->node->cls == 8) *who = e->node;   /* a helicopter is hit as itself */
+            if (*who) {
+                Frame f, fi;
+                Node_FrameIn(&f, *who, NULL);
+                Frame_Invert(&fi, &f);   /* 0x452910 */
+                Frame_Points(&at, (const float(*)[3])p1, 1, &fi);
+                *cls = (*who)->cls;
+            } else
+                *cls = -1;
+            if (!Impact_Damage(*who, s, rel, nrm, at)) *who = NULL;   /* 0x45d7c0 */
+            return 1;
+        }
+    *who = NULL;
+    *cls = -1;
+    return 0;
+}
+
+/* ---- the guns' flight (0x4609d0: types 1, 6, 0x12) ---- */
+
+/* not ported yet, as the effects: 0x45c950 the hit's effect and sound by what was hit */
+static void hit_effect(Node *s, const float at[3], Node *who, int32_t cls) { (void)s, (void)at, (void)who, (void)cls; }
+
+static int fly_gun(Node *s, float t)
+{
+    uint8_t *r = s->data;
+    float step = g_clock_step, trav;
+    ShotState st;
+    gather(&st, s);
+    /* the speed eased to the record's (near enough, or a long step: at once) */
+    if ((uint32_t)fbits(step) > 0x80000000u || fbits(step) > 0x3f733333) st.v[2] = st.speed;
+    else {
+        double e = SUB(st.speed, st.v[2]);
+        if (fabs(e) < 0.005) st.v[2] = st.speed;   /* 0x4a6398 */
+        else st.v[2] = F32(ADD(MUL(F32(e), step), st.v[2]));
+    }
+    const float *m = s->frame.m;
+    float w[3];
+    w[0] = F32(ADD(ADD(MUL(m[3], st.v[1]), MUL(m[0], st.v[0])), MUL(m[6], st.v[2])));
+    w[1] = F32(ADD(ADD(MUL(m[4], st.v[1]), MUL(m[1], st.v[0])), MUL(m[7], st.v[2])));
+    w[2] = F32(ADD(ADD(MUL(m[2], st.v[0]), MUL(m[8], st.v[2])), MUL(m[5], st.v[1])));
+    Integrate_F(st.p, w, st.g, t);   /* 0x471730 */
+    float l[3];
+    l[0] = F32(ADD(ADD(MUL(m[2], w[2]), MUL(m[0], w[0])), MUL(m[1], w[1])));
+    l[1] = F32(ADD(ADD(MUL(m[3], w[0]), MUL(m[4], w[1])), MUL(m[5], w[2])));
+    l[2] = F32(ADD(ADD(MUL(m[8], w[2]), MUL(m[6], w[0])), MUL(m[7], w[1])));
+    int hit = 0;
+    int32_t cls = -1;
+    memcpy(&trav, r + 0x40, 4);
+    for (; st.n > 0; st.n--)   /* each shot it carries swept in turn; past 70 m the owner too */
+        if (Shot_Sweep(s, fbits(trav) <= 0x428c0000 ? st.owner : NULL, st.p, &st.who, &cls)) hit = 1;
+    if (!hit && Terrain_Line(s->frame.pos, st.p)) {
+        hit = 1;
+        cls = -1;
+        st.who = NULL;
+    }
+    float d[3];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
+    double dzx = SUB(st.p[2], st.p0[2]);
+    trav = F32(ADD(fpu_sqrt(ADD(ADD(MUL(dzx, d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]))), trav));
+    memcpy(r + 0x40, &trav, 4);
+    if (!hit) {
+        for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memcpy(r + 0x14, l, 12);
+    } else {
+        double l2 = ADD(ADD(MUL(d[2], d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]));
+        if (fpu_sqrt(l2) > 0.009999999776482582f) Frame_FromDir(&s->frame, st.p, d);   /* 0x4a63a4 */
+        else
+            for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memset(r + 0x14, 0, 12);
+        double k = Fast_InvSqrt(l2);
+        float nn[3] = {-F32(MUL(d[0], k)), -F32(MUL(d[1], k)), -F32(MUL(k, d[2]))}, at[3];
+        at[0] = F32(ADD(MUL(nn[0], 2.0f), st.p[0]));   /* 0x4a63a8: 2 m back */
+        at[1] = F32(ADD(F32(MUL(nn[1], 2.0f)), st.p[1]));
+        at[2] = F32(ADD(F32(MUL(nn[2], 2.0f)), st.p[2]));
+        hit_effect(s, at, st.who, cls);
+    }
+    tracer(s, st.type == 6 ? 1 : (st.type == 1 || st.type == 0x12) ? 2 : 0);   /* 0x46c220 */
+    return !hit;
+}
+
+/* 0x459b50: the flight by type; 0 when the shot is spent. Types not ported yet fly on unchanged */
+int Shot_Fly(Node *s, float t)
+{
+    int32_t ty;
+    memcpy(&ty, s->data, 4);
+    int alive = 1;
+    switch (ty) {
+    case 1:
+    case 6:
+    case 0x12: return fly_gun(s, t);
+    case 2: case 3: case 4: case 5: case 7: case 8:   /* the guided and the dropped: not ported yet */
+        if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
+            g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
+        break;
+    }
+    return alive;
 }
