@@ -16,7 +16,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0xd | 0x404380 | 0x404520 | 0 | `Camera_CockpitStart` |
 | 0xe | 0x4059a0 | 0x403be0 | 7 | |
 | 0xf | 0x405450 | 0x4055e0 | 1 | `Camera_ChaseStart`, `Camera_Chase` |
-| 0x10 | 0x405000 | 0x405190 | 1 | |
+| 0x10 | 0x405000 | 0x405190 | 1 | `Camera_HoodStart`, `Camera_Hood` |
 | 0x11 | 0x406d40 | | 8 | |
 | 0x12 | 0x405b10 | 0x405c70 | 1 | `Camera_MountFrontStart`, `Camera_Mounted` |
 | 0x13 | 0x405d80 | 0x405c70 | 1 | `Camera_MountBackStart`, `Camera_Mounted` |
@@ -109,6 +109,21 @@ The view goes to zoom 1, `zoom_factor` to 0x10000, and `View_SetCamera` 0x43cf00
 
 The physics' camera place 0x4a85e8 (`View_Distance`) is the view's eye, +0x160 of 0x4a8488. The port
 copies `g_view.eye` into `g_view_pos` after the camera's function.
+
+## The hood view (mode 0x10)
+
+**The start.** `Camera_HoodStart` 0x405000 (F6) is the chase's start with the pitch and the yaw 0
+(neither of which its frame reads).
+
+**The frame.** `Camera_Hood` 0x405190:
+
+1. Runs the pilot's glance: the same targets and easing as `Camera_Pilot`, the code repeated.
+2. Takes `Frame_Euler` of (pitch, yaw, roll) at (0, 0.7, 3.5), times the node's frame. Unlike the
+   pilot's view, there is no eye node and no sway.
+3. Sets zoom 1 and `zoom_factor` 0x10000, then hands the frame to `View_SetCamera`.
+
+Checked: `--call hood` (case 48) and `--call pilot` (case 49, the pilot's view through the same
+harness), with pilot_yaw_delta 40 and pilot_pitch -10. Identical on t01, t05 and s01.
 
 ## The chase view (mode 0xf)
 

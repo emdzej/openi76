@@ -67,3 +67,7 @@ void Camera_Target(void);
    the vehicle looking toward the target */
 void Camera_TowardStart(Entity *e);
 void Camera_Toward(void);
+/* Camera_HoodStart 0x405000 (mode 0x10, F6) and Camera_Hood 0x405190: on the bonnet, 0.7 up and 3.5 ahead
+   in the node's frame, turned by the pilot's glance */
+void Camera_HoodStart(Entity *e);
+void Camera_Hood(void);
