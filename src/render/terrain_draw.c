@@ -6,6 +6,7 @@
 #include "render/light.h"
 #include "render/queue.h"
 #include "res.h"
+#include "roads.h"
 #include "settings.h"
 #include "terrain.h"
 #include "render/fpu.h"
@@ -448,12 +449,12 @@ void Terrain_LoadTextures(void)
 }
 
 /* Terrain_FreeTextures 0x48e650: a level with a texture releases the name at its index, so levels 3-5
-   release the second row's names, which it never took. (Level 6's would be the 16 bytes past the six names,
-   0x58a528; the port has none to release.) */
+   release the second row's names, which it never took, and level 6 the name past the six, 0x58a528: the
+   first road texture's (roads.h) */
 void Terrain_FreeTextures(void)
 {
-    for (int i = 0; i < 6; i++)
-        if (g_terr_level[i].tex.tex) Res_Release(g_terrain_tex[i]);
+    for (int i = 0; i < 7; i++)
+        if (g_terr_level[i].tex.tex) Res_Release(i < 6 ? g_terrain_tex[i] : g_road_names[0]);
     memset(g_terr_level, 0, sizeof g_terr_level);
 }
 

@@ -9,6 +9,7 @@
 #include "pcx.h"
 #include "platform.h"
 #include "res.h"
+#include "roads.h"
 #include "settings.h"
 #include "terrain.h"
 #include "vfs.h"
@@ -17,6 +18,7 @@
 #include "render/draw.h"
 #include "render/palette.h"
 #include "render/queue.h"
+#include "render/road_draw.h"
 #include "render/sky.h"
 #include "render/surface.h"
 #include "render/terrain_draw.h"
@@ -31,8 +33,9 @@ static Pcx screen;
 /* The mission viewer: the step 3 check of docs/re/port-plan.md, "a static mission camera". A mission's
    world and terrain (Mission_Load), the colour tables and textures as WinMain sets them up (0x401290, its
    world start), the main view as 0x403360 makes it, and a frame as Render_World 0x407550 draws it, of the
-   parts ported so far (the terrain and the sky). The camera is --param cam=x,y,z,yaw,pitch (metres,
-   degrees; y above the ground), by default over the middle of the map's first zone. */
+   parts ported so far (the terrain, the roads and the sky). The camera is --param cam=x,y,z,yaw,pitch (metres,
+   degrees; y above the ground), by default on the first road looking along it, or over the middle of the
+   map's first zone. */
 static bool viewer;
 static Surface surf;           /* the display record 0x58d860's surface */
 static uint8_t *pixels;
@@ -55,6 +58,7 @@ static bool viewer_init(const char *mission)
         return false;
     }
     Sky_Init();
+    Roads_Setup(mission);
     /* WinMain: the colours of black (0x58dcbc) and of the first grey that is not 0xff (0x58dcb8), the lum
        ramp of 0xef, the glow table, then the terrain's textures */
     Color_Match(0, 0, 0);
@@ -73,6 +77,13 @@ static bool viewer_init(const char *mission)
     for (int i = 0; i < 80 * 80; i++)
         if (g_zone_map[i] >= 0) { zx = i % 80, zz = i / 80; break; }
     x = (zx + 0.5) * 128 * 5.0, z = (zz + 0.5) * 128 * 5.0;   /* map square (zx, zz) is zone (24 + zx, 24 + zz) */
+    int pieces = 0;
+    for (RoadPiece *p = g_roads; p; p = p->next) pieces++;
+    if (g_roads && g_roads->n > 1) {   /* on the first road, along it */
+        const float *a = g_roads->pts[0], *b = g_roads->pts[1];
+        x = (a[0] + a[3]) / 2, z = (a[2] + a[5]) / 2;
+        yaw = atan2((b[0] + b[3]) / 2 - x, (b[2] + b[5]) / 2 - z) * 180 / M_PI;
+    }
     if (plat_param("cam", cam, sizeof cam)) sscanf(cam, "%lf,%lf,%lf,%lf,%lf", &x, &y, &z, &yaw, &pitch);
     double ground = Terrain_Height(x, z);
     Frame f = {{0}, 0, {x, ground + y, z}};
@@ -82,8 +93,8 @@ static bool viewer_init(const char *mission)
                   (float)-sp, (float)(cy * cp)};
     memcpy(f.m, r, sizeof r);
     View_SetCamera(&view, &f);
-    snprintf(m, sizeof m, "OpenI76: mission %s, camera %.1f %.1f %.1f yaw %.0f pitch %.0f", mission, x,
-             ground + y, z, yaw, pitch);
+    snprintf(m, sizeof m, "OpenI76: mission %s (%d road pieces), camera %.1f %.1f %.1f yaw %.0f pitch %.0f",
+             mission, pieces, x, ground + y, z, yaw, pitch);
     plat_log(m);
     return true;
 }
@@ -93,6 +104,7 @@ static void viewer_frame(void)
 {
     if (g_detail.b[DET_CLEAR]) Surface_Fill(&surf, 0);
     Terrain_Draw(&view);
+    Roads_Draw(&view);
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
     plat_present(pixels, 640, 480, 640, g_shown_pal);

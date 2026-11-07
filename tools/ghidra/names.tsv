@@ -207,3 +207,11 @@
 00407550	Render_World	render	high	a frame: terrain, roads, objects, the sky, the flush, the HUD
 00484410	Mission_Load	mission	high	the .msn: name to kind/number, then the table 0x4e9770; WDEF and TDEF ported
 00403360	View_Init	render	high	the main view 0x4a8488: fov pi/2, aspect, range 150 or the world's, zoom 1; then the camera modes
+00492cf0	Roads_Rdef	roads	high	the RDEF walk: RREV, RSEG, ISEG, TSEG, EXIT (0x4eb618)
+00492d20	Roads_Seg	roads	high	an RSEG cut into pieces of at most 25 points
+00492f20	Roads_First	roads	high	the pieces' list 0x4eb6f8
+004909e0	Roads_Setup	roads	high	names, textures, the pieces on the ground and their spheres
+00490de0	Roads_Names	roads	high	the 30 road texture names: defaults, then <mission>.rtm
+00453a70	Buf_ReadLine	misc	high	a line of a buffer, past an end of line and the white space after it
+00491180	Roads_Draw	roads	high	the road quads into the queue as occluders; ported, diffed
+00491650	Roads_DrawObjects	roads	med	the objects' road faces into the queue

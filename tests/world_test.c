@@ -4,6 +4,7 @@
 #include "chunks.h"
 #include "exe.h"
 #include "res.h"
+#include "roads.h"
 #include "terrain.h"
 #include "vfs.h"
 #include "vfs_host.h"
@@ -38,6 +39,7 @@ int main(void)
     CHECK(Chunks_Check(World_Table(), 3, 0x4eb5e8));
     CHECK(Chunks_Check(Terrain_Table(), 4, 0x4eb8e8));
     CHECK(Chunks_Check(Mission_Table(), 7, 0x4e9770));
+    CHECK(Chunks_Check(Roads_Table(), 5, 0x4eb618));
     CHECK(Mission_Load("t01.msn") && g_mission_kind == 2 && g_mission_number == 1 && g_world.sky[0]);
     ChunkDesc top[] = {
         {"WDEF", h_wdef, 0x2006}, {"TDEF", Terrain_Tdef, 0x2006}, {"RDEF", h_any, 0x2006}, {"ODEF", h_any, 0x2006},
