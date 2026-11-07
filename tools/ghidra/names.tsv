@@ -117,7 +117,7 @@
 0047eb50	Tex_AnimStart
 0047eac0	Tex_AnimStart2
 0047d2d0	Geo_Build
-0047dc70	Geom_SelectLod
+0047dc70	Lod_Select	lod	high	the mesh of a level, loaded when the name changes; ported, diffed
 0043bcc0	Palette_Set
 0043c010	Color_Get
 0043b5f0	Lum_Ramp
@@ -132,15 +132,15 @@
 00484390	Bwd2_ReadHeader
 00484680	Rev_Check
 004843c0	Bwd2_Header
-00494bc0	Terrain_ReadTdef
+00494bc0	Terrain_Tdef	terrain	high	the TDEF walk: TREV, ZMAP, ZONE, EXIT
 00494c10	Terrain_Zmap
 00494c80	Terrain_Zone
 00494d50	Terrain_MapFile
 00494d10	Terrain_ZoneData
 00494d00	Terrain_ZoneMap
 00494d20	Terrain_UnmapFile
-0048e8d0	Terrain_Draw
-00407550	Render_World
+0048e8d0	Terrain_Draw	terrain	high	the view's terrain: footprint, quadtree (rounding down), vertices, then the patch drawer; ported, diffed
+00407550	Render_World	render	high	a frame: terrain, roads, objects, the sky, the flush, the HUD
 00437b40	Display_SetPalette
 00492fa0	World_Wdef
 004931e0	World_SetLights
@@ -177,9 +177,7 @@
 0048e280	Terrain_Flag	terrain	high	the cell's bit 12
 0048e210	Terrain_Inside	terrain	high	inside the grid's cells -3072..13311
 0048e820	Terrain_Setup	terrain	high	lod, cell size, zone grid
-00494bc0	Terrain_Tdef	terrain	high	the TDEF walk: TREV, ZMAP, ZONE, EXIT
 0044e260	Settings_Defaults	settings	high	the detail preset by machine class
-0048e8d0	Terrain_Draw	terrain	high	the view's terrain: footprint, quadtree (rounding down), vertices, then the patch drawer; ported, diffed
 0048f090	Terr_Quad	terrain	high	the quadtree: cull, node, split test, four children, stitching
 0048f270	Terr_Cull	terrain	high	a square's circle (s/2 * 1.42) against the footprint's edges
 0048f720	Terr_Split	terrain	high	split when the far corner is within sqrt(k) * s of the eye
@@ -204,7 +202,6 @@
 00407470	Msg_Nop	misc	high	the release build's message: a bare ret
 004391c0	Surface_Make	render	high	a surface over a bitmap (allocated when none)
 0043df60	Sprite_Draw	render	high	the scaled sprite blitter, modes 1-5 (3: through lum, 0xff clear); mode 3 ported, diffed
-00407550	Render_World	render	high	a frame: terrain, roads, objects, the sky, the flush, the HUD
 00484410	Mission_Load	mission	high	the .msn: name to kind/number, then the table 0x4e9770; WDEF and TDEF ported
 00403360	View_Init	render	high	the main view 0x4a8488: fov pi/2, aspect, range 150 or the world's, zoom 1; then the camera modes
 00492cf0	Roads_Rdef	roads	high	the RDEF walk: RREV, RSEG, ISEG, TSEG, EXIT (0x4eb618)
@@ -230,7 +227,6 @@
 0048e120	World_Add	scene	high	centre and radius, then onto the world list through +0x60; ported, diffed
 0047d6c0	Lod_Init	lod	high	the level-of-detail hash 0x57f558; ported
 0047d700	Lod_Add	lod	high	a mesh name per state and level; ported, diffed
-0047dc70	Lod_Select	lod	high	the mesh of a level, loaded when the name changes; ported, diffed
 0047da30	Lod_Remove	lod	high	a node's record and its meshes; ported
 00423b90	Entity_Init	entity	high	the entity array, callbacks, name table; ported in part
 00423cf0	Entity_OnAdd	entity	high	a callback for every entity added; ported
@@ -240,7 +236,7 @@
 004258c0	Class_Free	entity	high	the class's destructor; ported for ported classes
 0042e5a0	Class_IsStructureNode	entity	high	classes 2, 3, 4, 0xb, 0xc
 0042e5e0	Class_IsStructure	entity	high	classes 2, 3, 4, 0xb, 0xc
-0042e620	Node_IsUser	entity	high	flag 0x10
+0042e620	Node_IsUser	scene	high	the node's flag 0x10
 0042e640	Class_IsMoving	entity	high	classes 1, 7, 9
 00450db0	List_Push	misc	high	a 12-byte cell at a list's front
 00492ac0	Names_Init	entity	high	the name table: 0x800 entries
@@ -363,7 +359,7 @@
 0043a400	Light_Remove	light	high	a node's light out of the table, the last into its place; ported
 004257c0	Class_Unlist	entity	high	the class's data freed and the node off the class lists; ported
 00450df0	List_Remove	entity	high	a cell out of a list; ported
-0042e250	Node_SetFlagsAll	scene	high	or-s flags into a node, its siblings and descendants; ported
+0042e250	Node_SetFlagsAll	scene	high	the node, its next ones and its children; ported
 00482ea0	Node_FirstTexture	lod	high	the first face texture of a node's mesh that is not a .map; ported
 00453ed0	Effects_Init	effects	high	the effects table and the three .xdf of the cars and buildings; ported
 00453f50	Effects_Register	effects	high	an effect's tree under its upper-cased name; 0 if there; ported
@@ -393,7 +389,7 @@
 004333b0	Class41_SetFrame	entity	high	a class 0x29 node's frame into its data; ported
 00495fe0	__splitpath	crt	high	MSVC _splitpath; the name part ported (crt_splitname)
 004088a0	AI_Init	ai	high	the teams emptied, the callbacks; partly ported
-00409be0	AI_Wheels	ai	high	the AI's 0xa994 from the four wheels; ported
+00409be0	AI_GripEstimate	ai	high	the AI block's +0xa994 from the wheels' grip; ported
 0040cbb0	AI_TacticsStart	ai	high	the tactics' state (and the table's tag check); ported
 0042e570	Class_IsVehicle	entity	high	classes 1, 8, 9; ported
 00484640	Mission_Ldef	mission	high	LDEF: 0x493530; ported
@@ -402,10 +398,10 @@
 004522e0	Frame_FromDir	math	high	a frame whose z axis is a direction; ported, diffed
 0040bf40	Fsm_ActionCode	fsm	med	an FSM action's name to its number
 00408400	Fsm_Load	fsm	med	ADEF's FSM chunk: the script's tables (0x40bc60, 0x40cb40)
-00450fa0	Clock_Tick	time	med	the frame's dt from GetTickCount, clamped 0.001-0.2
+00450fa0	Clock_Tick	clock	high	the frame step from GetTickCount, clamped; ported
 00425920	Class_StartAll	entity	med	the classes' start handlers (word 2) after the load
-00425a20	Class_Update1	entity	med	the classes' first per-frame handlers (word 3)
-00425b00	Class_Update2	entity	med	the classes' second per-frame handlers (word 4)
+00425a20	Class_Frame0	classes	high	every listed nodes per-frame handler (word 3); ported
+00425b00	Class_Frame1	classes	high	the same with word 4; ported
 004294e0	Vehicle_Start	vehicle	high	class 1's start: timer, physics set-up, hit zones, the user's armour; ported, diffed
 00471df0	Vehicle_PhysInit	physics	high	on the ground, wheels' heights, track and wheelbase, corners, specials, mass, brakes, engine; ported, diffed
 0042f640	Engine_Step	engine	high	gear, rpm and torque from the throttle and the speed; ported (its start call diffed)
@@ -421,13 +417,13 @@
 00409b00	AI_SetTaurus	ai	high	0x505454: the script's actor named taurus
 00409b10	AI_Taurus	ai	high	returns 0x505454
 0042d5e0	Node_Data	entity	high	returns node+0x70
-0042d920	Special_Kind	vehicle	high	a special's node's data word 0 (0 for none)
+0042d920	Special_Kind	damage	high	a special's data +0
 0042d4f0	Vehicle_Mode	vehicle	high	the vehicle's data +0x104
 004761b0	Engine_SoundStart	audio	med	0x476240 (the engine's sound) as a boolean
-00429eb0	Vehicle_Die	vehicle	med	the death: wreck, explosions, score, messages
+00429eb0	Vehicle_Damage	damage	high	class 1's damage handler: the side by the point, the parts, the look, the smoke, the death
 0042b790	Vehicle_Kill	vehicle	high	flag 0x20 and 0x429eb0 unless dying; ported
 0046fe20	Vehicle_Upright	physics	high	on its back at rest: the user is turned over, others die; ported, diffed
-004683c0	Sound_At	audio	med	a sound by id at a node
+004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00475cb0	Vehicle_Steer	physics	high	the front wheels turned by +0xe0 times -pi/4; ported, diffed
 0042e450	Node_SetYaw	scene	high	the axes turned about y; ported
 0042ffb0	Wheel_Contact	physics	high	ground, bumps, spring target, filtered travel, wheel height; ported, diffed
@@ -477,7 +473,7 @@
 00430120	Wheel_Ground	physics	high	a wheels data +0x2c
 00430130	Wheel_Travel	physics	high	a wheels data +0x24
 00472360	Vehicle_Physics	physics	high	a vehicles physics sub-step; ported, diffed (damage stubbed)
-0042a5d0	Terrain_Wear	damage	med	rough ground damages a random part by the terrain class +0x10 times dt
+0042a5d0	Terrain_Wear	damage	med	rough ground's wear: a random side's packet
 00429c70	Vehicle_Frame	vehicle	high	class 1 per-frame: physics sub-steps near the camera, the far step away; ported, diffed (damage stubbed)
 004042c0	View_Distance	view	high	2 farther than r from the camera, 1 past r plus a pad, else 0; ported
 00473440	Vehicle_FarStep	physics	high	a far vehicles step on a flat plane; ported, diffed
@@ -488,13 +484,10 @@
 00451250	Timer_Count	clock	high	sub-steps for the frame; ported
 00451290	Timer_CountDt	clock	high	Timer_Count for a given dt
 004512d0	Timer_Next	clock	high	the next sub-step; ported
-0042b830	Vehicle_DamageStep	damage	med	the damage per sub-step (parts, fire, death)
+0042b830	Vehicle_State	damage	high	each sub-step: the engine's and lights' keys, the start and wreck timer; ported
 00475ee0	Tyre_Step	physics	med	the tyres sounds and a flats damage
 00481d00	User_Controls	input	med	the input actions to the user vehicle (throttle +0xe4, steering +0xe0, ...)
 00480870	Input_Poll	input	med	polls the devices, then User_Controls
-00425a20	Class_Frame0	classes	high	every listed nodes per-frame handler (word 3); ported
-00425b00	Class_Frame1	classes	high	the same with word 4; ported
-00450fa0	Clock_Tick	clock	high	the frame step from GetTickCount, clamped; ported
 0047eee0	Input_FindDevice	input	high	a listed device by name (-1 absent), else opened; ported
 0047ed20	Input_OpenDevice	input	high	the device from the first driver that has it, else listed absent; ported
 0047ef40	Input_AnalogChannel	input	high	an analog channel by number or name; ported
@@ -545,27 +538,21 @@
 0042d520	Vehicle_GearUp	vehicle	high	+0x104 up to 5; ported inline
 0042d540	Vehicle_GearDown	vehicle	high	+0x104 down to 0; ported inline
 00450ab0	Ui_KeyWindow	ui	med	the first window with flag 0x100 (takes the keys)
-0042b830	Vehicle_State	damage	high	each sub-step: the engine's and lights' keys, the start and wreck timer; ported
 0042d660	Vehicle_Lights	damage	high	the headlamps, beam and brake lamps by the flag 0x40 and the lamps' health; ported
 0042e2d0	Node_SetFlags	scene	high	bits on the node, its first child and all after and under it; ported
 0042e320	Node_ClearFlags	scene	high	the same, cleared; ported
-0042e250	Node_SetFlagsAll	scene	high	the node, its next ones and its children; ported
 0042e290	Node_ClearFlagsAll	scene	high	the same, cleared; ported
-0042e620	Node_IsUser	scene	high	the node's flag 0x10
 0043a470	Light_SetOn	render	high	the node's light's flag 8; ported
 00476510	Engine_StartTime	damage	high	the user's engine start sample's length (esnp1-3.wav); ported
 004764b0	Engine_StartSample	damage	high	the start sample's entry by the engine's state and kind; ported
 00476580	Engine_IdleSound	sound	med	the idle sample after the start
 00467260	Sound_Play	sound	med	a sample by name; nonzero when it plays
-004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00407370	Net_Host	net	med	returns 0x4a8760
 0042bac0	Damage_Side	damage	high	a packet on a side: armour and chassis by their points times the specials' factors; ported
 0042bf90	Damage_Parts	damage	high	a packet on a random inner part of the side (or the tyres), the kill chance; ported
-0042d920	Special_Kind	damage	high	a special's data +0
 0042d940	Special_Works	damage	high	a special's +4 above 0 or +0x10 set
 00425df0	Class_Damage	classes	high	the class table's word 10 (0x4d3c48) for the node's class; ported for the parts
 00430900	Structure_Damage	damage	med	a structure's damage handler: destruction, explosion, chunks
-0042a5d0	Terrain_Wear	damage	med	rough ground's wear: a random side's packet
 0042f380	Engine_Damage	damage	high	class 0x15: points +0, power +0x18 at least 0.275 (0.4 the user's); ported
 004303f0	Part16_Damage	damage	high	class 0x16: points +4, +0x10 at least 0.2 of +0xc; ported
 0042fca0	Wheel_Damage	damage	high	class 0x1e: points +4, grip +0xc at least 0.5, +0x14; tells the AI; ported
@@ -573,12 +560,11 @@
 00434540	Part14_Damage	damage	high	class 0x14: points +0 (a dead test against bit 3); ported
 0042d8a0	Part18_Damage	damage	high	class 0x18: points +8, amounts kept; ported
 00456110	Gun_Damage	damage	high	class 0x32: the weapon instance's +0xc; ported
-00409be0	AI_GripEstimate	ai	high	the AI block's +0xa994 from the wheels' grip; ported
 0042d0a0	Vehicle_Whole	damage	high	the first 20 parts' points now over whole; ported
 0042c4b0	Damage_Look	damage	high	a part's damaged look (Lod states), a wheel's blown tyre; ported
 00482f20	Lod_SetStateTree	lod	high	the state on a node and all under it; ported
 004301a0	Tyre_Blow	damage	high	once: the radius times 0.688, +0x44, tblow.wav; ported
-004286c0	Entity_DropSphere	entity	high	+0x68 -1, +0x70 0
+004286c0	Entity_DropSphere	entity	high	the entity's cached sphere: +0x68 = -1, +0x70 = 0
 00456890	Gun_Points	weapons	high	the weapon instance's +0xc by its gun node
 004568d0	Gun_Whole	weapons	high	the definition's +0x5c by its gun node
 0042fd90	Wheel_Points	damage	high	a wheel's +4 and +8 (300 each without data)
@@ -592,7 +578,6 @@
 0046e220	Smoke_Stop	effects	med	removes an object's smoke trail
 0046e270	Smoke_Density	effects	med	an object's smoke trail's density
 0046e2b0	Smoke_Kind	effects	med	an object's smoke trail's kind
-00429eb0	Vehicle_Damage	damage	high	class 1's damage handler: the side by the point, the parts, the look, the smoke, the death
 0042d010	Side_Whole	damage	high	a side's lesser of the chassis's and the armour's health
 0045d7c0	Impact_Damage	damage	high	an impact's packet (mass x (v.-n)^2 x k, or a projectile's) through Class_Damage
 00408bf0	AI_Rethink	ai	high	every team's vehicles' AI block +0xa714 = 1
@@ -602,4 +587,3 @@
 00452cd0	Screen_Shake	camera	med	in the cockpit: the shake's parameters 0x4db32c-0x4db338
 00468a70	Hud_DamageArrow	hud	low	a free damage-direction record (or NULL)
 0042c580	Vehicle_Wreck	damage	high	the wreck: its start (lights out, worst look, parts' blows) and each step's random effect
-004286c0	Entity_DropSphere	entity	high	the entity's cached sphere: +0x68 = -1, +0x70 = 0
