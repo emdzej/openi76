@@ -213,8 +213,9 @@ results.
 
 **The cameras** (pushCam, popCam, camObjObj, camObjDir, camPosObj, camTransObj, camPosDir, camTransDir,
 camF12, camIsArrived) are the script's cameras of docs/re/camera.md (`src/scriptcam.c`). pushCam first
-asks the HUD's flag 0x550638 (0x428880). When it is set, the preset view 0xc goes on the user before the
-push: 0x581ebc = 0, 0x581ec0 = 0xc and `Camera_SetMode`. The HUD is not ported, so the port never does.
+asks the dashboard's swap flag 0x550638 (`Dash_IsOn` 0x428880, docs/re/cockpit.md). When it is set, the
+preset view 0xc goes on the user before the push: 0x581ebc = 0, 0x581ec0 = 0xc and `Camera_SetMode`, which
+swaps the dashboard back to the pilot's view.
 A mission's intro is such a sequence. It waits for `camIsArrived` or `isKeypress` (Esc), and while it
 polls `isKeypress` the typed keys go to the menus' poll, not to `Game_Command`.
 

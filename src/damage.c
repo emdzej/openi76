@@ -1,6 +1,7 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
 #include "camera.h"
+#include "cockpit.h"
 #include "ordnance.h"
 #include "classes.h"
 #include "collide.h"
@@ -1179,7 +1180,8 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
         Node_SetFlags(n, 0x200);
         if (g_user_entity && g_user_entity->node == n) {
             g_input_menu = 0;   /* 0x480680 */
-            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera; the HUD's 0x428890 not ported */
+            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera */
+            Dash_Off();   /* 0x428890 */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
         }
@@ -1375,7 +1377,8 @@ void Vehicle_Wreck(Node *n, int start)
         sound(7, n);
         if (g_user_entity && g_user_entity->node == n) {
             g_input_menu = 0;   /* 0x480680 */
-            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera; the HUD's 0x428890 not ported */
+            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera */
+            Dash_Off();   /* 0x428890 */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
         } else {

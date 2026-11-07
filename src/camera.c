@@ -1,5 +1,6 @@
 /* The main view and its camera modes (camera.h). In the current rounding mode (render/fpu.h). */
 #include "camera.h"
+#include "cockpit.h"
 #include "clock.h"
 #include "exe.h"
 #include "input.h"
@@ -134,11 +135,10 @@ static float ease_at(float cur, float to, float step, int neg_zero_too, float ra
     if (below(fabs(e), 0.005)) return to;
     return F32(ADD(MUL(MUL(step, F32(e)), rate), cur));
 }
-static float ease(float cur, float to, float step, int neg_zero_too) { return ease_at(cur, to, step, neg_zero_too, 4.0f); }
 
 /* the glance's targets from the actions pilot_pitch, pilot_yaw_delta and pilot_roll (degrees), and the
    angles eased toward them at 4 per second, the yaw the short way round */
-static void glance(float step)
+static void glance(float step, float rate)
 {
     const float deg = exe_f32(0x4a5020), turn = exe_f32(0x4a504c);   /* pi / 180, 2 pi */
     pitch_to = F32(MUL((double)rd32(INPUT_AT(0x4def78)), deg));
@@ -149,23 +149,23 @@ static void glance(float step)
     if (below(fabs((double)d), 0.005)) yaw = yaw_to;
     else if (!(d < 0)) {
         if ((int32_t)fbits(d) > 0x40490fdb) {
-            double s = ADD(MUL(MUL(SUB(d, turn), step), 4.0f), yaw);
+            double s = ADD(MUL(MUL(SUB(d, turn), step), rate), yaw);
             float t = F32(s);
             if (below(s, 0.0)) t = F32(ADD(t, turn));
             yaw = t;
         } else
-            yaw = F32(ADD(MUL(MUL(d, step), 4.0f), yaw));
+            yaw = F32(ADD(MUL(MUL(d, step), rate), yaw));
     } else {
         if (fbits(d) > 0xc0490fdbu) {
-            double s = ADD(MUL(MUL(ADD(d, turn), step), 4.0f), yaw);
+            double s = ADD(MUL(MUL(ADD(d, turn), step), rate), yaw);
             float t = F32(s);
             if (s > turn) t = F32(SUB(t, turn));
             yaw = t;
         } else
-            yaw = F32(ADD(MUL(MUL(d, step), 4.0f), yaw));
+            yaw = F32(ADD(MUL(MUL(d, step), rate), yaw));
     }
-    pitch = ease(pitch, pitch_to, step, 0);
-    roll = ease(roll, roll_to, step, 1);
+    pitch = ease_at(pitch, pitch_to, step, 0, rate);
+    roll = ease_at(roll, roll_to, step, 1, rate);
 }
 
 void Camera_Pilot(void)
@@ -178,7 +178,7 @@ void Camera_Pilot(void)
     if (!(n->cls == 1 || n->cls == 8 || n->cls == 9)) return;   /* 0x42e570 */
     Node *eye = *Data_Ptr(n->data, 0x398);
     if (!eye) return;
-    glance(step);
+    glance(step, 4.0f);   /* 0x4a5024 */
     Frame glance, sway, a, at, cam;
     Frame_Euler(&glance, pitch, yaw, roll, 0, 0, 0);
     Cockpit_Sway(&sway, n);
@@ -262,6 +262,44 @@ void Camera_CockpitStart(Entity *e)
     g_cockpit = 1;
     g_camera_mode = 0;
     g_camera_fn = Camera_Pilot;
+}
+
+/* the cockpit's other view (0xc, from the pilot's view or itself): the dashboard swapped (Dash_Toggle) and the
+   view at the eye with the glance eased at 2 a second; swapped back, the pilot's view again as 0xd's start */
+void Camera_DashStart(Entity *e)
+{
+    if (g_camera_mode != 0 && g_camera_mode != 2) return;
+    if (Dash_Toggle() != 1) {
+        Camera_CockpitStart(e);   /* 0x4049e0's second half is 0x404380's */
+        return;
+    }
+    View_SetZoom(&g_view, 1.0f);
+    view_again();
+    g_cockpit = 1;
+    g_camera_entity = e;
+    g_camera_mode = 2;
+    g_camera_fn = Camera_Dash;
+}
+
+void Camera_Dash(void)
+{
+    float step = g_clock_step;
+    if (!g_camera_entity) g_camera_entity = g_user_entity;
+    Node *n = g_camera_entity->node;
+    Node *eye = *Data_Ptr(n->data, 0x398);   /* the original tests neither */
+    if (!eye) return;
+    /* the eye in the vehicle's frame swayed: the sway between the eye's place and the vehicle's frame, where
+       the pilot's view puts it before the eye's */
+    Frame at, sway, base, t, gl, cam;
+    Node_FrameIn(&at, eye, n);
+    Cockpit_Sway(&sway, n);
+    Frame_Mul(&base, &sway, &n->frame);
+    Frame_Mul(&t, &at, &base);
+    glance(step, 2.0f);   /* 0x4a5044 */
+    Frame_Euler(&gl, pitch, yaw, roll, 0, 0, 0);
+    Frame_Mul(&cam, &gl, &t);
+    View_SetZoom(&g_view, F32(MUL((double)rd32(INPUT_AT(0x4defa4)), exe_f32(0x4a5088))));   /* zoom_factor / 65536 */
+    View_SetCamera(&g_view, &cam);
 }
 
 /* the chase's starts differ in the yaw (behind, or turned toward a side) */
@@ -623,7 +661,7 @@ void Camera_Hood(void)
     float step = g_clock_step;
     if (!g_camera_entity) g_camera_entity = g_user_entity;
     Entity *e = g_camera_entity;
-    glance(step);
+    glance(step, 4.0f);   /* 0x4a5024 */
     Frame a, cam;
     Frame_Euler(&a, pitch, yaw, roll, 0, 0.7f, 3.5f);   /* 0x3f333333, 0x40600000 */
     Frame_Mul(&cam, &a, &e->node->frame);
@@ -635,6 +673,7 @@ void Camera_Hood(void)
 
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
+    {0xc, Camera_DashStart},
     {0xd, Camera_CockpitStart},
     {0xe, Camera_OrbitStart},
     {0xf, Camera_ChaseStart},
@@ -659,6 +698,6 @@ void Camera_SetMode(Entity *e, int32_t mode)
     if (i == sizeof k_modes / sizeof *k_modes) return;
     k_modes[i].start(e);
     if (g_camera_mode == 2) return;
-    /* 0x428890: the HUD's, not ported yet */
+    Dash_Off();   /* 0x428890 */
     View_SetZoom(&g_view, 1.0f);
 }

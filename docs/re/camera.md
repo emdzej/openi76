@@ -12,7 +12,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 
 | Mode | Start | Per-frame | Sub-mode | Port |
 |---|---|---|---|---|
-| 0xc | 0x4049e0 | 0x404c60 | 2 | |
+| 0xc | 0x4049e0 | 0x404c60 | 2 | `Camera_DashStart`, `Camera_Dash` |
 | 0xd | 0x404380 | 0x404520 | 0 | `Camera_CockpitStart` |
 | 0xe | 0x4059a0 | 0x403be0 | 7 | `Camera_OrbitStart`, `Camera_Orbit` |
 | 0xf | 0x405450 | 0x4055e0 | 1 | `Camera_ChaseStart`, `Camera_Chase` |
@@ -29,8 +29,8 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0xfefe | 0x406bb0 | 0x403540 | 6 | `Camera_TrackStart`, `Camera_Track` |
 
 `Camera_SetMode` 0x407010 (entity, mode) does nothing while the sub-mode is 5, or for a mode not in the
-table. Otherwise it calls the start. Then, unless the new sub-mode is 2, it calls 0x428890 (the HUD's) and
-sets zoom 1. The port leaves out the modes not ported yet.
+table. Otherwise it calls the start. Then, unless the new sub-mode is 2, it calls `Dash_Off` 0x428890
+(docs/re/cockpit.md) and sets zoom 1.
 
 The starts from sub-mode 4 first pop the camera's whole state (0x4a8478-0x4a86e0, 0x268 bytes) from a stack
 of 8 (0x58c4e0, index 0x4a86e0). They then take the glance targets from the input again.
@@ -52,7 +52,7 @@ world's range when the detail's range is set (else 150), zoom 1. With 1 it also 
 - 0x4a86d8, to 0;
 - the mode, to 0x19 on the user's entity, through the table as `Camera_SetMode` would.
 
-Then, unless the mode is 2, it calls 0x428890 (the HUD's) and sets zoom 1. WinMain calls it once before
+Then, unless the mode is 2, it calls `Dash_Off` 0x428890 and sets zoom 1. WinMain calls it once before
 the game loop. The user's vehicle's start (0x4294e0, at 0x429c06) calls it too, with 1. That start can
 come during play: in t06 it does, in the script's frame and after its pushCam. The reset then drops the
 script's camera back to the pilot's view on the main surface 0x58d860 (`g_screen` in the port).
@@ -108,6 +108,28 @@ The view goes to zoom 1, `zoom_factor` to 0x10000, and `View_SetCamera` 0x43cf00
 
 The physics' camera place 0x4a85e8 (`View_Distance`) is the view's eye, +0x160 of 0x4a8488. The port
 copies `g_view.eye` into `g_view_pos` after the camera's function.
+
+## The dashboard's view (mode 0xc)
+
+`Camera_DashStart` 0x4049e0 does nothing outside sub-modes 0 and 2. Otherwise it swaps the dashboard
+(`Dash_Toggle` 0x428810, docs/re/cockpit.md). When the swap is on, it sets zoom 1, remakes the view at the
+old camera, and sets the cockpit flag 1, the entity and the sub-mode 2. It then installs `Camera_Dash`
+0x404c60. When the swap is off (or outside play, where the flag stays off), the rest of the start is the
+cockpit's start 0x404380 instruction for instruction, and the view is the pilot's again. So the preset
+toggles between the two cockpit views.
+
+`Camera_Dash` differs from the pilot's frame in three ways:
+
+- **No tests.** It tests neither the node's class nor the eye (data +0x398). The eye's climb to the
+  vehicle has no end test either.
+- **Where the sway goes.** The camera is the glance's frame, then the eye's frame up to the vehicle's,
+  then the sway, then the vehicle's frame. The pilot's view applies the sway before the eye's frame
+  instead.
+- **The glance and the zoom.** The glance eases at 2 a second, not 4. The zoom is
+  `zoom_factor`·(1/65536) (0x4defa4, 0x4a5088), not a reset to 1.
+
+Checked: `--call dash` (case 52) starts the view on the user's vehicle in play and runs five frames.
+The swap's parts are not set up, as the cockpit's set-up is stubbed. Identical on t01, s01 and a01.
 
 ## The hood view (mode 0x10)
 
@@ -284,7 +306,7 @@ at the load. The five frames are too short for the lost-shot path, which is the 
 ## The track view (mode 0xfefe, the death's)
 
 `Camera_TrackStart` 0x406bb0 is set when the user's vehicle dies (0x42a523, 0x42b01d and 0x42c83a, each
-then the HUD's 0x428890 and `track_yaw_delta` set to 8, so the camera circles the wreck). The start:
+then `Dash_Off` 0x428890 and `track_yaw_delta` set to 8, so the camera circles the wreck). The start:
 
 - remakes the view at the old camera, as the chase's does;
 - sets the entity, the cockpit flag 0 and the sub-mode 6;

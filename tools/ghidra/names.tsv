@@ -1029,7 +1029,13 @@
 004533b0	Path_At	camera	high	a path camera's segment and place; ported
 00453440	Cam_PathDir	camera	high	camPosDir, camTransDir: along a path, turned by angles; ported, diffed
 004537a0	Cam_F12	camera	high	camF12: over a, back along the line to b; ported
-00428880	Hud_Flag	hud	med	0x550638
+00428880	Dash_IsOn	cockpit	high	the dashboard's swap flag 0x550638; ported
+004286e0	Dash_Setup	cockpit	high	the dashboard's two parts by texture (zretc_6, zretc_1), the screen mode's mask; ported but the mask
+00428770	Dash_Mask	cockpit	high	in play with the swap: the mask's runs fill the frame buffer with 0xfe
+00428810	Dash_Toggle	cockpit	high	in play: the swap flag flipped, the parts shown or hidden; ported
+00428890	Dash_Off	cockpit	high	the swap off: the main part shown; ported
+004049e0	Camera_DashStart	camera	high	mode 0xc: the dashboard swapped, its view in sub-mode 2 or the cockpit's again; ported, diffed
+00404c60	Camera_Dash	camera	high	its frame: the eye's with the sway under it, the glance at 2; ported, diffed
 00419930	AI_TargetLost	ai	high	the target unseen 5 s while the user hides; ported
 004199a0	AI_TargetSeen	ai	high	0x419930's opposite; ported
 004099e0	AI_SightTurn	ai	high	one line of sight a frame while the user hides; ported

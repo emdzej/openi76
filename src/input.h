@@ -50,3 +50,6 @@ void User_ControlsReset(void);
    steering (+0xe0) from the analog values, or with the keys from ramps over 3 s; the engine (+0xec), the
    lights (+0x100), the hand brake (+0xf0), the gears (+0x104) and the direction (+0xe8) */
 void User_Controls(void);
+/* 0x581ebc: the last view was preset 1 (the cockpit); 0x581ec0: the last other preset (0x480990, 0x4809a0
+   set them) */
+extern int32_t g_view_cockpit, g_view_preset;

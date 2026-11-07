@@ -46,6 +46,11 @@ void Camera_Track(void);
 /* Camera_OrbitStart 0x4059a0 (mode 0xe, F2) and Camera_Orbit 0x403be0: the same in sub-mode 7, its frame
    without the track's test of the entity's node */
 void Camera_OrbitStart(Entity *e);
+/* Camera_DashStart 0x4049e0 (mode 0xc, the HUD's and the user's controls'): from sub-mode 0 or 2 the
+   dashboard swapped; on, Camera_Dash 0x404c60 in sub-mode 2 (the eye's view with the vehicle's sway applied
+   under the eye, the glance eased at 2, zoom from zoom_factor); off, the cockpit's start 0x404380 */
+void Camera_DashStart(Entity *e);
+void Camera_Dash(void);
 void Camera_Orbit(void);
 /* Camera_ChaseLeftStart 0x405ee0 (mode 0x14, F9) and Camera_ChaseRightStart 0x406070 (0x15): the chase
    turned to a yaw of 150 degrees (30 off behind) and of 30 degrees (30 off the front) */

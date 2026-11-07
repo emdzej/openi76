@@ -570,8 +570,8 @@ not ported. Then:
   - unported steps: 0x46fdb0 (a list at 0x4dd904), the AI's own death for others than the user (0x488950),
     the guns (0x455370), the engine's sound (0x476440);
   - `AI_Rethink` 0x408bf0, the sound 2 (0x4683c0) and `Node_SetFlags(n, 0x200)`;
-  - for the user's vehicle: only the menu keys (0x480680), the death camera (0x407010 with 0xfefe), the HUD
-    (0x428890) and 0x4def9c = 8.
+  - for the user's vehicle: only the menu keys (0x480680), the death camera (0x407010 with 0xfefe), the
+    dashboard's swap off (`Dash_Off` 0x428890) and 0x4def9c = 8.
 - Otherwise the wreck starts: `Vehicle_Wreck(n, 1)` 0x42c580.
 - A kill by the user scores (0x4072e0: 0x4ed940 the kills, 0x4ed93c the points). This only happens in the
   melee mode, while 0x4a8760 is set (0x407030); never in a mission.
@@ -619,8 +619,8 @@ entity's cached sphere (0x4286c0).
    `r × 2⁻¹⁵ × 2 + 2` and `r × 2⁻¹⁵ + 1`.
 4. Parts 0-10 get `Damage_Look` at level 4. The five body sides get texture frame 3 (as in the damage).
 5. `Node_SetFlags(n, 0x200)`, then the sounds 2 and 7.
-6. **For the user's vehicle:** only the menu keys, the death camera (0x407010 with 0xfefe), the HUD
-   (0x428890) and 0x4def9c = 8.
+6. **For the user's vehicle:** only the menu keys, the death camera (0x407010 with 0xfefe), the
+   dashboard's swap off (`Dash_Off` 0x428890) and 0x4def9c = 8.
    **For the others, outside network play:** each of the 20 parts takes a packet of mask 2. Its +0xc is
    `((rand & 0x7f) + 0x81) × points >> 8`, the points as in `Damage_Parts`, through `Class_Damage`.
 7. Unless it is the user's: the AI's death (0x488950). Then the guns (0x455370) and `AI_Rethink`.

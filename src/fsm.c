@@ -3,6 +3,8 @@
 #include "avoid.h"
 #include "ai.h"
 #include "classes.h"
+#include "camera.h"
+#include "cockpit.h"
 #include "collide.h"
 #include "combat.h"
 #include "damage.h"
@@ -951,8 +953,13 @@ static void action(uint32_t m, int32_t index)
     case 49: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), 0, 0); break;   /* teleport */
     case 50: destroy(E(m, 0)); break;  /* destroy */
     case 51: later(0x44e6e0); break;           /* playMovie */
-    case 52:   /* pushCam; with the HUD's 0x550638 set (0x428880) first the preset view 0xc (0x480990,
-                  0x4809a0, Camera_SetMode): the HUD is not ported, so it is never set */
+    case 52:   /* pushCam; with the dashboard swapped (0x428880) first the preset view 0xc again, which swaps it
+                  back (0x480990, 0x4809a0, Camera_SetMode) */
+        if (Dash_IsOn()) {
+            g_view_cockpit = 0;
+            g_view_preset = 0xc;
+            Camera_SetMode(g_user_entity, 0xc);
+        }
         Cam_Push();
         break;
     case 53: Cam_Pop(); break;   /* popCam */
