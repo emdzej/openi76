@@ -894,7 +894,7 @@
 00457a30	Weapons_Cycle	weapons	med	weapon_cycle: the next group
 00458030	Weapons_Link	weapons	med	the linked group of like weapons, with the dashboard
 00457df0	Weapons_Unlink	weapons	med	the group unlinked, with the dashboard
-00455560	Turrets_Aim	weapons	med	the turrets turned towards their target
+00455560	Turrets_Aim	weapons	high	the turrets turned towards the radar's contact, the fixed guns pitched; ported
 00428e80	Artillery_Fire	weapons	high	each gun one frame in eight asks the firing decision about the user
 004561f0	Weapons_DisplayStart	weapons	high	the dashboard's node (zbk_.map), the group's first slot, the separator, the slots' lights and digits
 0042e370	Node_FindTexture	objects	high	the first node whose level-4 first face has the texture; sets each visited node to level 4
@@ -978,3 +978,5 @@
 00428e70	Artillery_Dirty	weapons	high	0x550964 = 1: the guns' weapons looked up again
 00454f80	Weapons_Carrier	weapons	high	a vehicle's instances: count, five slots, slots 5 and 6; 2 without hard points
 00455080	Weapon_Facts	weapons	high	an instance's 0x20 bytes of facts for the AI's firing decision
+004333f0	Muzzle_Aim	weapons	high	a fixed gun's muzzle from its rest frame pitched at the target, within 10 degrees; ported
+00413810	AI_Predict	ai	high	where a node will be in time s (+0.09): along its velocity or round its turn; ported

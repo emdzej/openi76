@@ -72,8 +72,9 @@ VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC
 SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8, 34: 0x80}
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
-              # 34: the contacts, the display's argument, the chosen, the locks and targets, the nodes
-              34: (4, 8, 0x54, 0x5C, 0x60, 0x64, 0x68, 0x6C, 0x70, 0x74, 0x78, 0x7C),
+              # 34: the contacts, the display's argument, the camera frame's pad word (0x421df0 copies it from
+              # 0x455560's stack: garbage), the chosen, the locks and targets, the nodes
+              34: (4, 8, 0x34, 0x54, 0x5C, 0x60, 0x64, 0x68, 0x6C, 0x70, 0x74, 0x78, 0x7C),
               41: (0x24,)}   # 41: the pad word of a frame 0x433370 copies from its stack (garbage)
 # --call NAME [times]: after the start, a per-frame function on every listed vehicle (the port's
 # Dump_CallVehicles), with the vehicles' death and the sounds stubbed
@@ -867,6 +868,21 @@ def call_aim(exe, n, fpcw):
     call_fly(exe, n, fpcw)
 
 
+def call_turret(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    for i in range(struct.unpack("<i", exe.read(0x570AA0, 4))[0]):
+        if struct.unpack("<i", exe.read(0x566954 + i * 0x2C8, 4))[0] < 0:
+            exe.write(0x566954 + i * 0x2C8, struct.pack("<i", 0))
+    rn, ai, ue = u(u(n + 0x70) + 0x434), u(u(n + 0x70) + 0x108), u(0x4D3B64)
+    if ai and ue and n != u(ue):
+        exe.write(ai + 0xA9B4, struct.pack("<I", u(ue)))
+    if rn:
+        exe.call(0x4202D0, rn, limit=2_000_000_000, fpcw=rd)
+    for _ in range(3):
+        exe.call(0x455560, limit=2_000_000_000, fpcw=rd)
+
+
 def call_raze(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     pos = lambda m: struct.unpack("<3d", exe.read(m + 0x40, 24))  # noqa: E731
@@ -898,7 +914,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

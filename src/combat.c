@@ -164,8 +164,8 @@ double AI_Closest(const float p1[3], const float v1[3], const float p2[3], const
     return DIV(ADD(ADD(MUL(wy, dy), MUL(wz, dz)), MUL(wx, dx)), l2);
 }
 
-/* 0x413810: where t will be in time s (+0.09): along its velocity, or round its turn (+0xcc the yaw rate) */
-static void predict(Node *t, float s, float out[3])
+/* AI_Predict 0x413810: where t will be in time s (+0.09): along its velocity, or round its turn (+0xcc the yaw rate) */
+void AI_Predict(Node *t, float s, float out[3])
 {
     if (!is_vehicle(t)) {
         float c[4];
@@ -240,7 +240,7 @@ static void pursue(Node *n, Node *t)
         if (x < 0.01f) s = 0.01f;
         else if (bits(s) > 0x40a00000) s = 5.0f;
         float p[3];
-        predict(t, s, p);
+        AI_Predict(t, s, p);
         for (int k = 0; k < 3; k++) d[k] = F32(SUB(p[k], me[k]));
     }
     float a = F32(atan2(d[0], d[2]));
@@ -290,7 +290,7 @@ void AI_Ram(Node *n, Node *t)
     } else {
         float v[3], sp, p[3];
         Class_Velocity(n, v, &sp);
-        predict(t, approach(n, t, me, v, tc), p);
+        AI_Predict(t, approach(n, t, me, v, tc), p);
         dx = SUB(p[0], me[0]);
         dz = SUB(p[2], me[2]);
     }
@@ -312,7 +312,7 @@ static void meet(float out[3], Node *n, Node *t)
     if (s < 0.4f) s = 0.4f;   /* 0x4a5408 */
     else if (bits(s) > 0x3fe00000) s = 1.75f;
     float p[3];
-    predict(t, s, p);
+    AI_Predict(t, s, p);
     float wx = F32(DIV(SUB(p[0], F32(ax)), s)), wy = F32(DIV(SUB(p[1], F32(ay)), s)), wz = F32(DIV(SUB(p[2], F32(az)), s));
     float w = F32(fpu_sqrt(ADD(ADD(MUL(wx, wx), MUL(wy, wy)), MUL(wz, wz))));
     float r[3];
@@ -532,7 +532,7 @@ static int fire_mortar3(Node *a, Node *t, float skill, const Frame *mz)
     float s = !(fabs(l) >= 0.01f) ? 1e7f
                                   : F32(DIV(ADD(ADD(MUL(u[1], d[1]), MUL(u[2], d[2])), MUL(u[0], d[0])), F32(l)));
     if (ubits(s) > 0x80000000u || bits(s) > 0x3e4ccccd) return 0;
-    predict(t, s, tp);
+    AI_Predict(t, s, tp);
     float ex = F32(SUB(tp[0], ADD(MUL(v[0], s), p[0])));
     double ez = SUB(tp[2], ADD(MUL(v[2], s), p[2]));
     return !(ADD(MUL(ez, F32(ez)), MUL(ex, ex)) >= 400.0f);   /* 0x4a53f8 */
@@ -548,7 +548,7 @@ static int fire_mortar(Node *a, Node *t, int type, const Frame *mz)
     else if (type == 2) k = 0.4f, R = 80.0f, lim = 150.0f;
     else plat_log(exe_str(0x4a9380));   /* "Unknown mortar type" (0x402c80); the original's three are unset */
     float tp[3], ap[3], av[3], asp;
-    predict(t, k, tp);
+    AI_Predict(t, k, tp);
     ap[0] = F32(a->frame.pos[0]);
     ap[2] = F32(a->frame.pos[2]);
     Class_Velocity(a, av, &asp);
@@ -634,7 +634,7 @@ static int fire_behind(Node *a, Node *t)
         if (ubits(s) > 0xbf800000u) return 0;
         s = 0;
     } else if (bits(s) > 0x40e00000) return 0;
-    predict(t, s, tp);
+    AI_Predict(t, s, tp);
     float e[3];
     for (int i = 0; i < 3; i++) e[i] = F32(SUB(ap[i], tp[i]));
     return !(ADD(ADD(MUL(e[1], e[1]), MUL(e[2], e[2])), MUL(e[0], e[0])) >= 6.25f);   /* 0x4a5458 */

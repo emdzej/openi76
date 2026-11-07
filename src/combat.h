@@ -39,6 +39,8 @@ int Weapons_Carrier(Node *n, int32_t list[8]);
 int Weapon_Facts(int32_t inst, int32_t fact[8]);
 /* AI_Ram 0x41ddf0: ramming, flat out at where t will be */
 void AI_Ram(Node *n, Node *t);
+/* AI_Predict 0x413810: where t will be in time s (+0.09): along its velocity, or round its turn */
+void AI_Predict(Node *t, float s, float out[3]);
 /* AI_Closest 0x4139f0: when p1 moving at v1 and p2 at v2 come closest; 1e7 for nearly equal velocities */
 double AI_Closest(const float p1[3], const float v1[3], const float p2[3], const float v2[3]);
 /* AI_ShouldFire 0x413b10: whether a fires the weapon whose facts (Weapons_Refresh's 0x20 bytes) and muzzle

@@ -108,6 +108,7 @@ static void class_data(Out *o, const Node *n)
             uint8_t b[0xb8];
             memcpy(b, d, (size_t)small[i].size);
             if (c == 41) memset(b + 0x24, 0, 4);   /* a frame's pad word (garbage in the original) */
+            if (c == 34) memset(b + 0x34, 0, 4);   /* the camera frame's pad word, likewise */
             out(o, " d");
             hex(o, b, small[i].size);
         }
@@ -1062,6 +1063,21 @@ int Dump_CallVehicles(int which, int upside)
                     e[0x20] = c->b;
                     call_line(e, sizeof e);
                 }
+            }
+            break;
+        }
+        case 38: {   /* the turrets (0x455560) after the radar's frame (as in 37), three frames, every vehicle given
+                        a current weapon (the hard points' +4, -1 at the load) so that the turrets turn */
+            for (int i = 0; i < g_hardpoint_count; i++)
+                if (g_hardpoints[i].w1[0] < 0) g_hardpoints[i].w1[0] = 0;
+            Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
+            uint8_t *ai = n->data ? *Data_Ptr(n->data, 0x108) : NULL;
+            if (ai && g_user_entity && n != g_user_entity->node) *Data_Ptr(ai, 0xa9b4) = g_user_entity->node;
+            g_fpu_round = FPU_DOWN;
+            if (rn) Radar_Frame(rn);
+            for (int k = 0; k < 3; k++) {
+                g_fpu_round = FPU_DOWN;
+                Turrets_Aim();
             }
             break;
         }

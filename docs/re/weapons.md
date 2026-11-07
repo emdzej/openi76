@@ -531,11 +531,57 @@ Checked: `diff_objects --start` on t01, s04 and t05, with the start run on both 
 hard points, the definitions, the instances, the ordnance and the trees. The empty xdf names are
 compared as empty. The shot, launch and fly calls also run 0x433b70 now.
 
+## The turrets (0x455560)
+
+Each frame, before the triggers, every weapon instance is looked at by its slot's hard point type.
+
+**Not a turret** (type other than 3). The instance is ready (+0x3c and +0x40 set to 1). A forward or
+rear gun, or the first turret-kind one (definition +0x54 is 1 or 2, or 4 with +0x50 0), has its muzzle
+pitched at its kind's target (0x421d30) by Muzzle_Aim 0x4333f0:
+
+- The muzzle (class 0x29) goes back to its rest frame (its data's first 0x40 bytes).
+- With a target, the wanted pitch (+0x40) is the target's aim point's elevation (0x45d710) less the
+  muzzle's own, each from asin of its normalised height. It is kept within ±10 degrees (0.1745) and
+  negated, since a positive turn about x lowers. With no target it is 0.
+- The pitch it has (+0x44) closes on it by 4 × step × the difference. It jumps there when within 0.005,
+  or when 4 × step is outside [0, 0.95].
+- The muzzle is turned by that pitch (Frame_Pitch, then the rest frame).
+
+**A turret** (type 3). Nothing happens unless the vehicle has a current weapon (hard points +4 ≥ 0; −1
+at the load until a weapon is chosen). Otherwise the instance is not ready, and:
+
+- The gun's chain of first children is followed down to the third node of class 0x3f, the pitch
+  node. Its parent is the yaw node. With fewer than three, nothing turns.
+- The direction comes from the radar's chosen contact (0x421ba0):
+  - A shot leaves the pitch node along its z axis at the definition's speed (+0x6c) plus the vehicle's
+    velocity.
+  - The time of its closest approach to the target is taken (0x4139f0, kept to [0, 5] s). Where the
+    target will be then (0x413810) is moved into the pitch node's frame, taking the target entity's
+    box centre, or the place for a node without an entity.
+  - The direction is normalised with the fast inverse square root.
+  - With no contact the direction is the turret's own (quirk): the yaw node's z row's x negated and z,
+    with the pitch node's y row's z negated.
+- The turn rate is step × the ammunition left (+0xc / definition +0x5c; 1 in network play) × 6 for a
+  class 9 vehicle (a helicopter) or 1.5 otherwise.
+- The yaw node turns about y by atan2(x, z), at most the rate a frame. Quirk: when x² + z² is under
+  0.001, that sum itself is taken as the angle. Its x and z rows are scaled back to length 1 when the
+  inverse length is above 1.001, i.e. only when they have shrunk.
+- While the yaw is within 90 degrees, the pitch node turns about x by asin(y), likewise. This is skipped
+  when the definition's +0x54 and +0x50 are both 3. The new frame is kept only while its y row's z stays
+  under 0.95, renormalised the same way.
+- The instance is ready once the yaw (and the pitch, when it was turned) is within 2 degrees (0.0349).
+- The radar's target camera frame (+0x10, 0x421df0) becomes the last turned node's world frame. Its pad
+  word is the stack's, which the harness masks.
+
+Checked: `diff_objects --call turret` on s01, t05, t12 and s04, every vehicle given a current weapon so
+that the turrets turn, after the radar's frame; three frames.
+
 ## The weapons' frame (0x455d90)
 
 It runs once a frame after the AI, before the textures' animations:
 
-1. The turrets turn towards the radar's target (0x455560; not ported yet).
+1. The turrets turn towards the radar's target, and the fixed guns pitch (Turrets_Aim 0x455560; "The
+   turrets" below).
 2. On the user's hard points:
    - 0x4db474, the endless ammunition, is the shell's option bit 4 outside network play.
    - The triggers (0x4577c0) are read unless the script holds the user (0x505494, an intro's goto).

@@ -1271,12 +1271,194 @@ static void weapons_unlink(HardPoints *hp)
         }
 }
 
-/* not ported yet: 0x455560, the turrets turned towards the radar's target */
-static void turrets_aim(void) {}
+static const Frame k_identity = {.m = {1, 0, 0, 0, 1, 0, 0, 0, 1}};   /* 0x4db298 */
+
+/* the step towards angle a, s a frame (by a's sign), a itself when the step would pass it */
+static float turn_step(float a, double ext_zero_test, float s)
+{
+    float sign = ext_zero_test == 0 ? 0.0f : fbits(a) > 0 ? 1.0f : -1.0f;
+    float d = F32(MUL(s, sign));
+    if (MUL(SUB(a, d), a) < 0.0f) d = a;   /* 0x4a61a0 */
+    return d;
+}
+
+/* Muzzle_Aim 0x4333f0: a fixed gun's muzzle (class 0x29: its data the rest frame, +0x40 the pitch wanted,
+   +0x44 the pitch it has) back to its rest frame and pitched towards t: the difference between the
+   elevation to t's aim point (0x45d710) and the muzzle's own, within +-10 degrees (0x4a5db4), wanted
+   (negated: about x a positive turn lowers); with no target 0. The pitch closes on it by 4 x step x the
+   difference (0x4a5dbc), or jumps when within 0.005 (0x4a5dc8) or when 4 x step is out of [0, 0.95] */
+static void muzzle_aim(Node *m, Node *t)
+{
+    float s = g_clock_step;   /* 0x450f30 */
+    uint8_t *d = m->data;
+    memcpy(&m->frame, d, 0x40);
+    float want, have = rdf(d + 0x44);
+    double q = MUL(s, 4.0f);
+    float qf = F32(q);
+    int jump = q < 0.0f || fbits(qf) > 0x3f733333;   /* 0x4a5db0 */
+    if (t) {
+        Frame w;
+        Node_FrameIn(&w, m, NULL);   /* 0x42e6d0 */
+        float p[3] = {F32(w.pos[0]), F32(w.pos[1]), F32(w.pos[2])}, z[3] = {w.m[6], w.m[7], w.m[8]}, tp[3];
+        Shot_Target(tp, t);   /* 0x45d710 */
+        float h = F32(fpu_sqrt(ADD(MUL(z[2], z[2]), MUL(z[0], z[0]))));
+        float dx = F32(SUB(tp[0], p[0])), dy = F32(SUB(tp[1], p[1]));
+        double dzx = SUB(tp[2], p[2]);
+        float dz = F32(dzx);
+        float hd = F32(fpu_sqrt(ADD(MUL(dzx, dz), MUL(dx, dx))));
+        double k = Fast_InvSqrt(ADD(MUL(dy, dy), MUL(hd, hd)));   /* 0x4529a0 */
+        float ny = F32(MUL(dy, k)), nh = F32(MUL(k, hd));
+        double sm = MUL(Fast_InvSqrt(ADD(MUL(z[1], z[1]), MUL(h, h))), z[1]);
+        double L = fpu_sqrt(ADD(MUL(ny, ny), MUL(nh, nh)));
+        double diff = SUB(asin(fpu_div(ny, L)), asin(sm));   /* 0x497032 asin */
+        float df = F32(diff);
+        if (diff > 0.1745329201221466f) df = 0.1745329201221466f;   /* 0x3e32b8c2 */
+        if ((uint32_t)fbits(df) > 0xbe32b8c2u) df = -0.1745329201221466f;
+        want = F32(-df);
+        if (jump) have = want;
+        else {
+            double e = SUB(want, have);
+            float ef = F32(e);
+            have = fabs(e) < 0.005 ? want : F32(ADD(MUL(MUL(s, ef), 4.0f), have));
+        }
+    } else {
+        want = 0;
+        if (jump) have = 0;
+        else {
+            float ef = F32(-have);
+            have = fabs(ef) < 0.005 ? 0.0f : F32(ADD(MUL(MUL(ef, s), 4.0f), have));
+        }
+    }
+    putf(d + 0x40, want);
+    putf(d + 0x44, have);
+    Frame r, f;
+    Frame_Pitch(&r, have);   /* 0x451880 */
+    Frame_Mul(&f, &r, &m->frame);
+    m->frame = f;
+}
+
+/* Turrets_Aim 0x455560: each weapon in a turret's slot (hard point type 3), its vehicle having a current
+   weapon (+4 >= 0), turned towards the radar's chosen contact (with none, along the turret's own axes:
+   quirk, the yaw base's x and z with the pitch node's y). Its gun's chain of first children down to the
+   third node of class 0x3f is the pitch node, that node's parent the yaw node.
+   - The aim point: where the target will be (0x413810) at its closest approach to a shot leaving the
+     pitch node along its z at the weapon's speed (def +0x6c) plus the vehicle's velocity (0x4139f0, kept
+     to [0, 5] s), taken into the pitch node's frame (the entity's centre there, or the place).
+   - Each turns by step x the ammunition left (+0xc / def +0x5c; 1 in network play) x 6 (a class 9 vehicle,
+     0x4a61b4) or 1.5 (0x4a61b8) a frame: the yaw node about y by atan2(x, z) (quirk: under 0.001 the
+     squared length is taken as the angle), its x and z rows set back to length 1 when shrunk (by more than
+     1.001 in the inverse); the pitch node about x by asin(y) while the yaw is within 90 degrees, unless
+     the definition's +0x54 and +0x50 are both 3, kept only while its y row's z stays under 0.95.
+   - Ready (+0x3c, +0x40) once both are within 2 degrees (0x4a61e0); the radar's camera frame is the
+     last node turned's.
+   The other weapons are ready always, and the forward, rear and first turret-kind ones (def +0x54 1, 2, or
+   4 with +0x50 0) pitched at their kind's target (0x421d30, 0x4333f0). */
+void Turrets_Aim(void)
+{
+    (void)g_clock_step;   /* 0x450f30, its value dropped */
+    for (int i = 0; i < g_weapon_count; i++) {
+        WeaponInst *w = &g_weapons[i];
+        const WeaponDef *d = &g_weapon_defs[w->def];
+        HardPoints *hp = w->hp;
+        if (hp->slot[w->slot].type != 3) {
+            w->v3c = w->v40 = 1;
+            if (d->kind == 1 || d->kind == 2 || (d->kind == 4 && d->index == 0))
+                muzzle_aim(w->muzzle, Radar_KindTarget(hp->vehicle, w->kind));
+            continue;
+        }
+        if (hp->w1[0] < 0) continue;
+        Node *t = Radar_Current(hp->vehicle);
+        w->v3c = w->v40 = 0;
+        float ratio = g_net_game ? 1.0f : F32(fpu_div((double)(uint32_t)w->v0c, (double)(uint32_t)d->v[1]));
+        int pitch_too = !(d->kind == 3 && d->index == 3);
+        float speed;
+        memcpy(&speed, &d->v[5], 4);
+        Node *veh = hp->vehicle, *n = w->gun;
+        int cnt = 0;
+        while (cnt < 3) {
+            Node *c = n->child;
+            if (!c) break;
+            n = c;
+            if (c->cls == 0x3f) cnt++;
+        }
+        if (cnt < 3 || !n || !veh) continue;
+        float dir[3];
+        if (!t) {
+            dir[0] = F32(-n->prev->frame.m[6]);
+            dir[1] = F32(-n->frame.m[7]);
+            dir[2] = n->prev->frame.m[8];
+        } else {
+            Frame f;
+            Node_FrameIn(&f, n, NULL);
+            float sv[3], vv[3], tp[3], mp[3], tv[3], tsp, at[3];
+            for (int k = 0; k < 3; k++) sv[k] = F32(MUL(f.m[6 + k], speed));
+            const float *vel = (const float *)(veh->data + 0xbc);   /* 0x42d5e0 */
+            for (int k = 0; k < 3; k++) vv[k] = F32(ADD(vel[k], sv[k]));   /* 0x4561a0 */
+            for (int k = 0; k < 3; k++) tp[k] = F32(t->frame.pos[k]), mp[k] = F32(f.pos[k]);   /* 0x432a70 */
+            Class_Velocity(t, tv, &tsp);   /* 0x425be0 */
+            double tc = AI_Closest(tp, tv, mp, vv);   /* 0x4139f0 */
+            float time = F32(tc);
+            if (tc < 0.0f) time = 0;
+            else if (fbits(time) > 0x40a00000) time = 5.0f;
+            AI_Predict(t, time, at);   /* 0x413810 */
+            Frame tf = t->frame, inv, l;
+            for (int k = 0; k < 3; k++) tf.pos[k] = at[k];
+            Frame_Invert(&inv, &f);   /* 0x452910 */
+            Frame_Mul(&l, &tf, &inv);   /* 0x4527c0 */
+            Entity *e = Entity_OfNode(t);   /* 0x424060 */
+            if (e) Frame_Points((float(*)[3])dir, (const float(*)[3])e->c, 1, &l);   /* 0x452740 */
+            else for (int k = 0; k < 3; k++) dir[k] = F32(l.pos[k]);
+            double kk = Fast_InvSqrt(ADD(ADD(MUL(dir[0], dir[0]), MUL(dir[1], dir[1])), MUL(dir[2], dir[2])));   /* 0x416a60 */
+            for (int k = 0; k < 3; k++) dir[k] = F32(MUL(dir[k], kk));
+        }
+        float s = F32(MUL(MUL(g_clock_step, ratio), veh->cls == 9 ? 6.0f : 1.5f));
+        double a2 = ADD(MUL(dir[2], dir[2]), MUL(dir[0], dir[0]));
+        float yaw = a2 > 0.0010000000474974513f ? F32(atan2(dir[0], dir[2])) : F32(a2);   /* 0x4a61bc, fpatan */
+        int aimed = 0;
+        float dy = turn_step(yaw, fbits(yaw) & 0x7fffffff, s);
+        Frame r = k_identity, o;
+        float sn = F32(sin(dy)), cs = F32(cos(dy));
+        r.m[0] = cs, r.m[6] = sn, r.m[2] = F32(-sin(dy)), r.m[8] = cs;   /* fchs before the store */
+        Node *y = n->prev, *last = y;
+        Frame_Mul(&o, &r, &y->frame);
+        y->frame = o;
+        float *m = y->frame.m;
+        double q = Fast_InvSqrt(ADD(MUL(m[0], m[0]), MUL(m[2], m[2])));
+        if (q > 1.001) {   /* 0x4a61c8 */
+            m[0] = F32(MUL(m[0], q)), m[2] = F32(MUL(m[2], q));
+            m[6] = F32(MUL(m[6], q)), m[8] = F32(MUL(q, m[8]));
+        }
+        double ay = fabs(yaw);
+        if (pitch_too && ay < 1.570796298) {   /* 0x4a61d0 */
+            double px = asin(dir[1]);   /* 0x497032 */
+            float pitch = F32(px);
+            float dp = turn_step(pitch, px, s);
+            Frame r2 = k_identity, mm;
+            sn = F32(sin(dp)), cs = F32(cos(dp));
+            r2.m[4] = cs, r2.m[7] = sn, r2.m[5] = F32(-sin(dp)), r2.m[8] = cs;
+            Node *c = y->child;
+            last = c;
+            Frame_Mul(&mm, &r2, &c->frame);
+            if (fabsf(mm.m[5]) < 0.95) {   /* 0x4a61d8 */
+                double q2 = Fast_InvSqrt(ADD(MUL(mm.m[7], mm.m[7]), MUL(mm.m[8], mm.m[8])));
+                if (q2 > 1.001) {
+                    mm.m[4] = F32(MUL(mm.m[4], q2)), mm.m[5] = F32(MUL(mm.m[5], q2));
+                    mm.m[7] = F32(MUL(mm.m[7], q2)), mm.m[8] = F32(MUL(q2, mm.m[8]));
+                }
+                c->frame = mm;
+            }
+            if (fabsf(pitch) < 0.0349065844 && ay < 0.0349065844) aimed = 1;   /* 0x4a61e0 */
+        } else if (fabsf(yaw) < 0.0349065844) aimed = 1;
+        Frame lf;
+        Node_FrameIn(&lf, last, NULL);
+        Radar_SetFrame(veh, &lf);   /* 0x421df0 */
+        if (aimed) w->v3c = w->v40 = 1;
+    }
+}
 
 void Weapons_Frame(void)
 {
-    turrets_aim();
+    Turrets_Aim();
     HardPoints *hp = user_hardpoints();
     if (hp) {
         g_weapons_free = (g_game_options & 4) && !g_net_game;   /* the shell's endless ammunition */

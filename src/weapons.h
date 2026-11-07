@@ -152,8 +152,11 @@ uint32_t Hardpoints_Kinds(const Node *v);
 int Window_Open(Node *vehicle, int which);
 int Window_Busy(Node *vehicle, int which);
 
+/* Turrets_Aim 0x455560: the turrets turned towards the radar's chosen contact and ready (+0x3c, +0x40)
+   once on it; the other weapons ready, the fixed guns' muzzles pitched at their kind's target (0x4333f0) */
+void Turrets_Aim(void);
 extern int32_t g_weapons_linked;   /* 0x4db478 */
-/* Weapons_Frame 0x455d90: the turrets (not ported), the user's triggers, group and link from the
+/* Weapons_Frame 0x455d90: the turrets (Turrets_Aim), the user's triggers, group and link from the
    actions, then every instance's timers (Weapons_Tick); the dashboard's part is not ported */
 void Weapons_Frame(void);
 extern Node *g_dash;          /* 0x4db470 */
