@@ -543,22 +543,33 @@ static int fly_gun(Node *s, float t)
 /* not ported yet, as the effects: 0x46f170 the trail's step (its smoke behind the shot) */
 static void trail_step(Node *s) { (void)s; }
 
-/* 0x45f8b0: type 2's flight (the rockets): as the guns' with its own easing (half the step towards the
-   speed), always turned along its path, the explosion where it hit, and its trail */
-static int fly_rocket(Node *s, float t)
+/* 0x45f8b0 (type 2, the rockets) and 0x460f40 (types 4 and 7): as the guns' flight, always turned along the
+   path, the explosion where it hit, and a trail. The rockets ease the speed by half the step; 4 and 7 by
+   the flight's time as the guns do, and their path's length keeps dz unrounded */
+static int fly_rocket(Node *s, float t, int t47)
 {
     uint8_t *r = s->data;
     float step = g_clock_step, trav;
     ShotState st;
     gather(&st, s);
-    double h = MUL(step, 0.5f);   /* 0x4a6350 */
-    float hf = F32(h);
-    if (h < 0.0 || h != h || fbits(hf) > 0x3f733333) st.v[2] = st.speed;   /* 0x4a6354 */
-    else {
-        double e = SUB(st.speed, st.v[2]);
-        float ef = F32(e);
-        if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6360 */
-        else st.v[2] = F32(ADD(MUL(MUL(step, ef), 0.5f), st.v[2]));
+    if (t47) {
+        if ((uint32_t)fbits(t) > 0x80000000u || fbits(t) > 0x3f733333) st.v[2] = st.speed;
+        else {
+            double e = SUB(st.speed, st.v[2]);
+            float ef = F32(e);
+            if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6398 */
+            else st.v[2] = F32(ADD(MUL(t, ef), st.v[2]));
+        }
+    } else {
+        double h = MUL(step, 0.5f);   /* 0x4a6350 */
+        float hf = F32(h);
+        if (h < 0.0 || h != h || fbits(hf) > 0x3f733333) st.v[2] = st.speed;   /* 0x4a6354 */
+        else {
+            double e = SUB(st.speed, st.v[2]);
+            float ef = F32(e);
+            if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6360 */
+            else st.v[2] = F32(ADD(MUL(MUL(step, ef), 0.5f), st.v[2]));
+        }
     }
     const float *m = s->frame.m;
     float w[3];
@@ -583,7 +594,12 @@ static int fly_rocket(Node *s, float t)
     float d[3];
     for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
     double l2 = ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]));
-    trav = F32(ADD(fpu_sqrt(l2), trav));
+    if (t47) {   /* fst: dz unrounded times its float */
+        double dz = SUB(st.p[2], st.p0[2]);
+        trav = F32(ADD(fpu_sqrt(ADD(ADD(MUL(dz, d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]))), trav));
+        l2 = ADD(ADD(MUL(d[2], d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]));
+    } else
+        trav = F32(ADD(fpu_sqrt(l2), trav));
     memcpy(r + 0x40, &trav, 4);
     if (!hit) {
         Frame_FromDir(&s->frame, st.p, d);   /* 0x4522e0 */
@@ -609,8 +625,9 @@ int Shot_Fly(Node *s, float t)
     case 1:
     case 6:
     case 0x12: return fly_gun(s, t);
-    case 2: case 3: case 4: case 5: case 7: case 8:   /* the guided and the dropped: but 2 not ported yet */
-        if (ty == 2) alive = fly_rocket(s, t);
+    case 2: case 3: case 4: case 5: case 7: case 8:   /* 3, 5 and 8 not ported yet */
+        if (ty == 2) alive = fly_rocket(s, t, 0);
+        else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */
         if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
             g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
         break;

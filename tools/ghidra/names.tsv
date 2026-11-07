@@ -927,3 +927,4 @@
 00423eb0	Entity_Remove	objects	high	an entity's removal: callbacks, reference, entry cleared
 00469cd0	Collide_Remove	collide	high	the collision's removal callback: off the moving/static and ground lists
 0045f8b0	Shot_FlyRocket	weapons	high	type 2's flight: the guns' with half-step easing, turned along its path, a trail
+00460f40	Shot_FlyType4	weapons	high	types 4 and 7's flight: the rockets' with the guns' easing

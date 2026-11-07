@@ -529,5 +529,12 @@ It is the guns' flight (0x4609d0) with these changes:
 - **The trail.** After the flight the trail's step (0x46f170) runs; it is not ported yet. There is no
   tracer.
 
-The flights of types 3-5, 7, 8 (guided and dropped), 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not
-ported yet.
+**Types 4 and 7 (0x460f40)** fly the same way, with two differences. The speed is eased as the guns'
+is: by the flight's time, snapping when that time is negative or above 0.95. The path's length keeps
+dz unrounded, as the guns' does. Their sums are the rockets'.
+
+The flights of types 3, 5, 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet. Type 5
+(0x461340) is the same flight in other summing orders, plus 0x45e4e0 at the hit. That call leaves 8 to
+14 delayed hits around the point (0x4dc470), which 0x45e620 sweeps as their times come.
+
+Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4).
