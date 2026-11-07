@@ -29,6 +29,9 @@ bool Tex_SetFrame(uintptr_t owner, const char *name, int d, int value, bool upda
    use's flag 1; the shared pixels released), so that drawing on it changes that owner's texture alone. The
    copy is freed when the frame changes. An empty surface when there is none */
 Surface Tex_Writable(uintptr_t owner, const char *name);
+/* Tex_Restore 0x47c890: owner's own copy of texture name (Tex_Writable's) given up for the shared pixels;
+   with keep, the copy kept and the shared pixels copied over it */
+void Tex_Restore(uintptr_t owner, const char *name, int keep);
 /* Tex_Refresh 0x47c1b0: the owner's textures fetch their pixels again */
 bool Tex_Refresh(uintptr_t owner);
 /* Tex_Pixels 0x47dfc0: a frame's pixels by name, counted (Tex_PixelsRelease 0x47e4e0 drops the count) */

@@ -72,7 +72,7 @@ int g_dump_texanims;
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
                                     0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x400, 0x404, 0x408, 0x40c, 0x410,
-                                    0x414, 0x418, 0x41c, 0x420, 0x424, 0x428, 0x430, 0x434, 0x438, 0x440, 0x508};
+                                    0x414, 0x418, 0x41c, 0x420, 0x424, 0x428, 0x42c, 0x430, 0x434, 0x438, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
 {
@@ -342,6 +342,12 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "roadwar.h"
 #include "combat.h"
 #include "cockpit.h"
+#include "mirror.h"
+#include "render/sky.h"
+#include "render/obj_draw.h"
+#include "render/queue.h"
+#include "render/draw.h"
+#include "tracers.h"
 #include "tex.h"
 #include "settings.h"
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
@@ -1234,6 +1240,51 @@ int Dump_CallVehicles(int which, int upside)
                 Hud_Draw(&g_view, k == 3);
                 uint32_t b[2] = {crc32(px, sizeof px), Radar_Current(n) != NULL};
                 call_line(b, sizeof b);
+            }
+            break;
+        }
+        case 55: {   /* the rear-view mirror (0x471390) on the user's vehicle, in the cockpit, the camera's entity
+                        the user's: the radar's frame twice and its next contact, the cockpit's initialisation
+                        (0x426070); with the detail byte 13 1 and then 2 the mirror's set-up (0x471060) and three
+                        frames, n turned half round about y before the second; after each the CRC-32 of the
+                        mirror's texture, its size and the mirror's flag */
+            Entity *e = Entity_OfNode(n);
+            if (!e || !g_user_entity || g_user_entity->node != n) break;
+            static int ready;
+            if (!ready) {   /* WinMain's: the renderer's tables and queue, the tracers' ring */
+                char err[200];
+                ready = Draw_Init(err, sizeof err) && Queue_Init();
+                if (!ready) break;
+                InvSqrt_Init();
+                Objects_DrawInit();
+                Tracers_Init(100);
+                Settings_Defaults(3);   /* the detail: a fast machine's */
+                Sky_Init();
+            }
+            g_cockpit = 1;
+            g_camera_entity = e;
+            g_clock_step = 0.06f;
+            Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
+            g_fpu_round = FPU_DOWN;
+            for (int f = 0; f < 2 && rn; f++) Radar_Frame(rn);
+            Radar_Next(n);
+            Cockpit_Init();
+            for (int mode = 1; mode <= 2; mode++) {
+                g_detail.b[13] = (uint8_t)mode;
+                g_fpu_round = FPU_DOWN;
+                Mirror_Setup();
+                for (int k = 0; k < 3; k++) {
+                    if (k == 1)
+                        for (int j = 0; j < 9; j += 2)
+                            if (j != 4) n->frame.m[j] = -n->frame.m[j];
+                    g_fpu_round = FPU_DOWN;
+                    Rel_Clear();
+                    Mirror_Draw();
+                    const Surface *s = g_mirror_view.surface;
+                    uint32_t b[4] = {s && s->pixels && s->w * s->h > 0 ? crc32(s->pixels, (size_t)(s->pitch * s->h)) : 0,
+                                     s ? (uint32_t)s->pitch : 0, s ? (uint32_t)s->h : 0, (uint32_t)g_mirror_on};
+                    call_line(b, sizeof b);
+                }
             }
             break;
         }

@@ -10,6 +10,7 @@
 #include "fsm.h"
 #include "camera.h"
 #include "cockpit.h"
+#include "mirror.h"
 #include "classes.h"
 #include "clock.h"
 #include "combat.h"
@@ -93,7 +94,9 @@ static bool viewer_init(const char *mission)
     /* WinMain: the colours of black (0x58dcbc) and of the first grey that is not 0xff (0x58dcb8), the lum
        ramp of 0xef, the glow table, then the terrain's textures */
     Color_Match(0, 0, 0);
-    for (float g = 0; Color_Match(g, g, g) == 0xff; g += 0.015625f) {}   /* 0x4a500c */
+    int grey;
+    for (float g = 0; (grey = Color_Match(g, g, g)) == 0xff; g += 0.015625f) {}   /* 0x4a500c */
+    g_grey = (uint8_t)grey;
     Lum_Ramp(0xe0, 0xef, 0xef);
     Glow_Build(g_shown_pal);
     Terrain_LoadTextures();
@@ -133,6 +136,8 @@ static bool viewer_init(const char *mission)
 /* Render_World 0x407550, its ported parts */
 static void viewer_frame(void)
 {
+    /* 0x46d300 is not ported yet */
+    if (g_cockpit == 1) Mirror_Draw();   /* 0x471390 */
     if (g_detail.b[DET_SHADOWS]) memset(g_shadow_mask, 0, sizeof shadow_mask);   /* Surface_Fill(0x58d890, 0) */
     Render_SetHeading(&view);
     Terrain_Draw(&view);

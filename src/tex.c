@@ -214,6 +214,23 @@ Surface Tex_Writable(uintptr_t owner, const char *name)
     return Surface_Make(u->pixels->w, u->pixels->h, ((Texture *)u->pixels)->pixels);
 }
 
+void Tex_Restore(uintptr_t owner, const char *name, int keep)
+{
+    if (!owner || !name) return;
+    TexUse *u = use_find(owner, name);
+    if (!u || !(u->flags & 1)) return;
+    const Texture *src = Tex_Pixels(u->frame);
+    Texture *copy = (Texture *)u->pixels;
+    if (keep) {
+        if (src) memcpy(copy, src, (size_t)copy->w * (size_t)copy->h + 8);   /* the copy's size; unchecked */
+        Tex_PixelsRelease(u->frame);
+        return;
+    }
+    free(copy);
+    u->pixels = src;
+    u->flags &= ~1u;
+}
+
 bool Tex_Refresh(uintptr_t owner)
 {
     bool any = false;

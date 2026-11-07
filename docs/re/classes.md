@@ -15,6 +15,7 @@ and texture animations are identical (confirmed, 40 missions).
 | 1 | the constructor (the data, Class_Set 0x425700) |
 | 2 | the start, once after the load |
 | 3, 4 | the two per-frame handlers (0x425a20 and 0x425b00 run them from the game loop) |
+| 11 | the end, run for every listed node by 0x425580 (not ported yet); class 1's is 0x429da0, the mirror's end |
 | 12 | the destructor |
 
 Structures other than class 4 share class 2's entry (Class_IsStructure 0x42e5e0).

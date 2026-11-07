@@ -105,6 +105,9 @@ def seed(exe):
     exe.write(0x4EBC90, struct.pack("<I", SEED))
 
 
+last_lum = [None]   # the world's .lum, as the display's set-palette was given it
+
+
 def setup(log=None):
     exe = x86.Exe()
     exe_ref[0] = exe
@@ -120,7 +123,12 @@ def setup(log=None):
     file_stubs(exe, lib, log)
     exe.stub(0x402C80, lambda msg: (_ for _ in ()).throw(x86.Fault(f"fatal: {cstr(exe, msg)}")), 1)
     # the display's functions (the record 0x58d860's table): set-palette 0x58dc5c
-    exe.stub_pointer(0x58DC5C, lambda *a: 0, 5)
+    # (its lum table kept for the checks that draw pixels: the port's copies it, 0x43bcc0)
+    def set_palette(rec, first, count, pal, lum):
+        if lum:
+            last_lum[0] = exe.read(lum, 0x10000)
+        return 0
+    exe.stub_pointer(0x58DC5C, set_palette, 5)
     exe.stub(0x44E380, lambda size: exe.alloc(size), 1)
     exe.stub(0x44F600, lambda size, flags: exe.alloc(size), 2)
     # the clock and the message queue: fixed (a zero local time, tick 0, no messages)

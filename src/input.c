@@ -8,6 +8,7 @@
 #include "crt.h"
 #include "entity.h"
 #include "exe.h"
+#include "mirror.h"
 #include "physics.h"
 #include "platform.h"
 #include "vfs.h"
@@ -963,7 +964,7 @@ static int user_dead(void)
     return u && (rd32(u->node->data + 0x454) & 0x20);
 }
 
-/* 0x4809b0: a typed key's command. Ported: the preset views and the self-destruct; the rest (the pause, the
+/* 0x4809b0: a typed key's command. Ported: the preset views, the mirror and the self-destruct; the rest (the pause, the
    menus, the rear view, the video mode, network play's) is not yet */
 static void game_command(int c)
 {
@@ -972,7 +973,9 @@ static void game_command(int c)
     /* the first table's: 0xa, 0x20, 0x24, 0x2c and 0x2d end here, as does 0 */
     if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2c || c == 0x2d) return;
     if (user_dead()) return;   /* and while network play's chat line takes the keys (0x462690) */
-    if (c == 0xd) {
+    if (c == 0xb) {
+        Mirror_Toggle(u ? u->node : NULL);   /* 0x4712e0; the original reads the entity unchecked */
+    } else if (c == 0xd) {
         g_view_cockpit = 1;
         Camera_SetMode(u, c);
     } else if (c >= 0xe && c <= 0x18) {

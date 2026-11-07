@@ -533,7 +533,7 @@
 00404890	Camera_PilotStart	camera	high	mode 0x19: the pilot's view; ported
 00404520	Camera_Pilot	camera	high	the driver's eye with the glance and the sway; ported
 00470d40	Cockpit_Sway	physics	high	the cockpit's lean from the load shifts; ported
-00471390	Mirror_Draw	render	med	the rear-view mirror's view 0x5e2ae0
+00471390	Mirror_Draw	cockpit	high	the rear-view mirror's view 0x5e2ae0 onto its texture, then the mask; ported, diffed
 0042d500	Vehicle_SetMode	vehicle	high	+0x104 for class 1
 0042d520	Vehicle_GearUp	vehicle	high	+0x104 up to 5; ported inline
 0042d540	Vehicle_GearDown	vehicle	high	+0x104 down to 0; ported inline
@@ -1082,3 +1082,14 @@
 00426260	Cockpit_Free	cockpit	high	the cockpit's pictures and tables released
 00439420	Surface_FillRect	render	high	a surface's viewport filled with a colour; ported
 004225d0	Node_Radius	combat	high	the relations' cache's radius (+0x18)
+00471060	Mirror_Setup	cockpit	high	the class 0x1d part, its texture's own copy, the mask, the view; ported
+004712e0	Mirror_Toggle	cockpit	high	the key command 0xb: the mirror's flag flipped, the part shown or hidden; ported
+00471330	Mirror_Detail	cockpit	high	the mirror's flag from the detail byte 13; ported
+004715d0	Mirror_Eye	cockpit	high	the eye's world frame, x and z axes negated; ported
+00424550	Objects_DrawMirror	render	high	Objects_Draw without shadows, merges, headlights; ported, diffed
+00424000	Node_FindClassAll	scene	high	depth first by class, the root's siblings too; ported
+00429da0	Vehicle_End	classes	high	class 1's end (word 11): the mirror's flag, texture copy and mask; ported as Mirror_End
+00425580	Class_EndAll	classes	med	every listed node's end handler (the class table's word 11)
+0047c890	Tex_Restore	tex	high	an owner's private texture copy given back (or refreshed from the shared); ported
+0046e950	Smoke_DrawPuffs	effects	med	the puffs list 0x5772f8 queued as sprites (0x46e650), with 0x4dd080
+0046e650	Smoke_DrawPuff	effects	med	one puff: a type 9 sprite record, 0x8c

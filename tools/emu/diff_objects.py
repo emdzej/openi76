@@ -68,7 +68,7 @@ def chunk_rec(m, n):
 
 budget = [0]
 VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC, 0x3C0, 0x3C4, 0x3C8, 0x3CC,
-            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x420, 0x424, 0x428, 0x430, 0x434, 0x438, 0x440, 0x508)
+            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x420, 0x424, 0x428, 0x42C, 0x430, 0x434, 0x438, 0x440, 0x508)
 SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8, 34: 0x80}
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
@@ -1041,6 +1041,46 @@ def call_hud(exe, n, fpcw):
         CALL_OUT.append(struct.pack("<II", zlib.crc32(exe.read(px, 640 * 480)), int(t != 0)).hex())
 
 
+def call_mirror(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    e = next((0x547E60 + i * 0x78 for i in range(0x100) if u(0x547E60 + i * 0x78) == n), 0)
+    if not e or not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    for a in (0x46E950, 0x46D3D0):   # the smoke's puffs and 0x46d3d0, not ported
+        exe.stub(a, lambda *x: 0, 1)
+    # WinMain's: the camera-space vertices and the drawers' pool (as diff_objdraw.py's)
+    exe.write(0x58DCB0, struct.pack("<I", exe.put(bytes(0x40000))))
+    exe.write(0x58DCB4, struct.pack("<I", exe.put(bytes(0x200000))))
+    exe.call(0x46C0E0, 100, limit=50_000_000, fpcw=rd)   # the tracers' ring (WinMain's)
+    exe.call(0x4516F0, limit=50_000_000)                  # the inverse square root's table
+    exe.write(0x5E14D0, exe.read(0x4DAF38 + 3 * 14, 14))   # the detail: a fast machine's (as the port's)
+    exe.call(0x407A10, limit=500_000_000, fpcw=rd)        # the sky (WinMain's, after the load)
+    exe.write(0x4A847C, struct.pack("<I", 1))
+    exe.write(0x4A8660, struct.pack("<I", e))
+    exe.write(0x4DB138, struct.pack("<f", 0.06))
+    rn = u(u(n + 0x70) + 0x434)
+    for _ in range(2 if rn else 0):
+        exe.call(0x4202D0, rn, limit=2_000_000_000, fpcw=rd)
+    exe.call(0x421540, n, limit=50_000_000, fpcw=rd)
+    exe.call(0x426070, limit=500_000_000, fpcw=rd)
+    if mission.last_lum[0]:   # the lum table, as the port's display copies it
+        exe.write(0x5C0450, mission.last_lum[0])
+    for mode in (1, 2):
+        exe.write(0x5E14DD, bytes([mode]))
+        exe.call(0x471060, limit=500_000_000, fpcw=rd)
+        for k in range(3):
+            if k == 1:
+                for j in (0, 2, 6, 8):
+                    a = n + 0x18 + 4 * j
+                    exe.write(a, struct.pack("<I", u(a) ^ 0x80000000))
+            exe.call(0x421FC0, limit=50_000_000, fpcw=rd)
+            exe.call(0x471390, limit=2_000_000_000, fpcw=rd)
+            w, h, px = u(0x5E2A80), u(0x5E2A84), u(0x5E2A90)
+            c = zlib.crc32(exe.read(px, w * h)) if px and w * h > 0 else 0
+            CALL_OUT.append(struct.pack("<IIII", c, w, h, u(0x4DD928)).hex())
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1115,14 +1155,14 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
 START_LATER = (
-               # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
-               0x403360, 0x42DC00, 0x471060, 0x476240,
+               # the user vehicle's set-up (camera, special weapons' panel) and the engine's sound
+               0x403360, 0x42DC00, 0x476240,
                # the weapons' display's (0x4561f0) drawing: the surface, the diodes, the names, the counters
                0x4392B0, 0x456C10, 0x4569B0, 0x456CF0)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}

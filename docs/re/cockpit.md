@@ -152,8 +152,68 @@ view. It then draws four frames on a cleared 640 x 480 screen, the vehicle turne
 mode 1 in the fourth, and compares the screen's CRC-32. It is identical on s07 and a01: the box, the edge
 arrow, and nothing in mode 1 off the screen. t01 has no target at the load.
 
-The rear-view mirror (Render_World's 0x471390, through the view 0x5e2ae0) is not
-ported yet. The mirror's frame is drawn but empty.
+## The rear-view mirror (0x471060-0x471680)
+
+`src/mirror.c`. The mirror is a part of the user's vehicle, the node of class 0x1d. Each frame in the
+cockpit, its texture is redrawn with the world seen backwards from the eye, then framed by the
+texture's own picture.
+
+**The set-up, Mirror_Setup 0x471060.** It runs as the last step of the user vehicle's start (0x4294e0,
+0x4313f0), after the special weapons' panel.
+
+1. The flag 0x4dd928 is set to 1, and the view 0x5e2ae0 is cleared.
+2. 0x424000 finds the first class 0x1d node, depth first. This search also tries the root's siblings.
+   The node is stored in the data's +0x42c and shown.
+3. At level 4 (`Lod_Select`), the node's first face that has a texture name gives the mirror's texture.
+   The name is kept at 0x577398 and the node at 0x5773b8.
+4. The texture's picture (`Tex_Pixels`) is copied into a surface of its own, the mask 0x5e2ab0. The
+   surface the mirror draws on, 0x5e2a80, is the node's private copy of the texture (`Tex_Writable`).
+5. The view is `View_Create` on that surface. Its field of view is pi/6 (0x3f060a92), with aspect 1,
+   range 100 and zoom 1. Then sx and sy are negated. The texture's rows run bottom up, and a mirror's
+   picture is reversed left to right.
+6. The flag becomes the detail byte 13 (0x5e14dd), and the node is hidden when it is 0.
+
+**The drawing, Mirror_Draw 0x471390.** Render_World calls it first, before the shadow mask is cleared,
+when the cockpit flag 0x4a847c is 1. It needs the detail byte 13, the view's surface on (+0x28) and the
+flag.
+
+1. **The camera** is 0x4715d0: the camera entity's eye node (the data's +0x398) in the world
+   (`Node_FrameIn`), with its x and z axes negated, so it looks backwards. `View_SetCamera` takes it.
+2. **The surface** is filled with 0xea.
+3. **Byte 13 = 1** (all four presets) draws the objects only, with the queue's zmin -10 and zmax 500:
+   - `Objects_DrawMirror` 0x424550 and `Tracers_DrawOther` 0x46c5e0;
+   - the smoke's puffs (0x46e950, the list 0x5772f8) and 0x46d3d0, neither ported yet;
+   - the flush without ending the merges, then `Hud_Draw` in mode 1.
+4. **Byte 13 = 2** draws the whole scene:
+   - the heading (0x407480, Render_World's own code as a function), the terrain and the roads;
+   - 0x46d3d0, the mirror's objects, the tracers and the puffs;
+   - the sky (mode 2 with the detail byte 1, else 1), the flush with the merges, then the HUD in mode 1.
+5. **The mask** goes over the picture through the remap table (`Surface_Blit` mode 1):
+   - row 1 is set to 0xff, so the mask's colour 1 is drawn as 0xff;
+   - the entry [0xff, 0xff] (0x5e044f) becomes the grey 0x58dcb8, so where the mask is see-through
+     (0xff) and the picture is 0xff, the grey is drawn instead;
+   - both are put back after.
+
+`Objects_DrawMirror` 0x424550 is `Objects_Draw` without the shadows, the explosions' merges, the
+headlights and the clearing of a culled entity's merge. A group's children are queued as leaves (the
+record's +0x38 is 1, so only their own meshes are drawn: quirk, kept), with the entity's radius (1 for
+the flag 0x40 ones, type 7). The record's entity and merge words are not written. The flush clears the
+merge for every type but 6, so it does not matter. The entities are type 5 records, not 6.
+
+**The keys and the end.**
+- The key command 0xb (in the second switch of 0x4809b0) is `Mirror_Toggle` 0x4712e0 on the user's
+  node. It flips the flag and shows or hides the part.
+- 0x471330 sets the flag from the detail byte again.
+- Class 1's end handler 0x429da0 (the class table's word 11, run by 0x425580) is the mirror's end. On
+  the user's vehicle it clears the flag, hands the private copy back (`Tex_Restore` 0x47c890) and frees
+  the mask. The end pass is not ported yet.
+
+**Checked:** `--call mirror` (case 55) sets the tables WinMain sets: the vertices and the pool, the
+tracers' ring, the inverse square root, the class 3 detail and the sky. The emulator also gets the
+world's lum table, which the display's stubbed set-palette was given. The check then runs the radar's
+frames, its next contact and 0x426070. With the byte 13 at 1 and then at 2, it calls the set-up and three
+frames, turning the vehicle round before the second. It compares the mirror texture's CRC-32, its size
+and the flag. It is identical on t01, s01, a01 and t06.
 
 ## The dashboard's swap (0x4286e0-0x428890)
 

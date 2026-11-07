@@ -1,6 +1,7 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
 #include "cockpit.h"
+#include "mirror.h"
 #include "camera.h"
 #include "radar.h"
 #include "damage.h"
@@ -255,13 +256,14 @@ static uint32_t weapon_zones(int32_t side, int32_t type, double x)
 static void scale(uint8_t *p, float k) { put32(p, (int32_t)(int64_t)MUL((double)rd32(p), k)); }
 
 /* the user's set-up at the start: the cockpit (0x426410), the camera (0x403360), the weapons' display
-   (0x4561f0), 0x42dc00 and the dashboard (0x471060); the cockpit (in part), the camera and the weapons'
-   display are ported */
+   (0x4561f0), the special weapons' panel (0x42dc00) and the rear-view mirror (0x471060); all but the
+   panel are ported */
 static void user_start(Node *n)
 {
     Cockpit_Setup(n);   /* 0x426410 */
     if (g_screen) View_Init(1, g_screen);   /* 0x403360: the pilot's view again on the user */
     Weapons_DisplayStart(1);
+    Mirror_Setup();   /* 0x471060 */
 }
 
 static void start_vehicle(Node *n)

@@ -1,6 +1,6 @@
-/* The cockpit (0x426410-0x428900; docs/re/cockpit.md). Ported so far: the dashboard's swap, the two parts of
-   the user's vehicle that the cockpit's view 0xc shows in turn. The rest of the cockpit (its set-up 0x426410,
-   the instruments, the mask's drawing 0x428770) is not ported yet. */
+/* The cockpit (0x426410-0x428900; docs/re/cockpit.md): its set-up, the instruments, the 3D cockpit's
+   drawing, the HUD and the dashboard's swap. Not ported yet: the flat cockpit, the mask's drawing
+   (0x428770) and the special weapons' panel. The rear-view mirror is mirror.c. */
 #pragma once
 #include <stdint.h>
 #include "scene.h"

@@ -520,3 +520,80 @@ void Objects_Draw(const View *view)
         queue_obj(6, mov[i]->node, mc[i], mov[i]->r, lod_of(mov[i], 0, mc[i][2], k, 1), mx[i], 0, mov[i]);
     /* the vehicles' headlights at night (0x4919e0) are not ported yet */
 }
+
+/* Objects_DrawMirror 0x424550: Objects_Draw for the rear-view mirror. The same lists, but no shadows, no
+   explosions' merges, no headlights and no clearing of a culled entity's merge; a group's children are
+   all leaves (their own meshes only, quirk, kept) of the entity's radius (1 for the flag 0x40 ones), and
+   the entities type 5 records */
+void Objects_DrawMirror(const View *view)
+{
+    Light_Frame(view);
+    Entity *target = NULL;
+    if (g_cockpit) {
+        if (!g_camera_entity) g_camera_entity = g_user_entity;
+        target = g_camera_entity;
+    }
+    float k = F32(DIV(1.0, view->sx));
+    Entity *stat[MAX_ENTITIES], *mov[MAX_ENTITIES];
+    float sc[MAX_ENTITIES][3], mc[MAX_ENTITIES][3];
+    int32_t sx[MAX_ENTITIES], mx[MAX_ENTITIES];
+    int ns = 0, nm = 0;
+    for (int i = 0; i < g_entity_count; i++) {
+        Entity *e = &g_entities[i];
+        Node *n = e->node;
+        if (!n) continue;
+        if (n->flags & 0x100) {
+            for (Node *c = n->child; c; c = c->next) {
+                double w[3];
+                Point_ToWorld(w, c->centre, &c->frame);
+                float cp[3];
+                View_ToCamera(view, cp, w[0], w[1], w[2]);
+                int t = View_TestSphere(view, cp, F32(MUL(c->radius, 1.1f)));
+                if (t > 0) continue;
+                QRec *q = Queue_New();
+                c->facemask &= 0xffffffee;
+                QObj *o = &q->u.obj;
+                /* the original leaves the entity and the merge as the record's memory had them (the drawers
+                   clear the merge after use) */
+                o->ent = NULL;
+                o->merge = NULL;
+                o->node = c;
+                o->b = ~t & 0x100;
+                o->x = cp[0];
+                o->y = cp[1];
+                o->z = cp[2];
+                o->a = c->cls == 0x33 ? 0 : lod_of(e, F32(MUL(cp[2], k)), 0, 0, 0);
+                o->c = 1;
+                if (c->flags & 0x40) {
+                    q->type = 7;
+                    o->r = 1.0f;
+                } else {
+                    q->type = 5;
+                    o->r = e->r;
+                }
+                Queue_Add(F32(SUB(o->z, o->r)));
+            }
+            continue;
+        }
+        if (e == target) continue;
+        double w[3];
+        Point_ToWorld(w, e->c, &n->frame);
+        float cp[3];
+        View_ToCamera(view, cp, w[0], w[1], w[2]);
+        int t = View_TestSphere(view, cp, F32(MUL(e->r, 1.1f)));
+        if (t > 0) continue;
+        if (n->cls == 1 || n->cls == 7 || n->cls == 9) {   /* 0x42e640 */
+            mov[nm] = e;
+            memcpy(mc[nm], cp, sizeof cp);
+            mx[nm++] = ~t & 0x100;
+        } else {
+            stat[ns] = e;
+            memcpy(sc[ns], cp, sizeof cp);
+            sx[ns++] = ~t & 0x100;
+        }
+    }
+    for (int i = 0; i < ns; i++)
+        queue_obj(5, stat[i]->node, sc[i], stat[i]->r, lod_of(stat[i], 0, sc[i][2], k, 1), sx[i], 0, stat[i]);
+    for (int i = 0; i < nm; i++)
+        queue_obj(5, mov[i]->node, mc[i], mov[i]->r, lod_of(mov[i], 0, mc[i][2], k, 1), mx[i], 0, mov[i]);
+}
