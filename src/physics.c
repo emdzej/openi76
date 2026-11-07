@@ -231,6 +231,13 @@ void Frame_Yaw(Frame *out, float a)
     out->m[8] = c;
 }
 
+void Frame_Pitch(Frame *out, float a)
+{
+    float sn = F32(sin(a)), c = F32(cos(a));   /* fsincos 0x452a70 */
+    memcpy(out, exe_data(0x4db298, sizeof *out), sizeof *out);
+    out->m[4] = c, out->m[5] = sn, out->m[7] = -sn, out->m[8] = c;
+}
+
 void Integrate(double p[3], float v[3], const float a[3], float dt)
 {
     float ad[3], h[3];

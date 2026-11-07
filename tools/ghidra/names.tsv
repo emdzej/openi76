@@ -875,3 +875,24 @@
 0046b5a0	Nodes_Measure	collide	high	shown nodes' boxes, centres and radii from their vertices; ported
 0046b560	Meshes_Free	collide	high	the type 0x3000 meshes under a node freed; ported
 004775c0	Ground_Free	collide	high	the entity's walkable faces' list freed; ported
+00433810	Window_Start	weapons	high	a window (classes 0x20, 0x21) into the vehicle's +0x400/+0x404, its handgun, the user's animation; ported
+00433e40	Handgun_Add	weapons	high	the .45 handgun a window gives: hard point, ordnance 0x12, gun, muzzle, weapon; ported
+00433d10	Window_Anim	weapons	high	the window's texture frame stepped towards its target each 0.1 s; ported
+00433b70	Window_GunOut	weapons	high	the user's window animation started for the handgun; ported
+00433940	Window_Free	weapons	high	the window's record freed, the side's slot emptied; ported
+004337f0	Window_New	weapons	high	the window's 0x10 bytes; ported
+00433c50	Window_Closed	weapons	high	the side's window there and shut (an AI's always); ported
+00433cb0	Window_Open	weapons	high	the user's window wound down (frames 5); ported
+00433c10	Window_Busy	weapons	high	the user's window's state (the gun out); ported
+0042e970	Node_FindClass	scene	high	the first node of a class in a tree, depth first; ported
+00451880	Frame_Pitch	math	high	the identity turned about x; ported
+004597a0	Shots_Frame	ordnance	high	every live shot flown for the frame's step; ported
+00459d40	Shots_FlyList	ordnance	high	a list's shots: life, flight, the spent back to the pool; ported
+0045e620	Shots_Delayed	ordnance	med	the delayed hits (0x4dc470) swept and hit when due
+00455d90	Weapons_Frame	weapons	med	the weapons' frame: turrets, the user's triggers, groups, Weapons_Tick, the HUD
+004577c0	Weapons_UserTriggers	weapons	med	the user's triggers from weapon_fire / hardpointN_fire, or the handgun's
+00457a30	Weapons_Cycle	weapons	med	weapon_cycle: the next group
+00458030	Weapons_Link	weapons	med	the linked group of like weapons, with the dashboard
+00457df0	Weapons_Unlink	weapons	med	the group unlinked, with the dashboard
+00455560	Turrets_Aim	weapons	med	the turrets turned towards their target
+00428e80	Artillery_Fire	weapons	med	the artillery's firing decision (0x413b10) and trigger

@@ -27,6 +27,8 @@ void Wheel_Contact(Node *w, int hold, float force, int tclass);
 void Vehicle_Brake(Node *n, uint32_t flags, int braking);
 /* Frame_Yaw 0x451820: the identity turned by a about y */
 void Frame_Yaw(Frame *out, float a);
+/* Frame_Pitch 0x451880: the identity turned by a about x */
+void Frame_Pitch(Frame *out, float a);
 /* Integrate 0x471860: one step of p (doubles) and v under the acceleration a: v + a dt / 2 for dt, then
    v += a dt */
 void Integrate(double p[3], float v[3], const float a[3], float dt);

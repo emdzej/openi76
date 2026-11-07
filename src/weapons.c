@@ -7,6 +7,12 @@
 #include "ordnance.h"
 #include <math.h>
 #include "crt.h"
+#include <stdlib.h>
+#include "texanim.h"
+#include "tex.h"
+#include "physics.h"
+#include "damage.h"
+#include "classes.h"
 #include "effects.h"
 #include "exe.h"
 #include "lod.h"
@@ -17,6 +23,7 @@
 #include <string.h>
 
 #define ADD fpu_add
+#define SUB fpu_sub
 #define MUL fpu_mul
 #define F32 fpu_f32
 
@@ -367,6 +374,194 @@ static void ordnance_add(const OrdRec *o)
     g_ordnance_count++;
     r->entity->r = 1.0f;
     r->entity->has_a = 3;
+}
+
+/* ---- the windows (classes 0x20, 0x21) and their handguns (0x433810-0x433e40) ---- */
+
+/* 0x433e40: the .45 handgun a window gives the vehicle (side 1 the driver's, 2 the passenger's): a hard
+   point (id 6 or 5, type 6, side 3 or 4) at the vehicle's class 0x2b or 0x2c node, hidden then, or at a
+   new node turned and placed for the side; its own ordnance (type 0x12, 120 m/s, mask 4) and weapon */
+static void handgun_add(int side, Node *vehicle)
+{
+    int32_t id = 0, hside = 0;
+    uint32_t yaw = 0, pos[3] = {0, 0, 0};
+    Node *g = NULL;
+    if (side == 1) {
+        id = 6, hside = 3, yaw = 0x3fc49809;   /* 1.54 */
+        pos[0] = 0x3ed1eb85, pos[1] = 0x3f91eb85, pos[2] = 0x3d4ccccd;   /* 0.41, 1.14, 0.05 */
+        g = Node_FindClass(vehicle, 0x2b);
+        if (g) Node_SetFlags(g, 1);
+    }
+    if (side == 2) {
+        id = 5, hside = 4, yaw = 0xbff7f9f4;   /* -1.94 */
+        pos[0] = 0xbf4f5c29, pos[1] = 0x3f947ae1, pos[2] = 0xbdf5c28f;   /* -0.81, 1.16, -0.12 */
+        g = Node_FindClass(vehicle, 0x2c);
+        if (g) Node_SetFlags(g, 1);
+    }
+    Frame id_frame;
+    memcpy(&id_frame, exe_data(0x4db298, sizeof id_frame), sizeof id_frame);
+    hardpoint_add(vehicle, 0, hside, 6, id, g ? &g->frame : &id_frame);   /* 0x454c20 */
+
+    static OrdRec o;
+    memset(&o, 0, sizeof o);
+    o.type = 0x12;
+    o.tree = Node_Create(NULL);   /* "handgn" */
+    o.tree->cls = 0x33;
+    o.w2 = 0x42f00000;   /* 120 */
+    o.w4 = 4;
+    Xdf_Load(exe_str(0x4d6084), o.fx[0].xdf, NULL);   /* xbulg1.xdf */
+    memcpy(o.fx[0].sound, exe_data(0x4d6078, 10), 10);   /* wmgr2.wav */
+    Xdf_Load(exe_str(0x4d606c), o.fx[1].xdf, NULL);   /* xbulc1.xdf */
+    memcpy(o.fx[1].sound, exe_data(0x4d6060, 10), 10);   /* wmgr1.wav */
+    Xdf_Load(exe_str(0x4d6054), o.fx[2].xdf, NULL);   /* xbulb1.xdf */
+    memcpy(o.fx[2].sound, exe_data(0x4d6048, 10), 10);   /* hssr1.wav */
+    /* the fourth's file goes to the third's place again: the fourth's stays the stack's (here 0) */
+    Xdf_Load(exe_str(0x4d6054), o.fx[2].xdf, NULL);
+    memcpy(o.fx[3].sound, exe_data(0x4d603c, 10), 10);   /* hssr2.wav */
+    ordnance_add(&o);   /* 0x458c50 */
+
+    if (!g) {
+        g = Node_Create(vehicle);   /* "handgn" */
+        Frame r, t;
+        float a;
+        memcpy(&a, &yaw, 4);
+        Frame_Yaw(&r, a);
+        Frame_Mul(&t, &r, &g->frame);
+        g->frame = t;
+        Frame_Pitch(&r, 0.0872664600610733f);   /* 0x3db2b8c2: 5 degrees */
+        Frame_Mul(&t, &r, &g->frame);
+        g->frame = t;
+        for (int k = 0; k < 3; k++) {
+            float f;
+            memcpy(&f, &pos[k], 4);
+            g->frame.pos[k] = f;
+        }
+    }
+    g->cls = 0x32;
+    Node *m = Node_Create(g);   /* "handgn" */
+    Class_Set(m, 0x29);
+    memcpy(&m->frame, exe_data(0x4db298, sizeof m->frame), sizeof m->frame);
+
+    static WeaponRec w;
+    memset(&w, 0, sizeof w);
+    memcpy(w.b, exe_data(0x4d6030, 12), 12);   /* ".45 Handgun" */
+    static const uint32_t words[10] = {1, 45, 0x40200000, 0, 0x40400000, 0xfffffff, 1, 0x42f00000, 0x12, 0x3e4ccccd};
+    put32(w.b + W_KIND, 1);
+    put32(w.b + W_INDEX, side);
+    for (int k = 0; k < 10; k++) put32(w.b + 0x58 + 4 * k, (int32_t)words[k]);   /* 2.5, 3, 120, 0.2 */
+    memcpy(w.b + W_SOUND, exe_data(0x4d6024, 10), 10);   /* h45ch.wav */
+    put32(w.b + W_ID, id);
+    w.muzzle = m;
+    w.gun = g;
+    w.vehicle = vehicle;
+    put32(w.b + 0xa8, 0xfffffff);
+    put32(w.b + 0xac, 0x2d);
+    weapon_add(&w);   /* 0x454e20 */
+}
+
+void Window_Start(Node *n)
+{
+    uint8_t *d = n->data;
+    *Data_Ptr(d, 8) = n;
+    Node *root = Node_Root(n);
+    if (!(root->cls == 1 || root->cls == 8 || root->cls == 9)) return;   /* 0x42e570 */
+    uint8_t *vd = root->data;
+    if (g_user_entity && g_user_entity->node == root) put32(d + 4, 1);   /* 0x423fc0 */
+    if (n->cls == 0x20) {
+        *Data_Ptr(vd, 0x400) = n;
+        put32(d + 0xc, 1);
+        handgun_add(1, root);
+    }
+    if (n->cls == 0x21) {
+        *Data_Ptr(vd, 0x404) = n;
+        put32(d + 0xc, 2);
+        handgun_add(2, root);
+    }
+    if (rd32(d + 4) != 1) return;
+    WindowAnim *a = calloc(1, sizeof *a);   /* 0x44e380 */
+    *Data_Ptr(d, 0) = a;
+    if (!a) return;
+    a->next = g_clock_time;
+    const char *t = Node_FirstTexture(n, 0);
+    if (t && *t) {
+        TexAnim_Add(n, t, Window_Anim, 0x433d10, a);
+        Tex_SetFrame((uintptr_t)n, t, 1, 0, 0);
+        Tex_SetFrame((uintptr_t)n, t, 0, 0, 1);
+    }
+}
+
+void Window_Free(uint8_t *d)
+{
+    if (!d) return;
+    free(*Data_Ptr(d, 0));   /* 0x44e3e0 */
+    Node *n = *Data_Ptr(d, 8), *root = n ? Node_Root(n) : NULL;
+    if (root && root->data && (root->cls == 1 || root->cls == 8 || root->cls == 9)) {
+        /* whichever window the side's slot holds is let go */
+        if (rd32(d + 0xc) == 1 && *Data_Ptr(root->data, 0x400)) *Data_Ptr(root->data, 0x400) = NULL;
+        else if (rd32(d + 0xc) == 2 && *Data_Ptr(root->data, 0x404)) *Data_Ptr(root->data, 0x404) = NULL;
+    }
+}
+
+void Window_Anim(Node *n, const char *name, void *arg)
+{
+    WindowAnim *a = arg;
+    if (!a || !rd32(n->data + 4)) return;
+    float now = g_clock_time;
+    if (!(now > a->next)) return;
+    int32_t shown = a->shown;   /* as it was: each step moves from it, whatever the steps before did */
+    while (!(a->next > now)) {
+        a->next = F32(ADD(a->next, 0.1f));   /* 0x4a5dd4 */
+        if (a->target < shown) {
+            if (a->shown > 0) a->shown--;
+        } else if (a->target > shown && a->shown < 6)
+            a->shown++;
+    }
+    if (a->mode == 0 && a->shown > 5) a->shown = 5;
+    if (a->mode == 1 && a->target <= shown) {   /* the gun is in again: the window back up */
+        a->w4 = a->mode = 0;
+        a->shown = a->target = 5;
+        a->state = 0;
+        Tex_SetFrame((uintptr_t)n, name, 1, 0, 0);
+        Tex_SetFrame((uintptr_t)n, name, 0, 5, 1);
+        return;
+    }
+    Tex_SetFrame((uintptr_t)n, name, 1, a->mode, 0);
+    Tex_SetFrame((uintptr_t)n, name, 0, a->shown, 1);
+}
+
+static Node *window_of(Node *vehicle, int which)
+{
+    if (!vehicle || !vehicle->data) return NULL;
+    return *(Node **)Data_Ptr(vehicle->data, which == 1 ? 0x400 : 0x404);
+}
+
+static WindowAnim *window_anim(Node *w) { return rd32(w->data + 4) ? *(WindowAnim **)Data_Ptr(w->data, 0) : NULL; }
+
+int Window_Closed(Node *vehicle, int which)
+{
+    Node *w = window_of(vehicle, which);
+    if (!w) return 0;
+    if (!rd32(w->data + 4)) return 1;
+    WindowAnim *a = *(WindowAnim **)Data_Ptr(w->data, 0);
+    if (!a || a->state == 1) return 0;   /* the original reads through a failed allocation */
+    return a->mode == 0 && a->shown == 0 && a->target == 0;
+}
+
+int Window_Open(Node *vehicle, int which)
+{
+    Node *w = window_of(vehicle, which);
+    if (!w || !rd32(w->data + 4)) return 0;
+    WindowAnim *a = *(WindowAnim **)Data_Ptr(w->data, 0);
+    if (!a || a->state == 1) return 0;
+    return a->mode == 0 && a->shown == 5 && a->target == 5;
+}
+
+int Window_Busy(Node *vehicle, int which)
+{
+    Node *w = window_of(vehicle, which);
+    if (!w || !rd32(w->data + 4)) return 0;
+    WindowAnim *a = *(WindowAnim **)Data_Ptr(w->data, 0);
+    return a ? a->state : 0;
 }
 
 /* ---- the .gdf ---- */
@@ -730,10 +925,26 @@ void Weapons_Tick(void)
 
 void (*g_weapon_launch)(Launch *l, float late);   /* 0x458f40 */
 
-/* not ported yet, as the effects and the audio: 0x454940 the muzzle's flash, 0x433b70 the gun's
-   animation (the vehicle's +0x400 / +0x404 node), 0x468580 / 0x4685d0 the shot's sound by name */
+/* not ported yet, as the effects and the audio: 0x454940 the muzzle's flash, 0x468580 / 0x4685d0 the
+   shot's sound by name */
 static void muzzle_flash(Node *muzzle) { (void)muzzle; }
-static void gun_animation(Node *vehicle, int32_t which) { (void)vehicle, (void)which; }
+/* 0x433b70: the gun out of the window: the animation's frame from -1 towards 2 */
+static void gun_animation(Node *vehicle, int32_t which)
+{
+    Node *w = window_of(vehicle, which);
+    WindowAnim *a;
+    if (!w || !(a = window_anim(w))) return;
+    const char *t = Node_FirstTexture(w, 0);
+    if (a->state) return;
+    a->state = 1;
+    a->w4 = 1;
+    a->mode = 1;
+    a->shown = -1;
+    a->target = 2;
+    a->next = F32(SUB(g_clock_time, 0.1f));
+    Tex_SetFrame((uintptr_t)w, t, 1, 1, 0);
+    Tex_SetFrame((uintptr_t)w, t, 0, 0, 1);
+}
 static void shot_sound(const char *name, Node *at, int spatial) { (void)name, (void)at, (void)spatial; }
 /* 0x433730: a type 3 mortar's muzzle raised for its target's range (0x45ddb0); not ported yet */
 static void mortar_elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v) { (void)vehicle, (void)muzzle, (void)target, (void)v; }

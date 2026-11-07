@@ -333,3 +333,61 @@ Checked: `diff_objects --call fly` on t01, t05, s04, s07 and t12. Each weapon fi
 then every live shot flies three steps of 0.03 s, with the hit's effect and the tracer stubbed. It
 compares the shot's frame and record, the return, the rand seed and the whole tree, including t01's
 building hit by a gun.
+
+## The windows and the handgun (0x433810, 0x433e40)
+
+Classes 0x20 and 0x21 are the vehicle's windows: the driver's and the passenger's. Their data (0x10
+bytes, 0x4337f0) holds:
+- +0: the animation (the user's vehicle only);
+- +4: 1 on the user's vehicle;
+- +8: the node;
+- +0xc: the side, 1 or 2.
+
+**The start (0x433810).** On a vehicle (classes 1, 8, 9), a window takes the vehicle's +0x400 (driver)
+or +0x404 (passenger) and gives the vehicle a handgun (0x433e40). On the user's vehicle it also gets its
+animation:
+- a 0x1c-byte record (state, frame shown, target, mode, a word, the next step's time);
+- the window's first texture animated by 0x433d10 at frames 0 and 0.
+
+The class has no per-frame handler. Its handler 11 (0x433940) frees the record and empties the side's
+slot, whichever window is in it.
+
+**The handgun (0x433e40).** Every vehicle with windows has one per side, built from constants:
+- **The hard point.** Id 6 (driver) or 5 (passenger), type 6, side 3 or 4. It sits at the vehicle's
+  class 0x2b (or 0x2c) node, which is hidden (flag 1), or at the identity if there is none.
+- **The ordnance.** Type 0x12, speed 120, gravity 0, damage mask 4. Its effects are xbulg1.xdf with
+  wmgr2.wav, xbulc1.xdf with wmgr1.wav, and xbulb1.xdf with hssr1.wav.
+  - Quirk: the fourth effect's file is loaded into the third's place again. The fourth keeps its sound
+    (hssr2.wav), and its file name is whatever the stack held.
+  - The kind's node is a bare class 0x33 node.
+- **The gun.**
+  - With a 0x2b or 0x2c node, that node becomes the gun (class set to 0x32 directly).
+  - Without one, a new node under the vehicle is the gun: yawed 1.54 (driver) or -1.94 (passenger),
+    pitched 5 degrees, at (0.41, 1.14, 0.05) or (-0.81, 1.16, -0.12).
+  - Its muzzle is a class 0x29 child at the identity.
+- **The weapon.** ".45 Handgun", kind 1, index the side. Its words are 1, 45, 2.5, 0, 3, 0xfffffff, 1,
+  120, 0x12 and 0.2. Its sound is h45ch.wav, and +0xa8 and +0xac are 0xfffffff and 45.
+- Its instance's kind comes from type 6: 8 for the driver's, 0x10 for the passenger's.
+
+**The window's animation (0x433d10).**
+1. It runs each frame through the texture animations, on the user's vehicle, once the clock is past the
+   record's time.
+2. Each 0.1 s step moves the frame shown one toward the target, comparing with the frame shown on entry
+   (quirk: within one call it can overshoot), between 0 and 6.
+3. In mode 0 the frame is kept at 5 or below.
+4. In mode 1 (the gun out), once the target is no more than the entry's frame, the window is back: the
+   frame and target are 5, mode and state 0.
+5. The texture's frame is set from the mode (dimension 1) and the frame shown (dimension 0).
+
+**The gun out (0x433b70).** Firing a handgun starts the animation when its state is 0: state 1, mode 1,
+the frame -1 toward 2, the time 0.1 s back.
+
+**The checks.** The trigger code uses three:
+- **0x433c50, the window shut.** True for an AI's window. For the user's, it needs state 0, mode 0 and
+  frames 0.
+- **0x433cb0, wound down.** The user's window with state 0, mode 0 and frames 5.
+- **0x433c10, the gun out.** The state.
+
+Checked: `diff_objects --start` on t01, s04 and t05, with the start run on both sides. It compares the
+hard points, the definitions, the instances, the ordnance and the trees. The empty xdf names are
+compared as empty. The shot, launch and fly calls also run 0x433b70 now.

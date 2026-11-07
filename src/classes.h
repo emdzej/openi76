@@ -15,5 +15,7 @@ void Class_Frame(int which);
 struct Entity *Entity_OfNode(Node *n);
 /* Node_Root 0x42e6b0 */
 Node *Node_Root(Node *n);
+/* Node_FindClass 0x42e970: the first node of class cls in n's tree, depth first */
+Node *Node_FindClass(Node *n, int cls);
 /* Vehicle_Frame 0x429c70: class 1's first per-frame handler, the simulation */
 void Vehicle_Frame(Node *n);

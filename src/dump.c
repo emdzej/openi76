@@ -67,7 +67,7 @@ int g_dump_texanims;
 
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
-                                    0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x408, 0x40c, 0x410,
+                                    0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x400, 0x404, 0x408, 0x40c, 0x410,
                                     0x414, 0x418, 0x41c, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
@@ -287,8 +287,10 @@ size_t Objects_Dump(char *buf, size_t cap)
         out(&o, " ");
         hex(&o, r->xdf0, 8);
         for (int k = 0; k < 4; k++) {
+            /* a name with a 0 first is none, its rest unread (the handgun's fourth: the original's stack) */
+            static const uint8_t none[8];
             out(&o, " ");
-            hex(&o, r->fx[k].xdf, 8);
+            hex(&o, r->fx[k].xdf[0] ? r->fx[k].xdf : none, 8);
             hex(&o, (const uint8_t *)r->fx[k].sound, 16);
         }
         out(&o, "\n");

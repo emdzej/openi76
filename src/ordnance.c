@@ -110,20 +110,13 @@ static void normalise(float out[3], const float v[3])
     out[0] = x, out[1] = y, out[2] = z;
 }
 
-/* about x by a (0x451880) */
-static void frame_pitch(Frame *out, float a)
-{
-    float sn = F32(sin(a)), c = F32(cos(a));   /* fsincos 0x452a70 */
-    memcpy(out, exe_data(0x4db298, sizeof *out), sizeof *out);
-    out->m[4] = c, out->m[5] = sn, out->m[7] = -sn, out->m[8] = c;
-}
 
 /* the frame turned by yaw and pitch degrees first, each only when positive (as integer bits) */
 static void turn(Frame *f, float yaw, float pitch)
 {
     Frame y, p, t;
     Frame_Yaw(&y, F32(MUL(yaw, 0.01745329238474369f)));   /* 0x4a624c */
-    frame_pitch(&p, F32(MUL(pitch, 0.01745329238474369f)));
+    Frame_Pitch(&p, F32(MUL(pitch, 0.01745329238474369f)));
     if (fbits(yaw) > 0) {
         Frame_Mul(&t, &y, f);
         *f = t;
@@ -250,6 +243,31 @@ static void fill_pool(int k)
     }
 }
 
+/* 0x459d40's step (and the launch's): the life less dt; spent (or all shots off), the user stops
+   following it, else it flies (0x459b50); a shot that ends drops its nodes' references and its light and
+   goes from list which back to the pool */
+static void fly_one(Node *s, float dt, int which)
+{
+    uint8_t *d = s->data;
+    int32_t ty;
+    memcpy(&ty, d, 4);
+    int kk = Ordnance_Index(ty);
+    wr_f(d + 4, F32(SUB(rd_f(d + 4), dt)));
+    int alive;
+    if (g_shots_off || (uint32_t)fbits(rd_f(d + 4)) > 0x80000000u) {
+        if (Node_IsUser(*(Node **)Data_Ptr(d, 0xc)) && g_user_shot == s) g_user_shot = NULL;   /* 0x45c8f0 */
+        alive = 0;
+    } else
+        alive = (g_shot_fly ? g_shot_fly : Shot_Fly)(s, dt);
+    if (!alive) {
+        Node *veh = *(Node **)Data_Ptr(d, 0xc), *tg = *(Node **)Data_Ptr(d, 0x10);
+        if (veh) Node_Unref(veh);
+        if (tg) Node_Unref(tg);
+        if (g_ordnance[kk].w16 == 1) Light_Remove(s, &s->flags);   /* 0x43a400 */
+        list_add(kk, 2, list_take(kk, which, s));
+    }
+}
+
 Node *Shot_Launch(Launch *l, float late)
 {
     if (l->n == 0) return NULL;
@@ -334,26 +352,7 @@ Node *Shot_Launch(Launch *l, float late)
     case 0x11: if (o->tex[0]) tex_anim(s, o->tex, 1, 8); break;
     }
     /* the first flight, for the time late in the frame */
-    if (fabs(late) != 0.0 && (which == 0 || which == 1)) {
-        uint8_t *d = s->data;
-        int32_t ty;
-        memcpy(&ty, d, 4);
-        int kk = Ordnance_Index(ty);
-        wr_f(d + 4, F32(SUB(rd_f(d + 4), late)));
-        int alive;
-        if (g_shots_off || (uint32_t)fbits(rd_f(d + 4)) > 0x80000000u) {
-            if (Node_IsUser(*(Node **)Data_Ptr(d, 0xc)) && g_user_shot == s) g_user_shot = NULL;   /* 0x45c8f0 */
-            alive = 0;
-        } else
-            alive = (g_shot_fly ? g_shot_fly : Shot_Fly)(s, late);
-        if (!alive) {
-            Node *veh = *(Node **)Data_Ptr(d, 0xc), *tg = *(Node **)Data_Ptr(d, 0x10);
-            if (veh) Node_Unref(veh);
-            if (tg) Node_Unref(tg);
-            if (g_ordnance[kk].w16 == 1) Light_Remove(s, &s->flags);   /* 0x43a400 */
-            list_add(kk, 2, list_take(kk, which, s));
-        }
-    }
+    if (fabs(late) != 0.0 && (which == 0 || which == 1)) fly_one(s, late, which);
     return s;
 }
 
@@ -533,4 +532,25 @@ int Shot_Fly(Node *s, float t)
         break;
     }
     return alive;
+}
+
+/* not ported yet, with the beams' flight (0x45e720, which adds them): 0x45e620's delayed hits (0x4dc470,
+   14 to a record, each swept and hit when its time comes) */
+static void delayed_hits(void) {}
+
+void Shots_Frame(void)
+{
+    float dt = g_clock_step;   /* 0x450f30 */
+    delayed_hits();
+    if (fabs(dt) == 0.0) return;
+    for (int k = 0; k < g_ordnance_count; k++) {   /* 0x459d40 over the kind's two lists */
+        for (Node *s = g_ordnance[k].node ? g_ordnance[k].node->child : NULL, *nx; s; s = nx) {
+            nx = s->next;
+            fly_one(s, dt, 0);
+        }
+        for (Node *s = g_ordnance[k].list1, *nx; s; s = nx) {
+            nx = s->next;
+            fly_one(s, dt, 1);
+        }
+    }
 }

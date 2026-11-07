@@ -25,3 +25,6 @@ Node *Shot_Launch(Launch *l, float late);
 int Shot_Sweep(Node *s, Node *owner, float p1[3], Node **who, int32_t *cls);
 /* Shot_Fly 0x459b50: the shot's flight for t by its type; 0 when spent */
 int Shot_Fly(Node *s, float t);
+/* Shots_Frame 0x4597a0: every live shot of every kind (its node's children, then its second list) flown
+   for the frame's step; the spent back to their pool */
+void Shots_Frame(void);

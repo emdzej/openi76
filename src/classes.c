@@ -57,12 +57,12 @@ static void start_artillery(Node *n)
 /* 0x432b90 (class 7, a turret's base): a root takes its first class 7 descendant's data (0xa0 bytes),
    and that one leaves the class list; a non-root under a class 7 root has nothing to do. Then its place
    (+0x84 and +0x6c), its aim through the frame (+0x78) and the rate's inverse (+0x94). */
-static Node *find_class(Node *n, int cls)   /* 0x42e970 */
+Node *Node_FindClass(Node *n, int cls)   /* 0x42e970 */
 {
     if (!n) return NULL;
     if (n->cls == cls) return n;
     for (Node *c = n->child; c; c = c->next) {
-        Node *f = find_class(c, cls);
+        Node *f = Node_FindClass(c, cls);
         if (f) return f;
     }
     return NULL;
@@ -72,7 +72,7 @@ static void start_class7(Node *n)
 {
     if (!n->prev) {
         Node *f = NULL;
-        for (Node *c = n->child; c && !f; c = c->next) f = find_class(c, 7);
+        for (Node *c = n->child; c && !f; c = c->next) f = Node_FindClass(c, 7);
         if (!f) return;
         memcpy(n->data, f->data, 0xa0);
         Class_Unlist(f);
@@ -388,8 +388,8 @@ static const struct {
     {34, NULL, {NULL, later}},              /* 0x41fff0; 0x4202d0 */
     {52, no_start, {NULL, NULL}},           /* 0x454810 */
     {31, start_class31, {NULL, later}},     /* 0x4342f0; 0x4343c0 */
-    {32, NULL, {NULL, NULL}},               /* 0x433810 */
-    {33, NULL, {NULL, NULL}},
+    {32, Window_Start, {NULL, NULL}},       /* 0x433810 */
+    {33, Window_Start, {NULL, NULL}},
     {53, no_start, {later, NULL}},          /* 0x45bc90; 0x45bca0 */
     {5, start_scrounge, {NULL, NULL}},      /* 0x42ed80 */
     {41, start_class41, {NULL, NULL}},      /* 0x433370 */

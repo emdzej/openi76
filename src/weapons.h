@@ -54,7 +54,7 @@ typedef struct {           /* 0x50 bytes, 350 of them */
     char sound[16];        /* +0x2c */
     int32_t v3c, v40;      /* 1 */
     int32_t v44, v48;      /* 0 */
-    int32_t kind;          /* +0x4c: 1 front, 2 rear, 4 a turret, 8 / 0x10 dropped */
+    int32_t kind;          /* +0x4c: 1 front, 2 rear, 4 a turret, 8 / 0x10 the driver's / passenger's handgun */
 } WeaponInst;
 
 typedef struct {           /* 200 bytes, 20 of them */
@@ -124,3 +124,28 @@ extern void (*g_weapon_launch)(Launch *l, float late);
 /* Weapon_Fire 0x458710: n shots of w: the flash and the sound (not ported), the ammunition, the radar's
    target by the ordnance's type, then the launch (0x458f40) late s into the frame */
 void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late);
+
+/* the windows (classes 0x20 the driver's, 0x21 the passenger's): their data (0x10 bytes, 0x4337f0) is
+   +0 the user's animation, +4 1 on the user's vehicle, +8 the node, +0xc the side; the vehicle's +0x400
+   and +0x404 point at them */
+typedef struct {       /* 0x1c bytes (0x44e380) */
+    int32_t state;     /* +0: 1 while the gun is out */
+    int32_t shown;     /* +4: the texture's frame, 0-6 */
+    int32_t target;    /* +8 */
+    int32_t mode;      /* +0xc: 1 the gun out */
+    int32_t w4;        /* +0x10 */
+    float next;        /* +0x14: the next step's time */
+    int32_t w6;
+} WindowAnim;
+/* Window_Start 0x433810: the window into the vehicle's slot and its handgun (0x433e40); on the user's,
+   its animation (0x433d10 on its first texture, frames 0 and 0) */
+void Window_Start(Node *n);
+/* Window_Free 0x433940: the class's handler 11 (the animation freed, the side's slot let go) */
+void Window_Free(uint8_t *d);
+/* Window_Anim 0x433d10: each 0.1 s the frame one nearer the target; back up when the gun is in */
+void Window_Anim(Node *n, const char *name, void *arg);
+/* 0x433c50: the side's window there and shut (an AI's always), 0x433cb0: the user's window wound down
+   (frames 5), 0x433c10: its gun out */
+int Window_Closed(Node *vehicle, int which);
+int Window_Open(Node *vehicle, int which);
+int Window_Busy(Node *vehicle, int which);

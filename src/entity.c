@@ -3,6 +3,7 @@
 #include "clock.h"
 #include "crt.h"
 #include "exe.h"
+#include "weapons.h"
 #include "platform.h"
 #include "render/fpu.h"
 #include "render/light.h"
@@ -528,6 +529,10 @@ void Class_Free(int cls, uint8_t *data)
     /* handler 11 of the class's entry; the ported constructors' data is the heap's (0x430e10 for 2 and
        4, 0x4346a0 for 10) */
     if (data && cls == 53) debris_free(data);   /* 0x45bfd0: back to the pool */
+    else if (data && (cls == 32 || cls == 33)) {
+        Window_Free(data);   /* 0x433940 */
+        Data_Free(data);
+    }
     else if (data && classes[class_index(cls)].make) Data_Free(data);
 }
 

@@ -68,7 +68,7 @@ def chunk_rec(m, n):
 
 budget = [0]
 VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC, 0x3C0, 0x3C4, 0x3C8, 0x3CC,
-            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x440, 0x508)
+            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x440, 0x508)
 SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8}
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
@@ -748,7 +748,7 @@ def call_shot(exe, n, fpcw):
         CALL_OUT.append(struct.pack("<14I", *out).hex())
 
     if not SHOT:
-        for a, k in ((0x454940, 1), (0x433B70, 2), (0x4685D0, 3), (0x433730, 4)):
+        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x458F40, launch, 2)
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -783,7 +783,7 @@ def call_launch(exe, n, fpcw):
         return 1
 
     if not LAUNCH:
-        for a, k in ((0x454940, 1), (0x433B70, 2), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x459B50, fly, 2)
@@ -807,7 +807,7 @@ def call_fly(exe, n, fpcw):
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
         # the launch's effects as in call_launch; the hit's effect, and the flights not ported yet
-        for a, k in ((0x454940, 1), (0x433B70, 2), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6), (0x45C950, 4)):
             exe.stub(a, lambda *x: 0, k)
         for a in (0x45F8B0, 0x460480, 0x460F40, 0x461340, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
@@ -870,7 +870,7 @@ UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
-START_LATER = (0x41FFF0, 0x433810,
+START_LATER = (0x41FFF0,
                # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
                0x426410, 0x403360, 0x4561F0, 0x42DC00, 0x471060, 0x476240)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C}
@@ -1117,7 +1117,9 @@ def original():
         s += f"{int(w(4) != 0):x} {int(w(5) != 0):x} "   # the shot lists: whether set (the port's are pointers)
         s += " ".join(f"{w(j):x}" for j in (7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24)) + " "
         s += m.raw(r + 0x48, 16).hex() + " " + m.raw(r + 0x58, 8).hex()
-        s += "".join(" " + m.raw(r + 0x68 + 24 * k, 24).hex() for k in range(4))
+        # a name with a 0 first is none, its rest unread (the handgun's fourth: the original's stack)
+        fx = [m.raw(r + 0x68 + 24 * k, 24) for k in range(4)]
+        s += "".join(" " + ((bytes(8) if x[0] == 0 else x[:8]) + x[8:]).hex() for x in fx)
         out.append(s)
         if w(1):
             node(m, w(1), 0, out)
