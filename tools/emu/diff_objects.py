@@ -74,7 +74,7 @@ SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
               41: (0x24,)}   # 41: the pad word of a frame 0x433370 copies from its stack (garbage)
 START = "--start" in sys.argv
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
-START_LATER = (0x4294E0, 0x41FFF0, 0x433810,
+START_LATER = (0x41FFF0, 0x433810,
                # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
                0x426410, 0x403360, 0x4561F0, 0x42DC00, 0x471060, 0x476240)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C}
@@ -84,7 +84,7 @@ def class_data(m, cls, d):
     """vehicle.c's and entity.c's data, as src/dump.c prints it"""
     if cls in (1, 8, 9):
         raw = bytearray(m.raw(d, 0x50C))
-        for o in VEH_PTRS + ((0,) if cls in (8, 9) else ()):
+        for o in VEH_PTRS + ((0,) if cls in (1, 8, 9) else ()):
             raw[o:o + 4] = bytes(4)
         s = " v" + raw.hex() + " vp"
         for o in VEH_PTRS:
@@ -176,6 +176,7 @@ def original():
     exe.stub(0x484820, lambda *a: 1, 2)   # EXIT: the melee maps (M*) have no user vehicle, fatal outside a network game
     for f in mission.INITS:
         exe.call(f, limit=200_000_000)
+    mission.seed(exe)
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
     p = exe.put(M.encode() + b"\0")
     r = exe.call(0x484410, p, limit=2_000_000_000)
@@ -190,7 +191,7 @@ def original():
     count = m.i32(0x4D3B5C)
     user = m.u32(0x4D3B64)
     out = [f"entities {count} user {(user - 0x547E60) // 0x78 if user else -1} names {m.i32(0x54F7B0)} "
-           f"classes {m.i32(0x4D3C18)} {m.i32(0x4D3C1C)}"]
+           f"classes {m.i32(0x4D3C18)} {m.i32(0x4D3C1C)}", f"rand {m.u32(0x4EBC90):08x}"]
     for i in range(count):
         e = 0x547E60 + 0x78 * i
         s = f"E{i} {m.i32(e + 0x14)} {m.i32(e + 0x30)} {m.u32(e + 4):08x},{m.u32(e + 8):08x},{m.u32(e + 0xc):08x} r{m.u32(e + 0x10):08x}"

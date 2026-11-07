@@ -29,9 +29,9 @@ terrain, the roads, the sky; `tools/emu/regress.sh` diffs them against the origi
 the objects (entities, node trees, levels of detail, collision set-up, and their drawing with the
 dynamic lights and the shadows; docs/re/objects.md), the lines of objects (LDEF), the vehicles' loading
 (docs/re/vehicles.md) with their weapons (docs/re/weapons.md), the effects' loading (docs/re/effects.md)
-the AI's set-up (docs/re/ai.md) and the classes' start pass but the vehicles' (docs/re/classes.md). The app shows disc 1's loading screen, or with `--param
+the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app shows disc 1's loading screen, or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
-camera. Not ported yet: the vehicles' start, the mission's script (ADEF's FSM), the game loop and the classes' per-frame
+camera. Not ported yet: the user's cockpit and camera set-up, the mission's script (ADEF's FSM), the game loop and the classes' per-frame
 handlers (the vehicle simulation), firing, the AI's driving, the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.

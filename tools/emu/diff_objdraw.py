@@ -33,6 +33,7 @@ def load(name):
     exe.stub(0x484820, lambda *a: 1, 2)   # EXIT, as diff_objects.py
     for f in mission.INITS:
         exe.call(f, limit=200_000_000)
+    mission.seed(exe)
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
     r = exe.call(0x484410, exe.put(name.encode() + b"\0"), limit=2_000_000_000)
     ctypes.c_int.in_dll(lib, "g_fpu_round").value = 0

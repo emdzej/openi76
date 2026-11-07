@@ -1,6 +1,7 @@
 /* A text dump of the objects' state, for the diff harness (tools/emu/diff_objects.py prints the
    original's in the same form). Floats are their bits. */
 #include "collide.h"
+#include "crt.h"
 #include "ai.h"
 #include "effects.h"
 #include "entity.h"
@@ -160,6 +161,7 @@ size_t Objects_Dump(char *buf, size_t cap)
     budget = 100000;
     out(&o, "entities %d user %d names %d classes %d %d\n", g_entity_count,
         g_user_entity ? (int)(g_user_entity - g_entities) : -1, Names_Count(), g_class_count[0], g_class_count[1]);
+    out(&o, "rand %08x\n", crt_seed());
     for (int i = 0; i < g_entity_count; i++) {
         const Entity *e = &g_entities[i];
         out(&o, "E%d %d %d %08x,%08x,%08x r%08x", i, e->has_a, e->has_b, fb(e->c[0]), fb(e->c[1]), fb(e->c[2]), fb(e->r));

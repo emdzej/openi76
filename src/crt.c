@@ -11,6 +11,7 @@ int crt_rand(void)
 }
 
 void crt_srand(uint32_t s) { seed = s; }
+uint32_t crt_seed(void) { return seed; }
 
 static void swap(char *a, char *b, size_t size)   /* swap 0x497b20 */
 {

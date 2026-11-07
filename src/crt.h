@@ -9,6 +9,8 @@
    start); _srand sets it. */
 int crt_rand(void);
 void crt_srand(uint32_t seed);
+/* the seed as it is (for the dumps) */
+uint32_t crt_seed(void);
 
 typedef int (*CrtCompare)(const void *a, const void *b);
 /* _qsort 0x497960 (with shortsort 0x497ac0 and swap 0x497b20): not stable, and not the host's */

@@ -406,3 +406,21 @@
 00425920	Class_StartAll	entity	med	the classes' start handlers (word 2) after the load
 00425a20	Class_Update1	entity	med	the classes' first per-frame handlers (word 3)
 00425b00	Class_Update2	entity	med	the classes' second per-frame handlers (word 4)
+004294e0	Vehicle_Start	vehicle	high	class 1's start: timer, physics set-up, hit zones, the user's armour; ported, diffed
+00471df0	Vehicle_PhysInit	physics	high	on the ground, wheels' heights, track and wheelbase, corners, specials, mass, brakes, engine; ported, diffed
+0042f640	Engine_Step	engine	high	gear, rpm and torque from the throttle and the speed; ported (its start call diffed)
+0042f4c0	Gear_Choose	engine	high	the automatic gearbox's down shifts; ported
+0042fe30	Wheel_Ground	physics	high	a wheel's ground height into its data +0x2c, +0x30; ported
+0042e780	Node_WorldPos	scene	high	a node's world position as floats; ported
+004304f0	Brakes_Set	physics	high	the brakes' force (+0xc, +0x10), scaled in a network game; ported
+00456640	Weapons_Faster	weapons	high	special kind 8: the vehicle's weapons' +0x18 by 1.1; ported
+00455140	Weapon_OfGun	weapons	high	the hard point of the weapon whose gun is the node (3 for none); ported
+004551d0	Weapon_Info	weapons	high	instance i's muzzle frame, +0xc, +0x18 and slot id (3 if not instance i)
+00451210	Timer_Init	clock	high	a rate 1/period (1e30 for none) and two zeros; ported
+00450f30	Clock_Step	clock	high	0x4db138, the clamped frame step
+00409b00	AI_SetTaurus	ai	high	0x505454: the script's actor named taurus
+00409b10	AI_Taurus	ai	high	returns 0x505454
+0042d5e0	Node_Data	entity	high	returns node+0x70
+0042d920	Special_Kind	vehicle	high	a special's node's data word 0 (0 for none)
+0042d4f0	Vehicle_Mode	vehicle	high	the vehicle's data +0x104
+004761b0	Engine_SoundStart	audio	med	0x476240 (the engine's sound) as a boolean

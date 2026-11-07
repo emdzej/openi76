@@ -96,6 +96,15 @@ INITS = [0x466DD0, 0x46FA50, 0x44E330, 0x450E90, 0x480250, 0x421FC0, 0x423B90, 0
          0x45ADA0, 0x45C190]
 
 
+# rand()'s seed for both sides. The game seeds it with time(NULL) at start-up and again in the heap's set-up
+# (0x45e460, one of the inits); after the inits the emulator's is set to this (seed())
+SEED = 76
+
+
+def seed(exe):
+    exe.write(0x4EBC90, struct.pack("<I", SEED))
+
+
 def setup(log=None):
     exe = x86.Exe()
     exe_ref[0] = exe
@@ -119,7 +128,9 @@ def setup(log=None):
     exe.stub_import("PeekMessageA", lambda *a: 0, 5)
     exe.stub_import("GetLocalTime", lambda p: exe.write(p, bytes(16)), 1)
     exe.stub_import("GetSystemTime", lambda p: exe.write(p, bytes(16)), 1)
-    exe.call(0x4516F0)   # WinMain's start-up: the inverse square root's table (LDEF's frames use it)
+    # WinMain's start-up: the inverse square root's table (LDEF's frames use it)
+    lib.crt_srand(SEED)
+    exe.call(0x4516F0)
     return exe, lib
 
 
@@ -127,6 +138,7 @@ def load_mission(name, log=None, inits=INITS):
     exe, lib = setup(log)
     for f in inits:
         exe.call(f, limit=200_000_000)
+    seed(exe)
     # WinMain's default user vehicle (0x58dcd0 from 0x4a8448, `vppirna1`), before the shell's choice
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
     p = exe.put(name.encode() + b"\0")

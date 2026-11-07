@@ -1,11 +1,14 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
 #include "clock.h"
+#include "crt.h"
 #include "effects.h"
 #include "entity.h"
 #include "lod.h"
+#include "physics.h"
 #include "terrain.h"
 #include "texanim.h"
+#include "weapons.h"
 #include "exe.h"
 #include "render/fpu.h"
 #include <stdlib.h>
@@ -199,9 +202,119 @@ static void start_class40(Node *n)
 /* 0x476240 (through 0x4761b0): the engine's sound, its channel at the data's +0x10c; no audio yet */
 static void engine_sound(Node *n) { (void)n; }
 
-/* the user's vehicle's set-up at its start: the cockpit (0x426410), the camera (0x403360), the weapons'
-   display (0x4561f0), 0x42dc00 and the dashboard (0x471060); not ported yet */
+/* ---- class 1, a vehicle (0x4294e0) ---- */
+
+/* the hit zones: seven lists (counts at +0x1a0, 17 entries each at +0x1bc) of the parts a hit in that zone
+   can damage; part goes into each zone of mask */
+static void zone_add(uint8_t *d, int32_t part, uint32_t mask)
+{
+    for (int z = 0; z < 7; z++)
+        if (mask & 1u << z) {
+            int32_t k = rd32(d + 0x1a0 + 4 * z);
+            put32(d + 0x1bc + 4 * (uint32_t)(17 * z + k), part);
+            put32(d + 0x1a0 + 4 * z, k + 1);
+        }
+}
+
+/* 0x455140: the hard point of the weapon whose gun is node: its side (+8), type (+0xc) and the x of its
+   place; 0 for a node that is no weapon's (the original's 3) */
+static int weapon_of(const Node *node, int32_t *side, int32_t *type, double *x)
+{
+    for (int i = 0; i < g_weapon_count; i++)
+        if (g_weapons[i].gun == node) {
+            const HardSlot *s = &g_weapons[i].hp->slot[g_weapons[i].slot];
+            *side = s->side;
+            *type = s->type;
+            *x = s->frame.pos[0];
+            return 1;
+        }
+    return 0;
+}
+
+/* a weapon's zones by its hard point's place: the type 3 ones everywhere; type 1 (a turret) all but one
+   side's; else by the side (1 the front, 2 the rear, 3 and 4 the two others) and left or right */
+static uint32_t weapon_zones(int32_t side, int32_t type, double x)
+{
+    int neg = x < 0, pos = x > 0 || x != x;   /* fcomp's flags against 0 */
+    if (type == 3) return 0x7f;
+    if (type == 1) return neg ? 0x67 : pos ? 0x79 : 0x7f;
+    switch (side) {
+    case 1: return neg ? 3 : pos ? 9 : 1;
+    case 2: return type == 4 ? 0x20 : neg ? 0x24 : pos ? 0x30 : 0x20;
+    case 3: return 0x10;
+    case 4: return 4;
+    }
+    return 0;
+}
+
+/* _ftol of v by k */
+static void scale(uint8_t *p, float k) { put32(p, (int32_t)(int64_t)MUL((double)rd32(p), k)); }
+
+/* the user's set-up at the start: the cockpit (0x426410), the camera (0x403360), the weapons' display
+   (0x4561f0), 0x42dc00 and the dashboard (0x471060); not ported yet */
 static void user_start(Node *n) { (void)n; }
+
+static void start_vehicle(Node *n)
+{
+    uint8_t *d = n->data;
+    float t[3];
+    Timer_Init(t, 0.05f);   /* 0x3d4ccccd */
+    memcpy(d + 0x444, t, sizeof t);
+    Vehicle_PhysInit(n);
+    if (n->cls == 1) {
+        put32(d + 0x454, rd32(d + 0x454) | 0x80000);
+        for (uint32_t i = 0; i < 24; i++) {
+            Node *p = *Data_Ptr(d, 0x3a8 + 4 * i);
+            if (p) Node_Ref(p);
+        }
+    }
+    zone_add(d, 0, 9);
+    zone_add(d, 1, 3);
+    zone_add(d, 4, 0x30);
+    zone_add(d, 5, 0x24);
+    if (*Data_Ptr(d, 0x3b4)) {   /* the middle wheels */
+        zone_add(d, 2, 0x10);
+        zone_add(d, 3, 4);
+    }
+    zone_add(d, 6, 0x40);
+    zone_add(d, 7, 0xb);
+    zone_add(d, 8, 0x3f);
+    zone_add(d, 9, 0x3f);
+    for (uint32_t i = 10; i < 16; i++) {   /* the weapons */
+        Node *p = *Data_Ptr(d, 0x3a8 + 4 * i);
+        int32_t side, type;
+        double x;
+        if (p && weapon_of(p, &side, &type, &x)) zone_add(d, (int32_t)i, weapon_zones(side, type, x));
+    }
+    for (uint32_t i = 17; i < 19; i++)   /* the specials: one zone at random */
+        if (*Data_Ptr(d, 0x3a8 + 4 * i)) zone_add(d, (int32_t)i, 1u << (crt_rand() % 7));
+    zone_add(d, -1, 0x7f);
+    zone_add(d, -1, 0x40);
+    zone_add(d, -1, 0x40);
+    if (!(n->flags & 0x10)) return;   /* Node_IsUser 0x42e620 */
+    {   /* outside a network game (0x461900) the user's armour counts double and its parts' four times */
+        for (uint32_t i = 0; i < 4; i++) {
+            scale(d + 0x158 + 4 * i, 2.0f);   /* 0x4a59ac */
+            scale(d + 0x138 + 4 * i, 2.0f);
+            scale(d + 0x168 + 4 * i, 2.0f);
+            scale(d + 0x148 + 4 * i, 2.0f);
+        }
+        for (uint32_t i = 0; i < 5; i++) {
+            scale(d + 0x178 + 4 * i, 2.0f);
+            scale(d + 0x18c + 4 * i, 2.0f);
+        }
+        for (uint32_t i = 0; i < 24; i++) {
+            Node *p = *Data_Ptr(d, 0x3a8 + 4 * i);
+            if (!p) continue;
+            static const uint8_t words[][2] = {{0, 4}, {0, 4}, {4, 8}, {0, 4}, {8, 0xc}};   /* 20-24 */
+            const uint8_t *w = p->cls >= 20 && p->cls <= 24 ? words[p->cls - 20] : p->cls == 30 ? words[2] : NULL;
+            if (!w) continue;
+            scale(p->data + w[0], 4.0f);   /* 0x4a59e0 */
+            scale(p->data + w[1], 4.0f);
+        }
+    }
+    user_start(n);
+}
 
 /* 0x4313f0 (class 9): its entity in the data's first word; the 0x508 block's two words from the armour
    (+0x138); the engine's sound; not below the ground */
@@ -230,7 +343,7 @@ static const struct {
 } handlers[] = {
     {2, start_structure, {NULL, NULL}},     /* 0x4306c0 */
     {4, start_structure, {NULL, NULL}},     /* 0x434930 */
-    {1, NULL, {later, later}},              /* 0x4294e0; 0x429c70, 0x429d70 */
+    {1, start_vehicle, {later, later}},     /* 0x4294e0; 0x429c70, 0x429d70 */
     {9, start_class9, {later, NULL}},       /* 0x4313f0; 0x4314a0 */
     {8, start_artillery, {later, NULL}},    /* 0x428910; 0x428950 */
     {7, start_class7, {later, NULL}},       /* 0x432b90; 0x432c70 */

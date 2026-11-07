@@ -2,8 +2,8 @@
 
 `src/classes.c`, `src/texanim.c`. Checked by `tools/emu/diff_objects.py <mission> --start`: after the load
 both sides run the start pass. The emulator runs the original's 0x425920 with the handlers not ported yet
-stubbed. Then every mission's nodes, class data and texture animations are identical (confirmed, 40
-missions).
+stubbed (the user's set-up, the engine's sound, classes 32-34). Then every mission's nodes, class data
+and texture animations are identical (confirmed, 40 missions).
 
 ## The class table (0x4d3c20)
 
@@ -39,7 +39,7 @@ turret's aim (class 7) would come out one step off.
 
 | Class | Start | What |
 |---|---|---|
-| 1 | 0x4294e0 | a vehicle: a timer (0x451210, period 0.05, at +0x444); the physics' set-up 0x471df0; the hit zones; the user's armour and parts; the user's cockpit and camera. Not ported yet |
+| 1 | 0x4294e0 | a vehicle: a timer, the physics' set-up (0x471df0), the hit zones, the user's armour; [vehicles.md](vehicles.md) "The start". The user's cockpit and camera are not ported yet |
 | 2, 4 | 0x4306c0, 0x434930 | structures: network games only |
 | 5 | 0x42ed80 | scrounge |
 | 7 | 0x432b90 | a turret's base. A root takes its first class 7 descendant's 0xa0 bytes of data, and that node leaves the class list. Then its place (+0x84, +0x6c), its aim point through its frame (+0x78) and the rate's inverse (+0x94) |

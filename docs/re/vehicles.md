@@ -125,3 +125,93 @@ Registered by WinMain's per-mission set-up, in this order:
 4. **The collision, 0x469bd0 → 0x469c10.** For vehicles (classes 1 and 9), 0x46b950 grows the entity's
    radius to its COLP box's farthest corner + 0.1.
    - In that sum, dz stays unrounded on the stack (fst) and is multiplied by its float.
+
+## The start (Vehicle_Start 0x4294e0, ported, diffed)
+
+The class 1 start handler (docs/re/classes.md), checked by `diff_objects.py --start` (confirmed, 40
+missions). In order:
+
+1. **A timer** at +0x444 (Timer_Init 0x451210, period 0.05): the rate 1 / period, then two zeros. A
+   period not above 1e-4 gives the rate 1e30.
+2. **The physics' set-up** (Vehicle_PhysInit 0x471df0):
+   - The node goes onto the ground under it (Ground_Height 0x477290, the y replaced).
+   - Each wheel's data +0x2c and +0x30 take the ground's height under the wheel's world position
+     (0x42fe30, Node_WorldPos 0x42e780), and +0x34 = 0. The wheels are 0x3ac, 0x3a8, 0x3bc and 0x3b8,
+     then 0x3b4 and 0x3b0 if present.
+   - +0x114, the track, is the distance between the front pair (0x3ac, 0x3a8). +0x118, the wheelbase, is
+     from 0x3ac to the rear 0x3bc. The second sum squares the z off the FPU's stack by its float.
+   - +0x110 = 1 / (2 × wheelbase); +0x11c = the rear wheel's z; +0x478 = 0.1.
+   - The entity goes into the data's first word. The COLP record (the entity's +0x18) gives the body's
+     four corners (+4, +0x10, +0x1c, +0x28: its x from +0xc or +0x18, its z from +0x2c or +0x38, its y
+     half way between +0x20 and +0x24), and +0x34 from +0x28.
+   - 20 words of 0x488-0x504 are cleared. Twelve take ± half the track or the wheelbase (0x4a4-0x4fc,
+     the wheels' contact points).
+   - The specials (0x3ec-0x3f4, 0x42d920 their data's first word): kind 3 sets +0x128 = 1.25. Kind 8
+     (0x456640) makes the vehicle's weapons' +0x18 1.1 times (truncated). A slot whose id is not found
+     reads the hard points' count as the instance (kept).
+   - +0x454 |= 0x1001. 0x10000 too for the script's actor named `taurus` (0x505454), or for the user's
+     vehicle when the shell's option bit 0 (0x5e14e4) is set.
+   - +0x45c = the terrain's class under it (0x48e380).
+   - The mass (+0xa4) through Body_Set (0x4716f0) as both mass and inertia; +0xb4 = 2.656 / wheelbase.
+   - The brakes (0x3cc, 0x4304f0): +0xc = +0x10 = 2300 / mass. A network game scales them instead.
+   - The engine's first step (below) with no throttle, the speed +0xac, the flags +0x454 and the mode
+     +0x104.
+   - The engine's sound (0x4761b0, 0x476240): no audio yet.
+3. **A class 1 node** (not 9) sets +0x454 bit 0x80000 and takes a reference on each of its 24 slots'
+   nodes (0x3a8-0x404).
+4. **The hit zones.** There are seven lists, with counts at +0x1a0 and 17 entries each at +0x1bc. Each
+   part goes into the zones of its mask:
+
+   | Part | Zones |
+   |---|---|
+   | 0, 1 | 9, 3 |
+   | 4, 5 | 0x30, 0x24 |
+   | 2, 3 (with the middle wheels) | 0x10, 4 |
+   | 6, 7 | 0x40, 0xb |
+   | 8, 9 | 0x3f |
+   | 10-15, the weapons | by the hard point (0x455140): type 3 everywhere (0x7f). Type 1 by the side of x: 0x67 left, 0x79 right, 0x7f centred. Else by the side word: 1 → 3 / 9 / 1, 2 → 0x24 / 0x30 / 0x20 (always 0x20 for type 4), 3 → 0x10, 4 → 4 |
+   | 17, 18, the specials | one zone at random: 1 << (rand() % 7) |
+   | -1 | 0x7f, 0x40, 0x40 (end markers) |
+
+   The game seeds rand() with time(NULL) at start-up (WinMain) and again in the heap's set-up (0x45e460),
+   so the specials' zones change from run to run. The harness seeds both sides with 76 after the inits.
+5. **The user's vehicle** (node flag 0x10), outside a network game:
+   - The armour counts double: 0x138-0x177 and 0x178-0x19f, each word × 2 truncated (_ftol).
+   - The parts' two words count four times: classes 20, 21 and 23 at +0/+4, 22 and 30 at +4/+8, 24 at
+     +8/+0xc.
+   - Then the cockpit (0x426410), the camera (0x403360), the weapons' display (0x4561f0), 0x42dc00 and
+     the dashboard (0x471060): not ported yet, stubbed in the harness.
+
+## The engine (0x42f4c0-0x42fad0, ported)
+
+The engine's node (class 21, slot 0x3c4) has 0x2c bytes of data:
+
+| Offset | Field |
+|---|---|
+| +8 | the gear |
+| +0xc | the torque curve's width (0.025) |
+| +0x10 | the torque |
+| +0x14 | the peak (ENGN +0xc) |
+| +0x18 | a factor (1) |
+| +0x1c | the rpm |
+| +0x24 | the gauge's speed |
+
+**Engine_Step 0x42f640** (engine, throttle, speed, flags, neutral, mode). It is called once at the start;
+the per-frame physics calls it too.
+
+- **The gear.** Neutral holds gear 0. Modes 0 and 2 hold first.
+- **With the engine running and in gear** (flags bit 0, not bits 1-2):
+  - Up shifts: 1 → 2 on any throttle above 0.002. 2 → 3 above 25 km/h, or on the line from 62 km/h.
+    3 → 4 above 40, or on the line from 106. Mode 5 stops at second, mode 4 at third.
+  - Then Gear_Choose 0x42f4c0 for the down shifts.
+  - The rpm is the wheels' turns per minute (|speed| × 0.5974 × 60) × the gear's ratio (0x4d5cc0) ×
+    3.538 + 850. First gear is fixed at 1050.
+  - The gauge reads |speed| scaled to mph.
+- **Out of gear:**
+  - The rpm eases toward its target at twice the frame step (0x4db138): 0 with the engine off, 1050
+    idling, or 1050 + 4950 × throttle up to 6000. It jumps when the gap is under 0.005, or the step is
+    outside [0, 0.95].
+  - The gauge eases toward |speed| the same way.
+- **The torque:** (peak − width × (rpm − 3500)²) × factor.
+
+The comparisons on floats' bits as signed integers are the original's, kept.
