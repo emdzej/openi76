@@ -193,6 +193,63 @@ void Collide_Add(Entity *e)
     }
 }
 
+/* 0x46b560: the meshes of type 0x3000 under n freed */
+static void meshes_free(Node *n)
+{
+    for (; n; n = n->next) {
+        if ((n->flags & 0xf000) == 0x3000) mesh_free(n);
+        if (n->child) meshes_free(n->child);
+    }
+}
+
+/* 0x46b5a0: each shown node with a mesh (level 0) under n gets its box (+0x94), centre (+0x84) and
+   radius (+0x90) anew from its vertices */
+static void nodes_measure(Node *n)
+{
+    for (; n; n = n->next) {
+        if (!(n->flags & 1) && Lod_Select(n, 0)) {
+            float mn[3] = {1e30f, 1e30f, 1e30f}, mx[3] = {-1e30f, -1e30f, -1e30f}, c[3], best = -1e30f;
+            const Geom *g = n->geom;
+            for (int i = 0; i < g->nverts; i++)
+                for (int k = 0; k < 3; k++) {
+                    float v = g->verts[i][k];
+                    if (mn[k] > v) mn[k] = v;           /* test ah,0x41: an unordered one is not taken */
+                    if (!(mx[k] >= v)) mx[k] = v;       /* test ah,1: it is */
+                }
+            memcpy(n->bmin, mn, 12);
+            memcpy(n->bmax, mx, 12);
+            for (int k = 0; k < 3; k++) c[k] = F32(ADD(MUL(mx[k], 0.5f), MUL(mn[k], 0.5f)));   /* 0x4a6510 */
+            memcpy(n->centre, c, 12);
+            for (int i = 0; i < g->nverts; i++) {
+                float dx = F32(SUB(g->verts[i][0], c[0])), dy = F32(SUB(g->verts[i][1], c[1]));
+                double dz = SUB(g->verts[i][2], c[2]);   /* fst: unrounded, times its float */
+                double s2 = ADD(ADD(MUL(dz, F32(dz)), MUL(dy, dy)), MUL(dx, dx));
+                if (s2 > best) best = F32(s2);
+            }
+            n->radius = F32(fpu_sqrt(best));
+        }
+        if (n->child) nodes_measure(n->child);
+    }
+}
+
+void Collide_Refit(Entity *e)
+{
+    if (!e) return;
+    if (e->has_a == 3) meshes_free(e->node);   /* 0x46b540 */
+    for (GroundCell *g = e->a, *nx; g; g = nx) {   /* 0x4775c0 */
+        nx = g->next;
+        free(g);
+    }
+    e->a = NULL;
+    nodes_measure(e->node);
+    register_entity(e);   /* 0x46b480 */
+    ground_faces(e->node, e, e->node->cls == 0xc);   /* 0x4774e0: whatever the class (quirk) */
+    float mn[3], mx[3];
+    Node_Bounds(e->node, mn, mx);
+    for (int k = 0; k < 3; k++) e->c[k] = F32(MUL(ADD(mx[k], mn[k]), 0.5f));
+    e->r = Node_Radius(e->node, e->c[0], e->c[1], e->c[2]);
+}
+
 /* ---- the ground under a point ---- */
 
 /* 0x479340: (px, pz) inside the face's outline in x and z (its corners in v): first a box test, then the

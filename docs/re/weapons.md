@@ -326,8 +326,8 @@ user's, it stops being the followed shot (0x45c8f0 clears 0x573484 if it is that
 ignores the third damage kind. For each kind in the mask:
 - On a crash, at class 2 only, the crash's amount (+0x14) is quartered again for every kind (quirk).
 - The kind's amount comes off the points.
-- If it is more than the points left, the structure is destroyed (not ported yet: the children, the
-  explosion, the rubble, the smoke and the collision's refit).
+- If it is more than the points left, the structure is destroyed (objects.md "A structure's
+  destruction").
 
 Checked: `diff_objects --call fly` on t01, t05, s04, s07 and t12. Each weapon fires once 0.01 s late,
 then every live shot flies three steps of 0.03 s, with the hit's effect and the tracer stubbed. It

@@ -80,3 +80,5 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
    every part a blow of (129..256) / 256 of its points. Then one step in sixteen each: a wheel (0-4) or a
    body piece (10-15) thrown off and hidden, fires, smoke or an explosion near */
 void Vehicle_Wreck(Node *n, int start);
+/* Chunk_Spawn 0x45b0a0: the node's destruction chunks thrown as debris; 0 without a record */
+int Chunk_Spawn(Node *n);

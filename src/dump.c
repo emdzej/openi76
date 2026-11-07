@@ -184,10 +184,12 @@ size_t Objects_Dump(char *buf, size_t cap)
         for (int k = 0; k < 5; k++) out(&o, " %x", (uint32_t)e->b[k]);
         for (int k = 0; k < 6; k++) out(&o, " %08x", e->rest[(0x50 - 0x34) / 4 + k]);
         int g = 0;
-        if (e->node && e->node->cls > 10 && e->node->cls < 0xe)
+        /* a walkable faces' list: the ground classes', and a refitted static one's (Collide_Refit) */
+        int ground = e->has_a == 3 || (e->node && e->node->cls > 10 && e->node->cls < 0xe);
+        if (ground)
             for (const void *const *c = e->a; c && g < 100000; c = (const void *const *)c[2]) g++;
         out(&o, " g%d", g);
-        if (e->has_a && e->a && !(e->node && e->node->cls > 10 && e->node->cls < 0xe)) {
+        if (e->has_a && e->a && !ground) {
             out(&o, " a");
             hex(&o, e->a, 0x3c);
         }
@@ -988,6 +990,45 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 35: {   /* a structure's destruction (0x430900, its effects and sounds stubbed): the intact structure
+                        whose root is nearest n hit by 100000 of the first kind; the result, the rand seed, the
+                        structure's data and entity sphere, then each piece of debris (frame, box, sphere, data) */
+            Node *best = NULL;
+            double bd = 0;
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Node *s = g_entities[i].node;
+                if (!s || !Class_IsStructure(s->cls) || s->cls == 4 || (s->flags & 0x200) || !s->data) continue;
+                double dx = s->frame.pos[0] - n->frame.pos[0], dy = s->frame.pos[1] - n->frame.pos[1],
+                       dz = s->frame.pos[2] - n->frame.pos[2], d = dx * dx + dy * dy + dz * dz;
+                if (!best || d < bd) best = s, bd = d;
+            }
+            if (!best) break;
+            uint8_t pk[0x1c] = {0};
+            uint16_t m = 1;
+            uint32_t a = 100000;
+            memcpy(pk + 4, &m, 2);
+            memcpy(pk + 8, &a, 4);
+            g_fpu_round = FPU_DOWN;
+            int32_t r = Class_Damage(best, pk, NULL);
+            uint32_t seed = crt_seed();
+            Entity *e = Entity_OfNode(best);
+            uint8_t b[8 + 0x30 + 16];
+            memcpy(b, &r, 4);
+            memcpy(b + 4, &seed, 4);
+            memcpy(b + 8, best->data, 0x30);
+            memcpy(b + 0x38, e ? (const void *)e->c : (const void *)(b + 0x38), 16);
+            call_line(b, sizeof b);
+            for (Node *c = g_chunk_mgr->child; c; c = c->next) {
+                uint8_t q[0x24 + 24 + 0x28 + 0x44];
+                memcpy(q, c->frame.m, 0x24);
+                memcpy(q + 0x24, c->frame.pos, 24);
+                memcpy(q + 0x3c, c->centre, 0x28);
+                memcpy(q + 0x64, c->data, 0x40);
+                memset(q + 0xa4, 0, 4);
+                call_line(q, sizeof q);
+            }
             break;
         }
         case 34: {   /* the guns' flight (0x459b50: 0x4609d0, the hit's effect and the tracer stubbed): each of n's

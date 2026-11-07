@@ -552,7 +552,7 @@
 0042bf90	Damage_Parts	damage	high	a packet on a random inner part of the side (or the tyres), the kill chance; ported
 0042d940	Special_Works	damage	high	a special's +4 above 0 or +0x10 set
 00425df0	Class_Damage	classes	high	the class table's word 10 (0x4d3c48) for the node's class; ported for the parts
-00430900	Structure_Damage	damage	med	a structure's damage from its points; ported but the destruction
+00430900	Structure_Damage	damage	high	a structure's damage from its points; destruction and refit; ported
 0042f380	Engine_Damage	damage	high	class 0x15: points +0, power +0x18 at least 0.275 (0.4 the user's); ported
 004303f0	Part16_Damage	damage	high	class 0x16: points +4, +0x10 at least 0.2 of +0xc; ported
 0042fca0	Wheel_Damage	damage	high	class 0x1e: points +4, grip +0xc at least 0.5, +0x14; tells the AI; ported
@@ -857,11 +857,21 @@
 00459b50	Shot_Fly	ordnance	high	the flight by type; 0 when spent; ported (the guns)
 0045c8f0	Shot_Unfollow	ordnance	high	clears 0x573484 if it is the shot; ported
 0045c950	Shot_HitEffect	ordnance	med	the hit's effect and sound by what was hit
-00430e40	Structure_DestroyChild	damage	med	a destroyed structure's child: 0x200, explosion, rubble
-0042e920	Node_FlagRoot	scene	high	0x200 on the top ancestor once; 1 when set
-0042e9b0	Node_FindWithout	scene	high	the first node in the tree without the flag bits
+00430e40	Structure_DestroyPart	damage	high	a destroyed structure's part: 0x200, children, root's explosion, own wreck; ported
+0042e920	Node_FlagRoot	scene	high	0x200 on the parent if it is an unmarked root; 1 then; ported
+0042e9b0	Node_FindFlag	scene	high	the first node in the tree (depth first) with any of the bits; ported
 00424060	Entity_OfNode	entity	high	the entity (0x547e60, 0x78-byte slots) of the node's root
 00465520	Net_Destroyed	net	med	a destroyed object's network flag
-00431320	Structure_Smoke	damage	med	eight smokes (0x45c780) at a place
-0045b0a0	Structure_Rubble	damage	med	the destroyed object's replacements by its hash (0x570aa8)
-0046b280	Entity_Refit	entity	med	the entity's collision rebuilt and its sphere re-measured
+00431320	Smoke_Eight	damage	med	eight smokes (0x45c780) at a place, by rand()%2
+0045b0a0	Chunk_Spawn	damage	high	the node's chunks thrown as class 53 debris under the chunk manager; ported
+0046b280	Collide_Refit	collide	high	an entity's collision measured and typed again; ported
+0045c030	Chunk_Skin	damage	high	the first face with a chunk skin texture bound to the record's name; ported
+004617e0	Debris_Throw	entity	high	a piece's velocity plus noise, speed and spin; ported
+00461750	Noise_Init	entity	high	the 251 noise floats under srand(0), then srand(time); ported
+0045bc10	Debris_New	entity	high	class 53's data from the pool; the oldest given up when empty; ported
+0045bfd0	Debris_Free	entity	high	class 53's data back to the pool; ported
+0045bca0	Debris_Frame	entity	med	class 53's per-frame: the debris' flight
+0045bba0	Chunks_Close	entity	high	the chunk table freed, the pool closed (0x570c70)
+0046b5a0	Nodes_Measure	collide	high	shown nodes' boxes, centres and radii from their vertices; ported
+0046b560	Meshes_Free	collide	high	the type 0x3000 meshes under a node freed; ported
+004775c0	Ground_Free	collide	high	the entity's walkable faces' list freed; ported

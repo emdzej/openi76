@@ -231,3 +231,67 @@ the rest (confirmed).
 ## After the load
 
 The classes' start pass (0x425920) and the texture animations are in [classes.md](classes.md).
+
+## A structure's destruction (0x430900)
+
+A structure (classes 2, 3, 0xb and 0xc; class 4 has its own handler, 0x434950, not ported yet) is
+destroyed when a damage kind's amount is more than the points it has left (the data's first word; see
+weapons.md "A structure's damage"). Then:
+
+1. The entity's cached sphere is dropped and the points go to 0.
+2. 0x200 is set on the node's tree, and the data's state (+0x28) goes to 1.
+3. Each child goes the same way (0x430e40, recursively).
+4. **The root's explosion.** If the node's parent is a root not yet marked, the root is marked 0x200
+   (0x42e920). If the root is a structure:
+   - Its state goes to 1.
+   - At its first part flagged 0x1000000 (0x42e9b0), it explodes by the data's name (+0x10; "null"
+     gives "x1_bldx1") with its sound (+0x18; "null" gives sound 7). Class 3 has neither. Its state
+     then goes to 2.
+   - A root with a light loses it.
+5. **The node's own wreck.** This applies to a structure with a mesh whose state is still 1:
+   - It explodes at the centre of its box's floor: the four bottom corners through its world frame,
+     averaged. The two functions add the corners' z in different orders.
+   - The explosion is "x1_bldx1" for flag 0x400000 and "x1_cars1" for 0x800000; with neither, there is
+     none.
+   - It throws its debris (0x45b0a0, below).
+   - It sends eight smokes up at 15 m/s, each 0x4d538c or 0x4d5394 by `rand() % 2`.
+   - Its state goes to 2.
+6. Its meshes switch to state 1 (0x47db20).
+7. **The collision's refit (0x46b280, the top node only):**
+   - The type-3 meshes and the walkable-face list are freed.
+   - Every shown node with a mesh is measured again from its vertices (0x46b5a0: box, centre and
+     radius, with the same comparisons as the load's).
+   - The collision types are set again (0x46b480).
+   - The walkable faces are gathered again, whatever the class (quirk: 0x477200 does it only for
+     classes 11 to 13).
+   - The sphere comes from the box again.
+   - The ground box (+0x50) and the entity's lists stay as they were.
+
+The explosions, the sounds, the smokes and network play's messages (0x465520) are not ported yet.
+
+**The debris (0x45b0a0).** The node's chunk record (SCHK, 0x45ae40, in the hash 0x570aa8) gives up to
+10 pieces. Each one:
+- is a new node named after the chunk, at the chunk's frame after the node's world frame (0x4527c0),
+  with the chunk's box and sphere;
+- is class 53, with its data from a pool of 150 blocks of 0x44 bytes (0x570c78, free through +0x40).
+  The data holds a body (0x471680) and is gone 15 s after the clock (+0x3c);
+- has its mesh "<name>.geo" in state 0, level 0;
+- is skinned if the record has its 13 names (0x45afa0): the first face whose texture is
+  "VC C<c> TP" (c's place in "1234567890AB") or "V1 BO DY" (12) is bound to that name (0x45c030);
+- goes under the chunk manager (0x4dc428). The first piece ever becomes the oldest (0x4dc42c);
+- is thrown at (0, 10, 0) plus noise × 10 (data +0x18), with its speed (+8) and a spin of noise × 20
+  (+0x24) (0x4617e0).
+
+Then the record is freed and the new classes start (0x425920). When the pool is empty, the oldest piece
+is freed to make room (0x45bc10). A freed piece's data goes back to the pool, and the next newer piece
+becomes the oldest (0x45bfd0). The pieces' flight (class 53's frame handler, 0x45bca0) is not ported
+yet.
+
+**The noise (0x461750).** Chunks_Init fills a ring of 251 floats under `srand(0)`. Each is
+`(the sum of ten rand() / 32767) × 0.2 - 1`, so close to normal, between -1 and 1. They are read in turn
+(0x573488). The original then reseeds from the clock. The port keeps the seed it had, since it never
+seeds from the clock (crt.h).
+
+Checked: `diff_objects --call raze` on t01, t05, s04, s07, t12, s01 and m01, with the effects and sounds
+stubbed. For each vehicle, the nearest intact structure takes 100000 of the first kind. It compares the
+result, the rand seed, the data, the entity's sphere, every piece of debris and the whole tree.

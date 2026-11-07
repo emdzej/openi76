@@ -833,8 +833,39 @@ def call_fly(exe, n, fpcw):
                                      + struct.pack("<i", alive) + exe.read(0x4EBC90, 4)).hex())
                     s = u(s + 0x60)
 
+
+def call_raze(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    pos = lambda m: struct.unpack("<3d", exe.read(m + 0x40, 24))  # noqa: E731
+    p0, best, bd = pos(n), 0, 0.0
+    for i in range(0x100):
+        s = u(0x547E60 + i * 0x78)
+        if not s or u(s + 0x6C) not in (2, 3, 0xB, 0xC) or u(s + 0x10) & 0x200 or not u(s + 0x70):
+            continue
+        q = pos(s)
+        dx, dy, dz = q[0] - p0[0], q[1] - p0[1], q[2] - p0[2]
+        d = dx * dx + dy * dy + dz * dz
+        if not best or d < bd:
+            best, bd = s, d
+    if not best:
+        return
+    pk = exe.put(bytes(4) + struct.pack("<HH", 1, 0) + struct.pack("<I", 100000) + bytes(16))
+    r = exe.call(0x430900, best, pk, limit=2_000_000_000, fpcw=(fpcw & ~0xC00) | 0x400)
+    root = best
+    while u(root + 0x68):
+        root = u(root + 0x68)
+    e = next((0x547E60 + i * 0x78 for i in range(0x100) if u(0x547E60 + i * 0x78) == root), 0)
+    CALL_OUT.append((struct.pack("<i", r) + exe.read(0x4EBC90, 4) + exe.read(u(best + 0x70), 0x30)
+                     + (exe.read(e + 4, 16) if e else bytes(16))).hex())
+    c = u(u(0x4DC428) + 0x64)
+    while c:
+        d = u(c + 0x70)
+        CALL_OUT.append((exe.read(c + 0x18, 0x24) + exe.read(c + 0x40, 24) + exe.read(c + 0x84, 0x28)
+                         + exe.read(d, 0x40) + bytes(4)).hex())
+        c = u(c + 0x60)
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -1012,13 +1043,14 @@ def original():
         s += "".join(f" {m.u32(e + 0x1c + 4 * k):x}" for k in range(5))
         s += "".join(f" {m.u32(e + 0x50 + 4 * k):08x}" for k in range(6))
         g, nd = 0, m.u32(e)
-        if nd and 10 < m.i32(nd + 0x6c) < 0xe:
+        ground = m.i32(e + 0x14) == 3 or (nd and 10 < m.i32(nd + 0x6c) < 0xe)
+        if ground:
             c = m.u32(e + 0x18)
             while c and g < 100000:
                 g, c = g + 1, m.u32(c + 8)
         s += f" g{g}"
         a = m.u32(e + 0x18)
-        if m.i32(e + 0x14) and a and not (nd and 10 < m.i32(nd + 0x6c) < 0xe):
+        if m.i32(e + 0x14) and a and not ground:
             s += " a" + m.raw(a, 0x3C).hex()
         out.append(s)
         if m.u32(e):

@@ -2,8 +2,12 @@
 #include "damage.h"
 #include "ordnance.h"
 #include "classes.h"
+#include "collide.h"
 #include "entity.h"
 #include "exe.h"
+#include "geom.h"
+#include "scene.h"
+#include "objects.h"
 #include "ai.h"
 #include "crt.h"
 #include "physics.h"
@@ -441,10 +445,202 @@ static int damage_gun(Node *n, uint8_t *p)
     return r;
 }
 
-/* not ported yet: a structure's destruction (0x430900's lethal branch: the entity's sphere dropped, the
-   points to 0, 0x200 on the tree, the children's own (0x430e40), the parent's explosion and sound, the
-   rubble (0x45b0a0), the smoke (0x431320), the state (0x47db20) and the collision's refit (0x46b280)) */
-static void structure_destroy(Node *n) { (void)n; }
+/* ---- a structure's destruction (0x430900's lethal branch, 0x430e40) ---- */
+
+static void sphere_drop(Entity *e);
+
+/* not ported yet, as the effects and the sounds: 0x4540d0 an explosion by name at a node and place,
+   0x4683c0 the sound by number 7, 0x468580 a sound by name, 0x45c780 a smoke (0x4d538c or 0x4d5394) */
+static void explosion(const char name[8], Node *n, const float at[3]) { (void)name, (void)n, (void)at; }
+static void sound_named(const char *name, Node *n) { (void)name, (void)n; }
+static void smoke_puff(int second, const float at[3], const float v[3], float k) { (void)second, (void)at, (void)v, (void)k; }
+
+static int is_none(const char *s, int n) { return crt_strnicmp(s, exe_str(0x4a90f4), (size_t)n) == 0; }   /* "null" */
+
+/* 0x42e920: if n's parent is a root not yet destroyed, it is marked (0x200); 1 then */
+static int flag_root(Node *n)
+{
+    while (n->prev && n->prev->child != n) n = n->prev;
+    Node *p = n->prev;
+    if (!p || p->prev || (p->flags & 0x200)) return 0;
+    p->flags |= 0x200;
+    return 1;
+}
+
+/* 0x42e9b0: the first node in the tree (depth first) with any of bits */
+static Node *find_flag(Node *n, uint32_t bits)
+{
+    if (!n || (n->flags & bits)) return n;
+    for (Node *c = n->child; c; c = c->next) {
+        Node *f = find_flag(c, bits);
+        if (f) return f;
+    }
+    return NULL;
+}
+
+/* the root's own explosion when its last part goes: at its first part flagged 0x1000000, by the data's
+   name (+0x10, "null": "x1_bldx1") and sound (+0x18, "null": number 7); class 3 is spared both */
+static void root_explodes(Node *n)
+{
+    Node *p = Node_Parent(n);
+    uint8_t *pd = p->data;
+    if (!Class_IsStructure(p->cls)) return;
+    put32(pd + 0x28, 1);
+    Node *at = find_flag(p, 0x1000000);
+    if (at && pd) {
+        float w[3];
+        Node_WorldPos(w, at);
+        if (p->cls != 3) {
+            char name[8];
+            if (is_none((const char *)pd + 0x10, 8)) strncpy(name, exe_str(0x4d539c), 8);   /* x1_bldx1 */
+            else memcpy(name, pd + 0x10, 8);
+            explosion(name, at, w);
+            if (crt_stricmp((const char *)pd + 0x18, exe_str(0x4a90f4)) == 0) sound(7, at);
+            else sound_named((const char *)pd + 0x18, at);
+        }
+        put32(pd + 0x28, 2);
+    }
+    if (p->flags & 0x800) Light_Remove(p, &p->flags);
+    /* network play's message (0x461900, 0x465520 with the data's +8) is not ported */
+}
+
+/* 0x45c030: the first face (along the list) whose texture is a chunk's skin, "VC C<c> TP" by the
+   character's place in "1234567890AB" or "V1 BO DY" as 12, bound to that of the 13 names; 1 then */
+static int chunk_skin(Node *c, const Node *n, const GeomFace *f)
+{
+    for (; f; f = f->next) {
+        const char *t = f->texture;
+        if (!t[0]) continue;
+        int i = -1;
+        /* the sscanf: "VC", any white space, "C", one character */
+        const char *q = t;
+        int got = 0;
+        if (q[0] == 'V' && q[1] == 'C') {
+            q += 2;
+            while (*q == ' ' || (*q >= '\t' && *q <= '\r')) q++;
+            if (*q == 'C' && q[1]) got = 1, q++;
+        }
+        if (got) {
+            const char *digits = exe_str(exe_u32(0x4dc434)), *at = strchr(digits, *q);
+            i = at ? (int)(at - digits) : -1;   /* the original's NULL - base is negative too */
+        } else if (strncmp(exe_str(0x4dc440), t, 8) == 0)   /* "V1 BO DY" */
+            i = 12;
+        if (i >= 0) {
+            Tex_Bind((uintptr_t)c, t, Chunk_Name(n, i));
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* 0x45b0a0: the node's chunks thrown as debris (class 53 under the chunk manager): each at its frame
+   after the node's, its box and sphere, its mesh "<name>.geo" (skinned when the record has its names),
+   up at 10 m/s with noise (0x4617e0); then the record is gone and the new classes start */
+int Chunk_Spawn(Node *n)
+{
+    int count;
+    const Chunk *ch = Chunk_List(n, &count);
+    if (!ch) return 0;
+    for (int i = 0; i < count; i++) {
+        const Chunk *k = &ch[i];
+        uint8_t name[8];
+        memcpy(name, &k->a, 4);
+        memcpy(name + 4, &k->b, 4);
+        Node *c = Node_New(NULL, (const char *)name);
+        if (!c) continue;
+        Frame w;
+        Node_FrameIn(&w, n, NULL);
+        Frame_Mul(&c->frame, &w, &k->frame);   /* 0x4527c0 */
+        memcpy(c->centre, k->p, 12);
+        memcpy(&c->radius, &k->p[3], 4);
+        memcpy(c->bmin, k->box, 12);
+        memcpy(c->bmax, k->box + 3, 12);
+        c->flags = 0;
+        Class_Set(c, 53);
+        if (!c->data) {
+            Node_Free(c);
+            continue;
+        }
+        Lod_Add(c, Obj_Name(name, exe_str(0x4dc458)), 0, 0);   /* ".geo" */
+        if (Chunk_Name(n, 0)) {
+            Lod_Select(c, 0);
+            if (c->geom) chunk_skin(c, n, c->geom->faces);
+        }
+        Node_Attach(c, g_chunk_mgr);
+        Debris_First(c);
+        float up[3] = {0, 10.0f, 0};
+        Debris_Throw(c, up);
+    }
+    Chunk_Drop(n);
+    Class_StartAll();   /* 0x425920 */
+    return 1;
+}
+
+/* the node's own wreck: a structure with a mesh whose state is still 1 explodes at the centre of its box's
+   floor by its flags (0x400000 "x1_bldx1", 0x800000 "x1_cars1"), throws its debris (0x45b0a0) and
+   eight smokes up at 15 m/s; the sum orders of the floor's corners are the two functions' own */
+static void node_wrecks(Node *n, int child)
+{
+    if (!Class_IsStructure(n->cls) || !n->geom || !(rd32(n->data + 0x28) & 1)) return;
+    uint8_t *d = n->data;
+    Frame f;
+    Node_FrameIn(&f, n, NULL);
+    float c[4][3] = {{n->bmin[0], n->bmin[1], n->bmin[2]}, {n->bmax[0], n->bmin[1], n->bmin[2]},
+                     {n->bmax[0], n->bmin[1], n->bmax[2]}, {n->bmin[0], n->bmin[1], n->bmax[2]}}, w[4][3], at[3];
+    Frame_Points(w, (const float(*)[3])c, 4, &f);
+    float q = exe_f32(0x4a5d0c);   /* 0.25 */
+    at[0] = fpu_f32(fpu_mul(fpu_add(fpu_add(fpu_add(w[3][0], w[2][0]), w[1][0]), w[0][0]), q));
+    at[1] = fpu_f32(fpu_mul(fpu_add(fpu_add(fpu_add(w[0][1], w[3][1]), w[2][1]), w[1][1]), q));
+    at[2] = child ? fpu_f32(fpu_mul(fpu_add(fpu_add(fpu_add(w[1][2], w[0][2]), w[2][2]), w[3][2]), q))
+                  : fpu_f32(fpu_mul(fpu_add(fpu_add(fpu_add(w[1][2], w[0][2]), w[3][2]), w[2][2]), q));
+    char name[8] = {0};
+    if (n->flags & 0x400000) strncpy(name, exe_str(0x4d539c), 8);
+    else if (n->flags & 0x800000) strncpy(name, exe_str(0x4d57d4), 8);
+    int32_t hi;
+    memcpy(&hi, name + 4, 4);
+    if (hi >= 0 && (hi > 0 || rd32((const uint8_t *)name)) && n->cls != 3) {
+        explosion(name, n, at);
+        if (Class_IsStructure(n->cls) && crt_stricmp((const char *)d + 0x18, exe_str(0x4a90f4)) != 0)
+            sound_named((const char *)d + 0x18, n);
+        else
+            sound(7, n);
+    }
+    Chunk_Spawn(n);
+    float up[3] = {0, 15.0f, 0};
+    for (int i = 0; i < 8; i++) smoke_puff(crt_rand() % 2 != 0, at, up, 15.0f);   /* 0x431320 */
+    if (Class_IsStructure(n->cls)) put32(d + 0x28, 2);
+}
+
+/* 0x430e40: a destroyed structure's part: 0x200 on its tree, its state 1, its children's own, then the
+   root's explosion if it was the root's first, its own wreck and its mesh's state 1 */
+static void destroy_part(Node *n)
+{
+    uint8_t *d = n->data;
+    Node_SetFlags(n, 0x200);
+    if (Class_IsStructure(n->cls)) put32(d + 0x28, 1);
+    for (Node *c = n->child; c; c = c->next) destroy_part(c);
+    if (flag_root(n)) root_explodes(n);
+    node_wrecks(n, 1);
+    Lod_SetState(n, 1);
+    /* network play's message (0x465520 with the data's +8) is not ported */
+}
+
+/* 0x430900's lethal branch: as a part (0x430e40), from the entity's sphere dropped and the points at 0,
+   and the collision refitted at the end (0x46b280) */
+static void structure_destroy(Node *n)
+{
+    Entity *e = Entity_OfNode(n);
+    sphere_drop(e);
+    put32(n->data, 0);
+    uint8_t *d = n->data;
+    Node_SetFlags(n, 0x200);
+    if (Class_IsStructure(n->cls)) put32(d + 0x28, 1);
+    for (Node *c = n->child; c; c = c->next) destroy_part(c);
+    if (flag_root(n)) root_explodes(n);
+    node_wrecks(n, 0);
+    Lod_SetState(n, 1);
+    Collide_Refit(e);
+}
 
 /* 0x430900: a structure's damage, from its points (data +0); 1 when destroyed */
 static int damage_structure(Node *n, uint8_t *p)

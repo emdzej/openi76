@@ -1,5 +1,7 @@
 /* Entities and classes (entity.h). In the current rounding mode (render/fpu.h). */
 #include "entity.h"
+#include "clock.h"
+#include "crt.h"
 #include "exe.h"
 #include "platform.h"
 #include "render/fpu.h"
@@ -427,10 +429,12 @@ static uint8_t *class30_new(void)
     return d;
 }
 
+static uint8_t *debris_new(void);
+static void debris_free(uint8_t *d);
+
 typedef uint8_t *(*ClassNew)(void);
 /* the table 0x4d3c20 in its order: the class and its constructor (handler 0) where ported. Entry 0
-   (class 0) is never found. The constructors still missing: 34 0x41ff50 and 53 0x45bc10 (50, 51 and 5
-   have none). Where the
+   (class 0) is never found. The constructor still missing: 34 0x41ff50 (50, 51 and 5 have none). Where the
    original leaves the data uncleared, the port's is zero. */
 static const struct {
     int32_t cls;
@@ -439,7 +443,7 @@ static const struct {
     {0, NULL},  {2, structure_new}, {4, structure_new}, {1, class1_new},  {9, class9_new},  {8, class8_new},
     {7, class7_new}, {10, class10_new}, {21, class21_new}, {22, class22_new}, {30, class30_new}, {23, class23_new}, {20, class20_new},
     {35, class35_new}, {36, class36_new}, {34, NULL}, {52, class52_new}, {31, class31_new}, {32, class32_new},
-    {33, class32_new}, {53, NULL}, {50, NULL}, {51, NULL}, {5, NULL}, {24, class24_new}, {41, class41_new},
+    {33, class32_new}, {53, debris_new}, {50, NULL}, {51, NULL}, {5, NULL}, {24, class24_new}, {41, class41_new},
     {40, class40_new},
 };
 #define NCLASSES (int)(sizeof classes / sizeof classes[0])
@@ -523,7 +527,8 @@ void Class_Free(int cls, uint8_t *data)
 {
     /* handler 11 of the class's entry; the ported constructors' data is the heap's (0x430e10 for 2 and
        4, 0x4346a0 for 10) */
-    if (data && classes[class_index(cls)].make) Data_Free(data);
+    if (data && cls == 53) debris_free(data);   /* 0x45bfd0: back to the pool */
+    else if (data && classes[class_index(cls)].make) Data_Free(data);
 }
 
 /* the name table: {name, node} entries; the original's grows by 0x100 after its first 0x800, through a
@@ -576,8 +581,95 @@ Node *g_chunk_mgr;                             /* 0x4dc428 */
 
 static unsigned chunk_bucket(const Node *n) { return (unsigned)(((uintptr_t)n * 0x6cd + 0xaab) % CHUNK_BUCKETS); }
 
+/* the debris (class 53): 150 data blocks of 0x44 bytes (0x570c78), free through their +0x40; the oldest
+   piece thrown (0x4dc42c) and its data (0x4dc430) give theirs up when none is left */
+#define DEBRIS_POOL 150
+static uint8_t *debris_pool[DEBRIS_POOL];
+static uint8_t *debris_head;     /* 0x570c6c */
+static int32_t debris_closed;    /* 0x570c70: the table torn down (0x45bba0) */
+Node *g_debris_oldest;           /* 0x4dc42c */
+static uint8_t *debris_oldest_d; /* 0x4dc430 */
+
+/* the noise (0x573490): 251 sums of ten rand()s, scaled to about -1..1, read in turn (0x573488) */
+static float noise[251];
+static int noise_at;
+
+static void noise_init(void)   /* 0x461750 */
+{
+    uint32_t keep = crt_seed();
+    crt_srand(0);
+    for (int i = 0; i < 251; i++) {
+        float v = 0;
+        double s = 0;
+        for (int k = 0; k < 10; k++) {
+            s = fpu_add(fpu_mul((double)crt_rand(), 3.0518509447574615e-05f), v);   /* 0x4a63b0 */
+            v = fpu_f32(s);
+        }
+        noise[i] = fpu_f32(fpu_sub(fpu_mul(s, 0.2f), 1.0f));   /* 0x4a63b4, 0x4a63b8 */
+    }
+    noise_at = 0;
+    crt_srand(keep);   /* the original reseeds from the clock (time(NULL)); the port never does (crt.h) */
+}
+
+static float noise_next(void)
+{
+    float v = noise[noise_at];
+    noise_at = (noise_at + 1) % 251;
+    return v;
+}
+
+void Debris_Throw(Node *c, const float v[3])
+{
+    uint8_t *d = c->data;
+    float w[3];
+    for (int i = 0; i < 3; i++) {
+        w[i] = fpu_f32(fpu_add(fpu_mul(noise_next(), 10.0f), v[i]));   /* 0x4a63bc */
+        putf(d + 0x18 + 4 * i, w[i]);
+    }
+    putf(d + 8, fpu_f32(fpu_sqrt(fpu_add(fpu_add(fpu_mul(w[2], w[2]), fpu_mul(w[0], w[0])), fpu_mul(w[1], w[1])))));
+    for (int i = 0; i < 3; i++) putf(d + 0x24 + 4 * i, fpu_f32(fpu_mul(noise_next(), 20.0f)));   /* 0x4a63c0 */
+}
+
+static uint8_t *debris_new(void)   /* 0x45bc10 */
+{
+    if (!debris_head) {
+        Node *old = g_debris_oldest;
+        if (!old) return NULL;
+        Class_Unlist(old);
+        Node_Free(old);
+        if (!debris_head) return NULL;
+    }
+    uint8_t *d = debris_head;
+    debris_head = *(uint8_t **)Data_Ptr(d, 0x40);
+    *Data_Ptr(d, 0x40) = NULL;
+    Body_Init(d);
+    putf(d + 0x3c, fpu_f32(fpu_add(g_clock_time, 15.0f)));   /* 0x4a6288: gone in 15 s */
+    return d;
+}
+
+static void debris_free(uint8_t *d)   /* 0x45bfd0 */
+{
+    if (debris_closed) return;
+    if (d == debris_oldest_d) {   /* the oldest goes: the one thrown after it (before it in the list) */
+        g_debris_oldest = g_debris_oldest->prev;
+        debris_oldest_d = g_debris_oldest->data;
+        if (g_debris_oldest == g_chunk_mgr) g_debris_oldest = NULL, debris_oldest_d = NULL;
+    }
+    *Data_Ptr(d, 0x40) = debris_head;
+    debris_head = d;
+}
+
+void Debris_First(Node *c)
+{
+    if (!g_debris_oldest) {
+        g_debris_oldest = c;
+        debris_oldest_d = c->data;
+    }
+}
+
 void Chunks_Init(void)
 {
+    noise_init();
     for (int i = 0; i < CHUNK_BUCKETS; i++)
         for (ChunkRec *r = chunk_table[i], *nx; r; r = nx) {
             nx = r->next;
@@ -588,6 +680,15 @@ void Chunks_Init(void)
     g_chunk_mgr->data = NULL;
     g_chunk_mgr->flags = 0x100;
     Entity_Add(g_chunk_mgr, NULL, NULL);
+    for (int i = 0; i < DEBRIS_POOL; i++) {
+        if (!debris_pool[i]) debris_pool[i] = Data_New(0x44);
+        else memset(debris_pool[i], 0, 0x44);
+    }
+    for (int i = 0; i < DEBRIS_POOL; i++) *Data_Ptr(debris_pool[i], 0x40) = i + 1 < DEBRIS_POOL ? debris_pool[i + 1] : NULL;
+    debris_head = debris_pool[0];
+    g_debris_oldest = NULL;
+    debris_oldest_d = NULL;
+    debris_closed = 0;
 }
 
 static ChunkRec *chunk_find(const Node *n)
@@ -638,6 +739,18 @@ const char *Chunk_Name(const Node *n, int i)
 {
     const ChunkRec *r = chunk_find(n);
     return r && r->has_names && i >= 0 && i < 13 ? r->names[i] : NULL;
+}
+
+void Chunk_Drop(const Node *n)
+{
+    unsigned k = chunk_bucket(n);
+    for (ChunkRec **pp = &chunk_table[k]; *pp; pp = &(*pp)->next)
+        if ((*pp)->node == n) {
+            ChunkRec *r = *pp;
+            *pp = r->next;
+            free(r);
+            return;
+        }
 }
 
 const Chunk *Chunk_List(const Node *n, int *count)

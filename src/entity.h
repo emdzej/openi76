@@ -91,10 +91,18 @@ bool Names_Add(const char *name, Node *n);
 Node *Names_Find(const char *name);
 int Names_Count(void);
 
-/* Chunks_Init 0x45ada0: the chunk table, the chunk manager's node and entity (0x4dc428); its noise
-   table (0x461750) and debris pool are not ported yet */
+/* Chunks_Init 0x45ada0: the chunk table, the chunk manager's node and entity (0x4dc428), the noise
+   (0x461750: under srand(0)) and the debris' pool of 150 */
 void Chunks_Init(void);
 extern Node *g_chunk_mgr;
+extern Node *g_debris_oldest;   /* 0x4dc42c: the oldest piece of debris, given up when the pool is out */
+/* 0x45b0a0's: the first piece thrown becomes the oldest */
+void Debris_First(Node *c);
+/* Debris_Throw 0x4617e0: a piece's velocity v plus noise x 10 (data +0x18), its speed (+8) and a spin of
+   noise x 20 (+0x24) */
+void Debris_Throw(Node *c, const float v[3]);
+/* the node's chunk record freed (0x45b0a0's end) */
+void Chunk_Drop(const Node *n);
 /* Chunk_Add 0x45ae40: a destruction chunk of node: at most 10 a node, in the hash 0x570aa8 (0x71 buckets
    by the node's address) */
 typedef struct Chunk {
