@@ -48,3 +48,27 @@ void Poly_FillTexTiled(const Surface *s, ScreenVert *v, int n, const Texture *te
 extern int g_poly_stale_row;
 void Poly_FillTexPerspTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex);
 void Poly_FillTexPerspTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+
+/* Poly_FillTexPerspShade 0x449bc0 (mode 0x15): perspective textured and Gouraud-shaded through the lum table
+   (q rewritten in place as the shade, (1 - q) * 7936). */
+void Poly_FillTexPerspShade(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+/* With texel 0xff see-through (the key on the texel before shading; the shade advances): 0x446700 (mode
+   0x55, not the remap). Tiled: 0x447e90 (0x17), and keyed 0x4449b0 (0x57), masked but scaled by size - 1
+   like the untiled ones. The affine entries for these
+   modes (0x07, 0x47) are a bare ret (0x447e80, 0x4449a0): nothing is drawn. */
+void Poly_FillTexPerspShadeKey(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspShadeTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspShadeTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+
+/* Flat-shaded perspective textures: one shade for the polygon from vertex 0's q, lum[shade << 8 | texel].
+   0x441480 (modes 0xec, 0xf4), and tiled 0x441c90 (0xee, 0xf6). */
+void Poly_FillTexPerspFlat(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+void Poly_FillTexPerspFlatTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex);
+
+/* Poly_FillShadow 0x442a70 (mode 0xc0): an untextured polygon that darkens what is under it through the table
+   at 0x5c0350, each pixel once: g_shadow_mask has a bit per screen pixel (rows g_shadow_stride bytes apart,
+   most significant bit first in each little-endian dword) that the filler tests and sets. The colour is not
+   used. */
+extern uint8_t *g_shadow_mask;
+extern int g_shadow_stride;
+void Poly_FillShadow(const Surface *s, const ScreenVert *v, int n, uint8_t colour);

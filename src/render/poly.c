@@ -230,17 +230,23 @@ static void edge_setup_tex(const ScreenVert *a, const ScreenVert *b, TexEdge *e)
    routine with a different pixel line (the index is t << 8 | d in a byte register pair). */
 enum { PIX_COPY, PIX_REMAP, PIX_TBL, PIX_TBL_REV, PIX_GLOW, PIX_KEY };
 
-static inline void tex_put(uint8_t *p, int op, uint8_t t)
+/* below: 0 or 0x10000. The index is built in a byte register pair whose register still holds u >> 16 in its
+   upper half, so for a negative u it lands 64 KB below the table. For lum and remap that is still inside the
+   block (the tbl and lum tables); for the others it is outside it, where the port reads the table itself. */
+static inline void tex_put(uint8_t *p, int op, uint8_t t, int below)
 {
     switch (op) {
     case PIX_COPY: *p = t; break;
-    case PIX_REMAP: *p = g_rtab[RT_REMAP + (t << 8 | *p)]; break;
+    case PIX_REMAP: *p = g_rtab[RT_REMAP - below + (t << 8 | *p)]; break;
     case PIX_TBL: *p = g_rtab[RT_TBL + (t << 8 | *p)]; break;
     case PIX_TBL_REV: *p = g_rtab[RT_TBL + (*p << 8 | t)]; break;
     case PIX_GLOW: *p = g_rtab[RT_GLOW + (t << 8 | *p)]; break;
     case PIX_KEY: if (t != 0xff) *p = t; break;   /* colour 0xff is see-through */
     }
 }
+
+/* the 64 KB below, for u's sign (see tex_put); the tiled fillers mask the register, so it is clear there */
+static inline int tex_below(int tiled, uint32_t uu) { return !tiled && (int32_t)uu < 0 ? 0x10000 : 0; }
 
 /* Tbl_KeySave 0x4438c0 / Tbl_KeyRestore 0x4438f0: around the reversed-translucency fillers, the tbl column
    for texel 0xff is saved and set to the destination itself, so that texel is see-through. */
@@ -305,7 +311,7 @@ static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *te
             uint32_t ust = (uint32_t)magic_lo(ADD(du, MAGIC)), vst = (uint32_t)magic_lo(ADD(dv, MAGIC));
             uint8_t *p = row + x1;
             for (int k = x2 - x1; k > 0; k--) {
-                tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
+                tex_put(p++, op, tex_fetch(tex, tiled, vv, uu), tex_below(tiled, uu));
                 uu += ust, vv += vst;
             }
         }
@@ -318,7 +324,7 @@ static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *te
 
 /* An edge of the perspective textured filler: x, w (1/z), u * w and v * w at the start vertex's rounded y and
    their steps per row. Here the steps are rounded to floats first and the start values computed from them. */
-typedef struct { float x, w, u, v, dx, dw, du, dv; } PerspEdge;
+typedef struct { float x, w, u, v, q, dx, dw, du, dv, dq; } PerspEdge;
 
 static void edge_setup_persp(const ScreenVert *a, const ScreenVert *b, PerspEdge *e)
 {
@@ -327,7 +333,9 @@ static void edge_setup_persp(const ScreenVert *a, const ScreenVert *b, PerspEdge
     e->du = F32(MUL(SUB(b->u, a->u), inv));
     e->dw = F32(MUL(SUB(b->w, a->w), inv));
     e->dx = F32(MUL(inv, SUB(b->x, a->x)));
+    e->dq = F32(MUL(SUB(b->q, a->q), inv));   /* the shaded ones' */
     double t = SUB((double)round_magic((double)a->y), a->y);
+    e->q = F32(ADD(MUL(e->dq, t), a->q));
     e->w = F32(ADD(MUL(e->dw, t), a->w));
     e->u = F32(ADD(MUL(e->du, t), a->u));
     e->v = F32(ADD(MUL(e->dv, t), a->v));
@@ -337,16 +345,26 @@ static void edge_setup_persp(const ScreenVert *a, const ScreenVert *b, PerspEdge
 static void edge_step_persp(PerspEdge *e)
 {
     e->w = F32(ADD(e->w, e->dw)), e->v = F32(ADD(e->v, e->dv)), e->u = F32(ADD(e->u, e->du));
-    e->x = F32(ADD(e->x, e->dx));
+    e->x = F32(ADD(e->x, e->dx)), e->q = F32(ADD(e->q, e->dq));
 }
 
-static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op, int tiled)
+/* TEX_MASK: the texel indices masked with size - 1; TEX_FULL: u, v scaled by the size, not size - 1 (the
+   tiled fillers have both, but the shaded tiled ones only the mask) */
+/* TEX_FLAT: one shade for the polygon, from vertex 0's q as in the flat filler */
+enum { TEX_MASK = 1, TEX_SHADED = 2, TEX_FULL = 4, TEX_FLAT = 8, TEX_TILED = TEX_MASK | TEX_FULL };
+
+/* The perspective fillers. Shaded (TEX_SHADED, mode bit 0): each vertex's q is rewritten as its shade
+   (1 - q) * 7936 (8.8, shades 0..31) and interpolated linearly in screen space; a pixel is
+   lum[shade << 8 | texel]. The span keeps the shade in the low 16 bits of a register whose upper bits count
+   the pixels, so it wraps modulo 2^16 and only its upper byte is used. */
+static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex, int op, int flags)
 {
+    int tiled = flags & TEX_MASK, shaded = flags & TEX_SHADED, full = flags & TEX_FULL;
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
     tex_rows_build(tex, tex->h);
-    /* here only times (size - 1), or the size tiled: the 65536 comes in with the reciprocal of w */
-    double sv = tiled ? (double)tex->h : SUB((double)tex->h, 1.0), su = tiled ? (double)tex->w : SUB((double)tex->w, 1.0);
+    /* here only times (size - 1), or the size: the 65536 comes in with the reciprocal of w */
+    double sv = full ? (double)tex->h : SUB((double)tex->h, 1.0), su = full ? (double)tex->w : SUB((double)tex->w, 1.0);
     int top = 0, ymin = 100000;
     for (int i = 0; i < n; i++) {
         next[i] = i + 1 < n ? i + 1 : 0;
@@ -354,8 +372,10 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
         int32_t y = round_magic((double)v[i].y);
         v[i].u = F32(MUL(v[i].u, su));
         v[i].v = F32(MUL(v[i].v, sv));
+        if (shaded) v[i].q = F32(MUL(SUB(1.0, v[i].q), 7936.0));
         if (y <= ymin) ymin = y, top = i;   /* ties: the later vertex */
     }
+    int fsh = flags & TEX_FLAT ? round_magic(MUL(SUB(1.0, v[0].q), 7936.0)) & 0xff00 : 0;
     uint8_t *row = s->pixels + (s->y0 + ymin) * s->pitch + s->x0;
     int l = top, r = top, y = ymin;
     PerspEdge L = {0}, R = {0};
@@ -389,6 +409,21 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
             double t = SUB((double)x1, e->x);
             double uw = ADD(MUL(du, t), e->u), ww = ADD(MUL(dw, t), e->w), vw = ADD(MUL(dv, t), e->v);
             float du16 = F32(MUL(du, 16.0)), dv16 = F32(MUL(dv, 16.0)), dw16 = F32(MUL(dw, 16.0));
+            uint32_t sh = 0, sst = 0;
+            if (shaded) {   /* the shade's slope stays a double */
+                double dq = MUL(SUB(f->q, e->q), inv);
+                sst = (uint32_t)magic_lo(ADD(dq, MAGIC)) & 0xffff;
+                sh = (uint32_t)magic_lo(ADD(ADD(MUL(dq, t), e->q), MAGIC)) & 0xffff;
+            }
+/* the key is on the texel before shading; the shade advances either way. The last pixel's index register is
+   cleared first (below = 0). */
+#define PERSP_PIXEL(p, below)                                                                \
+    do {                                                                                     \
+        uint8_t tx = tex_fetch(tex, tiled, vv, uu), sx = tx;                                 \
+        if (shaded) sx = g_rtab[RT_LUM - (below) + ((sh & 0xff00) | tx)], sh = (sh + sst) & 0xffff; \
+        if (flags & TEX_FLAT) sx = g_rtab[RT_LUM - (below) + (fsh | tx)];                    \
+        if (op == PIX_KEY) { if (tx != 0xff) *(p) = sx; } else tex_put(p, op, sx, below);     \
+    } while (0)
             /* runs of 16 pixels, affine between exact points; the next run's reciprocal is started ahead */
             double rcp = DIV(65536.0, ww);
             uint32_t uu = (uint32_t)magic_lo(ADD(MUL(rcp, uw), MAGIC));
@@ -405,7 +440,8 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
                 rcp = DIV(65536.0, ww);
                 uint32_t ust = (uint32_t)((int32_t)(ue - uu) >> 4), vst = (uint32_t)((int32_t)(ve - vv) >> 4);
                 for (int k = 0; k < 16; k++) {
-                    tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
+                    PERSP_PIXEL(p, tex_below(tiled, uu));
+                    p++;
                     uu += ust, vv += vst;
                 }
                 uu = ue, vv = ve;
@@ -419,11 +455,13 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
                 uint32_t ust = (uint32_t)magic_lo(ADD(MUL(SUB(uex, (double)(int32_t)uu), rinv), MAGIC));
                 uint32_t vst = (uint32_t)magic_lo(ADD(MUL(SUB(vex, (double)(int32_t)vv), rinv), MAGIC));
                 for (int k = 0; k < left; k++) {
-                    tex_put(p++, op, tex_fetch(tex, tiled, vv, uu));
+                    PERSP_PIXEL(p, tex_below(tiled, uu));
+                    p++;
                     uu += ust, vv += vst;
                 }
             }
-            tex_put(p, op, tex_fetch(tex, tiled, vv, uu));
+            PERSP_PIXEL(p, 0);
+#undef PERSP_PIXEL
         }
         edge_step_persp(&R);
         edge_step_persp(&L);
@@ -472,6 +510,104 @@ void Poly_FillTexPerspTblRev(const Surface *s, ScreenVert *v, int n, const Textu
 /* Poly_FillTexTiled 0x448870 (also at 0x4453a0, mode 0x46: no remap) */
 void Poly_FillTexTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_affine(s, v, n, tex, PIX_COPY, 1); }
 /* Poly_FillTexPerspTiled 0x448e00 */
-void Poly_FillTexPerspTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, 1); }
+void Poly_FillTexPerspTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, TEX_TILED); }
 /* Poly_FillTexPerspTiledKey 0x445930 */
-void Poly_FillTexPerspTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_KEY, 1); }
+void Poly_FillTexPerspTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_KEY, TEX_TILED); }
+/* Poly_FillTexPerspShade 0x449bc0 */
+void Poly_FillTexPerspShade(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, TEX_SHADED); }
+/* Poly_FillTexPerspShadeKey 0x446700 */
+void Poly_FillTexPerspShadeKey(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_KEY, TEX_SHADED); }
+/* Poly_FillTexPerspShadeTiled 0x447e90 */
+void Poly_FillTexPerspShadeTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, TEX_SHADED | TEX_MASK); }
+/* Poly_FillTexPerspShadeTiledKey 0x4449b0 */
+void Poly_FillTexPerspShadeTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_KEY, TEX_SHADED | TEX_MASK); }
+/* Poly_FillTexPerspFlat 0x441480 */
+void Poly_FillTexPerspFlat(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, TEX_FLAT); }
+/* Poly_FillTexPerspFlatTiled 0x441c90 */
+void Poly_FillTexPerspFlatTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex) { tex_persp(s, v, n, tex, PIX_COPY, TEX_FLAT | TEX_TILED); }
+
+/* The shadow mask (0x58d8a0, its row stride in bytes at 0x58d890): one bit per screen pixel, most significant
+   bit first in each little-endian dword, set by the shadow filler where it has darkened a pixel. */
+uint8_t *g_shadow_mask;
+int g_shadow_stride;
+
+static uint32_t mask_load(const uint8_t *p) { uint32_t w; memcpy(&w, p, 4); return w; }
+static void mask_store(uint8_t *p, uint32_t w) { memcpy(p, &w, 4); }
+
+/* Poly_FillShadow 0x442a70 */
+void Poly_FillShadow(const Surface *s, const ScreenVert *v, int n, uint8_t colour)
+{
+    int next[64], prev[64], yi[64];
+    if (n < 1 || n > 64) return;
+    int top = 0, ymin = 10000;
+    for (int i = 0; i < n; i++) {
+        next[i] = i + 1 < n ? i + 1 : 0;
+        prev[i] = i ? i - 1 : n - 1;
+        yi[i] = round_magic((double)v[i].y);
+        if (yi[i] <= ymin) ymin = yi[i], top = i;   /* ties: the later vertex */
+    }
+    uint8_t *row = s->pixels + (ymin + s->y0) * s->pitch + s->x0;
+    uint8_t *mrow = g_shadow_mask + (ymin + s->y0) * g_shadow_stride;   /* x0 is not added here */
+    const uint8_t *shadow = g_rtab + 0x11200;   /* 0x5c0350: each colour darkened (Glow_Build) */
+    int l = top, r = top, y = ymin;
+    float lx = 0, ls = 0, rx = 0, rs = 0;
+    for (;;) {
+        if (yi[l] <= y) {   /* the left edge (along next); done when it is back at the top */
+            int a;
+            do {
+                a = l;
+                l = next[a];
+                if (l == top) return;
+            } while (yi[l] <= y);
+            double inv = DIV(1.0, SUB(v[l].y, v[a].y)), slope = MUL(inv, SUB(v[l].x, v[a].x));
+            ls = F32(slope), lx = F32(ADD(MUL(SUB((double)round_magic((double)v[a].y), v[a].y), slope), v[a].x));
+        }
+        if (yi[r] <= y) {   /* the right edge (along prev) */
+            int a;
+            do {
+                a = r;
+                r = prev[a];
+            } while (yi[r] <= y);
+            double inv = DIV(1.0, SUB(v[r].y, v[a].y)), slope = MUL(inv, SUB(v[r].x, v[a].x));
+            rs = F32(slope), rx = F32(ADD(MUL(SUB((double)round_magic((double)v[a].y), v[a].y), slope), v[a].x));
+        }
+        int xr = round_magic((double)rx), xl = round_magic((double)lx);
+        if (xl != xr) {
+            int x1 = xl > xr ? xr : xl, left = (xl > xr ? xl : xr) - x1;
+            uint8_t *p = row + x1, *m = mrow + ((x1 >> 3) & ~3);
+            uint32_t bit = 0x80000000u >> (x1 & 31);
+#define SHADOW_PIXEL()                                         \
+    do {                                                       \
+        if (!(w & bit)) *p = shadow[*p], w |= bit;             \
+        bit = bit >> 1 | bit << 31;                            \
+        p++;                                                   \
+    } while (0)
+            /* to the dword's end, then whole dwords (an 8-bit count), then the rest; the last dword is
+               written back even when no pixel of it was drawn */
+            int c = 32 - (x1 & 31);
+            left -= c;
+            if (left < 0) c += left, left = 0;
+            uint32_t w = mask_load(m);
+            for (; c > 0; c--) SHADOW_PIXEL();
+            mask_store(m, w);
+            m += 4;
+            if (left >> 5) {
+                int dwords = (left >> 5) & 0xff ? (left >> 5) & 0xff : 256;
+                for (; dwords > 0; dwords--, m += 4) {
+                    w = mask_load(m);
+                    for (int k = 0; k < 32; k++) SHADOW_PIXEL();
+                    mask_store(m, w);
+                }
+            }
+            w = mask_load(m);
+            for (c = left & 31; c > 0; c--) SHADOW_PIXEL();
+            mask_store(m, w);
+#undef SHADOW_PIXEL
+        }
+        rx = F32(ADD(rx, rs));
+        lx = F32(ADD(lx, ls));
+        mrow += g_shadow_stride;
+        row += s->pitch;
+        y++;
+    }
+}

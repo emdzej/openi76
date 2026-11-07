@@ -45,3 +45,14 @@
 004453a0	Poly_FillTexTiled_46	render	high	mode 0x46: the same code as Poly_FillTexTiled; diffed
 00448e00	Poly_FillTexPerspTiled	render	high	perspective textured, tiled (mode 0x16); ported, diffed
 00445930	Poly_FillTexPerspTiledKey	render	high	perspective textured, tiled, texel 0xff see-through (mode 0x56); ported, diffed
+00449bc0	Poly_FillTexPerspShade	render	high	perspective textured, Gouraud-shaded through lum (mode 0x15); the shade wraps in 16 bits; ported, diffed
+00446700	Poly_FillTexPerspShadeKey	render	high	mode 0x55: shaded, texel 0xff see-through; ported, diffed
+00447e90	Poly_FillTexPerspShadeTiled	render	high	mode 0x17: shaded, indices masked, scaled by size - 1; ported, diffed
+004449b0	Poly_FillTexPerspShadeTiledKey	render	high	mode 0x57: shaded, masked, keyed; ported, diffed
+00441480	Poly_FillTexPerspFlat	render	high	modes 0xec, 0xf4: perspective textured, one shade from vertex 0; ported, diffed
+00441c90	Poly_FillTexPerspFlatTiled	render	high	modes 0xee, 0xf6: flat-shaded, tiled; ported, diffed
+00442a70	Poly_FillShadow	render	high	mode 0xc0: darkens through 0x5c0350 once per pixel, a coverage bitmap at 0x58d8a0; ported, diffed
+00447e80	Poly_FillNone_07	render	high	mode 0x07 affine: a bare ret
+004449a0	Poly_FillNone_47	render	high	mode 0x47 affine: a bare ret
+0043d370	Poly_FillOutline	render	high	modes 0xe3 etc.: forwards to Poly_Outline 0x43e940
+0043e940	Poly_Outline	render	high	draws each edge with the line rasterizer 0x44b310 (rounded ends)

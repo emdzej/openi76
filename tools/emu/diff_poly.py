@@ -21,11 +21,17 @@ import x86  # noqa: E402
 
 W, H = 640, 480
 RTAB, RTAB_SIZE = 0x5AF150, 0x31300   # the colour tables' block (g_rtab)
+SHADOW_MASK, SHADOW_STRIDE = 0x58D8A0, 0x58D890   # the shadow filler's coverage bitmap and its row stride
+MASK_STRIDE = W // 8 + 4
 TEX_CACHE = 0x5AD310   # the textured fillers' last texture record (their row table is rebuilt when it differs)
 
 # The tiled affine filler reads the row-table copies' position from a stack slot it never set (see
 # g_poly_stale_row): where it does, so the port can be given the same value.
 STALE_ROW = {0x448870: 0x4488CB, 0x4453A0: 0x4453FB}
+
+# Fillers whose table index, for a negative u, lands below the colour tables' block (the index register keeps
+# u >> 16's sign bits): not reproducible, those cases are skipped.
+BELOW_OUTSIDE = {0x442D90, 0x443320, 0x4424E0, 0x443910, 0x444150}
 
 # name: (address, port function, kind, texel reads). The reads, for the textured ones: each "mov eax,
 # [index * 4 + rows]" (address, index register) and each "mov al, [eax + reg]" (address, register holding u).
@@ -35,6 +41,7 @@ PERSP_READ = lambda r0, r1, r2, t0, t1, t2: ([(r0, "EAX"), (r1, "EAX"), (r2, "EB
 FILLERS = {
     "flat": (0x43EA00, "Poly_FillFlat", "flat", None),
     "gouraud": (0x43ECD0, "Poly_FillGouraud", "gouraud", None),
+    "shadow": (0x442A70, "Poly_FillShadow", "shadow", None),
     "tex": (0x44A570, "Poly_FillTexAffine", "tex", AFFINE_READ(0x44AA2E, 0x44AA3C)),
     "remap": (0x4470B0, "Poly_FillTexRemap", "tex", AFFINE_READ(0x44756E, 0x44757C)),
     "tbl": (0x442D90, "Poly_FillTexTbl", "tex", AFFINE_READ(0x44324E, 0x44325C)),
@@ -52,6 +59,15 @@ FILLERS = {
                   PERSP_READ(0x443F32, 0x44402D, 0x444059, 0x443F40, 0x44403B, 0x444062)),
     "persp-tblrev": (0x444150, "Poly_FillTexPerspTblRev", "persp",
                      PERSP_READ(0x44477E, 0x444879, 0x4448A5, 0x44478C, 0x444887, 0x4448AE)),
+    "persp-shade": (0x449BC0, "Poly_FillTexPerspShade", "persp",
+                    PERSP_READ(0x44A2F0, 0x44A414, 0x44A44E, 0x44A2FE, 0x44A422, 0x44A457)),
+    "persp-shadekey": (0x446700, "Poly_FillTexPerspShadeKey", "persp",
+                       PERSP_READ(0x446E30, 0x446F59, 0x446F98, 0x446E3E, 0x446F67, 0x446FA1)),
+    "persp-shadetiled": (0x447E90, "Poly_FillTexPerspShadeTiled", "persp", ([], [])),
+    "persp-shadetiledkey": (0x4449B0, "Poly_FillTexPerspShadeTiledKey", "persp", ([], [])),
+    "persp-flat": (0x441480, "Poly_FillTexPerspFlat", "persp",
+                   PERSP_READ(0x441A86, 0x441B72, 0x441BA5, 0x441A94, 0x441B80, 0x441BAE)),
+    "persp-flattiled": (0x441C90, "Poly_FillTexPerspFlatTiled", "persp", ([], [])),
     "persp-tiled": (0x448E00, "Poly_FillTexPerspTiled", "persp", ([], [])),
     "persp-tiledkey": (0x445930, "Poly_FillTexPerspTiledKey", "persp", ([], [])),
 }
@@ -118,6 +134,7 @@ def run(name, count, seed, up, verbose):
         def texel(uc, a, size, r):
             p = (reg(uc, "EAX") + reg(uc, r)) & 0xFFFFFFFF
             outside[0] |= not texrec[0] <= p < texrec[1]
+            outside[0] |= addr in BELOW_OUTSIDE and r == "EDX" and reg(uc, r) >> 31 == 1
         for a, r in reads[0]:
             exe.uc.hook_add(UC_HOOK_CODE, row, r, begin=a, end=a)
         for a, r in reads[1]:
@@ -134,8 +151,16 @@ def run(name, count, seed, up, verbose):
     keep = []   # the port's textures stay alive, so no two share an address (its row table is cached by address)
     for i in range(count):
         n, verts, colour = polygon(rng, kind)
-        dest = rng.randbytes(W * H) if reads else bytes(W * H)
+        dest = rng.randbytes(W * H) if reads or kind == "shadow" else bytes(W * H)
         exe.reset_heap()
+        if kind == "shadow":   # a mask with some pixels already darkened
+            mask = bytes(rng.randrange(256) & rng.randrange(256) & rng.randrange(256) for _ in range(MASK_STRIDE * (H + 1)))
+            mp = exe.put(mask)
+            exe.write(SHADOW_MASK, struct.pack("<I", mp))
+            exe.write(SHADOW_STRIDE, struct.pack("<I", MASK_STRIDE))
+            port_mask = ctypes.create_string_buffer(mask, len(mask))
+            ctypes.c_void_p.in_dll(lib, "g_shadow_mask").value = ctypes.cast(port_mask, ctypes.c_void_p).value
+            ctypes.c_int.in_dll(lib, "g_shadow_stride").value = MASK_STRIDE
         bits = exe.put(dest)
         surf = exe.put(struct.pack("<IIIIIIII", W, 0, 0, 0, 0, 0, bits, 0))
         vp = exe.put(verts)
@@ -172,6 +197,8 @@ def run(name, count, seed, up, verbose):
         problems = []
         if vbuf.raw[:len(verts)] != want_v:
             problems.append("the vertices differ")
+        if kind == "shadow" and exe.read(mp, len(mask)) != port_mask.raw[:len(mask)]:
+            problems.append("the shadow masks differ")
         if exe.read(RTAB, RTAB_SIZE) != bytes(port_rtab):
             problems.append("the colour tables differ")
         if buf.raw != want:

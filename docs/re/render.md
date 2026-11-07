@@ -208,3 +208,31 @@ is built in a byte register pair (t = texel, d = destination).
   `stale + 3` of a new texture repeat row `stale - 1`. When `stale` is below the texture's height, that is a
   visible band of four repeated texture rows. The port keeps the slot as `g_poly_stale_row`. The harness
   reads the original's slot at 0x4488cb, so both get the same value.
+
+## Shaded textures, the shadow filler and the outline
+
+- **Gouraud-shaded perspective** 0x449bc0 (0x15). Each vertex's q is rewritten as `(1 - q) * 7936` (8.8,
+  shades 0 to 31) and interpolated down the edges like the other coordinates, from rounded float steps. The
+  span's shade slope stays a double, and start and step are rounded through `1.5 * 2^52`. The pixel loop
+  keeps the shade in the low 16 bits of EBX and a pixel counter from bit 17 up. The step register is
+  `(dQ & 0xffff) | 0xfffe0000`, so one add moves the shade on and counts down, and bit 16 (the shade's
+  carry) is cleared before each add. The shade therefore wraps modulo 2^16, and only its upper byte is used:
+  `lum[shade << 8 | texel]`. Variants: keyed 0x446700 (0x55, texel 0xff skipped before shading, while the
+  shade still advances), tiled 0x447e90 (0x17, masked but scaled by size - 1, unlike the other tiled ones),
+  and both 0x4449b0 (0x57). The affine entries for 0x07 and 0x47 are a bare `ret`: nothing is drawn.
+- **Flat-shaded perspective** 0x441480 (0xec, 0xf4) and its tiled copy 0x441c90 (0xee, 0xf6). One shade
+  comes from vertex 0, as in the flat filler: `round((1 - q0) * 7936) & 0xff00`.
+- **The sign bits.** The table variants build the index in DL/DH. In the loops the register still holds
+  `u >> 16`, so for a negative u the read lands 64 KB below the table. For lum that is the tbl region of
+  the block, and for remap the lum table. The port does the same (`tex_below`). For tbl and glow the read
+  falls outside the block, and the harness skips such cases. The last pixel of a perspective span clears
+  the register first, and the tiled fillers mask it.
+- **Shadow** 0x442a70 (0xc0) is untextured. It turns each destination pixel into `0x5c0350[pixel]` (a
+  darker colour, built by Glow_Build), each pixel only once: a bitmap (0x58d8a0, row stride 0x58d890) has
+  one bit per screen pixel, MSB first in each little-endian dword, and the filler tests and sets it. A span
+  runs to its first dword boundary, then in whole dwords (an 8-bit count of them), then the rest. The last
+  dword is written back even when no pixel of it was drawn. The bitmap column is x without the surface's
+  x0, but its row includes y0. Its own walk is the flat filler's, with the slope unrounded for the start.
+- **Outline** 0x43d370 (0xe3, 0xe7, ...) forwards to 0x43e940, which draws each edge (the previous vertex
+  to this one, ends rounded) with the line rasterizer 0x44b310. That is the next thing to port, with
+  DrawPoint and DrawLine.
