@@ -13,7 +13,7 @@ uint32_t g_play_state;
 
 static float inv_step = 16.666668f;   /* 0x4db13c: 1 / g_clock_step */
 static float last;                    /* 0x55f738: the previous tick, in seconds */
-static float total;                   /* 0x55f73c: the steps summed after the first three */
+float g_clock_total;                  /* 0x55f73c: the steps summed after the first three (0x450e80) */
 static int32_t warm;                  /* 0x55f740 */
 static int32_t frames;                /* 0x55f744 */
 
@@ -38,7 +38,7 @@ void Clock_Init(void)
     memcpy(&g_clock_dt, &b, 4);
     memcpy(&g_clock_step, &b, 4);
     g_clock_inv = inv_step = from(0x41855556);   /* 16.67 */
-    total = 0;
+    g_clock_total = 0;
     warm = frames = 0;
     g_clock_game = 0;
     g_clock_time = 0;
@@ -85,7 +85,7 @@ void Clock_Tick(void)
     }
     g_clock_step = fpu_f32(fpu_sub(now, last));
     if (warm < 3) warm++;   /* 0x4a6058 */
-    else total = fpu_f32(fpu_add(g_clock_step, total));
+    else g_clock_total = fpu_f32(fpu_add(g_clock_step, g_clock_total));
     if (bits(g_clock_step) < 0x3a83126f) g_clock_step = from(0x3a83126f);        /* 0.001 */
     else if (bits(g_clock_step) > 0x3e4ccccd) g_clock_step = from(0x3e4ccccd);   /* 0.2 */
     g_clock_time = fpu_f32(fpu_add(g_clock_step, g_clock_time));

@@ -36,7 +36,7 @@ camera. With `--param play=1` too it runs the game loop's ported parts: the vehi
 pilot's camera (docs/re/camera.md) and the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. Not ported yet: the other camera modes and the cockpit, the
-mission's script (ADEF's FSM), damage, tyres, firing, the AI's driving, the HUD, the shell and audio. Read
+mission's script's actions (its machines run: docs/re/fsm.md), the effects, firing, the AI's driving, the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 

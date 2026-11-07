@@ -8,18 +8,28 @@
 #include "roads.h"
 #include "terrain.h"
 #include "world.h"
+#include "fsm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 int g_mission_number, g_mission_kind;
 
-/* the handlers of the steps not ported yet (ADEF 0x484660 0x492f70, the mission's script): the chunk is
-   read past */
-static int later(const uint8_t *c, void *arg, const uint8_t *end)
+/* EXIT 0x4843d0: never matches (as World_Wdef's) */
+static int exit_check(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)c, (void)arg, (void)end;
-    return 1;
+    return 0;
+}
+
+static ChunkDesc adef[] = {   /* 0x4eb668 */
+    {"AREV", Rev_Check, 0x2004}, {"FSM", Fsm_Chunk, 0x1}, {"EXIT", exit_check, 0x1000},
+};
+
+/* ADEF 0x492f70: the mission's script */
+static int mission_adef(const uint8_t *payload, void *name_arg, const uint8_t *end)
+{
+    return Bwd2_Walk(payload, adef, 3, NULL, name_arg, true, end) != NULL;
 }
 
 /* EXIT 0x484820: outside a network game (0x407380: 0x4a8760 or the shell's 0x461900; neither is ported,
@@ -37,7 +47,7 @@ static int mission_exit(const uint8_t *c, void *arg, const uint8_t *end)
 
 static ChunkDesc table[] = {   /* 0x4e9770 */
     {"WDEF", World_Wdef, 0x2006}, {"TDEF", Terrain_Tdef, 0x2006}, {"RDEF", Roads_Rdef, 0x2006},
-    {"ODEF", Objects_Odef, 0x2006},      {"LDEF", Objects_Ldef, 0x2006},        {"ADEF", later, 0x2006},
+    {"ODEF", Objects_Odef, 0x2006},      {"LDEF", Objects_Ldef, 0x2006},        {"ADEF", mission_adef, 0x2006},
     {"EXIT", mission_exit, 0x2000},
 };
 

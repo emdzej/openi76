@@ -587,3 +587,23 @@
 00452cd0	Screen_Shake	camera	med	in the cockpit: the shake's parameters 0x4db32c-0x4db338
 00468a70	Hud_DamageArrow	hud	low	a free damage-direction record (or NULL)
 0042c580	Vehicle_Wreck	damage	high	the wreck: its start (lights out, worst look, parts' blows) and each step's random effect
+00408400	Fsm_Chunk	fsm	high	ADEF's FSM chunk: the script's tables (0x40bc60) and their resolution (0x40cb40)
+0040bc60	Fsm_Read	fsm	high	the FSM chunk's words in order: actions, entities, sounds, paths, machines, constants, code
+0040bae0	Fsm_ReadEntities	fsm	high	the entity records (0x60 each, room for 200 more)
+0040b810	Fsm_ReadPaths	fsm	high	the path records (0x58 each) and their points
+0040b9d0	Fsm_ReadMachines	fsm	high	the machines (0x10bc each, linked by +0x10b8)
+0040cb40	Fsm_Resolve	fsm	high	the actions' codes, the entities' nodes, the sounds' files, the machines started
+0040c970	Fsm_FindEntities	fsm	high	each entity's node by its object's name; "taurus" noted
+0040c880	Fsm_FindSounds	fsm	high	each sound's file by its extension (wav resource, smk on the disc)
+0040ca80	Fsm_StartMachines	fsm	high	the machines' argument words to constants' addresses, the start frame
+0040ebb0	Fsm_Run	fsm	high	one machine until it yields (0) or returns from its start (1): the 14 ops
+0040ef00	Fsm_Frame	fsm	high	the mission's end by time, then every machine; finished ones removed
+0040d0d0	Fsm_Action	fsm	high	the 96 actions by code
+0040d0b0	Fsm_Init	fsm	high	the end time FLT_MAX, the slow flag cleared
+00409020	AI_Frame	ai	high	each AI vehicle's look-ahead box, the script (or the melee 0x408e20), the frame's ends
+00408e20	Melee_Frame	ai	med	everyone not dead attacks the user (the melee's script)
+0044ebc0	Movie_Exists	movie	high	a movie on the disc (<drive>:\cutscene\name) or, with local, in smk\
+00401280	Game_SetState	app	high	0x4a80f4 = the state
+00450e80	Clock_Script	clock	high	returns 0x55f73c, the steps summed after the first three ticks
+00409b00	Fsm_SetTaurus	fsm	high	0x505454 = the node
+004240c0	Names_FindId	entity	high	Names_Find (0x492bd0 on 0x54f7a8) by the 8-byte name as two words

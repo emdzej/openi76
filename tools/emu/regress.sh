@@ -43,6 +43,14 @@ if [ -z "$1" ]; then
     done
   done
   echo "[diff_objects (and --start), diff_objdraw] every mission done"
+  # the mission's script, 150 frames of 0.1 s with the actions' game side stubbed
+  for f in ${OPENI76_DATA:-cd}/MISSIONS/*.MSN; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" | tr 'A-Z' 'a-z')
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_fsm.py "$m" 150 2>&1) || fail=1
+    echo "$out" | grep -q identical || echo "$out" | tail -6
+  done
+  echo "[diff_fsm] every mission done"
   # the vehicles' physics, called on every vehicle of two missions (the m missions have none at the load), upright and on their backs
   for m in t01.msn s04.msn; do
     for c in upright steer wheels brake grip force air drag drive corners collide ground settle physics frame sway state side parts wear hit impact wreck; do

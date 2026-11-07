@@ -14,6 +14,8 @@
 #include "lod.h"
 #include "objects.h"
 #include "render/light.h"
+#include "render/fpu.h"
+#include "fsm.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -805,4 +807,43 @@ int Dump_CallVehicles(int which, int upside)
         }
     }
     return k;
+}
+
+/* the script's state after each of frames frames of dt on the script's clock (tools/emu/diff_fsm.py): the
+   constants, then each machine's ip, flag, stack pointers and stack, its words that are addresses given as
+   what they point at (m+ the machine, c the code's pair, k the constant) */
+static void fsm_word(char *o, size_t cap, size_t *len, uint32_t m, int32_t v)
+{
+    uint32_t u = (uint32_t)v;
+    int k;
+    if (u >= m && u < m + 0x10bc) k = snprintf(o + *len, cap - *len, " m%x", u - m);
+    else if (g_fsm.n_code && u >= g_fsm.code && u < g_fsm.code + (uint32_t)g_fsm.n_code * 8) k = snprintf(o + *len, cap - *len, " c%x", (u - g_fsm.code) / 8);
+    else if (g_fsm.n_consts && u >= g_fsm.consts && u < g_fsm.consts + (uint32_t)g_fsm.n_consts * 4) k = snprintf(o + *len, cap - *len, " k%x", (u - g_fsm.consts) / 4);
+    else k = snprintf(o + *len, cap - *len, " %x", u);
+    if (k > 0 && *len + (size_t)k < cap) *len += (size_t)k;
+}
+
+static uint32_t fbits32(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
+
+size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
+{
+    size_t len = 0;
+    for (int f = 0; f < frames; f++) {
+        g_clock_total = (float)((double)g_clock_total + dt);   /* to nearest, as diff_fsm.py's */
+        Fsm_Frame();
+        len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x consts", f, (int)g_game_state, fbits32(g_fsm_end_time));
+        for (int32_t i = 0; i < g_fsm.n_consts && len + 16 < cap; i++) len += (size_t)snprintf(o + len, cap - len, " %x", (uint32_t)Fsm_Word(g_fsm.consts + (uint32_t)i * 4));
+        len += (size_t)snprintf(o + len, cap - len, "\n");
+        for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {
+            uint32_t sp = (uint32_t)Fsm_Word(m + 0x10b0);
+            len += (size_t)snprintf(o + len, cap - len, " ip %x flag %x", ((uint32_t)Fsm_Word(m + 0x10a8) - g_fsm.code) / 8, (uint32_t)Fsm_Word(m + 0x10a0));
+            fsm_word(o, cap, &len, m, Fsm_Word(m + 0x10ac));
+            fsm_word(o, cap, &len, m, (int32_t)sp);
+            fsm_word(o, cap, &len, m, Fsm_Word(m + 0x10b4));
+            len += (size_t)snprintf(o + len, cap - len, " :");
+            for (uint32_t p = m; p < sp && p < m + 0x1000 && len + 16 < cap; p += 4) fsm_word(o, cap, &len, m, Fsm_Word(p));
+            len += (size_t)snprintf(o + len, cap - len, "\n");
+        }
+    }
+    return len;
 }

@@ -27,9 +27,8 @@ from unicorn import x86_const as X  # noqa: E402
 
 def load(name):
     exe, lib = mission.setup()
-    # as diff_objects.py: no ADEF yet
-
-    exe.stub(0x484660, lambda *a: 1, 3)
+    # as diff_objects.py: ADEF runs, a movie's _stat as the port's
+    exe.stub(0x44EBC0, lambda nm, local: int(lib.Movie_Exists(exe.read(nm, 40).split(b"\0")[0], local)), 2)
     exe.stub(0x484820, lambda *a: 1, 2)   # EXIT, as diff_objects.py
     for f in mission.INITS:
         exe.call(f, limit=200_000_000)

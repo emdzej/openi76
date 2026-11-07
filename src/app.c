@@ -3,6 +3,8 @@
    start-up (WinMain, the shell, the intro movie) replaces this in steps 4, 5 and 10 of
    docs/re/port-plan.md. */
 #include "app.h"
+#include "ai.h"
+#include "fsm.h"
 #include "camera.h"
 #include "classes.h"
 #include "clock.h"
@@ -171,8 +173,9 @@ static void play_frame(void)
         Input_Poll();
         Class_Frame(0);
         Class_Frame(1);
-        /* not ported yet: the AI and the scripts (0x409020), the weapons (0x428e80), the chunks (0x4597a0),
-           the HUD's weapons (0x455d90), the texture animations (0x47e9a0) */
+        AI_Frame();
+        /* not ported yet: the weapons (0x428e80), the chunks (0x4597a0), the HUD's weapons (0x455d90), the
+           texture animations (0x47e9a0) */
         if (g_camera_fn) g_camera_fn();
         static int frames, trace = -1;
         if (trace < 0) {
@@ -196,6 +199,13 @@ static void play_frame(void)
         memcpy(g_view_pos, g_view.eye, sizeof g_view_pos);   /* 0x4a85e8 is the view's eye */
         /* 0x404170 (the objects' detail by distance) and the sounds are not ported yet */
         viewer_frame();
+        static int32_t shown_state = 5;
+        if (g_game_state != shown_state) {   /* the mission's end: WinMain's loop would leave (not ported yet) */
+            char m[64];
+            snprintf(m, sizeof m, "OpenI76: the game's state is now %d", (int)g_game_state);
+            plat_log(m);
+            shown_state = g_game_state;
+        }
     } else
         plat_present(pixels, 640, 480, 640, g_shown_pal);
 }

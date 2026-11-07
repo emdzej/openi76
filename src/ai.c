@@ -1,5 +1,6 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
+#include "fsm.h"
 #include "terrain.h"
 #include "render/fpu.h"
 #include <string.h>
@@ -78,4 +79,9 @@ void AI_Init(void)
     Entity_OnAdd(ai_add);
     /* the removal callback 0x408660 and the rest of the set-up (0x40fda0, 0x40fac0, 0x40f0b0, 0x40d0b0,
        0x40b7f0, the skill tables 0x40b380) come with the driving */
+}
+
+void AI_Frame(void)
+{
+    Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
 }

@@ -566,7 +566,8 @@ def node(m, n, depth, out):
 def original():
     exe, lib = mission.setup()
 
-    exe.stub(0x484660, lambda *a: 1, 3)   # ADEF (the mission's script, which takes references): not ported yet
+    # ADEF (0x484660) runs: the script's tables (0x408400); a movie's _stat (0x44ebc0) as the port's
+    exe.stub(0x44EBC0, lambda nm, local: int(lib.Movie_Exists(exe.read(nm, 40).split(b"\0")[0], local)), 2)
     exe.stub(0x484820, lambda *a: 1, 2)   # EXIT: the melee maps (M*) have no user vehicle, fatal outside a network game
     for f in mission.INITS:
         exe.call(f, limit=200_000_000)
