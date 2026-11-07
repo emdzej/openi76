@@ -1,13 +1,15 @@
 /* The render queue (queue.h). The original's records hold 32-bit pointers; the port's hold native ones, and
    their sizes follow: a record is its header and n vertices, or its header and its type's object fields
    (the original's sizes are in the table at 0x4eb048: 0, 0, 88, 88, then 40 but for types 10 and 11, 88).
-   Every comparison is the x87's, unordered (NaN) results included.
+   Every comparison is the x87's, unordered (NaN) results included, and the arithmetic is in the current
+   rounding mode (render/fpu.h).
 
    One difference follows from the sizes: a type 0 or 1 record without vertices is only a header (0x1c
    bytes) in the original, and the flush clears its +0x3c (the object's merge) for it, which is in the
    records queued after it. The game queues those types with vertices only. */
 #include "render/queue.h"
 #include "exe.h"
+#include "render/fpu.h"
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -41,7 +43,8 @@ static QPolyFn poly = DrawPoly;
 static bool below(double a, double b) { return a < b || isnan(a) || isnan(b); }
 static bool below_eq(double a, double b) { return a <= b || isnan(a) || isnan(b); }
 
-/* fadd 1.5 * 2^52 and the low dword: the nearest integer, ties even (an unordered value gives its low bits) */
+/* fadd 1.5 * 2^52 and the low dword: the integer in the current mode (rounding down in the game, a floor;
+   an unordered value gives its low bits) */
 static int32_t rint32(double d)
 {
     if (isnan(d)) {
@@ -49,7 +52,7 @@ static int32_t rint32(double d)
         memcpy(&u, &d, 8);
         return (int32_t)(uint32_t)u;
     }
-    return (int32_t)(uint32_t)(uint64_t)(int64_t)nearbyint(d);
+    return (int32_t)(uint32_t)(uint64_t)(int64_t)fpu_round(d);
 }
 static int32_t fbits(float f) { int32_t i; memcpy(&i, &f, 4); return i; }
 
@@ -112,7 +115,7 @@ QRec *Queue_Skip(void)
 /* a span in each bucket from `from` (a depth less zmin) to `far`: the occluder's x range and its bucket */
 static void add_spans(int32_t bucket, float from, float far, float x0, float x1)
 {
-    int32_t count = rint32((double)far - from), b = rint32(from);
+    int32_t count = rint32(fpu_sub(far, from)), b = rint32(from);
     for (int32_t k = 0; k < count; k++, b++) {
         /* the original writes past its tables and its span pool unchecked; the port stops */
         if ((uint32_t)b > BUCKETS || span_next >= spans + SPANS) break;
@@ -140,10 +143,10 @@ static void spans_poly(int32_t bucket, float z, const QRec *r)
         if (below((double)r->u.v[i].x - x0, 0)) x0 = r->u.v[i].x;
     for (int i = 1; i < n; i++)
         if (!below_eq((double)r->u.v[i].z - zf, 0)) zf = r->u.v[i].z;
-    float far = (float)((double)zf - g_q_zmin);
-    double d = (double)z - g_q_zmin;
+    float far = fpu_f32(fpu_sub(zf, g_q_zmin));
+    double d = fpu_sub(z, g_q_zmin);
     if (!below_eq(d, far)) return;
-    add_spans(bucket, (float)d, far, x0, x1);
+    add_spans(bucket, fpu_f32(d), far, x0, x1);
     spans_used = 1;
 }
 
@@ -151,11 +154,11 @@ static void spans_poly(int32_t bucket, float z, const QRec *r)
 static void spans_obj(int32_t bucket, float z, const QRec *r)
 {
     const QObj *o = &r->u.obj;
-    float x1 = (float)((double)o->r + o->x), x0 = (float)((double)o->x - o->r);
-    float far = (float)(((double)o->z - g_q_zmin) + o->r);
-    double d = (double)z - g_q_zmin;
+    float x1 = fpu_f32(fpu_add(o->r, o->x)), x0 = fpu_f32(fpu_sub(o->x, o->r));
+    float far = fpu_f32(fpu_add(fpu_sub(o->z, g_q_zmin), o->r));
+    double d = fpu_sub(z, g_q_zmin);
     if (!below_eq(d, far)) return;
-    add_spans(bucket, (float)d, far, x0, x1);
+    add_spans(bucket, fpu_f32(d), far, x0, x1);
     spans_used = 1;
 }
 
@@ -188,7 +191,7 @@ QRec *Queue_Add(float z)
     QRec *cur = (QRec *)cursor;
     int n = cur->n;
     if (g_q_zmin > z) return cur;   /* fcomp: unordered goes on */
-    int32_t b = rint32((double)z - g_q_zmin);
+    int32_t b = rint32(fpu_sub(z, g_q_zmin));
     if (b > 0x1000 || n > 0x10) return cur;
     int type = cur->type;
     if (type == 0xc) return cur;
@@ -199,8 +202,8 @@ QRec *Queue_Add(float z)
     else if (type > 1) {
         float x0, x1;
         if (n == 0) {
-            x1 = (float)((double)cur->u.obj.x + cur->u.obj.r);
-            x0 = (float)((double)cur->u.obj.x - cur->u.obj.r);
+            x1 = fpu_f32(fpu_add(cur->u.obj.x, cur->u.obj.r));
+            x0 = fpu_f32(fpu_sub(cur->u.obj.x, cur->u.obj.r));
         } else {
             x1 = cur->u.v[0].x;
             for (int i = 1; i < n; i++)
@@ -319,7 +322,7 @@ void Queue_Flush(const View *view, int end_merges)
                             r->next = r->prev;
                             int32_t to = least + zmin_i;
                             if (to > here) to = here - 1;
-                            float z = (float)to;
+                            float z = fpu_f32(to);
                             if (below((double)to, g_q_zmin)) z = g_q_zmin;
                             Queue_Add(z);
                             m->bucket = to;

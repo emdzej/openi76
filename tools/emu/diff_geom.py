@@ -75,8 +75,9 @@ def port(g):
 
 
 def main():
-    step = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    palname = sys.argv[2] if len(sys.argv) > 2 else "t01.act"
+    argv = [a for a in sys.argv if a != "--down"]
+    step = int(argv[1]) if len(argv) > 1 else 10
+    palname = argv[2] if len(argv) > 2 else "t01.act"
     path = os.path.join(os.environ.get("OPENI76_DATA", "cd"), "I76.ZFS")
     if not os.path.exists(path):
         print("diff_geom: no I76.ZFS, skipped")
@@ -93,8 +94,9 @@ def main():
     lib.Geo_Build.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
     lib.Geo_Build.restype = ctypes.POINTER(Geom)
     lib.Geo_Free.argtypes = [ctypes.POINTER(Geom)]
-    lib.Palette_Set(pal, None)
     exe = x86.Exe()
+    x86.rounding(exe, lib, sys.argv)
+    lib.Palette_Set(pal, None)
     exe.stub_heap()
     exe.stub(0x4928C0, lambda p: int(lib.Res_Exists(exe.read(p, 32).split(b"\0")[0])), 1)
     exe.reset_heap()

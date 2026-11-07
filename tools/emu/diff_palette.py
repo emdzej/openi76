@@ -30,10 +30,11 @@ def fbits(f):
 
 
 def main():
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 50
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    argv, down = x86.rounding(exe, lib, sys.argv)
+    count = int(argv[1]) if len(argv) > 1 else 50
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
     lib.Color_Match.argtypes = [ctypes.c_float] * 3
     port_rtab = (ctypes.c_uint8 * RTAB_SIZE).in_dll(lib, "g_rtab")
     port_pal = (ctypes.c_float * 768).in_dll(lib, "g_pal_rgb")
@@ -88,14 +89,14 @@ def main():
     lib.Gamma_Build()
     port_gamma = bytes((ctypes.c_uint8 * 2560).in_dll(lib, "g_gamma"))
     want = exe.read(0x5ADB50, 2560)
-    for k in range(10):
+    for k in range(10 if not down else 0):   # built once, by WinMain (0x401290), at nearest
         a, b = want[256 * k:256 * k + 256], port_gamma[256 * k:256 * k + 256]
         if k == 2:
             check("gamma", all(abs(x - y) <= 1 for x, y in zip(a, b)), "row 2")
         else:
             check("gamma", a == b, f"row {k}: {sum(x != y for x, y in zip(a, b))} entries")
     exe.write(0x5ADB50, port_gamma)
-    setting = ctypes.c_uint8.in_dll(lib, "g_gamma_index")
+    setting = ctypes.c_uint8.from_address(ctypes.addressof(ctypes.c_uint8.in_dll(lib, "g_detail")) + 0xC)
     for _ in range(200):
         exe.reset_heap()
         pal = rng.randbytes(768)

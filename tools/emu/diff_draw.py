@@ -51,13 +51,15 @@ def polygon(rng, mode, n):
 
 
 def main():
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
+    argv = [a for a in sys.argv if a != "--down"]
+    count = int(argv[1]) if len(argv) > 1 else 2000
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
     exe = x86.Exe()
     exe.uc.mem_map(0, 0x1000)   # FS:[0], DrawPoly's SEH frame (the emulator's FS base is 0)
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
     lib.exe_init.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
     err = ctypes.create_string_buffer(200)
+    x86.rounding(exe, lib, sys.argv)
     if not lib.vfs_mount_default() or not lib.exe_init(err, 200):
         sys.exit(f"exe_init: {err.value.decode()}")
     if not lib.Draw_Init(err, 200):

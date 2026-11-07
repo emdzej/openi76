@@ -14,6 +14,35 @@ alike as `fmul ST2`). The ports follow its operation order exactly.
 stack, a heap, a sentinel return). `diff_*.py` feed the same inputs to the original and to the port (the
 core as a shared library, `-DOPENI76_SHARED=ON`, through ctypes) and compare the output byte for byte.
 
+## The FPU's rounding (confirmed)
+
+The game's floating-point results depend on the x87 control word's rounding (RC), and v1.0 changes it in
+a way that persists:
+
+- **The start.** The thread starts at 0x27f: 53-bit precision, round to nearest. The runtime's
+  `_controlfp(_PC_53, _MCW_PC)` at start-up only sets the precision.
+- **Terrain_Height 0x491f00 sets RC = 1 (down) and never restores it.** It saves the control word, ors in
+  0x400 and loads it for its two `fistp` floors, and then returns. Run in the emulator from 0x27f, it
+  returns with 0x67f. Every game frame queries the terrain (the terrain's visibility pass 0x48eaa0 does
+  first), so from the first query on the game rounds down: every frame, and every later mission's load.
+  Only the very first mission's load (and the front end before it) runs at nearest.
+- **Nothing in the game code sets it back.** A scan of the exe's `fldcw` sites:
+  - DrawPoly 0x43d730 sets RC = 2 (up) around the fill and restores the caller's;
+  - Terrain_Draw 0x48e8d0 sets RC = 1 for its quadtree pass and restores the caller's;
+  - Terrain_Height sets RC = 1, as above;
+  - the runtime (`_ftol`, `pow`'s dispatcher, `floor` through `_ctrlfp`) saves and restores.
+
+  The one `finit` (0x4516e0, `fwait; fninit; ret`) is called only from DrawPoly's exception path. After
+  a faulting filler it leaves 64-bit precision, since DrawPoly's restore puts back only RC.
+- **What it means for the port.** Every operation's result depends on the mode it runs in. `src/render/
+  fpu.h` keeps the current mode (`g_fpu_round`, in the x87's RC encoding) and does each operation in
+  round-to-nearest, corrected by its exact error for the other modes. The ported code does its arithmetic
+  through it where it can run in game, and sets and restores the mode where the original does. The
+  differential tests run such code in both modes the game uses (0x27f and 0x67f).
+- **Not exact in every mode.** The transcendental instructions (`fsincos`, `fpatan`, `fyl2x`/`f2xm1`)
+  round per RC as well. The port uses the C library's functions, which round to nearest, and corrects
+  only the final store.
+
 ## DrawPoly 0x43d730: the entry point
 
 `DrawPoly(ctx, verts, count, colour, mode)`. The mode has 9 bits (512 combinations).

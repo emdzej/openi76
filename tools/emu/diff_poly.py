@@ -120,7 +120,7 @@ def run(name, count, seed, up, verbose):
     fn = getattr(lib, fname)
     fn.argtypes = [ctypes.POINTER(Surface), ctypes.c_void_p, ctypes.c_int,
                    ctypes.c_uint8 if reads is None else ctypes.c_void_p]
-    ctypes.c_int.in_dll(lib, "g_fpu_round").value = 1 if up else 0
+    ctypes.c_int.in_dll(lib, "g_fpu_round").value = 2 if up else 0   # the x87 RC: 2 up
     rtab = rng.randbytes(RTAB_SIZE)
     exe.write(RTAB, rtab)
     port_rtab = (ctypes.c_uint8 * RTAB_SIZE).in_dll(lib, "g_rtab")

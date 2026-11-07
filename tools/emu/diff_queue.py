@@ -44,10 +44,11 @@ def fbits(f):
 
 
 def main():
-    frames = int(sys.argv[1]) if len(sys.argv) > 1 else 300
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    argv, down = x86.rounding(exe, lib, sys.argv)
+    frames = int(argv[1]) if len(argv) > 1 else 300
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
     lib.Queue_New.restype = ctypes.POINTER(QRec)
     lib.Queue_Add.restype = ctypes.c_void_p
     lib.Queue_Add.argtypes = [ctypes.c_float]

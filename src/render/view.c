@@ -1,12 +1,17 @@
-/* The view: projection, frustum and camera (0x43c8a0-0x43d36a), and the rectangle helpers. All of it runs in
-   the FPU's default rounding with 53-bit precision, which is plain double arithmetic; the operation order
-   is the original's, and f32() marks each store to a float. */
+/* The view: projection, frustum and camera (0x43c8a0-0x43d36a), and the rectangle helpers. 53-bit precision
+   in the current rounding mode (render/fpu.h); the operation order is the original's, and F32() marks each
+   store to a float. */
 #include "render/view.h"
+#include "render/fpu.h"
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
 
-static float f32(double d) { return (float)d; }
+#define ADD fpu_add
+#define SUB fpu_sub
+#define MUL fpu_mul
+#define DIV fpu_div
+#define F32 fpu_f32
 static int32_t bits(float f) { int32_t i; memcpy(&i, &f, 4); return i; }
 /* the original clamps floats by comparing their bits as signed integers */
 static float clamp_bits(float f, int32_t lo, int32_t hi)
@@ -59,16 +64,16 @@ void View_SetRect(View *v, int x0, int y0, int x1, int y1)
     v->xmax = (float)s->x1;
     v->ymax = (float)s->y1;
     const float tenth = 0.1f;
-    double kx = tenth / (double)v->sx, ky = tenth / (double)v->sy;
-    double l = (double)v->xmin - v->cx, t = (double)v->ymin - v->cy;
-    float rf = f32((double)v->xmax - v->cx), bf = f32((double)v->ymax - v->cy);
-    float lf = f32(l), tf = f32(t);
-    float nl = f32(l * kx), nt = f32(t * ky), nr = f32(kx * rf), nb = f32(ky * bf);
+    double kx = DIV(tenth, v->sx), ky = DIV(tenth, v->sy);
+    double l = SUB(v->xmin, v->cx), t = SUB(v->ymin, v->cy);
+    float rf = F32(SUB(v->xmax, v->cx)), bf = F32(SUB(v->ymax, v->cy));
+    float lf = F32(l), tf = F32(t);
+    float nl = F32(MUL(l, kx)), nt = F32(MUL(t, ky)), nr = F32(MUL(kx, rf)), nb = F32(MUL(ky, bf));
     float near[4][3] = {{nl, nt, tenth}, {nr, nt, tenth}, {nr, nb, tenth}, {nl, nb, tenth}};
-    double zr = (double)v->range * v->zoom;
-    float z = !(zr >= 1500) ? f32(zr) : 1500.0f;
-    double fx = z / (double)v->sx, fy = z / (double)v->sy;
-    float fl = f32(lf * fx), ft = f32(tf * fy), fr = f32(fx * rf), fb = f32(fy * bf);
+    double zr = MUL(v->range, v->zoom);
+    float z = !(zr >= 1500) ? F32(zr) : 1500.0f;
+    double fx = DIV(z, v->sx), fy = DIV(z, v->sy);
+    float fl = F32(MUL(lf, fx)), ft = F32(MUL(tf, fy)), fr = F32(MUL(fx, rf)), fb = F32(MUL(fy, bf));
     float far[4][3] = {{fl, ft, z}, {fr, ft, z}, {fr, fb, z}, {fl, fb, z}};
     memcpy(v->near_c, near, sizeof near);
     memcpy(v->far_c, far, sizeof far);
@@ -86,12 +91,12 @@ void View_SetRect(View *v, int x0, int y0, int x1, int y1)
     float m[3];
     for (int k = 0; k < 3; k++) {
         double sum = 0;
-        for (int i = 0; i < 4; i++) sum += fc[i][k];
-        m[k] = f32((double)f32(sum) * 0.2f);
+        for (int i = 0; i < 4; i++) sum = ADD(sum, fc[i][k]);
+        m[k] = F32(MUL(F32(sum), 0.2f));
     }
     for (int i = 0; i < 6; i++) {
         float *p = v->plane[i];
-        double d = ((double)p[0] * m[0] + (double)p[1] * m[1]) + (double)p[2] * m[2] + p[3];
+        double d = ADD(ADD(ADD(MUL(p[0], m[0]), MUL(p[1], m[1])), MUL(p[2], m[2])), p[3]);
         if (!(d >= 0.0))
             for (int k = 0; k < 4; k++) p[k] = -p[k];
     }
@@ -102,13 +107,13 @@ void View_SetZoom(View *v, float zoom)
     zoom = clamp_bits(zoom, 0x3f000000, 0x41000000);   /* 0.5-8 */
     v->zoom = zoom;
     double tn = v->tan_half;
-    double w = (double)v->surface->pitch * zoom * 0.5;
-    double far = (double)v->range * zoom, k = (double)zoom * 600.0f;
-    double sec2 = tn * tn + 1.0f;
-    v->sx = f32(w / tn);
-    v->sy = f32(-(w * ((double)v->aspect / tn)));
-    v->far_radius = f32(sqrt(sec2 * (far * far)));
-    v->radius600 = f32(sqrt(sec2 * (k * k)));
+    double w = MUL(MUL(v->surface->pitch, zoom), 0.5);
+    double far = MUL(v->range, zoom), k = MUL(zoom, 600.0f);
+    double sec2 = ADD(MUL(tn, tn), 1.0f);
+    v->sx = F32(DIV(w, tn));
+    v->sy = F32(-MUL(w, DIV(v->aspect, tn)));
+    v->far_radius = F32(fpu_sqrt(MUL(sec2, MUL(far, far))));
+    v->radius600 = F32(fpu_sqrt(MUL(sec2, MUL(k, k))));
     View_SetRect(v, ftol(v->xmin), ftol(v->ymin), ftol(v->xmax), ftol(v->ymax));
 }
 
@@ -121,21 +126,21 @@ void View_SetCamera(View *v, const Frame *f)
     for (int i = 0; i < 4; i++) {
         const float *c = v->far_c[i];
         double *w = v->corner[i];
-        w[0] = ((double)m[0] * c[0] + (double)c[1] * m[3]) + (double)c[2] * m[6] + p[0];
-        w[1] = ((double)c[0] * m[1] + (double)c[2] * m[7]) + (double)c[1] * m[4] + p[1];
-        w[2] = ((double)c[1] * m[5] + (double)c[0] * m[2]) + (double)c[2] * m[8] + p[2];
+        w[0] = ADD(ADD(ADD(MUL(m[0], c[0]), MUL(c[1], m[3])), MUL(c[2], m[6])), p[0]);
+        w[1] = ADD(ADD(ADD(MUL(c[0], m[1]), MUL(c[2], m[7])), MUL(c[1], m[4])), p[1]);
+        w[2] = ADD(ADD(ADD(MUL(c[1], m[5]), MUL(c[0], m[2])), MUL(c[2], m[8])), p[2]);
         for (int k = 0; k < 3; k++) if (!(w[k] >= lo[k])) lo[k] = w[k];
         for (int k = 0; k < 3; k++) if (w[k] > hi[k]) hi[k] = w[k];
     }
-    for (int k = 0; k < 3; k++) v->centre[k] = (hi[k] + lo[k]) * 0.5;
+    for (int k = 0; k < 3; k++) v->centre[k] = MUL(ADD(hi[k], lo[k]), 0.5);
     double r2 = 0;
     const double *pts[5] = {v->eye, v->corner[0], v->corner[1], v->corner[2], v->corner[3]};
     for (int i = 0; i < 5; i++) {
-        double dx = v->centre[0] - pts[i][0], dy = v->centre[1] - pts[i][1], dz = v->centre[2] - pts[i][2];
-        double d = (dx * dx + dz * dz) + dy * dy;
+        double dx = SUB(v->centre[0], pts[i][0]), dy = SUB(v->centre[1], pts[i][1]), dz = SUB(v->centre[2], pts[i][2]);
+        double d = ADD(ADD(MUL(dx, dx), MUL(dz, dz)), MUL(dy, dy));
         if (d > r2) r2 = d;
     }
-    v->radius = sqrt(r2);
+    v->radius = fpu_sqrt(r2);
     Frame_Invert(&v->cam, f);
 }
 
@@ -143,9 +148,9 @@ void View_ToCamera(const View *v, float out[3], double x, double y, double z)
 {
     const float *m = v->cam.m;
     const double *p = v->cam.pos;
-    float a = f32(((m[3] * y + m[6] * z) + m[0] * x) + p[0]);
-    float b = f32(((m[1] * x + m[7] * z) + m[4] * y) + p[1]);
-    float c = f32(((m[5] * y + m[2] * x) + m[8] * z) + p[2]);
+    float a = F32(ADD(ADD(ADD(MUL(m[3], y), MUL(m[6], z)), MUL(m[0], x)), p[0]));
+    float b = F32(ADD(ADD(ADD(MUL(m[1], x), MUL(m[7], z)), MUL(m[4], y)), p[1]));
+    float c = F32(ADD(ADD(ADD(MUL(m[5], y), MUL(m[2], x)), MUL(m[8], z)), p[2]));
     out[0] = a;
     out[1] = b;
     out[2] = c;
@@ -155,21 +160,21 @@ void View_ToCamera(const View *v, float out[3], double x, double y, double z)
    when its far side is too (from the sign bits of the stored floats) */
 static int side(double d, float r)
 {
-    return (signbit(f32(d - r)) ? 1 : 0) | (signbit(f32(r + d)) ? 2 : 0);
+    return (signbit(F32(SUB(d, r))) ? 1 : 0) | (signbit(F32(ADD(r, d))) ? 2 : 0);
 }
 
 int View_TestSphere(const View *v, const float c[3], float r)
 {
     /* the near and far planes by z alone */
-    int near = side((double)v->plane[5][2] * c[2] + v->plane[5][3], r);
+    int near = side(ADD(MUL(v->plane[5][2], c[2]), v->plane[5][3]), r);
     if (near == 3) return 1;
-    int far = side((double)v->plane[4][2] * c[2] + v->plane[4][3], r);
+    int far = side(ADD(MUL(v->plane[4][2], c[2]), v->plane[4][3]), r);
     if (far == 3) return 1;
     int acc = near | far;
-    float rr = f32((double)r * 1.1f);   /* the sides, through the apex, with a margin */
+    float rr = F32(MUL(r, 1.1f));   /* the sides, through the apex, with a margin */
     for (int i = 0; i < 4; i++) {
         const float *p = v->plane[i];
-        int code = side(((double)p[0] * c[0] + (double)p[2] * c[2]) + (double)p[1] * c[1], rr);
+        int code = side(ADD(ADD(MUL(p[0], c[0]), MUL(p[2], c[2])), MUL(p[1], c[1])), rr);
         if (code == 3) return 1;
         acc |= code;
     }
@@ -182,17 +187,17 @@ void View_Create(View *v, Surface *s, float fov, float aspect, float range, floa
     v->surface = s;
     fov = clamp_bits(fov, 0x3f490fdb, 0x4016cbe4);    /* pi/4 - 3pi/4 */
     range = clamp_bits(range, 0x42c80000, 0x447a0000); /* 100 - 1000 */
-    float half = f32((double)fov * 0.5f);
-    float sn = f32(sin(half)), cs = f32(cos(half));    /* fsincos, 0x452a70 */
-    v->cx = f32(s->pitch * 0.5);
-    v->cy = f32(s->h * 0.5);
+    float half = F32(MUL(fov, 0.5f));
+    float sn = F32(sin(half)), cs = F32(cos(half));    /* fsincos, 0x452a70 (the C library's: math3d.c) */
+    v->cx = F32(MUL(s->pitch, 0.5));
+    v->cy = F32(MUL(s->h, 0.5));
     v->aspect = aspect;
     v->range = range;
     v->xmin = (float)s->x0;
     v->ymin = (float)s->y0;
     v->xmax = (float)s->x1;
     v->ymax = (float)s->y1;
-    v->tan_half = f32((double)sn / cs);
+    v->tan_half = F32(DIV(sn, cs));
     View_SetZoom(v, zoom);
     Frame id = {{1, 0, 0, 0, 1, 0, 0, 0, 1}, 0, {0, 1, 0}};   /* 0x4db298, then the position */
     View_SetCamera(v, &id);

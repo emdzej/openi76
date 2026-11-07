@@ -47,6 +47,7 @@ class Exe:
         uc.mem_map(STUBS, 0x1000)
         self.pe, self.raw = pe, d
         self.next_stub = STUBS
+        self.fpcw = 0x027F
         self.imports = None
         self.heap = HEAP
         self.fault = None
@@ -81,10 +82,13 @@ class Exe:
         return struct.unpack("<I", self.read(addr, 4))[0]
 
     # ---- calls ----
-    def call(self, addr, *args, conv="cdecl", ecx=0, edx=0, limit=50_000_000, fpcw=0x027F):
+    def call(self, addr, *args, conv="cdecl", ecx=0, edx=0, limit=50_000_000, fpcw=None):
         """Calls addr with integer args (cdecl/stdcall: all on the stack; fastcall: the first two in ECX, EDX).
-        Returns EAX. The FPU control word is fpcw (default 0x27f: round to nearest, 53-bit precision, as
-        Windows starts a thread)."""
+        Returns EAX. The FPU control word is fpcw, by default self.fpcw (0x27f: round to nearest, 53-bit
+        precision, as Windows starts a thread; 0x67f rounds down, as the game runs after its first terrain
+        height query, docs/re/render.md "The FPU's rounding")."""
+        if fpcw is None:
+            fpcw = self.fpcw
         uc = self.uc
         if conv == "fastcall":
             args = list(args)
@@ -164,3 +168,13 @@ class Exe:
             return a
         self.stub_import("HeapAlloc", alloc, 3)
         self.stub_import("HeapFree", lambda h, f, p: 1, 3)
+
+
+def rounding(exe, lib, argv):
+    """--down in argv: both the original (control word 0x67f) and the port (g_fpu_round = 1) round down, as
+    the game does after its first terrain height query. Returns argv without the flag."""
+    import ctypes
+    down = "--down" in argv
+    exe.fpcw = 0x067F if down else 0x027F
+    ctypes.c_int.in_dll(lib, "g_fpu_round").value = 1 if down else 0
+    return [a for a in argv if a != "--down"], down

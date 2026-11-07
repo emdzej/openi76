@@ -63,10 +63,11 @@ class Run:
 
 
 def main():
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    argv, down = x86.rounding(exe, lib, sys.argv)
+    count = int(argv[1]) if len(argv) > 1 else 1000
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
     lib.View_Create.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Surface)] + [ctypes.c_float] * 4
     lib.View_SetZoom.argtypes = [ctypes.POINTER(View), ctypes.c_float]
     lib.View_SetCamera.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Frame)]

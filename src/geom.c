@@ -1,6 +1,7 @@
 /* Meshes in memory and their cache (geom.h). */
 #include "geom.h"
 #include "res.h"
+#include "render/fpu.h"
 #include "render/palette.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -37,17 +38,17 @@ Geom *Geo_Build(const uint8_t *d, size_t n)
     GeomRef *ref = calloc(refs ? refs : 1, sizeof *ref);
     const uint8_t *p = d + 0x24;
     for (int i = 0; i < nv; i++)
-        for (int k = 0; k < 3; k++) g->verts[i][k] = rdf(p + 12 * i + 4 * k) + geo_offset[k];
+        for (int k = 0; k < 3; k++) g->verts[i][k] = fpu_f32(fpu_add(rdf(p + 12 * i + 4 * k), geo_offset[k]));
     p += (size_t)nv * 12;
     for (int i = 0; i < nv; i++)
-        for (int k = 0; k < 3; k++) g->normals[i][k] = rdf(p + 12 * i + 4 * k) + geo_offset[k];
+        for (int k = 0; k < 3; k++) g->normals[i][k] = fpu_f32(fpu_add(rdf(p + 12 * i + 4 * k), geo_offset[k]));
     f = d + 0x24 + (size_t)nv * 24;
     for (int i = 0; i < nf; i++) {
         GeomFace *fc = &faces[i];
         fc->nrefs = rd32(f + 4);
         memcpy(fc->rgb, f + 8, 3);
         const float k = 1.0f / 255.0f;   /* 0x4a6954 */
-        fc->colour = (uint8_t)Color_Match((float)(f[8] * (double)k), (float)(f[9] * (double)k), (float)(f[10] * (double)k));
+        fc->colour = (uint8_t)Color_Match(fpu_f32(fpu_mul(f[8], k)), fpu_f32(fpu_mul(f[9], k)), fpu_f32(fpu_mul(f[10], k)));
         memcpy(fc->flags, f + 0x1f, 3);
         /* strncpy of 15 from the 13-byte field: a name of 13 characters would take 2 bytes of the next word */
         memset(fc->texture, 0, sizeof fc->texture);
@@ -65,7 +66,7 @@ Geom *Geo_Build(const uint8_t *d, size_t n)
         if (i) faces[i - 1].next = fc;
         fc->refs = ref;
         float sum[3] = {0, 0, 0};
-        float inv = (float)(1.0f / (double)fc->nrefs);   /* 0x4a695c (1.0) / n */
+        float inv = fpu_f32(fpu_div(1.0f, fc->nrefs));   /* 0x4a695c (1.0) / n */
         const uint8_t *r = f + 0x37;
         for (int j = 0; j < fc->nrefs; j++, r += 16) {
             ref[j].vertex = (uint32_t)rd32(r);
@@ -73,9 +74,9 @@ Geom *Geo_Build(const uint8_t *d, size_t n)
             ref[j].u = rdf(r + 8);
             ref[j].v = rdf(r + 12);
             const float *v = ref[j].vertex < (uint32_t)nv ? g->verts[ref[j].vertex] : (const float[3]){0, 0, 0};
-            for (int c = 0; c < 3; c++) sum[c] = (float)((double)v[c] + sum[c]);
+            for (int c = 0; c < 3; c++) sum[c] = fpu_f32(fpu_add(v[c], sum[c]));
         }
-        for (int c = 0; c < 3; c++) fc->centre[c] = (float)((double)sum[c] * inv);
+        for (int c = 0; c < 3; c++) fc->centre[c] = fpu_f32(fpu_mul(sum[c], inv));
         for (int c = 0; c < 4; c++) fc->plane[c] = rdf(f + 0xb + 4 * c);
         ref += fc->nrefs;
         f += 0x37 + (size_t)fc->nrefs * 16;

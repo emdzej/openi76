@@ -37,8 +37,9 @@ def real_members():
 
 
 def main():
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 300
-    rng = random.Random(int(sys.argv[2]) if len(sys.argv) > 2 else 76)
+    argv = [a for a in sys.argv if a != "--down"]   # no floating point: the same in both modes
+    count = int(argv[1]) if len(argv) > 1 else 300
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
     cmpf = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)(

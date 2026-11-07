@@ -6,6 +6,7 @@
 #include "exe.h"
 #include "pcx.h"
 #include "platform.h"
+#include "settings.h"
 #include "vfs.h"
 #include "vfs_zfs.h"
 #include <stdio.h>
@@ -21,6 +22,7 @@ bool app_init(void)
         plat_log(m);
         return false;
     }
+    Settings_Defaults(3);   /* a fast machine's (0x44e260) */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
     size_t n;

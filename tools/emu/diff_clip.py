@@ -87,11 +87,12 @@ def fields(raw, n, textured):
 
 
 def main():
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
-    seed = int(sys.argv[2]) if len(sys.argv) > 2 else 76
+    argv = [a for a in sys.argv if a != "--down"]
+    count = int(argv[1]) if len(argv) > 1 else 2000
+    seed = int(argv[2]) if len(argv) > 2 else 76
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
-    ctypes.c_int.in_dll(lib, "g_fpu_round").value = 0
+    x86.rounding(exe, lib, sys.argv)
     ok = True
     for name, (addr, fname, camera, textured) in ROUTINES.items():
         fn = getattr(lib, fname)
