@@ -147,6 +147,8 @@ void Window_Anim(Node *n, const char *name, void *arg);
 /* 0x433c50: the side's window there and shut (an AI's always), 0x433cb0: the user's window wound down
    (frames 5), 0x433c10: its gun out */
 int Window_Closed(Node *vehicle, int which);
+/* 0x455030: the kinds of the vehicle's weapon instances, or-ed (its hard points' +0x2c0) */
+uint32_t Hardpoints_Kinds(const Node *v);
 int Window_Open(Node *vehicle, int which);
 int Window_Busy(Node *vehicle, int which);
 

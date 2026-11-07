@@ -17,6 +17,8 @@ void Rel_Clear(void);
    distance between them over the ground */
 float Pair_Angle(Node *a, Node *b);
 float Pair_Dist(Node *a, Node *b);
+/* Pair_Vec 0x4236a0 (0x42e400): b's centre less a's, as the pair's entry keeps it */
+void Pair_Vec(float out[3], Node *a, Node *b);
 /* Pair_Dist3 0x422dc0 (0x42e4e0): the distance between them in space */
 float Pair_Dist3(Node *a, Node *b);
 /* Angle_Sector 0x42e500: which eighth of the turn b lies from a, 0 straight ahead (centred), clockwise */
@@ -30,6 +32,11 @@ void Combat(Node *n, Node *t, int mode);
 /* Weapons_Refresh 0x408c40: while +0xa714 asks, the AI block's weapons (+0xa718 the count, +0xa71c the
    instances, +0xa738 their facts, 0x20 each) and those facing forward (0x4089d0: +0xa6f4, +0xa6f8) */
 void Weapons_Refresh(Node *n);
+/* Weapons_Carrier 0x454f80: the vehicle's weapon instances (the count, up to five of its slots in order,
+   then slots 5 and 6's); 2 when it has no hard points (list untouched) */
+int Weapons_Carrier(Node *n, int32_t list[8]);
+/* Weapon_Facts 0x455080: a weapon instance's facts for the AI (0x20 bytes); 0 for a freed instance */
+int Weapon_Facts(int32_t inst, int32_t fact[8]);
 /* AI_Ram 0x41ddf0: ramming, flat out at where t will be */
 void AI_Ram(Node *n, Node *t);
 /* AI_Closest 0x4139f0: when p1 moving at v1 and p2 at v2 come closest; 1e7 for nearly equal velocities */

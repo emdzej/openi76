@@ -694,7 +694,7 @@ static void structure_destroy(Node *n)
     if (flag_root(n)) root_explodes(n);
     node_wrecks(n, 0);
     Lod_SetState(n, 1);
-    Collide_Refit(e);
+    Collide_Refit(n);
 }
 
 /* 0x430900: a structure's damage, from its points (data +0); 1 when destroyed */

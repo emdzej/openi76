@@ -1,5 +1,6 @@
 /* Entities and classes (entity.h). In the current rounding mode (render/fpu.h). */
 #include "entity.h"
+#include "radar.h"
 #include "clock.h"
 #include "crt.h"
 #include "exe.h"
@@ -455,7 +456,7 @@ static void debris_free(uint8_t *d);
 
 typedef uint8_t *(*ClassNew)(void);
 /* the table 0x4d3c20 in its order: the class and its constructor (handler 0) where ported. Entry 0
-   (class 0) is never found. The constructor still missing: 34 0x41ff50 (50, 51 and 5 have none). Where the
+   (class 0) is never found. (50, 51 and 5 have no constructor.) Where the
    original leaves the data uncleared, the port's is zero. */
 static const struct {
     int32_t cls;
@@ -463,7 +464,7 @@ static const struct {
 } classes[] = {
     {0, NULL},  {2, structure_new}, {4, structure_new}, {1, class1_new},  {9, class9_new},  {8, class8_new},
     {7, class7_new}, {10, class10_new}, {21, class21_new}, {22, class22_new}, {30, class30_new}, {23, class23_new}, {20, class20_new},
-    {35, class35_new}, {36, class36_new}, {34, NULL}, {52, class52_new}, {31, class31_new}, {32, class32_new},
+    {35, class35_new}, {36, class36_new}, {34, Radar_New}, {52, class52_new}, {31, class31_new}, {32, class32_new},
     {33, class32_new}, {53, debris_new}, {50, NULL}, {51, NULL}, {5, NULL}, {24, class24_new}, {41, class41_new},
     {40, class40_new},
 };
@@ -496,7 +497,24 @@ void Body_State(uint8_t out[0x3c], const Node *n)
         Body_Init(out);
         memcpy(out + 0x24, n->data, 12);
         break;
-    default:   /* none, and 7's 0x433050; 51's 0x459810 (a body from its owner's) is not ported yet */
+    case 51:   /* Shot_Body 0x459810: a shot's, mass 15, its velocity (record +0x14) turned to the world with that
+                  velocity's length, its spin (record +0x2c); +4 and +0xc are the original's stack's */
+        if (!n->data) {
+            Body_Init(out);
+            break;
+        } else {
+            const float *m = n->frame.m, *v = (const float *)(n->data + 0x14);
+            float w[3];
+            w[0] = F32(ADD(ADD(MUL(m[0], v[0]), MUL(m[3], v[1])), MUL(m[6], v[2])));
+            w[1] = F32(ADD(ADD(MUL(m[4], v[1]), MUL(m[1], v[0])), MUL(m[7], v[2])));
+            w[2] = F32(ADD(ADD(MUL(m[8], v[2]), MUL(m[5], v[1])), MUL(m[2], v[0])));
+            putf(out, 15.0f);
+            putf(out + 8, F32(fpu_sqrt(ADD(ADD(MUL(w[2], w[2]), MUL(w[0], w[0])), MUL(w[1], w[1])))));
+            memcpy(out + 0x18, w, 12);
+            memcpy(out + 0x24, n->data + 0x2c, 12);
+        }
+        break;
+    default:   /* none, and 7's 0x433050 */
         Body_Init(out);
     }
 }

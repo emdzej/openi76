@@ -1,6 +1,7 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "radar.h"
 #include "ai.h"
 #include "clock.h"
 #include "crt.h"
@@ -976,7 +977,7 @@ void Input_Poll(void)
 /* ---- the user's vehicle ---- */
 
 static float ramp_up, ramp_down, ramp_right, ramp_left;   /* 0x4e9244-0x4e9250 */
-static float horn_wait;                                   /* 0x4e9358 */
+static float target_wait;                                   /* 0x4e9358 */
 
 void User_ControlsReset(void)
 {
@@ -990,6 +991,8 @@ static float ramp_time(float t, float step)
     return s > 3.0 ? 3.0f : fpu_f32(s);
 }
 
+static uint32_t fbits_f(float f) { uint32_t v; memcpy(&v, &f, 4); return v; }
+
 void User_Controls(void)
 {
     float step = g_clock_step;
@@ -998,8 +1001,8 @@ void User_Controls(void)
     uint8_t *d = n->data;
     if (!d) return;
     /* network play: the throttle at -1 and no steering while 0x462690 or 0x463120 */
-    double w = fpu_sub(horn_wait, step);   /* 0x482e50 */
-    horn_wait = w > 0.0 ? fpu_f32(w) : 0.0f;
+    double w = fpu_sub(target_wait, step);   /* 0x482e50 */
+    target_wait = w > 0.0 ? fpu_f32(w) : 0.0f;
     uint8_t up = *INPUT_AT(0x4defd0), down = *INPUT_AT(0x4defd1), right = *INPUT_AT(0x4defd9),
             left = *INPUT_AT(0x4defda);
     const float k16 = exe_f32(0x4a7400), third = exe_f32(0x4a7408), one = exe_f32(0x4a740c),
@@ -1054,10 +1057,27 @@ void User_Controls(void)
         Vehicle_Kill(n);
         *INPUT_AT(0x4deff9) = 0;
     }
+    /* the radar's keys: the range, the target camera, the targets (next_target and prev_target start again
+       from the nearest once 5 s have gone by since the last: 0x4e9358, 0x482e80 and 0x482e40) */
+    if (*INPUT_AT(0x4deff1)) Radar_ToggleRange(n);   /* 0x4213d0 */
+    if (*INPUT_AT(0x4deff2)) Radar_RangeReset(n);       /* 0x421400 */
+    if (*INPUT_AT(0x4deff3)) Radar_ToggleCamera(n);    /* 0x421430 */
+    /* 0x4deff4 target_nearest_enemy: the nearest enemy (0x409420, through the script's nearestEnemy 0x409590) chosen
+       (0x4218a0): not ported yet */
+    if (*INPUT_AT(0x4deff5)) {
+        if ((fbits_f(target_wait) & 0x7fffffffu) == 0) Radar_Clear(n);   /* 0x421840 */
+        Radar_Next(n);   /* 0x421540 */
+        target_wait = 5.0f;
+    }
+    if (*INPUT_AT(0x4deff6)) {
+        if ((fbits_f(target_wait) & 0x7fffffffu) == 0) Radar_Clear(n);
+        Radar_Prev(n);   /* 0x421640 */
+        target_wait = 5.0f;
+    }
+    if (*INPUT_AT(0x4deff7)) Radar_ChooseKind(n, 1);   /* frontal_target, 0x421760: the one ahead */
+    if (*INPUT_AT(0x4deff8)) Radar_Clear(n);   /* reset_target */
     /* not ported yet: the specials (0x4821e0), the map (0x44f7f0), the notepad (0x41e950), the horn
-       (0x476420), the poetry (0x4513c0), the binoculars (0x407010), the radar (0x4213d0, 0x421400,
-       0x421430), the targets (0x4218a0, 0x421540, 0x421640, 0x421760, 0x421840) and the combat view
-       (0x480940) */
+       (0x476420), the poetry (0x4513c0), the binoculars (0x407010) and the combat view (0x480940) */
 }
 
 /* ---- set-up ---- */

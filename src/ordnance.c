@@ -823,6 +823,213 @@ fly:
     return !hit;
 }
 
+/* the ground contact's record (0x6c bytes): +0 1 when met, +4 0, +8 a body (0x471680), +0x44 the time
+   into the step, +0x48 the point (the shot's own), +0x54 minus the point's velocity, +0x60 the ground's
+   normal */
+typedef struct {
+    int32_t met, w4;
+    uint8_t body[0x3c];
+    float t, p[3], v[3], n[3];
+} Contact3;
+
+/* 0x45f390: whether any of shot s's n points (in its frame) meets the ground within the step t. Each point
+   moving (a velocity component's square at least 1e-8, 0x471bb0) is marched from its place along its
+   velocity in 5 m steps, (int)(t |v| 0.2) + 1 of them, and its end (place + v t) tried last. The first
+   below the ground (0x477290) is the contact: from the march at the steps' time (j + 1) / |v| x 5, at the
+   end at t. Quirk: the normal (0x491bf0) is taken at the march's cursor even for the end */
+static int ground_contact(Node *s, Contact3 *r, float t, const float (*pts)[3], int n)
+{
+    float w[8][3];
+    Frame_Points(w, pts, n, &s->frame);   /* 0x452740 */
+    for (int i = 0; i < n; i++) {
+        float v[3];
+        Point_Velocity(v, pts[i], s);   /* 0x471bb0 */
+        double vx2 = MUL(v[0], v[0]);
+        float vx2f = F32(vx2);
+        if (vx2 < 9.99999905104687e-09f && MUL(v[1], v[1]) < 9.99999905104687e-09f && MUL(v[2], v[2]) < 9.99999905104687e-09f)
+            continue;   /* 0x4a6344: still */
+        double L = fpu_sqrt(ADD(ADD(MUL(v[1], v[1]), MUL(v[2], v[2])), vx2f));
+        float Lf = F32(L), e[3], u[3], c[3];
+        e[0] = F32(ADD(MUL(t, v[0]), w[i][0]));
+        e[1] = F32(ADD(MUL(t, v[1]), w[i][1]));
+        e[2] = F32(ADD(MUL(t, v[2]), w[i][2]));
+        for (int k = 0; k < 3; k++) u[k] = F32(fpu_div(v[k], Lf));
+        memcpy(c, w[i], 12);
+        int steps = (int32_t)(int64_t)MUL(MUL(t, Lf), 0.20000000298023224f);   /* 0x4a6348, ftol */
+        int hit = 0, j;
+        for (j = 0; j <= steps; j++) {
+            float h;
+            Ground_Height(c[0], c[1], c[2], &h, NULL);   /* 0x477290 */
+            if (h > c[1]) {
+                hit = 1;
+                break;
+            }
+            float x = F32(ADD(MUL(u[0], 5.0f), c[0])), y = F32(ADD(MUL(u[1], 5.0f), c[1]));   /* 0x4a634c */
+            c[2] = F32(ADD(MUL(u[2], 5.0f), c[2]));
+            c[0] = x, c[1] = y;
+        }
+        if (!hit) {
+            float h;
+            Ground_Height(e[0], e[1], e[2], &h, NULL);
+            if (!(h > e[1])) continue;
+        }
+        memset(r, 0, sizeof *r);
+        r->met = 1;
+        Body_Init(r->body);   /* 0x471680 */
+        r->t = hit ? F32(MUL(fpu_div((double)(j + 1), Lf), 5.0f)) : t;
+        memcpy(r->p, pts[i], 12);
+        for (int k = 0; k < 3; k++) r->v[k] = F32(-MUL(u[k], Lf));   /* fchs before the store */
+        Terrain_Normal(r->n, c[0], c[2]);   /* 0x491bf0 */
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x476020: vehicle n kicked: spun by the quarter q's turn rates (0x4a66b8: about +-22.5 and +-11.25
+   degrees a second about x and z) times spin, its velocity times damp when above 2 m/s, then up by up
+   (to at most 20 m/s), its speed and that speed's inverse (1e30 when about 0) anew, and in the air
+   (+0x454 bit 4). Also called by 0x476170 */
+static void vehicle_kick(Node *n, int q, float spin, float up, float damp)
+{
+    uint8_t *d = n->data;
+    for (int i = 0; i < 3; i++) wr_f(d + 0xc8 + 4 * i, F32(MUL(exe_f32(0x4a66b8 + 12 * (uint32_t)q + 4 * (uint32_t)i), spin)));
+    if (fbits(rd_f(d + 0xac)) > 0x40000000)
+        for (int i = 0; i < 3; i++) wr_f(d + 0xbc + 4 * i, F32(MUL(rd_f(d + 0xbc + 4 * i), damp)));
+    wr_f(d + 0xc0, F32(ADD(rd_f(d + 0xc0), up)));
+    if (fbits(rd_f(d + 0xc0)) > 0x41a00000) wr_32(d + 0xc0, 0x41a00000);
+    float vx = rd_f(d + 0xbc), vy = rd_f(d + 0xc0), vz = rd_f(d + 0xc4);
+    float sp = F32(fpu_sqrt(ADD(ADD(MUL(vy, vy), MUL(vz, vz)), MUL(vx, vx))));
+    wr_f(d + 0xac, sp);
+    if (fbits(sp) <= 0x38d1b717) wr_32(d + 0xb0, 0x7149f2ca);
+    else wr_f(d + 0xb0, F32(fpu_div(1.0f, sp)));   /* 0x4a6750 */
+    uint32_t f;
+    memcpy(&f, d + 0x454, 4);
+    f |= 4;
+    memcpy(d + 0x454, &f, 4);
+}
+
+/* 0x475db0: n kicked from the world point at: the quarter of n it lies in (by the signs of its x and z in
+   n's frame: 0 left behind, 1 right ahead... x > 0 gives 1 or 3, z > 0 gives 0 or 1), up times 4 */
+static void vehicle_kick_at(Node *n, const float at[3], float spin, float up, float damp)
+{
+    Frame inv;
+    Frame_Invert(&inv, &n->frame);   /* 0x452910 */
+    float l[3];
+    Frame_Points((float(*)[3])l, (const float(*)[3])at, 1, &inv);   /* 0x452740 */
+    int q = fbits(l[0]) > 0 ? (fbits(l[2]) > 0 ? 1 : 3) : (fbits(l[2]) > 0 ? 0 : 2);
+    vehicle_kick(n, q, spin, F32(MUL(up, 4.0f)), damp);   /* 0x4a679c */
+}
+
+/* not ported yet, as the audio: 0x468580 a sound by name, not placed */
+static void rest_sound(const char *name) { (void)name; }
+
+/* 0x45e720: types 0xe-0x10 and 0x13 (the mines and the blox, 0xf and 0x10, dropped to bounce and roll):
+   - Moving less than 1 m/s in its frame (record +0x14), it lies still: on the ground (0x477290) and
+     stood up on the terrain's normal there (0x491bf0, 0x452170).
+   - Else its eight corners (0x4dc478, +-0.1 by +-0.1 by +-0.2) are tried against the ground over the
+     step (0x45f390). Without a contact it flies on with gravity (0x471730), turned by its spin (record
+     +0x2c, 0x471d40). With one, its velocity is reflected about the ground's normal and a quarter kept,
+     its spin changed by the contact point's velocity crossed with the point (times 0.2 / |point|^2),
+     and under 1 m/s it comes to rest (its kind's sound, 0x468580; quirk: its velocity is then set
+     from the reflection anyway).
+   - The distance travelled (+0x40) takes the step twice (quirk).
+   - Then each of its n sweeps a metre up from its place, the owner spared for its first 2 s; only the
+     last sweep's target is hit (0x45c950). A mine (0xf) kicks a car it hits by spin 1, up 8 and its
+     speed times 0.75, a blox (0x10) by 0.5, 2 and 0.5 (0x475db0) */
+static int fly_rolling(Node *s, float t)
+{
+    uint8_t *r = s->data;
+    float *trav = (float *)(r + 0x40), *spin = (float *)(r + 0x2c);
+    ShotState st;
+    gather(&st, s);
+    const float *m = s->frame.m;
+    float up[3] = {0, 0, 0};   /* the ground's normal (the original's stack when unset: never read so) */
+    int still = 0;
+    double sp = fpu_sqrt(ADD(ADD(MUL(st.v[0], st.v[0]), MUL(st.v[1], st.v[1])), MUL(st.v[2], st.v[2])));
+    if (!(sp >= 1.0f)) {   /* 0x4a6324 */
+        still = 1;
+        float h;
+        Ground_Height(st.p[0], st.p[1], st.p[2], &h, NULL);
+        st.p[1] = h;
+        Terrain_Normal(up, st.p[0], st.p[2]);
+    } else {
+        float corners[8][3];
+        for (int i = 0; i < 24; i++) corners[i / 3][i % 3] = exe_f32(0x4dc478 + 4 * (uint32_t)i);
+        Contact3 c;
+        int met = ground_contact(s, &c, t, (const float(*)[3])corners, 8);
+        float w[3];
+        w[0] = F32(ADD(ADD(MUL(m[3], st.v[1]), MUL(m[0], st.v[0])), MUL(m[6], st.v[2])));
+        w[1] = F32(ADD(ADD(MUL(m[7], st.v[2]), MUL(m[4], st.v[1])), MUL(m[1], st.v[0])));
+        w[2] = F32(ADD(ADD(MUL(m[8], st.v[2]), MUL(m[5], st.v[1])), MUL(m[2], st.v[0])));
+        if (!met) {
+            Integrate_F(st.p, w, st.g, t);   /* 0x471730 */
+            st.v[0] = F32(ADD(ADD(MUL(m[0], w[0]), MUL(m[1], w[1])), MUL(m[2], w[2])));
+            st.v[1] = F32(ADD(ADD(MUL(m[3], w[0]), MUL(m[4], w[1])), MUL(m[5], w[2])));
+            st.v[2] = F32(ADD(ADD(MUL(m[7], w[1]), MUL(m[8], w[2])), MUL(m[6], w[0])));
+        } else {
+            memcpy(up, c.n, 12);
+            const float *n = c.n;
+            double B = SUB(SUB(MUL(MUL(w[1], n[1]), -0.5f), MUL(MUL(w[2], n[2]), 0.5f)), MUL(MUL(w[0], n[0]), 0.5f));
+            float rv[3];   /* 0x4a6328, 0x4a632c, 0x4a6330 */
+            for (int i = 0; i < 3; i++) rv[i] = F32(ADD(MUL(n[i], B), MUL(w[i], 0.25f)));
+            float a[3], cr[3], dw[3];
+            a[0] = F32(ADD(ADD(MUL(m[0], c.v[0]), MUL(m[1], c.v[1])), MUL(m[2], c.v[2])));
+            a[1] = F32(ADD(ADD(MUL(m[4], c.v[1]), MUL(m[3], c.v[0])), MUL(m[5], c.v[2])));
+            a[2] = F32(ADD(ADD(MUL(m[8], c.v[2]), MUL(m[6], c.v[0])), MUL(m[7], c.v[1])));
+            cr[0] = F32(SUB(MUL(a[1], c.p[2]), MUL(a[2], c.p[1])));
+            cr[1] = F32(SUB(MUL(a[2], c.p[0]), MUL(a[0], c.p[2])));
+            cr[2] = F32(SUB(MUL(a[0], c.p[1]), MUL(a[1], c.p[0])));
+            double k = fpu_div(0.20000000298023224f, ADD(ADD(MUL(c.p[1], c.p[1]), MUL(c.p[2], c.p[2])), MUL(c.p[0], c.p[0])));   /* 0x4a6334 */
+            for (int i = 0; i < 3; i++) dw[i] = F32(MUL(cr[i], k));
+            for (int i = 0; i < 3; i++) st.p[i] = F32(ADD(MUL(t, rv[i]), st.p[i]));
+            if (fpu_sqrt(ADD(ADD(MUL(rv[1], rv[1]), MUL(rv[2], rv[2])), MUL(rv[0], rv[0]))) < 1.0f) {
+                rest_sound(g_ordnance[st.kind].fx[0].sound);   /* the kind's +0x70 */
+                float h;
+                Ground_Height(st.p[0], st.p[1], st.p[2], &h, NULL);
+                st.p[1] = h;
+                still = 1;
+            }
+            Mat_Rows(st.v, rv, m);   /* 0x45f830 */
+            for (int i = 0; i < 3; i++) spin[i] = F32(ADD(dw[i], spin[i]));
+        }
+    }
+    float d[3];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
+    double len = fpu_sqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0])));
+    *trav = F32(ADD(len, *trav));
+    if (still) {
+        Frame f;
+        Frame_UpFwd(&f, up, &s->frame.m[6]);   /* 0x452170 */
+        s->frame = f;
+        for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+    } else {
+        float w0 = spin[0], w1 = spin[1], w2 = spin[2];
+        for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        Frame f;
+        Frame_Turn(&f, &s->frame, w0, w1, w2, t);   /* 0x471d40 */
+        s->frame = f;
+    }
+    memcpy(r + 0x14, st.v, 12);
+    *trav = F32(ADD(len, *trav));   /* again */
+    int hit = 0;
+    int32_t cls = -1;
+    for (; st.n > 0; st.n--) {
+        float q[3];
+        memcpy(q, st.p, 12);
+        st.p[1] = F32(ADD(st.p[1], 1.0f));
+        if (Shot_Sweep(s, SUB(st.life0, st.life) > 2.0f ? NULL : st.owner, st.p, &st.who, &cls)) hit = 1;   /* 0x4a633c */
+        memcpy(st.p, q, 12);
+    }
+    if (hit) {
+        hit_effect(s, st.p, st.who, cls);   /* 0x45c950 */
+        if (st.who && cls == 1) {
+            if (st.type == 0xf) vehicle_kick_at(st.who, st.p, 1.0f, 2.0f, 0.75f);
+            else if (st.type == 0x10) vehicle_kick_at(st.who, st.p, 0.5f, 0.5f, 0.5f);
+        }
+    }
+    return !hit;
+}
+
 /* 0x45f100 (type 0xc) and 0x45f260 (type 0x11): the dropped, which stay where they lie: each of the
    shot's n sweeps a metre upwards from its place, its owner spared for its first 2 s. Once one has met
    something, every sweep after it hits again (quirk), at the place; 0xc also spins a vehicle it hits
@@ -870,6 +1077,7 @@ int Shot_Fly(Node *s, float t)
     case 0x12: return fly_gun(s, t);
     case 0xc: return fly_dropped(s, 1);    /* 0x45f100 */
     case 0x11: return fly_dropped(s, 0);   /* 0x45f260 */
+    case 0xe: case 0xf: case 0x10: case 0x13: return fly_rolling(s, t);   /* 0x45e720 */
     case 2: case 3: case 4: case 5: case 7: case 8:
         if (ty == 2) alive = fly_rocket(s, t, 0);
         else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */

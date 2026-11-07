@@ -171,8 +171,8 @@ For n shots of an instance, late s into the frame:
    - 3, on a vehicle without flag 0x20: the pick along the muzzle (0x45d420 → 0x46ae70), then locked on
      the radar (0x421be0); with the flag: the radar's lock (0x421c30);
    - others: the radar's current target (0x421ba0).
-   The radar lives at the vehicle's +0x434, set by the radar part's start (0x41fff0, not ported yet), so
-   for now every radar lookup finds none, on both sides of the check.
+   The radar lives at the vehicle's +0x434, set by the radar part's start (0x41fff0); see "The radar"
+   below. Type 8 with a target calls 0x4098e0, as does type 3 (both no-ops for the port).
 5. **The mortar's elevation.** A kind 3, index 3 def raises the muzzle for the target (0x433730 with
    0x45ddb0; not ported yet).
 6. **The launch.** The vehicle's velocity and speed go into the record, then the launch (0x458f40) runs
@@ -334,7 +334,146 @@ then every live shot flies three steps of 0.03 s, with the hit's effect and the 
 compares the shot's frame and record, the return, the rand seed and the whole tree, including t01's
 building hit by a gun.
 
-## The windows and the handgun (0x433810, 0x433e40)
+## The radar (0x41fbc0-0x421fc0, class 34)
+
+The radar is a part of the vehicle, a node of class 34. Each frame it keeps the vehicles around it as
+contacts, one of them possibly chosen, and for each weapon kind the target its weapons would take. The
+firing reads it (above); so do the guided rockets (type 8).
+
+**The data (0x41ff50, 0xb0 bytes).**
+
+| Offset | What |
+|---|---|
+| +0 | the range (1; the keys radar_range_toggle 0x4213d0 toggles it, radar_range_reset 0x421400 sets it) |
+| +4 | the contacts, nearest first |
+| +8 | the display's argument (0x10 bytes: 0, 0x1d, -, 0) |
+| +0xc | the flags: 1 working, 2 the target camera, 4 switched off, 8 cleared this frame, 0x10 a contact chosen |
+| +0x10 | the target camera's frame (identity when none), +0x50 whether it is set (0x421df0) |
+| +0x54 | the chosen contact |
+| +0x5c, +0x60, +0x64 | the locks of kinds 1, 2 and 4 (0x421be0 sets, 0x421c30 reads) |
+| +0x68-+0x74 | the targets of the weapon kinds 1, 2, 8 and 0x10 (0x421ca0 sets, 0x421d30 reads) |
+| +0x78, +0x7c | the vehicle and the radar's node |
+| +0x80 | the display's surface (0x30 bytes) |
+
+The constructor sets the flags word's bit 1 and clears bits 2, 4 and 0x10, leaving the rest of the
+heap's word. Nothing ever sets bit 1 again.
+
+**A contact (0x24 bytes).**
+- +0: its node.
+- +4, +8: the pair's vector from the radar's vehicle (0x4236a0, the relations' cache: the other's centre
+  less the vehicle's), x and z.
+- +0xc, +0x10: that vector turned into the vehicle's heading (0x422200, made positive by adding 2π).
+- +0x14: the distance over the ground (0x4227b0).
+- +0x18: a time; +0x1c a brightness byte. While the time is behind the mission's (0x450f40), it
+  steps one second forward and the brightness goes up by 3, to at most 0x69. A choice sets the
+  brightness to 0, letting go sets it to 0x69, and the chosen contact seen in a frame gets 0xff.
+- +0x20: the next.
+
+**The start (0x41fff0).**
+1. The vehicle is the radar's root. It keeps the radar at its data's +0x434.
+2. The node's flag 1 is cleared on it and its first child's tree (0x42e320).
+3. On the user's vehicle only, the display's animation (0x4208f0) goes on the node's first texture
+   (0x482ea0), with the texture's frame counters at 0.
+
+**The frame (0x4202d0, class 34's second per-frame handler).**
+1. Bit 8 is cleared.
+2. **A radar not the user's** (outside network play) is the AI's (0x420170):
+   - An artillery gun's (class 8) holds the user (the contact 0x5ad1a0, whose node the artillery's
+     start set). This needs the gun not off (0x200) and the user not hidden (0x421e30). Its locks
+     and targets are all the user, and bit 0x10 is set. Otherwise it holds the empty contact
+     0x5ad170, everything 0, and bit 0x10 is cleared.
+   - Any other vehicle's radar holds its AI's target. The AI block's 0x24 bytes at +0xa9b4 are laid
+     out as a contact; the AI's set-up gives them time FLT_MAX and the rest 0. That contact is the
+     list and the chosen one, bit 0x10 is set, and every lock and target is the AI's target (made
+     live). When the user is hidden, the list and choice are the empty contact, the kind-4 lock is 0
+     and bit 0x10 is cleared, though the other words still take the AI's target. A quirk: the user's
+     hiding counts whoever the target is.
+3. **The user's** (and in network play every vehicle's):
+   - The weapon kinds' targets come first (0x45d4d0, below).
+   - The radar is cleared when it is not working, switched off, or its own vehicle is hidden. The
+     contacts are freed, the choice let go (0x421840's steps), and bit 8 set.
+   - Otherwise the contacts are rebuilt from the radar's list (0x4d3a90, every vehicle's entity), the
+     radar's own vehicle skipped.
+   - **A vehicle already a contact** is updated (0x4212a0's steps). It is kept when it is alive, may
+     be aimed at (0x42d340) and is within 600 m (0x4d3a4c) over the ground, between the nodes'
+     places. Kept contacts are moved to the new list, inserted after every contact as near or
+     nearer. The chosen one, seen, is marked 0xff.
+   - **A contact not kept** is let go when it was the chosen one and the vehicle has no flag 0x20.
+     It is then freed, unless the vehicle has flag 0x20 and the other is alive.
+   - **A dead vehicle** leaves the radar's list (without a reference to drop).
+   - **A vehicle not yet a contact** is only added on a vehicle without flag 0x20; one with flag
+     0x20 makes its contacts by choice (0x4218a0). The new record comes from the heap uncleared: its
+     time is a freed block's or zero, and both catch up to the mission's at once. Its brightness is
+     set to 0x69 after the update. A quirk: the 0xff mark then goes to the list's head, if that is
+     the chosen one, not to the new contact.
+   - **A jammer.** When a vehicle just added or kept is itself hidden (0x421e30: its jammer is on),
+     the whole radar is cleared as above, and the frame ends.
+   - Old contacts left in the old list are lost (never freed). When the chosen contact was not seen,
+     the choice is let go.
+
+**The weapon kinds' targets (0x45d4d0).**
+- Each target is the nearest car (class 1, not the vehicle) within 650 m of the vehicle's place,
+  inside a cone whose cosine squared is 0.933, about 15 degrees (0x46b050).
+- Kind 1 looks along the vehicle's z axis.
+- Kind 2 looks along -z, if the vehicle has rear weapons (its hard points' kinds 0x455030, bit 2).
+- Kinds 8 and 0x10 look along x and -x, if the vehicle has such weapons and the driver's or the
+  passenger's window is open (0x433c50), or the vehicle has flag 0x20.
+- Each is stored live (0x421ca0).
+
+**The rest.**
+- 0x421ba0 gives the chosen contact's node, unless that node is freed (its +8 not 0).
+- 0x421480 turns the target camera off (bit 2, the frame).
+- 0x421840 lets the choice go.
+- 0x4214c0 toggles bit 4. Switching off also clears bit 1, so the radar stays dead after it is
+  switched on again (a quirk).
+- **The user's keys (0x481d00).**
+  - radar_range_toggle toggles +0 while the radar works (0x4213d0); radar_range_reset sets it to 1
+    (0x421400).
+  - radar_camera_toggle toggles bit 2 while a contact is chosen (0x421430).
+  - next_target (0x421540) steps to the next enemy contact after the chosen one, round the list. An
+    enemy may be aimed at (0x42d340) and is on a team (node flags 0x70000), not the user's own.
+  - prev_target (0x421640) walks the same way, noting the last enemy it meets. The walk ends where it
+    began, though, and that one is chosen again (a quirk): the key never reaches the previous one.
+  - Both clear the choice first once 5 s have gone by since either was last pressed (0x4e9358, which
+    0x482e50 counts down each frame), so they start again from the nearest. Each press sets the 5 s.
+  - frontal_target chooses the kind-1 target's contact (0x421760, with 1); reset_target lets the
+    choice go (0x421840).
+  - target_nearest_enemy chooses the script's nearest enemy (0x409420 through 0x409590, the
+    nearestEnemy action; or the nearest artillery gun if nearer, 0x4290c0) with 0x4218a0. It is not
+    ported yet.
+- **0x4218a0** chooses a given vehicle's contact, letting the old choice go first. On a vehicle with flag
+  0x20 the contact list is made of that vehicle alone.
+- Not ported yet: the jammer's activation (0x421f30), and the display (0x4208f0, 0x4210b0, with the
+  mask zradmask.map).
+- **The removal callback (0x41fef0).** A removed entity's cell leaves the list. Its node, if still
+  alive, loses the radar's reference.
+
+## The artillery (0x428cc0-0x428e80)
+
+The artillery guns (class 8) are on their own list (0x550640, at most 200; 0x428cc0 adds them as
+entities are made). Each gun's data has a block at +0x508 (0x54 bytes, made with class 8's data):
+- +0, +4: 600, 600, and +8 their inverse;
+- +0xc: the carrier's list (0x454f80: the weapon count, up to five slots' instances, then slots 5 and
+  6's). +0x10 is its first weapon, the gun's.
+- +0x2c: that weapon's facts for the firing decision (0x455080).
+- +0x4c: firing (1). +0x50: how seldom it decides (5).
+
+**The look-up (0x428db0)** runs after AI_Begin at the mission's start:
+- each gun's list and facts are filled (a failure is reported, 0x4d53fc / 0x4d53d4);
+- its weapon's hard points get +4 = 0 (0x456810);
+- the instance is checked to belong to the gun (0x458980).
+
+Any vehicle's removal (0x428d00, the artillery's removal callback, which also takes a gun off the
+list) sets 0x550964, and the next frame repeats the look-up first. 0x428e70 sets the flag too, from a
+weapon's removal (0x455370).
+
+**The frame (0x428e80, after the AI's).** Outside network play, with a user:
+- each gun not off (0x200) and firing takes its weapon's muzzle frame (0x4551d0);
+- with +0x50 above 1, it goes on only when `rand() % (2 x +0x50 - 2)` is 0, one frame in eight;
+- it then asks the AI's firing decision about the user (0x413b10, skill and aim 1, docs/re/ai.md
+  "Firing") and on yes pulls the trigger (0x455350).
+
+
 
 Classes 0x20 and 0x21 are the vehicle's windows: the driver's and the passenger's. Their data (0x10
 bytes, 0x4337f0) holds:
@@ -599,7 +738,39 @@ When the 8 s are up, or the special is no longer on, the bit is cleared; in the 
 is also switched off (0x42d980). In a network game, every vehicle with the bit is hidden except the
 user's own, including one without the special.
 
-The beams' flights (0xe-0x10, 0x13) are not ported yet.
+**Types 0xe-0x10 and 0x13 (0x45e720), the mines and the blox** (glandmin and gceracer are 0xf, gblox
+0x10). They are dropped to bounce, roll and come to rest:
+- **At rest.** Moving under 1 m/s in its frame (+0x14), it lies on the ground (0x477290) and stands on
+  the terrain's normal there (0x491bf0, the frame from up and its z axis, 0x452170).
+- **The ground contact (0x45f390).** Its eight corners (0x4dc478: x and y +-0.1, z +-0.2) are tried in
+  turn. A corner whose velocity (0x471bb0) has a component whose square is at least 1e-8 is marched
+  from its place along that velocity, in 5 m steps: (int)(t |v| 0.2) + 1 of them, then its end
+  (place + v t). The first point below the ground is the contact. The record (0x6c bytes) keeps:
+  - the time: (j + 1) / |v| x 5 from the march, t at the end;
+  - the corner, and minus its velocity;
+  - the terrain's normal, taken at the march's cursor even when the end met the ground (a quirk).
+- **In the air** (no contact): it flies on with gravity (0x471730). Its frame turns by its spin
+  (+0x2c, 0x471d40).
+- **On a contact:**
+  - Its velocity w in the world is reflected about the normal n, and a quarter kept:
+    n (-0.5 (w.n), summed as -0.5 w1 n1 - 0.5 w2 n2 - 0.5 w0 n0) + 0.25 w.
+  - It moves along that.
+  - Its spin grows by the corner's velocity in its frame, crossed with the corner, times
+    0.2 / |corner|^2.
+  - Its frame velocity becomes the reflection taken into its frame (0x45f830).
+  - Under 1 m/s it comes to rest on the ground with its kind's first sound (+0x70, 0x468580). A
+    quirk: its velocity is then zeroed and at once set from the reflection anyway.
+- **Distance.** The travelled distance (+0x40) takes the step twice (a quirk).
+- **Sweeps.** Each of its n sweeps runs a metre up from its place, sparing the owner while the shot's
+  age is at most 2 s. Only the last sweep's target is hit (0x45c950).
+- **The kick (0x475db0 → 0x476020).** A mine (0xf) kicks a car it hits; a blox (0x10) does the same
+  with 0.5, 2 and 0.5.
+  - The quarter of the car the hit lies in picks the turn rates (0x4a66b8: +-pi/8 about x, +-pi/16
+    about z), times the spin (1 for a mine).
+  - Above 2 m/s the car's velocity is multiplied by 0.75.
+  - Its vertical speed grows by 8 (4 x 2), to at most 20 m/s.
+  - Its speed and that speed's inverse are set anew (1e30 when about 0), and it is in the air (+0x454
+    bit 4).
 
 Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4, s01 type 5).
 The delayed hits' walk is not covered by the harness.

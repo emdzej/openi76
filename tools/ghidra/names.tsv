@@ -886,23 +886,23 @@
 00433c10	Window_Busy	weapons	high	the user's window's state (the gun out); ported
 0042e970	Node_FindClass	scene	high	the first node of a class in a tree, depth first; ported
 00451880	Frame_Pitch	math	high	the identity turned about x; ported
+00459810	Shot_Body	ordnance	high	class 51's body: mass 15, the record's velocity to the world, its spin; ported
 004597a0	Shots_Frame	ordnance	high	every live shot flown for the frame's step; ported
 00459d40	Shots_FlyList	ordnance	high	a list's shots: life, flight, the spent back to the pool; ported
-0045e620	Shots_Delayed	ordnance	med	the delayed hits (0x4dc470) swept and hit when due
 00455d90	Weapons_Frame	weapons	med	the weapons' frame: turrets, the user's triggers, groups, Weapons_Tick, the HUD
 004577c0	Weapons_UserTriggers	weapons	med	the user's triggers from weapon_fire / hardpointN_fire, or the handgun's
 00457a30	Weapons_Cycle	weapons	med	weapon_cycle: the next group
 00458030	Weapons_Link	weapons	med	the linked group of like weapons, with the dashboard
 00457df0	Weapons_Unlink	weapons	med	the group unlinked, with the dashboard
 00455560	Turrets_Aim	weapons	med	the turrets turned towards their target
-00428e80	Artillery_Fire	weapons	med	the artillery's firing decision (0x413b10) and trigger
+00428e80	Artillery_Fire	weapons	high	each gun one frame in eight asks the firing decision about the user
 004561f0	Weapons_DisplayStart	weapons	high	the dashboard's node (zbk_.map), the group's first slot, the separator, the slots' lights and digits
 0042e370	Node_FindTexture	objects	high	the first node whose level-4 first face has the texture; sets each visited node to level 4
 0040a9a0	Fsm_IsArrived	fsm	high	the vehicle's AI +0x9c is 1; clears it
 0040f0d0	Fsm_Teleport	fsm	high	teleport/teleportOffset: the path's first point on the ground, the angle, the speed along the heading
 004579b0	Weapons_AllBroken	weapons	high	every weapon of the five slots at zero health
 00456830	Weapon_Health	weapons	high	an instance's points over its definition's
-00421480	Radar_Unlock	radar	med	the radar's lock let go
+00421480	Radar_CameraOff	radar	high	the target camera off (bit 2, its frame)
 0046c0e0	Tracers_Init	effects	high	the tracers' textures (mmgun.map, mcannon.map), n records in a ring, the line colour
 0046c1e0	Tracers_Free	effects	high	frees the ring
 0046c220	Tracer_Update	effects	high	a shot's tracer moved on its history, or a new one from the ring
@@ -940,3 +940,41 @@
 0042d340	Vehicle_Targetable	vehicles	high	a vehicle not off; a car only with +0x454 bit 1
 0042d460	Special_Of	vehicles	high	the first working special of a kind among +0x3ec-+0x3f4
 0042d980	Special_Toggle	vehicles	high	a special with charges switched on (+0x10, time +0x14) or off
+0041ff50	Radar_New	radar	high	class 34's data (0xb0): on, flags 1, the lock's frame identity
+0041fff0	Radar_Start	radar	high	the vehicle (root) keeps the radar at +0x434; the user's gets the display animation
+004202d0	Radar_Frame	radar	high	class 34's per-frame: the AI's (0x420170) or the contacts rebuilt within 600 m; not a Ghidra function
+00420170	Radar_AI	radar	high	an AI's radar holds its AI's target (+0xa9b4); artillery the user
+0041fef0	Radar_Remove	radar	high	the entity callback on removal: off the radar's list, the reference dropped
+004212a0	Contact_Update	radar	high	a contact's vector, turned, distance, brightness by the second
+00421ba0	Radar_Current	radar	high	the chosen contact's node, if not freed
+00421be0	Radar_Lock	radar	high	the lock of kind 1, 2 or 4 set (type 3's pick)
+00421c30	Radar_Locked	radar	high	the lock of kind 1, 2 or 4
+00421ca0	Radar_SetKind	radar	high	the weapon kind's (1, 2, 8, 0x10) target, live
+00421d30	Radar_KindTarget	radar	high	the weapon kind's target, live
+00421df0	Radar_SetFrame	radar	high	the lock's frame set (+0x50 = 1)
+00421840	Radar_Clear	radar	high	the chosen contact let go
+004214c0	Radar_ToggleOff	radar	high	bit 4 toggled; off also clears bit 1 (never back)
+00421540	Radar_Next	radar	high	the user's key: the next enemy contact chosen
+00421640	Radar_Prev	radar	high	the user's key: the previous enemy contact chosen
+00421760	Radar_ChooseKind	radar	high	the user's key: the weapon kind's target chosen
+004218a0	Radar_Choose	radar	high	a given vehicle chosen (with flag 0x20: the list made of it)
+004213d0	Radar_ToggleRange	radar	high	radar_range_toggle: +0 toggled when working
+00421400	Radar_RangeReset	radar	high	radar_range_reset: +0 = 1
+00421430	Radar_ToggleCamera	radar	high	radar_camera_toggle: bit 2 toggled while a contact is chosen
+004208f0	Radar_Display	radar	med	the user's radar display, a texture animation; not ported
+004210b0	Radar_DrawView	radar	med	the display's top-down view drawn into the surface; not ported
+00421f30	Jammer_Use	radar	med	the jammer special switched on: sounds, a charge, +0x454 bit 0x40000
+00421dc0	Radar_Surface	radar	med	the radar's display surface (+0x80)
+0045d4d0	Radar_Kinds	radar	high	each weapon kind's target along the vehicle's axes (0x46b050)
+0046b050	Dir_Pick	radar	high	the nearest car within 650 m in a cone (cos^2 0.933) along a direction
+00455030	Hardpoints_Kinds	weapons	high	the vehicle's hard points' kinds or-ed (+0x2c0)
+004236a0	Pair_Vec	ai	high	the relations' cache: b's centre less a's
+0045e720	Shot_FlyRolling	weapons	high	types 0xe-0x10, 0x13: mines and blox bounce off the ground (0x45f390), roll and rest; distance counted twice
+0045f390	Shot_GroundContact	weapons	high	a shot's corners marched in 5 m steps along their velocity; the first below the ground
+00475db0	Vehicle_KickAt	vehicles	high	a car kicked from a world point: its quarter's turn rates, up times 4
+00476020	Vehicle_Kick	vehicles	high	turn rates from the quarter's table, velocity damped above 2 m/s, up to 20 m/s, airborne
+00428db0	Artillery_Lookup	weapons	high	each gun's carrier list (0x454f80) and weapon facts (0x455080) into its +0x508 block
+00428d00	Artillery_Remove	weapons	high	the removal callback: a gun off the list; any vehicle flags a look-up
+00428e70	Artillery_Dirty	weapons	high	0x550964 = 1: the guns' weapons looked up again
+00454f80	Weapons_Carrier	weapons	high	a vehicle's instances: count, five slots, slots 5 and 6; 2 without hard points
+00455080	Weapon_Facts	weapons	high	an instance's 0x20 bytes of facts for the AI's firing decision

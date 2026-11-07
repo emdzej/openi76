@@ -57,7 +57,7 @@ void Node_CentreNow(float out[4], Node *n)
    difference taken its own way. The port orders the nodes by when they were made (Node.serial), as the
    heap hands them out. The original's hash chains only find entries; a list does the same. */
 typedef struct { Node *n; float h, c[4]; } RelNode;
-typedef struct { Node *lo, *hi; float d2, d3, a_lh, a_hl; } RelPair;
+typedef struct { Node *lo, *hi; float d2, d3, a_lh, a_hl, v_lh[3]; } RelPair;   /* v_lh: hi's centre less lo's */
 #define REL_NODES 200
 #define REL_PAIRS 2048
 static RelNode rel_node[REL_NODES];
@@ -93,6 +93,7 @@ static const RelPair *rel_pair_of(Node *a, Node *b)
     if (e == &spare) plat_log("OpenI76: the relations' pair table is full");
     e->lo = lo, e->hi = hi;
     float dx = F32(SUB(l->c[0], h->c[0])), dy = F32(SUB(l->c[1], h->c[1])), dz = F32(SUB(l->c[2], h->c[2]));
+    e->v_lh[0] = -dx, e->v_lh[1] = -dy, e->v_lh[2] = -dz;
     e->a_hl = fabsf(dx) == 0 && fabsf(dz) == 0 ? 0 : F32(atan2(dx, dz));   /* fpatan */
     double xx = MUL(dx, dx), zz = MUL(dz, dz), yy = MUL(dy, dy);
     e->d2 = F32(fpu_sqrt(ADD(zz, xx)));
@@ -113,6 +114,13 @@ float Pair_Angle(Node *a, Node *b)
 }
 
 float Pair_Dist(Node *a, Node *b) { return rel_pair_of(a, b)->d2; }
+
+void Pair_Vec(float out[3], Node *a, Node *b)
+{
+    const RelPair *e = rel_pair_of(a, b);
+    int s = e->lo == a ? 1 : -1;
+    for (int i = 0; i < 3; i++) out[i] = s * e->v_lh[i];
+}
 
 float Pair_Dist3(Node *a, Node *b) { return rel_pair_of(a, b)->d3; }
 
@@ -401,8 +409,7 @@ void Combat(Node *n, Node *t, int mode)
     }
 }
 
-/* 0x455080: a weapon instance's facts for the AI (0x20 bytes); 0 for a freed instance */
-static int weapon_facts(int32_t inst, int32_t fact[8])
+int Weapon_Facts(int32_t inst, int32_t fact[8])
 {
     const WeaponInst *w = &g_weapons[inst];
     if (w->index != inst) return 0;
@@ -427,27 +434,36 @@ static int weapon_facts(int32_t inst, int32_t fact[8])
     return 1;
 }
 
+int Weapons_Carrier(Node *n, int32_t list[8])
+{
+    int h = 0;
+    while (h < g_hardpoint_count && g_hardpoints[h].vehicle != n) h++;
+    if (h == g_hardpoint_count) return 2;
+    const HardPoints *hp = &g_hardpoints[h];
+    int32_t k = 0;
+    memset(list, 0, 8 * sizeof list[0]);
+    for (int s = 0; s < hp->count; s++)
+        if (hp->slot[s].inst != -1) list[1 + k++] = hp->slot[s].inst;
+    list[6] = hp->slot[5].inst;
+    list[7] = hp->slot[6].inst;
+    list[0] = k;
+    return 1;
+}
+
 void Weapons_Refresh(Node *n)
 {
     uint8_t *ai = ai_of(n);
     if (!rd32(ai + 0xa714)) return;
-    int h = 0;   /* 0x454f80 */
-    while (h < g_hardpoint_count && g_hardpoints[h].vehicle != n) h++;
-    if (h == g_hardpoint_count)
+    int32_t list[8];
+    memcpy(list, ai + 0xa718, sizeof list);
+    if (Weapons_Carrier(n, list) != 1)
         put32(ai + 0xa718, 0);
     else {
-        const HardPoints *hp = &g_hardpoints[h];
-        int32_t list[8] = {0}, k = 0;
-        for (int s = 0; s < hp->count; s++)
-            if (hp->slot[s].inst != -1) list[1 + k++] = hp->slot[s].inst;
-        list[6] = hp->slot[5].inst;
-        list[7] = hp->slot[6].inst;
-        list[0] = k;
         memcpy(ai + 0xa718, list, sizeof list);
         for (int i = 0; i < rd32(ai + 0xa718); i++) {
             int32_t fact[8];
             memcpy(fact, ai + 0xa738 + i * 0x20, sizeof fact);
-            if (!weapon_facts(rd32(ai + 0xa71c + i * 4), fact)) {
+            if (!Weapon_Facts(rd32(ai + 0xa71c + i * 4), fact)) {
                 char m[64];
                 snprintf(m, sizeof m, exe_str(0x4a8938), i);
                 plat_log(m);

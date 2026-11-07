@@ -25,6 +25,7 @@
 #include "settings.h"
 #include "terrain.h"
 #include "tracers.h"
+#include "vehicle.h"
 #include "vfs.h"
 #include "vfs_zfs.h"
 #include "world.h"
@@ -161,6 +162,7 @@ static bool play_init(void)
     Rel_Clear();   /* 0x421fc0 as the mission starts */
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
+    Artillery_Lookup();   /* 0x428db0 */
     Tracers_Init(100);   /* 0x46c0e0, with WinMain's inits after the classes' start */
     Clock_Init();
     if (!Input_Init()) {
@@ -184,7 +186,7 @@ static void play_frame(void)
         Class_Frame(0);
         Class_Frame(1);
         AI_Frame();
-        /* not ported yet: the artillery's firing (0x428e80) */
+        Artillery_Fire();  /* 0x428e80 */
         Shots_Frame();     /* 0x4597a0 */
         Weapons_Frame();   /* 0x455d90 */
         TexAnim_Run();     /* 0x47e9a0 */

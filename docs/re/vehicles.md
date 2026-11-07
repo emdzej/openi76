@@ -280,7 +280,9 @@ between objects; with none, **Corners_Hit** looks for the ground:
 
 - Each corner's world place (Frame_Points) and velocity (Point_Velocity 0x471bb0: each body up the
   parents, the velocity plus ω × r, through the frame; Body_State 0x425c80 takes the class table's
-  word 8, a vehicle's body at +0xa4).
+  word 8, a vehicle's body at +0xa4; a shot's, class 51's 0x459810, is built: mass 15, its velocity
+  (the record's +0x14) turned to the world with that velocity's length as the speed, its spin from the
+  record's +0x2c).
 - n = ftol(speed × dt) + 1, at most 7; the step is dt × (1/n) from the table 0x4a6864, and there are
   n + 1 of them (one more than dt covers). A reverse speed past −1 m a step gives n ≤ 0: no steps, or for
   n = 0 one step of −1e-4 dt (the table's first word).

@@ -1,6 +1,7 @@
 /* A text dump of the objects' state, for the diff harness (tools/emu/diff_objects.py prints the
    original's in the same form). Floats are their bits. */
 #include "clock.h"
+#include "radar.h"
 #include "classes.h"
 #include "collide.h"
 #include "damage.h"
@@ -68,7 +69,7 @@ int g_dump_texanims;
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
                                     0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x400, 0x404, 0x408, 0x40c, 0x410,
-                                    0x414, 0x418, 0x41c, 0x430, 0x440, 0x508};
+                                    0x414, 0x418, 0x41c, 0x430, 0x434, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
 {
@@ -92,7 +93,7 @@ static void class_data(Out *o, const Node *n)
             else if (veh_ptrs[i] == 0x108) {   /* the words that are addresses cleared, as tools/emu/diff_objects.py */
                 static uint8_t ai[0xa9d8];
                 memcpy(ai, p, sizeof ai);
-                static const uint16_t addr[] = {0, 0x60, 0x88, 0x8c, 0xa96c, 0xa998};
+                static const uint16_t addr[] = {0, 0x60, 0x88, 0x8c, 0xa96c, 0xa998, 0xa9b4};
                 for (size_t j = 0; j < sizeof addr / sizeof addr[0]; j++) memset(ai + addr[j], 0, 4);
                 out(o, "%08x", crc32(ai, sizeof ai));
             }
@@ -101,7 +102,7 @@ static void class_data(Out *o, const Node *n)
         }
         return;
     }
-    static const struct { int cls, size; } small[] = {{30, 0x88}, {20, 8}, {21, 0x2c}, {22, 0x18}, {23, 0x20}, {24, 0x18}, {7, 0xa0}, {41, 0x40}, {31, 8}, {35, 0x4c}, {36, 0x4c}, {40, 0xb8}};
+    static const struct { int cls, size; } small[] = {{30, 0x88}, {20, 8}, {21, 0x2c}, {22, 0x18}, {23, 0x20}, {24, 0x18}, {7, 0xa0}, {41, 0x40}, {31, 8}, {35, 0x4c}, {36, 0x4c}, {40, 0xb8}, {34, 0x80}};
     for (size_t i = 0; i < sizeof small / sizeof small[0]; i++)
         if (c == small[i].cls && (c != 40 || g_dump_texanims)) {   /* class 40's data is set at the start */
             uint8_t b[0xb8];
@@ -1033,6 +1034,46 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 36: {   /* the radar's frame (0x4202d0) twice on n's radar: each time its data (the pointer words 0),
+                        the nodes it points at (the chosen contact's, the locks and targets, the vehicle, the
+                        radar's) by name, then each contact: its node's name, place, distance, time and
+                        brightness */
+            Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
+            if (!rn) break;
+            for (int k = 0; k < 2; k++) {
+                g_fpu_round = FPU_DOWN;
+                Radar_Frame(rn);
+                uint8_t *r = rn->data, b[0x80 + 10 * 8];
+                memcpy(b, r, 0x80);
+                Contact *ch = *(Contact **)Data_Ptr(r, 0x54);
+                Node *ns[10] = {ch ? *ch->node : NULL};
+                for (int j = 0; j < 9; j++) ns[1 + j] = *(Node **)Data_Ptr(r, 0x5c + 4 * (uint32_t)j);
+                for (int j = 0; j < 10; j++) {
+                    if (ns[j]) memcpy(b + 0x80 + 8 * j, ns[j]->name, 8);
+                    else memset(b + 0x80 + 8 * j, 0, 8);
+                }
+                call_line(b, sizeof b);
+                for (Contact *c = *(Contact **)Data_Ptr(r, 4); c; c = c->next) {
+                    uint8_t e[8 + 0x18 + 1];
+                    Node *cn = *c->node;
+                    if (cn) memcpy(e, cn->name, 8);
+                    else memset(e, 0, 8);
+                    memcpy(e + 8, &c->x, 0x18);
+                    e[0x20] = c->b;
+                    call_line(e, sizeof e);
+                }
+            }
+            break;
+        }
+        case 37: {   /* the shots' flight after the radar's frame: n's targets as its radar holds them, an AI's
+                        target (its block's +0xa9b4) made the user's vehicle */
+            Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
+            uint8_t *ai = n->data ? *Data_Ptr(n->data, 0x108) : NULL;
+            if (ai && g_user_entity && n != g_user_entity->node) *Data_Ptr(ai, 0xa9b4) = g_user_entity->node;
+            g_fpu_round = FPU_DOWN;
+            if (rn) Radar_Frame(rn);
+        }
+        /* fall through */
         case 34: {   /* the shots' flight (0x459b50, the effects and sounds stubbed): each of n's weapons fired once
                         0.01 s late, then every live shot of both lists flown three steps of 0.03 s; at each,
                         the shot's frame, its record (the vehicle as whether it is n, the target as whether there

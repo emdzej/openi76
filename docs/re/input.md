@@ -145,8 +145,10 @@ The actions go into the user's vehicle's data:
   - For class 1, `shift_up` and `shift_down` change the mode +0x104 within 0-5. The direction +0xe8 is
     -1 in mode 1, else 1. `reverse_direction` flips it and sets the mode to 1 (reverse) or 3.
   - 0x4deff9 kills the vehicle.
+- The radar's and the targets' keys are ported (docs/re/weapons.md, "The radar"), except
+  target_nearest_enemy.
 - **Not ported yet:** the specials (0x4821e0), the map, the notepad, the horn, the poetry, the binoculars,
-  the radar and the targets.
+  target_nearest_enemy and the combat view.
 
 The shipped `input.map` drives with the keypad's arrows (scan codes 0x48, 0x50, 0x4b, 0x4d: `UpArrow` and
 the others are the keypad's). The grey arrows and the grey Page Up and Page Down move the pilot's glance

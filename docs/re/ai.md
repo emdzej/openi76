@@ -179,6 +179,10 @@ one vehicle a frame: the one whose search goes on (0x505440), or else the first 
 goes on; 0x4eec30 marks a search ran. Class 9 skips the search: one point, the script's. While searching
 it drives at a quarter of its cruising speed (+0xa994, 0x4a575c) with the wheels straight. AI_Frame's
 end (0x409020) clears 0x4a88c8 and, when no search ran, drops the owner's (0x40fdf0: the pool freed).
+Just before that, outside network play, it asks whether the user is hidden from the radar (0x421e30,
+into 0x505458). When the user is hidden, it clears 0x50544c (unless 0x50545c is set), 0x50545c and
+0x505448. Nothing reads these words, but the call matters for its side effect: it switches the jammer
+off when its time is up (docs/re/weapons.md, "The radar's hiding").
 
 Its pushes: the search done (0x41d5d0) pushes following (0x17); rolling back (0x4183a0) 0x10; the
 obstacle test (0x418ee0) 0x11; stuck (0x4189c0) 0x12. Its pop (0x41d5f0): the script path ran out

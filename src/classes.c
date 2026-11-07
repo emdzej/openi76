@@ -1,5 +1,6 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
+#include "radar.h"
 #include "damage.h"
 #include "clock.h"
 #include "crt.h"
@@ -389,7 +390,7 @@ static const struct {
     {20, no_start, {NULL, NULL}},           /* 0x434530 */
     {35, start_needle, {NULL, NULL}},       /* 0x4263b0 */
     {36, start_needle, {NULL, NULL}},
-    {34, NULL, {NULL, later}},              /* 0x41fff0; 0x4202d0 */
+    {34, Radar_Start, {NULL, Radar_Frame}}, /* 0x41fff0; 0x4202d0 */
     {52, no_start, {NULL, NULL}},           /* 0x454810 */
     {31, start_class31, {NULL, later}},     /* 0x4342f0; 0x4343c0 */
     {32, Window_Start, {NULL, NULL}},       /* 0x433810 */

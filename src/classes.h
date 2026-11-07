@@ -13,6 +13,8 @@ void Class_StartAll(void);
 void Class_Frame(int which);
 /* the entity of n's root (0x424060), NULL if none */
 struct Entity *Entity_OfNode(Node *n);
+/* 0x5ad1a0: the artillery's contact, its node the user's (0x428910) */
+extern Node *g_artillery_target;
 /* Node_Root 0x42e6b0 */
 Node *Node_Root(Node *n);
 /* Node_FindClass 0x42e970: the first node of class cls in n's tree, depth first */

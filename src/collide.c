@@ -1,5 +1,6 @@
 /* The collision world's set-up (collide.h). In the current rounding mode (render/fpu.h). */
 #include "collide.h"
+#include "classes.h"
 #include "exe.h"
 #include "lod.h"
 #include "terrain.h"
@@ -233,8 +234,9 @@ static void nodes_measure(Node *n)
     }
 }
 
-void Collide_Refit(Entity *e)
+void Collide_Refit(Node *n)
 {
+    Entity *e = Entity_OfNode(n);   /* 0x424060 */
     if (!e) return;
     if (e->has_a == 3) meshes_free(e->node);   /* 0x46b540 */
     for (GroundCell *g = e->a, *nx; g; g = nx) {   /* 0x4775c0 */
@@ -242,7 +244,7 @@ void Collide_Refit(Entity *e)
         free(g);
     }
     e->a = NULL;
-    nodes_measure(e->node);
+    nodes_measure(n);   /* from the node given, with its siblings: not the entity's root */
     register_entity(e);   /* 0x46b480 */
     ground_faces(e->node, e, e->node->cls == 0xc);   /* 0x4774e0: whatever the class (quirk) */
     float mn[3], mx[3];

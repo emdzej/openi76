@@ -260,7 +260,9 @@ weapons.md "A structure's damage"). Then:
 7. **The collision's refit (0x46b280, the top node only):**
    - The type-3 meshes and the walkable-face list are freed.
    - Every shown node with a mesh is measured again from its vertices (0x46b5a0: box, centre and
-     radius, with the same comparisons as the load's).
+     radius, with the same comparisons as the load's). The walk starts at the destroyed node itself:
+     that node, the nodes after it and everything under them. The entity's root is not the start.
+     Starting from the root would re-measure the world objects that follow it in the world list.
    - The collision types are set again (0x46b480).
    - The walkable faces are gathered again, whatever the class (quirk: 0x477200 does it only for
      classes 11 to 13).

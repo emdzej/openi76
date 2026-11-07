@@ -10,7 +10,9 @@
 #include <stdbool.h>
 
 extern char g_user_vcf[16];   /* 0x58dcd0: the user's vehicle's .vcf (WinMain: 0x4a8448 by default) */
-extern int g_vcf_forced;      /* 0x4e9c20: the user's object loads its own .vcf */
+extern int g_vcf_forced;
+/* 0x4d3a90: the radar's list, the vehicles' entities (0x41fea0) */
+extern struct Cell *g_radar;      /* 0x4e9c20: the user's object loads its own .vcf */
 
 /* the per-mission set-up of WinMain's that concerns vehicles: the radar's 0x41fbc0 and the artillery's
    0x428d80 entity callbacks (before the collision's) */
@@ -18,3 +20,9 @@ void Vehicle_Init(void);
 /* Vehicle_Load 0x485030: x->node's .vcf (path: the record's name and .vcf); the user's (node flag 0x10)
    is g_user_vcf's, and the node takes its name */
 bool Vehicle_Load(ObjCtx *x, const char *path);
+/* Artillery_Lookup 0x428db0 (after AI_Begin): each gun's weapon, its carrier's list and facts */
+void Artillery_Lookup(void);
+/* Artillery_Fire 0x428e80 (each frame, after the AI's): outside network play, each gun not off and firing
+   decides on the user (0x413b10, skill and aim 1) one frame in eight (rand % (2 x 5 - 2)), and pulls its
+   trigger; the weapons are looked up again first after any vehicle was removed (0x428d00) */
+void Artillery_Fire(void);

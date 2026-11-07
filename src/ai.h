@@ -17,7 +17,7 @@ void AI_Init(void);
 extern int g_user_pressed;
 /* AI_Frame 0x409020 (each frame, unless the AI is off at 0x4a8904): each team vehicle's look-ahead box
    (+0x9d40-+0x9d54), the mission's script (Fsm_Frame; in the melee 0x408e20 instead), the frame's ends
-   (0x409b50, 0x40f0a0, 0x40f050, 0x40f060, 0x40fad0). Not ported yet: the radar's (0x421e30) */
+   (0x409b50, 0x40f0a0, 0x40f050, 0x40f060, 0x40fad0), the user's hiding from the radar (0x421e30) */
 void AI_Frame(void);
 /* 0x505490: g_user_pressed as the frame began (0x409b50 moves it there and clears it) */
 extern int g_user_pressed_prev;

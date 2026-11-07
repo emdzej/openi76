@@ -68,10 +68,12 @@ def chunk_rec(m, n):
 
 budget = [0]
 VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC, 0x3C0, 0x3C4, 0x3C8, 0x3CC,
-            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x430, 0x440, 0x508)
-SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8}
+            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x430, 0x434, 0x440, 0x508)
+SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8, 34: 0x80}
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
+              # 34: the contacts, the display's argument, the chosen, the locks and targets, the nodes
+              34: (4, 8, 0x54, 0x5C, 0x60, 0x64, 0x68, 0x6C, 0x70, 0x74, 0x78, 0x7C),
               41: (0x24,)}   # 41: the pad word of a frame 0x433370 copies from its stack (garbage)
 # --call NAME [times]: after the start, a per-frame function on every listed vehicle (the port's
 # Dump_CallVehicles), with the vehicles' death and the sounds stubbed
@@ -806,12 +808,10 @@ def call_fly(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
-        # the launch's effects as in call_launch; the hit's sound, and the flights not ported yet
+        # the launch's effects as in call_launch and the hit's sound
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
-        for a in (0x45E720,):
-            exe.stub(a, lambda *x: 1, 2)
         FLY["on"] = 1
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
     for i in range(cnt):
@@ -833,6 +833,38 @@ def call_fly(exe, n, fpcw):
                         CALL_OUT.append((exe.read(s + 0x18, 0x24) + exe.read(s + 0x40, 24) + bytes(r)
                                          + struct.pack("<i", alive) + exe.read(0x4EBC90, 4)).hex())
                         s = u(s + 0x60)
+
+
+def call_radar(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    rn = u(u(n + 0x70) + 0x434)
+    if not rn:
+        return
+    name = lambda p: exe.read(p, 8) if p else bytes(8)  # noqa: E731
+    for _ in range(2):
+        exe.call(0x4202D0, rn, limit=2_000_000_000, fpcw=rd)
+        r = u(rn + 0x70)
+        raw = bytearray(exe.read(r, 0x80))
+        for o in SMALL_PTRS[34]:
+            raw[o:o + 4] = bytes(4)
+        ch = u(r + 0x54)
+        out = bytes(raw) + name(u(ch) if ch else 0) + b"".join(name(u(r + 0x5C + 4 * j)) for j in range(9))
+        CALL_OUT.append(out.hex())
+        c = u(r + 4)
+        while c:
+            CALL_OUT.append((name(u(c)) + exe.read(c + 4, 0x18) + exe.read(c + 0x1C, 1)).hex())
+            c = u(c + 0x20)
+
+
+def call_aim(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rn, ai, ue = u(u(n + 0x70) + 0x434), u(u(n + 0x70) + 0x108), u(0x4D3B64)
+    if ai and ue and n != u(ue):
+        exe.write(ai + 0xA9B4, struct.pack("<I", u(ue)))
+    if rn:
+        exe.call(0x4202D0, rn, limit=2_000_000_000, fpcw=(fpcw & ~0xC00) | 0x400)
+    call_fly(exe, n, fpcw)
 
 
 def call_raze(exe, n, fpcw):
@@ -866,12 +898,12 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
-START_LATER = (0x41FFF0,
+START_LATER = (
                # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
                0x426410, 0x403360, 0x42DC00, 0x471060, 0x476240,
                # the weapons' display's (0x4561f0) drawing: the surface, the diodes, the names, the counters
@@ -898,6 +930,7 @@ def class_data(m, cls, d):
                 ai[0xA96C:0xA970] = bytes(4)   # the road piece and the target (the calls compare them)
                 ai[0x88:0x90] = bytes(8)   # the paths followed and the script's (addresses)
                 ai[0xA998:0xA99C] = bytes(4)
+                ai[0xA9B4:0xA9B8] = bytes(4)   # the target (its contact's node)
                 s += f"{zlib.crc32(bytes(ai)):08x}"
             elif o == 0x508:
                 s += m.raw(p, 0x18 if cls == 9 else 0x54).hex()

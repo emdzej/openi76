@@ -1,5 +1,6 @@
 /* The weapons' loading (weapons.h). In the current rounding mode (render/fpu.h). */
 #include "weapons.h"
+#include "radar.h"
 #include "chunks.h"
 #include "clock.h"
 #include "combat.h"
@@ -961,23 +962,6 @@ static void shot_sound(const char *name, Node *at, int spatial) { (void)name, (v
 /* 0x433730: a type 3 mortar's muzzle raised for its target's range (0x45ddb0); not ported yet */
 static void mortar_elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v) { (void)vehicle, (void)muzzle, (void)target, (void)v; }
 
-/* the vehicle's radar (its data's +0x434, set by the radar part's start 0x41fff0, not ported yet: none) */
-static Node *radar_of(Node *vehicle)
-{
-    if (!vehicle || !vehicle->data) return NULL;
-    return *(Node **)Data_Ptr(vehicle->data, 0x434);
-}
-
-/* 0x421ba0: the radar's current target (its list's head, when alive); 0x421d30: the target the radar
-   holds for a weapon kind (1, 2, 8, 0x10); 0x421c30 / 0x421be0: the locks for kinds 1, 2, 4 */
-static Node *radar_target(Node *vehicle, int kind)
-{
-    Node *r = radar_of(vehicle);
-    (void)kind;
-    if (r) plat_log("OpenI76: a radar's target (0x421ba0-0x421d30) is not ported");
-    return NULL;
-}
-
 /* 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
 int Nodes_AxesAlike(Node *a, Node *b)
 {
@@ -1047,15 +1031,17 @@ void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
     switch (l.type) {
     case 1:
     case 2:
-    case 6: l.target = radar_target(vehicle, w->kind); break;
+    case 6:   /* a turret's the radar's current, the others' their kind's */
+        l.target = w->kind == 4 ? Radar_Current(vehicle) : Radar_KindTarget(vehicle, w->kind);   /* 0x421ba0, 0x421d30 */
+        break;
     case 3:
         if (!(vehicle->flags & 0x20)) {
-            l.target = Muzzle_Pick(w->muzzle, vehicle);   /* 0x45d420, then locked by 0x421be0 */
-            radar_target(vehicle, w->kind);
+            l.target = Muzzle_Pick(w->muzzle, vehicle);   /* 0x45d420 */
+            Radar_Lock(w->hp->vehicle, l.target, w->kind);   /* 0x421be0 */
         } else
-            l.target = radar_target(vehicle, w->kind);   /* 0x421c30 */
+            l.target = Radar_Locked(vehicle, w->kind);   /* 0x421c30 */
         break;
-    default: l.target = radar_target(vehicle, 0); break;
+    default: l.target = Radar_Current(vehicle); break;   /* 0x421ba0 */
     }
     /* 0x4098e0 with types 3 and 8 and a target: a no-op */
     if (d->kind == 3 && d->index == 3) mortar_elevation(vehicle, w->muzzle, l.target, d->v[5]);
@@ -1139,6 +1125,12 @@ static HardPoints *hardpoints_of(const Node *v)
     for (int i = 0; i < g_hardpoint_count; i++)
         if (g_hardpoints[i].vehicle == v) return &g_hardpoints[i];
     return NULL;
+}
+
+uint32_t Hardpoints_Kinds(const Node *v)
+{
+    HardPoints *h = hardpoints_of(v);
+    return h ? h->flags : 0;   /* the original reads the word before the table's first */
 }
 
 static HardPoints *user_hardpoints(void) { return g_user_entity ? hardpoints_of(g_user_entity->node) : NULL; }   /* 0x423fc0 */

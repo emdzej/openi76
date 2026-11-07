@@ -1,5 +1,7 @@
 /* The vehicles' loading (vehicle.h). In the current rounding mode (render/fpu.h). */
 #include "vehicle.h"
+#include "combat.h"
+#include "radar.h"
 #include "ai.h"
 #include "chunks.h"
 #include "crt.h"
@@ -569,14 +571,78 @@ static void artillery_add(Entity *e)
     else plat_log("More then 200 artillery guns in this level");
 }
 
+static int g_artillery_dirty;   /* 0x550964: the guns' weapons to be looked up again */
+
+/* 0x428d00 (0x428d80's): any vehicle removed has the guns' weapons looked up again; a gun leaves the list */
+static void artillery_remove(Entity *e)
+{
+    if (is_vehicle(e->node)) g_artillery_dirty = 1;
+    if (e->node->cls != 8) return;
+    int i = 0;
+    while (i < g_artillery_count && g_artillery[i] != e) i++;
+    if (i >= g_artillery_count) return;
+    for (; i < g_artillery_count - 1; i++) g_artillery[i] = g_artillery[i + 1];
+    g_artillery_count--;
+}
+
+/* the gun's block (its data's +0x508, 0x54 bytes): +0xc the carrier's list (+0x10 its first weapon), +0x2c
+   that weapon's facts, +0x4c firing, +0x50 how seldom (5) */
+static uint8_t *gun_block(Node *g) { return *Data_Ptr(g->data, 0x508); }
+
+void Artillery_Lookup(void)
+{
+    for (int i = 0; i < g_artillery_count; i++) {
+        Node *g = g_artillery[i]->node;
+        uint8_t *b = gun_block(g);
+        int32_t list[8], fact[8];
+        memcpy(list, b + 0xc, sizeof list);
+        if (Weapons_Carrier(g, list) != 1) plat_log(exe_str(0x4d53fc));   /* 0x454f80 */
+        memcpy(b + 0xc, list, sizeof list);
+        int32_t inst;
+        memcpy(&inst, b + 0x10, 4);
+        memcpy(fact, b + 0x2c, sizeof fact);
+        if (Weapon_Facts(inst, fact) != 1) plat_log(exe_str(0x4d53d4));   /* 0x455080 */
+        memcpy(b + 0x2c, fact, sizeof fact);
+        g_weapons[inst].hp->w1[0] = 0;   /* 0x456810 */
+        if (g_weapons[inst].hp->vehicle != g) plat_log(exe_str(0x4a92a8));   /* 0x458980 */
+    }
+    g_artillery_dirty = 0;
+}
+
+void Artillery_Fire(void)
+{
+    if (g_net_game || !g_user_entity) return;
+    if (g_artillery_dirty) Artillery_Lookup();   /* the same pass as 0x428db0's, inline */
+    Node *user = g_user_entity->node;
+    for (int i = 0; i < g_artillery_count; i++) {
+        Node *g = g_artillery[i]->node;
+        uint8_t *b = gun_block(g);
+        int32_t on, every, inst, fact[8];
+        memcpy(&on, b + 0x4c, 4);
+        if ((g->flags & 0x200) || !on) continue;
+        memcpy(&inst, b + 0x10, 4);
+        WeaponInst *w = &g_weapons[inst];
+        if (w->hp->vehicle != g) plat_log(exe_str(0x4a92a8));   /* 0x458980 */
+        if (w->index != inst) plat_log("OpenI76: a freed weapon's frame (0x4551d0 leaves it unset)");
+        Frame mz;
+        Node_FrameIn(&mz, w->muzzle, NULL);   /* 0x4551d0 */
+        memcpy(&every, b + 0x50, 4);
+        if (every != 1 && crt_rand() % (every * 2 - 2) != 0) continue;   /* 1 in 8 frames */
+        memcpy(fact, b + 0x2c, sizeof fact);
+        if (AI_ShouldFire(g, user, 1.0f, 1.0f, fact, &mz)) w->v44 = 1;   /* 0x413b10, the trigger 0x455350 */
+    }
+}
+
 void Vehicle_Init(void)
 {
-    /* 0x41fbc0: the radar (its mask and its slots are not ported yet) */
+    /* 0x41fbc0: the radar (its display's mask 0x47dfc0 and its slots 0x50a5e0 are not ported yet) */
     g_radar = NULL;
     Entity_OnAdd(radar_add);
+    Radar_Init();   /* 0x41fef0 on removal */
     AI_Init();   /* 0x4088a0 */
     g_artillery_count = 0;   /* 0x428d80 */
     Entity_OnAdd(artillery_add);
+    Entity_OnRemove(artillery_remove);
 }
 
 bool Vehicle_Load(ObjCtx *x, const char *path)

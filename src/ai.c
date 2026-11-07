@@ -1,5 +1,8 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
+#include "entity.h"
+#include "weapons.h"
+#include "damage.h"
 #include "clock.h"
 #include "combat.h"
 #include "nav.h"
@@ -77,11 +80,14 @@ void AI_Rethink(void)
 
 int g_user_pressed;
 
+static int32_t g_ai_505458, g_ai_50545c, g_ai_50544c, g_ai_505448;   /* the user's hiding, AI_Frame's end */
+
 void AI_Init(void)
 {
     memset(g_team_count, 0, sizeof g_team_count);
     memset(g_teams, 0, sizeof g_teams);
     Entity_OnAdd(ai_add);
+    g_ai_505458 = g_ai_50545c = g_ai_50544c = g_ai_505448 = 0;
     Nav_Init();   /* 0x40fda0 */
     /* the removal callback 0x408660 and the rest of the set-up (0x40fac0, 0x40f0b0, 0x40d0b0,
        0x40b7f0, the skill tables 0x40b380) come with the driving */
@@ -147,6 +153,15 @@ void AI_Frame(void)
     ai_boxes();
     Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
     g_ai_505510 = g_ai_505508 < g_ai_50550c ? 1 : g_ai_505508 == g_ai_50550c ? 0 : 2;   /* 0x40f060 */
+    /* the user hidden from the radar (0x421e30, for its side effects: the jammer's time up switches it
+       off) outside network play; the words it clears are not read anywhere. The original asks between
+       0x40fad0's count and the search's turns, which do not depend on it */
+    if (!g_net_game) g_ai_505458 = g_user_entity ? Radar_Hidden(g_user_entity->node) : 0;
+    if (g_ai_505458) {
+        if (!g_ai_50545c) g_ai_50544c = 0;
+        g_ai_50545c = 0;
+        g_ai_505448 = 0;
+    }
     AI_SearchTurns();
 }
 

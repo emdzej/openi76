@@ -37,7 +37,7 @@ pilot's camera (docs/re/camera.md) and the damage, the death and the wreck (docs
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. Not ported yet: the other camera modes and the cockpit, the
 mission's script's actions (its machines run: docs/re/fsm.md), the effects but the guns' (the user fires, the guns' shots fly with their tracers and hit with their
-explosions and splash, docs/re/weapons.md; the other ordnance, the turrets and the wrecks' effects are not ported), the AI's driving (its tactics, line of sight and firing decision are ported: docs/re/ai.md), the HUD, the shell and audio. Read
+explosions and splash, docs/re/weapons.md; the other ordnance, the turrets and the wrecks' effects are not ported), the AI's driving (its tactics, line of sight and firing decision are ported: docs/re/ai.md; the radar's contacts and targets too, not its display: docs/re/weapons.md), the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 

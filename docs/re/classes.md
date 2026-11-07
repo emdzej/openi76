@@ -52,7 +52,8 @@ turret's aim (class 7) would come out one step off.
 | 40 | 0x433180 | three filters (Filter_Init 0.5, 4) |
 | 41 | 0x433370 | a muzzle: its frame into the data (the frame's pad word comes from the stack: garbage, masked in the harness), then 0, 0 and its root |
 | 10, 20, 22, 23, 52, 53 | – | nothing to do |
-| 32, 33, 34 | 0x433810, 0x41fff0 | not ported yet |
+| 32, 33 | 0x433810 | the windows ([weapons.md](weapons.md)) |
+| 34 | 0x41fff0 | the radar: the vehicle's +0x434, the user's display animation ([weapons.md](weapons.md) "The radar") |
 
 ## Texture animations (0x47e890-0x47ebe0)
 
