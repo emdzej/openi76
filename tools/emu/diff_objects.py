@@ -119,8 +119,28 @@ def call_force(exe, n, fpcw):
         CALL_OUT.append(exe.read(r, 8).hex())
 
 
+def call_air(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    for j in range(3):
+        if j == 1:
+            y = struct.unpack("<d", exe.read(n + 0x48, 8))[0]
+            exe.write(n + 0x48, struct.pack("<d", y + 3))
+            exe.write(d + 0xBC, struct.pack("<fff", 2, 1, 0))
+            exe.write(d + 0xC8, struct.pack("<fff", 0.1, 0.2, 0.3))
+        if j == 2:
+            y = struct.unpack("<d", exe.read(n + 0x48, 8))[0]
+            exe.write(n + 0x48, struct.pack("<d", y - 2.8))
+            exe.write(d + 0x454, bytes([exe.read(d + 0x454, 1)[0] | 4]))
+        o = exe.put(bytes(4 + 4 + 12 + 4 + 12 + 0x40))
+        r = exe.call(0x474400, n, struct.unpack("<I", struct.pack("<f", 0.05))[0], o + 4, o + 8, o + 0x14, o + 0x18,
+                     o + 0x24, fpcw=fpcw)
+        exe.write(o, struct.pack("<i", r))
+        exe.write(o + 0x24 + 0x24, bytes(4))   # the frame's pad
+        CALL_OUT.append(exe.read(o, 0x64).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

@@ -376,6 +376,31 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 6: {   /* the air step (dt 0.05): as loaded; 3 up moving and turning; 0.2 up, flagged in the air */
+            static const float v[3] = {2, 1, 0}, w[3] = {0.1f, 0.2f, 0.3f};
+            for (int j = 0; j < 3; j++) {
+                if (j == 1) {
+                    n->frame.pos[1] += 3;
+                    memcpy(n->data + 0xbc, v, sizeof v);
+                    memcpy(n->data + 0xc8, w, sizeof w);
+                }
+                if (j == 2) {
+                    n->frame.pos[1] -= 2.8;
+                    n->data[0x454] |= 4;
+                }
+                struct { int32_t r; uint32_t flags; float vel[3], speed, w[3]; } o;
+                Frame f;
+                memset(&o, 0, sizeof o);
+                memset(&f, 0, sizeof f);
+                o.r = Vehicle_Air(n, 0.05f, &o.flags, o.vel, &o.speed, o.w, &f);
+                f.pad = 0;
+                uint8_t b[sizeof o + sizeof f];
+                memcpy(b, &o, sizeof o);
+                memcpy(b + sizeof o, &f, sizeof f);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

@@ -37,3 +37,13 @@ void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip);
    wheels' grip, driving on the rear's with the engine's torque (the peak when locked); *slide = 1 when it
    is over the grip */
 void Vehicle_Force(Node *n, float thr, int upside, const float f[3], uint32_t flags, float *acc, int32_t *slide);
+/* Frame_Euler 0x4518e0: the frame of the angles (about y, then x before it, then z before that) and the
+   offset t */
+void Frame_Euler(Frame *out, float ax, float ay, float az, float tx, float ty, float tz);
+/* Frame_Turn 0x471d40: f turned by the angular velocity w for dt */
+void Frame_Turn(Frame *out, const Frame *f, float wx, float wy, float wz, float dt);
+/* Ballistic 0x4719a0: p and v under gravity g (on y) for dt */
+void Ballistic(float p[3], float v[3], float g, float dt);
+/* Vehicle_Air 0x474400: a vehicle in the air (+0x454 bit 4) or just off the ground falls; 1 with the
+   step's results (flags, velocity, speed, turn, frame) when it is in the air or lands, 0 on the ground */
+int Vehicle_Air(Node *n, float dt, uint32_t *flags, float vel[3], float *speed, float w[3], Frame *f);

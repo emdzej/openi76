@@ -370,3 +370,96 @@ void Vehicle_Force(Node *n, float thr, int upside, const float f[3], uint32_t fl
     }
     *acc = a;
 }
+
+void Frame_Euler(Frame *out, float ax, float ay, float az, float tx, float ty, float tz)
+{
+    Frame a, b, c, t;
+    Frame_Yaw(&a, ay);
+    float s = F32(sin(ax)), co = F32(cos(ax));   /* about x */
+    memcpy(&b, exe_data(0x4db298, sizeof b), sizeof b);
+    b.m[4] = co, b.m[8] = co, b.m[7] = -s, b.m[5] = s;
+    Frame_Mul(&t, &b, &a);
+    a = t;
+    s = F32(sin(az)), co = F32(cos(az));   /* about z */
+    memcpy(&c, exe_data(0x4db298, sizeof c), sizeof c);
+    c.m[0] = co, c.m[4] = co, c.m[3] = -s, c.m[1] = s;
+    Frame_Mul(&t, &c, &a);
+    a = t;
+    a.pos[0] = tx, a.pos[1] = ty, a.pos[2] = tz;
+    *out = a;
+}
+
+void Frame_Turn(Frame *out, const Frame *f, float wx, float wy, float wz, float dt)
+{
+    Frame r, t;
+    Frame_Euler(&r, F32(-MUL(dt, wx)), F32(-MUL(dt, wy)), F32(-MUL(dt, wz)), 0, 0, 0);
+    Frame_Mul(&t, &r, f);
+    *out = t;
+}
+
+void Ballistic(float p[3], float v[3], float g, float dt)
+{
+    p[0] = F32(ADD(MUL(v[0], dt), p[0]));
+    p[2] = F32(ADD(MUL(v[2], dt), p[2]));
+    double gd = MUL(dt, g);
+    p[1] = F32(ADD(MUL(ADD(MUL(0.5f, gd), v[1]), dt), p[1]));   /* 0x4a66b0 */
+    v[1] = F32(ADD(gd, v[1]));
+}
+
+int Vehicle_Air(Node *n, float dt, uint32_t *flags, float vel[3], float *speed, float w[3], Frame *f)
+{
+    uint8_t *d = n->data;
+    uint32_t fl = (uint32_t)rd32(d + 0x454);
+    if (!(fl & 4) && (fl & 0x200)) return 0;
+    float p[3] = {F32(n->frame.pos[0]), F32(n->frame.pos[1]), F32(n->frame.pos[2])}, v[3], h;
+    memcpy(v, d + 0xbc, sizeof v);
+    Ballistic(p, v, -9.8f, dt);   /* 0xc11ccccd */
+    Ground_Height(p[0], p[1], p[2], &h, NULL);
+    /* the height of the body's bottom over the ground: the node's, or upside down its top's */
+    int32_t upb;
+    memcpy(&upb, &n->frame.m[4], 4);
+    double y = upb > 0 ? (double)p[1] : ADD(MUL(n->frame.m[4], rdf(d + 0x34)), p[1]);
+    float above = F32(SUB(y, h));
+    int32_t ab;
+    memcpy(&ab, &above, 4);
+    int air = ((fl & 4) && below(rdf(d + 0x470), above)) || ab > 0x3f000000;   /* rising, or over 0.5 */
+    if (!air) {
+        putf(d + 0x470, above);
+        p[1] = h;
+        if (!(fl & 4)) return 0;
+    } else {
+        putf(d + 0x470, above);
+    }
+    /* the step's results: the frame at the new place, the velocity, the speed, the turn */
+    *f = n->frame;
+    for (int k = 0; k < 3; k++) f->pos[k] = p[k];
+    memcpy(vel, v, sizeof v);
+    *speed = F32(fpu_sqrt(ADD(ADD(MUL(v[1], v[1]), MUL(v[2], v[2])), MUL(v[0], v[0]))));
+    memcpy(w, d + 0xc8, 12);
+    if (!air) {   /* landing: sliding if it comes down sideways */
+        *flags = (fl & ~4u) | 0x200;
+        float side = F32(ADD(ADD(MUL(v[2], f->m[2]), MUL(v[1], f->m[1])), MUL(f->m[0], v[0])));
+        int32_t sb;
+        memcpy(&sb, &side, 4);
+        if ((n->flags & 0x10) && ((uint32_t)sb > 0xbf800000u || sb > 0x3f800000)) *flags |= 2;
+        return 1;
+    }
+    /* in the air the nose eases down toward -pi/20 */
+    int32_t wb, db;
+    memcpy(&wb, &w[0], 4);
+    memcpy(&db, &dt, 4);
+    if ((uint32_t)wb < 0xbe20d97cu) {
+        if ((uint32_t)db > 0x80000000u || db > 0x3f733333) {
+            wb = (int32_t)0xbe20d97c, memcpy(&w[0], &wb, 4);
+        } else {
+            double g = SUB(exe_f32(0x4a67ec), w[0]);
+            if (below(fabs(g), 0.005)) wb = (int32_t)0xbe20d97c, memcpy(&w[0], &wb, 4);   /* 0x4a67d8 */
+            else w[0] = F32(ADD(MUL(F32(g), dt), w[0]));
+        }
+    }
+    *flags = ((fl | 4) & ~0x2202u);
+    Frame t;
+    Frame_Turn(&t, f, w[0], w[1], w[2], dt);
+    *f = t;
+    return 1;
+}

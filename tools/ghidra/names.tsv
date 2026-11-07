@@ -452,3 +452,7 @@
 00474bf0	Vehicle_Force	physics	high	the drive or brake acceleration along the forward axis, limited by the grip; ported, diffed
 0042d650	Vehicle_Brakes	vehicle	high	the brakes node data (0x3cc)
 0042fad0	Engine_Torque	engine	high	the engine data +0x10
+00474400	Vehicle_Air	physics	high	falling: ballistic step, landing, the nose easing down, the frame turned; ported, diffed
+004719a0	Ballistic	physics	high	position and velocity under gravity on y; ported, diffed
+00471d40	Frame_Turn	math	high	a frame turned by w dt; ported, diffed
+004518e0	Frame_Euler	math	high	a frame from angles about y, x, z and an offset; ported, diffed
