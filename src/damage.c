@@ -3,6 +3,7 @@
 #include "classes.h"
 #include "entity.h"
 #include "exe.h"
+#include "physics.h"
 #include "render/fpu.h"
 #include "render/light.h"
 #include <string.h>
@@ -175,4 +176,91 @@ void Vehicle_State(Node *n, float dt)
         f &= 0xffff73f7u;
     }
     put32(d + 0x454, (int32_t)f);
+}
+
+/* 0x42d920: a special's kind (its data's +0); 0x42d940: it still works (+4 above 0, or +0x10 set) */
+static int special_kind(const Node *s) { return s ? rd32(s->data) : 0; }
+static int special_works(const Node *s) { return s && (rd32(s->data + 4) >= 1 || rd32(s->data + 0x10) != 0); }
+
+/* a working special of the kind among the three (+0x3ec, +0x3f0, +0x3f4) */
+static int has_special(uint8_t *d, int kind)
+{
+    for (uint32_t o = 0x3ec; o <= 0x3f4; o += 4) {
+        Node *s = slot(d, o);
+        if (special_kind(s) == kind && special_works(s)) return 1;
+    }
+    return 0;
+}
+
+static uint32_t rdu(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
+static int32_t ftol(double x) { return (int32_t)(int64_t)x; }
+
+/* the packet's amounts the mask selects, summed */
+static int32_t packet_sum(const uint8_t *p)
+{
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    int32_t s = 0;
+    for (int i = 0; i < 4; i++)
+        if (m & (1u << i)) s += rd32(p + 8 + 4 * i);
+    return s;
+}
+
+/* a part's points (at off) against an amount at a: the part takes a / k, or when it has fewer than that
+   (by ftol(points k), unsigned) it goes to 0 with its pair (off2) and the rest stays in the packet */
+static void absorb(uint8_t *d, uint32_t off, uint32_t off2, uint8_t *a, float k)
+{
+    int32_t pts = rd32(d + off);
+    uint32_t v = (uint32_t)ftol(fpu_mul((double)pts, k)), c = rdu(a);
+    if (v < c) {
+        put32(a, (int32_t)(c - v));
+        put32(d + off, 0);
+        put32(d + off2, 0);
+    } else {
+        put32(d + off, pts - ftol(fpu_div((double)c, k)));
+        put32(d + off2, rd32(d + off2) - ftol(fpu_div((double)rdu(a), k)));
+        put32(a, 0);
+    }
+}
+
+int32_t Damage_Side(uint8_t *d, uint32_t side, uint8_t *p, int user)
+{
+    float ka = 1.0f, kc = 1.0f;
+    if (side >= 5) return 0;
+    if (side == 0 || side == 3) ka = has_special(d, 5) ? 2.0f : 1.0f;   /* 0x4a59ac, 0x4a59a4 */
+    if (has_special(d, 7)) ka = fpu_f32(fpu_add(ka, 0.1f));             /* 0x4a59cc */
+    if (has_special(d, 6)) {
+        uint32_t b = 0x3f8ccccd;   /* 1.1 */
+        memcpy(&kc, &b, 4);
+    }
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    if (side == 4) {
+        /* underneath: the armour (+0x19c) and the chassis (+0x188) take their share and the packet keeps
+           all of it */
+        if (m & 8) {
+            int32_t pts = rd32(d + 0x19c);
+            uint32_t c = rdu(p + 0x14);
+            if ((uint32_t)ftol(fpu_mul((double)pts, ka)) < c) put32(d + 0x19c, 0);
+            else put32(d + 0x19c, pts - ftol(fpu_div((double)c, ka)));
+        }
+        for (int i = 0; i < 4; i++) {
+            if (!(m & 3)) continue;
+            int32_t pts = rd32(d + 0x188);
+            uint32_t c = rdu(p + 8 + 4 * i);
+            if ((uint32_t)ftol(fpu_mul((double)pts, kc)) < c) put32(d + 0x188, 0);
+            else put32(d + 0x188, pts - ftol(fpu_div((double)c, kc)));
+        }
+        return packet_sum(p);
+    }
+    /* the shell's options for the user's vehicle (0x5e14e4): 0x10 its armour, 8 its chassis take nothing
+       and the packet's share is dropped (outside network play) */
+    int no_armour = (g_game_options & 0x10) && user, no_chassis = (g_game_options & 8) && user;
+    if ((m & 8) && !no_armour) absorb(d, 0x148 + side * 4, 0x18c + side * 4, p + 0x14, ka);
+    else if (no_armour) put32(p + 0x14, 0);
+    for (int i = 0; i < 4; i++) {
+        if ((m & 3) && !no_chassis) absorb(d, 0x138 + side * 4, 0x178 + side * 4, p + 8 + 4 * i, kc);
+        else if (no_chassis) put32(p + 8 + 4 * i, 0);
+    }
+    return packet_sum(p);
 }

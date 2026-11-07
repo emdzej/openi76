@@ -22,3 +22,10 @@ float Engine_StartTime(Node *n);
    by dt and at 0 the engine runs (bit 1) or the wreck is removed. The flags as read at the start are
    written back with the timer, so a change made meanwhile (the lights) is lost then */
 void Vehicle_State(Node *n, float dt);
+/* Damage_Side 0x42bac0: a damage packet (+4 a mask: 1, 2 the chassis's amounts, 8 the armour's +0x14;
+   +8-+0x14 four amounts) on a side (0-3; 4 underneath) of the vehicle data d. The armour (+0x148 +
+   4 side, with +0x18c) takes the armour's amount, the chassis (+0x138, with +0x178) each chassis amount,
+   by their points times k: 2 on the front and back with a working special of kind 5, + 0.1 with kind 7;
+   the chassis 1.1 with kind 6. What a part cannot take stays in the packet. The packet's selected
+   amounts, summed */
+int32_t Damage_Side(uint8_t *d, uint32_t side, uint8_t *p, int user);

@@ -8,6 +8,8 @@
    the engine's first step */
 void Vehicle_PhysInit(Node *n);
 
+extern uint32_t g_game_options;   /* 0x5e14e4: the shell's (1 the user with Taurus, 8 and 0x10 its chassis and armour take no damage) */
+
 /* Vehicle_Kill 0x42b790: a class 1 vehicle not already dying (+0x454 bits 0x8020) dies (bit 0x20, 0x429eb0) */
 void Vehicle_Kill(Node *n);
 /* Vehicle_Upright 0x46fe20: a vehicle turning slowly with its up axis along the ground's normal

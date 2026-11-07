@@ -361,3 +361,39 @@ as played.
 
 Checked: `diff_objects.py --call state` (ten sub-steps of the engine's key, the lights' key and the
 brake on every vehicle) is identical to the original on t01 and s04.
+
+## Damage on a side (0x42bac0)
+
+`Damage_Side` 0x42bac0 (`src/damage.c`) takes a damage packet:
+
+| Offset | Field |
+|---|---|
+| +4 | a 16-bit mask: bits 0-3 select the amounts that count; 1 or 2 means the chassis is hit, 8 the armour |
+| +8-+0x14 | four unsigned amounts; +0x14 is also the armour's |
+
+It applies the packet to a side of the vehicle's data: 0-3, or 4 underneath.
+
+The factors:
+
+- The armour's factor is 2 on sides 0 and 3 when one of the three specials (+0x3ec-+0x3f4) is a working
+  one of kind 5. It gets 0.1 more with kind 7. Kind is the special's data +0; working is +4 above 0 or
+  +0x10 set.
+- The chassis's factor is 1.1 with kind 6.
+
+On sides 0-3:
+
+- The armour's points (+0x148 + 4·side) take the armour's amount when `ftol(points · k)` is not less than
+  it (unsigned). They lose `ftol(amount / k)`, so does the pair +0x18c + 4·side, and the amount becomes 0.
+  Otherwise both go to 0 and the amount keeps the rest.
+- The chassis (+0x138, with +0x178) does the same once for each of the four amounts.
+- The shell's options 0x5e14e4 spare the user's vehicle, outside network play: 0x10 the armour, 8 the
+  chassis. The packet's share is then dropped (set to 0) without touching the vehicle.
+
+Underneath (4), the armour +0x19c and the chassis +0x188 lose their share the same way, but the packet
+keeps every amount and the options do not apply.
+
+The result is the sum of the selected amounts left. The caller passes it on to the inner parts
+(0x42bf90) while it is not 0.
+
+Checked: `diff_objects.py --call side` (ten packets per vehicle) is identical on t01, s04, t15, s01, a01,
+t10 and t05.

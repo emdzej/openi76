@@ -350,8 +350,20 @@ def call_state(exe, n, fpcw):
         CALL_OUT.append(out.hex())
 
 
+def call_side(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    masks = (1, 2, 3, 8, 9, 0xB, 0xF, 8, 3, 0xB)
+    opts = exe.read(0x5E14E4, 4)
+    for j in range(10):
+        pk = exe.put(struct.pack("<IHH4I", 0, masks[j], 0, 50 * j + 7, 30 * j + 1, 1000, 13 * j))
+        exe.write(0x5E14E4, struct.pack("<I", 0x18 if j >= 6 else 0))
+        r = exe.call(0x42BAC0, d, j % 5, pk, j & 1, fpcw=fpcw)
+        CALL_OUT.append((exe.read(pk, 0x18) + struct.pack("<i", r) + exe.read(d + 0x138, 0x68)).hex())
+    exe.write(0x5E14E4, opts)
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

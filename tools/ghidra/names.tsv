@@ -560,3 +560,10 @@
 00467260	Sound_Play	sound	med	a sample by name; nonzero when it plays
 004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00407370	Net_Host	net	med	returns 0x4a8760
+0042bac0	Damage_Side	damage	high	a packet on a side: armour and chassis by their points times the specials' factors; ported
+0042bf90	Damage_Parts	damage	med	a packet on a random inner part of the side (or the tyres), the kill chance
+0042d920	Special_Kind	damage	high	a special's data +0
+0042d940	Special_Works	damage	high	a special's +4 above 0 or +0x10 set
+00425df0	Class_Damage	classes	high	the class table's word 10 (0x4d3c48) for the node's class
+00430900	Structure_Damage	damage	med	a structure's damage handler: destruction, explosion, chunks
+0042a5d0	Terrain_Wear	damage	med	rough ground's wear: a random side's packet

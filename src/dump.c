@@ -670,6 +670,25 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 17: {   /* ten damage packets on the sides (0-4), masks, the user flag and the options varied */
+            static const uint16_t masks[10] = {1, 2, 3, 8, 9, 0xb, 0xf, 8, 3, 0xb};
+            uint32_t opts = g_game_options;
+            for (int j = 0; j < 10; j++) {
+                uint8_t pk[0x18] = {0};
+                uint32_t a[4] = {50u * j + 7, 30u * j + 1, 1000, 13u * j};
+                memcpy(pk + 4, &masks[j], 2);
+                memcpy(pk + 8, a, 16);
+                g_game_options = j >= 6 ? 0x18 : 0;
+                int32_t r = Damage_Side(n->data, (uint32_t)j % 5, pk, j & 1);
+                uint8_t b[0x18 + 4 + 0x68];
+                memcpy(b, pk, 0x18);
+                memcpy(b + 0x18, &r, 4);
+                memcpy(b + 0x1c, n->data + 0x138, 0x68);
+                call_line(b, sizeof b);
+            }
+            g_game_options = opts;
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);
