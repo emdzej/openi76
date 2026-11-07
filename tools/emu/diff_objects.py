@@ -3,10 +3,9 @@ bounds, meshes, levels of detail, destruction chunks), the world list, the spawn
 as a text dump (src/dump.c), line by line.
 
 The original runs WinMain's per-mission set-up and Mission_Load in the emulator (mission.py), with the
-vehicle loader 0x485030 failing (vehicles are not ported yet: the port drops their nodes the same way)
-the mission's EXIT 0x484820 (no user vehicle: a fatal) passing, and the pieces the port does not have
-yet answered as the port answers them: the effects (.xdf, 0x493210: only the name "null") and the
-LDEF and ADEF chunks (0x484640, 0x484660: read past).
+mission's EXIT 0x484820 passing, and the pieces the port does not have yet answered as the port answers
+them: the vehicles' weapons (WEPN 0x4863d0: succeeding without one), the effects (.xdf, 0x493210: only
+the name "null") and the LDEF and ADEF chunks (0x484640, 0x484660: read past).
 
   diff_objects.py [mission.msn]
 """
@@ -67,6 +66,35 @@ def chunk_rec(m, n):
 
 
 budget = [0]
+VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC, 0x3C0, 0x3C4, 0x3C8, 0x3CC,
+            0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x440, 0x508)
+SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0}
+
+
+def class_data(m, cls, d):
+    """vehicle.c's and entity.c's data, as src/dump.c prints it"""
+    if cls in (1, 8, 9):
+        raw = bytearray(m.raw(d, 0x50C))
+        for o in VEH_PTRS:
+            raw[o:o + 4] = bytes(4)
+        s = " v" + raw.hex() + " vp"
+        for o in VEH_PTRS:
+            p = m.u32(d + o)
+            s += f" {o:x}:"
+            if not p:
+                s += "-"
+            elif o == 0x108:
+                ai = bytearray(m.raw(p, 0xA9D8))
+                ai[0x60:0x64] = bytes(4)
+                s += f"{zlib.crc32(bytes(ai)):08x}"
+            elif o == 0x508:
+                s += m.raw(p, 0x18 if cls == 9 else 0x54).hex()
+            else:
+                s += m.raw(p, 8).hex()
+        return s
+    if cls in SMALL:
+        return " d" + m.raw(d, SMALL[cls]).hex()
+    return ""
 
 
 def node(m, n, depth, out):
@@ -88,6 +116,8 @@ def node(m, n, depth, out):
             size = 0x14 if cls == 10 else 0x30
             b = m.raw(d, size)
             s += " d" + "".join(f"{b[i]:02x}" for i in range(size) if cls == 10 or i < 0x10 or i >= 0x18)
+        elif d:
+            s += class_data(m, cls, d)
         out.append(s)
         r = lod_rec(m, n)
         if r:
@@ -128,7 +158,8 @@ def node(m, n, depth, out):
 
 def original():
     exe, lib = mission.setup()
-    exe.stub(0x485030, lambda *a: 0, 3)   # the vehicle's .vcf: failing
+    exe.stub(0x4863D0, lambda *a: 1, 2)   # WEPN (the weapons): not ported yet
+    exe.stub(0x408510, lambda *a: 0, 1)   # the AI's entity callback: not ported yet
     exe.stub(0x484820, lambda *a: 1, 2)   # the mission's EXIT: no fatal without a user vehicle
 
     def xdf(name, out, kind):   # the effects (.xdf) are not ported yet: only their first step, "null"
@@ -158,7 +189,11 @@ def original():
             c = m.u32(e + 0x18)
             while c and g < 100000:
                 g, c = g + 1, m.u32(c + 8)
-        out.append(s + f" g{g}")
+        s += f" g{g}"
+        a = m.u32(e + 0x18)
+        if m.i32(e + 0x14) and a and not (nd and 10 < m.i32(nd + 0x6c) < 0xe):
+            s += " a" + m.raw(a, 0x3C).hex()
+        out.append(s)
         if m.u32(e):
             node(m, m.u32(e), 0, out)
     w, k, s = m.u32(0x5E3018), 0, "world"

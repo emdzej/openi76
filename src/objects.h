@@ -19,6 +19,27 @@ int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end);
    height there. With entity, it gets the record's class. Not on the ground: its sphere and box from the
    record, and the class's set-up. */
 Node *Obj_Node(Node *parent, const uint8_t *rec, const char *name, bool ground, bool entity);
+/* the context of an OBJ (0x494170's 0x15 words): the node; a vehicle's scratch (0x485030's, 0xaa8 bytes);
+   its COLP's twelve words and their flag; an SDFC's (or VDFC's) five words and their flag */
+typedef struct {
+    Node *node;
+    uint8_t *vcf;
+    int32_t has_x;
+    int32_t x[12];
+    int32_t b[5];
+    int32_t has_b;
+} ObjCtx;
+
+/* Obj_Tree100 0x493c90: Obj_Tree's form for 100-byte records (VGEO, WGEO, VLOC's needles): the parent
+   by name under parent (else parent itself), made_fn called for each node made, and a fourth level for
+   the third under a class 0x32 parent */
+Node *Obj_Tree100(const uint8_t *const *lists, Node *parent, int nlod, int nstate, int count,
+                  void (*made_fn)(Node *n, Node *parent));
+/* the chunk handlers the .sdf and the .vdf share: SOBJ 0x4949a0, LOBJ 0x4934c0, EXIT 0x4843d0 */
+int Objects_Sobj(const uint8_t *c, void *arg, const uint8_t *end);
+int Objects_Lobj(const uint8_t *c, void *arg, const uint8_t *end);
+int Objects_Exit(const uint8_t *c, void *arg, const uint8_t *end);
+
 /* Obj_Tree 0x493ed0: the nodes of lists (nlod x nstate lists of count records, level-major) under
    parent: list 0's records are made (their parents by name), every list's names go to the levels of
    detail. Returns the first node. */

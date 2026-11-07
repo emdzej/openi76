@@ -7,8 +7,8 @@ entities, their node trees, levels of detail, destruction chunks, lights, spawn 
 the world list and the collision set-up. `tools/emu/diff_objects.py` finds the port's state identical to
 the original's for all 40 missions on disc 1.
 
-**Not yet:** the vehicles (`.vcf`, 0x485030), the effects (`.xdf`, 0x493210), the constructors of the
-classes other than 2, 4 and 10, LDEF and ADEF, and the drawing below.
+The vehicles' loading is in [vehicles.md](vehicles.md). **Not yet:** the vehicles' weapons (WEPN), the
+effects (`.xdf`, 0x493210), the constructors of classes 34 and 53, LDEF and ADEF.
 
 ## The chain
 

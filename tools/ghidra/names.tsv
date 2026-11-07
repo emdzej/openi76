@@ -307,3 +307,52 @@
 004a3da0	Shadow_Tree	render	high	a sibling list's shadows, recursively; ported, diffed
 004a3e50	Shadow_TreeVehicle	render	high	the same for vehicles; ported
 004a3c20	Shadow_Draw	render	high	an entity's shadow (types 3, 0xb); ported, diffed
+00485030	Vehicle_Load	vehicle	high	a vehicle object's .vcf (the user's: the chosen one); ported, diffed
+004852a0	Vcf_Vcfc	vehicle	high	VCFC: .vdf, .vtf, wheels, components, armour; ported, diffed
+00485620	Vcf_Spec	vehicle	high	SPEC: a special's node (class 0x18); ported, diffed
+004863d0	Vcf_Wepn	vehicle	med	WEPN: a weapon on a hard point; not ported
+004855a0	Vdf_Read	vehicle	high	the .vdf; ported
+004855e0	Vtf_Read	vehicle	high	the .vtf; ported
+00485df0	Wdf_Read	vehicle	high	a wheel pair's .wdf, placed by WLOC; ported, diffed
+00488110	Cdf_Read	vehicle	high	compnent.cdf: engine, brakes, suspension; ported, diffed
+004856b0	Vdf_Vdfc	vehicle	high	VDFC: class, mass, five words; ported, diffed
+004857d0	Vdf_Vloc	vehicle	high	VLOC: needles, headlights, points; ported, diffed
+00485b80	Vdf_Vgeo	vehicle	high	VGEO: the parts, 7 levels x 4 states; ported, diffed
+00485ac0	Vdf_VgeoPart	vehicle	high	a part into the data by class; ported, diffed
+00485be0	Vdf_Vchk	vehicle	high	VCHK: chunks, 100-byte records; ported, diffed
+00485d40	Vdf_Colp	vehicle	high	COLP: the collision record's words; ported, diffed
+00485d70	Vdf_Wloc	vehicle	high	WLOC: six wheel places; ported, diffed
+00486250	Vdf_Hloc	vehicle	high	HLOC: a hard point; ported
+00487530	Vdf_Etbl	vehicle	high	ETBL: an effect table; ported
+00481320	Effects_AddTable	effects	high	an effect table by kind and name; ported
+004860c0	Wdf_Wdfc	vehicle	high	WDFC: a wheel pair, class 30; ported, diffed
+004861d0	Wdf_Wgeo	vehicle	high	WGEO: wheel meshes; ported, diffed
+00487e50	Cdf_Part	vehicle	high	ENGN/BRAK/SUSP: the n-th of its kind; ported, diffed
+00487360	Vtf_Bind	vehicle	high	a slot to a material unless null; ported, diffed
+00487490	Vtf_Body	vehicle	high	V1 BO DY and the chunk names over the tree; ported, diffed
+0045afa0	Chunk_SetNames	entity	high	a chunk record's 13 names; ported
+0047bb20	Tex_Bind	tex	high	owner's name to a material; ported, diffed
+00493c90	Obj_Tree100	objects	high	Obj_Tree for 100-byte records, with a callback; ported, diffed
+00493c10	Obj_Lists	objects	high	list pointers stride x 100 apart; ported
+00494720	Colp_Record	objects	high	the COLP words as the entity's record; ported, diffed
+0042d410	Spec_New	vehicle	high	a special's node; ported
+0042d8f0	Spec_Set	vehicle	high	a special's kind and count; ported
+00429170	Class1_New	entity	high	vehicle: data and four part nodes; ported, diffed
+00429210	Vehicle_Data	entity	high	a vehicle's data, 0x50c bytes; ported, diffed
+00431390	Class9_New	entity	high	class 9: and the 0x18 block; ported, diffed
+004288c0	Class8_New	entity	high	class 8: and the 0x54 block; ported, diffed
+00432ad0	Class7_New	entity	high	class 7 (a gun): 0xa0 bytes; ported, diffed
+004330e0	Class7_Set	entity	high	a gun's aim, rate, strength from the record; ported, diffed
+0042faf0	Class30_New	entity	high	a wheel's data; ported, diffed
+00453df0	Filter_Init	math	high	a two-pole filter and its gain; ported, diffed
+00469b80	Motion_Init	entity	high	a motion record; ported
+00471680	Body_Init	entity	high	a body: mass and inertia 1e30; ported
+004716f0	Body_Set	entity	high	mass and inertia with their ratios; ported
+0040fb20	Ai_New	ai	high	a vehicle's AI block (0xa9d8 bytes); ported, diffed
+0040b430	Ai_Skills	ai	high	the AI block's four skills; ported, diffed
+0040b380	Ai_SkillTables	ai	high	the skill tables by level; ported
+0041fbc0	Radar_Init	radar	med	the radar's set-up and entity callbacks; callbacks ported
+0041fea0	Radar_Add	radar	high	a vehicle onto the radar list, referenced; ported, diffed
+00428cc0	Artillery_Add	entity	high	class 8 onto the artillery list; ported
+00408510	Ai_OnAdd	ai	med	the AI's entity callback: teams, AI blocks; not ported
+0046b950	Collide_VehicleRadius	collide	high	radius to the COLP box's farthest corner + 0.1; ported, diffed

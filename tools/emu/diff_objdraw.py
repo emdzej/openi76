@@ -27,7 +27,8 @@ from unicorn import x86_const as X  # noqa: E402
 
 def load(name):
     exe, lib = mission.setup()
-    exe.stub(0x485030, lambda *a: 0, 3)   # as diff_objects.py: no vehicles, effects, LDEF or ADEF yet
+    exe.stub(0x4863D0, lambda *a: 1, 2)   # as diff_objects.py: no weapons, AI, effects, LDEF or ADEF yet
+    exe.stub(0x408510, lambda *a: 0, 1)
     exe.stub(0x484820, lambda *a: 1, 2)
 
     def xdf(nm, out, kind):

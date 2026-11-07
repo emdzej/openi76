@@ -1,5 +1,6 @@
 /* A mission's objects (objects.h). In the current rounding mode (render/fpu.h). */
 #include "objects.h"
+#include "vehicle.h"
 #include "collide.h"
 #include "crt.h"
 #include "entity.h"
@@ -75,7 +76,14 @@ Node *Obj_Node(Node *parent, const uint8_t *rec, const char *name, bool ground, 
             put32(n->data, (uint32_t)rd32(rec + 0x64));
             put32(n->data + 4, (uint32_t)rd32(rec + 0x64));
             break;
-        case 7:   /* 0x4330e0 (class 7's constructor is not ported yet) */
+        case 7:   /* 0x4330e0: a gun's aim (3 words), its rate, its strength twice */
+            if (n->data) {
+                memcpy(n->data + 0x78, rec + 0x68, 12);
+                memcpy(n->data + 0x94, rec + 0x74, 4);
+                put32(n->data + 0x90, 1);
+                put32(n->data + 0x9c, (uint32_t)rd32(rec + 0x64));
+                put32(n->data + 0x98, (uint32_t)rd32(rec + 0x64));
+            }
             break;
         case 10: {   /* 0x4348a0, 0x434910 */
             float k = exe_f32(0x4a5e30);
@@ -130,15 +138,38 @@ Node *Obj_Tree(const uint8_t *const *lists, Node *parent, int nlod, int nstate, 
     return made[0];
 }
 
-/* the context of an OBJ (0x494170's 0x15 words): the node, a vehicle's two, then an SDFC's five */
-typedef struct {
-    Node *node;
-    void *vcf;
-    int32_t has_x;
-    int32_t x[12];
-    int32_t b[5];
-    int32_t has_b;
-} ObjCtx;
+Node *Obj_Tree100(const uint8_t *const *lists, Node *parent, int nlod, int nstate, int count,
+                  void (*made_fn)(Node *n, Node *parent))
+{
+    Node *made[80];   /* the original's array: more than 80 records overrun it */
+    if (count == 0) return NULL;
+    made[0] = NULL;
+    for (int lod = 0; lod < nlod; lod++)
+        for (int state = 0; state < nstate; state++, lists++)
+            for (int i = 0; i < count; i++) {
+                const uint8_t *rec = *lists + (size_t)i * 100;
+                Node *n;
+                if (state == 0 && lod == 0) {
+                    const char *pname = (const char *)rec + 0x38;
+                    Node *p = NULL;
+                    if (crt_strnicmp(pname, "world", 5) != 0 && crt_strnicmp(pname, "null", 4) != 0) {
+                        p = Node_Find(parent, pname);
+                        if (!p) plat_log("Can't find parent for an object");
+                    }
+                    if (!p) p = parent;
+                    n = Obj_Node(p, rec, (const char *)rec, false, true);
+                    if (!n) return NULL;
+                    made[i] = n;
+                    if (made_fn) made_fn(n, parent);
+                } else {
+                    n = made[i];
+                }
+                const char *name = Obj_Name(rec, ".geo");
+                Lod_Add(n, name, state, lod);
+                if (lod == 2 && parent && parent->cls == 0x32) Lod_Add(n, Obj_Name(rec, ".geo"), state, 3);
+            }
+    return made[0];
+}
 
 /* 0x493210: an .xdf (the effects) into out's 8-byte name; the file and its effect are not ported yet,
    only its first step, the name "null" */
@@ -167,7 +198,7 @@ static int sdfc(const uint8_t *c, void *arg, const uint8_t *end)
 }
 
 /* SOBJ 0x4949a0 */
-static int sobj(const uint8_t *c, void *arg, const uint8_t *end)
+int Objects_Sobj(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)end;
     ObjCtx *x = arg;
@@ -217,7 +248,7 @@ static int schk(const uint8_t *c, void *arg, const uint8_t *end)
 }
 
 /* LOBJ 0x4934c0: the node's light */
-static int lobj(const uint8_t *c, void *arg, const uint8_t *end)
+int Objects_Lobj(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)end;
     ObjCtx *x = arg;
@@ -231,15 +262,15 @@ static int lobj(const uint8_t *c, void *arg, const uint8_t *end)
     return 1;
 }
 
-static int exit_check(const uint8_t *c, void *arg, const uint8_t *end)
+int Objects_Exit(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)c, (void)arg, (void)end;
     return 0;   /* 0x4843d0: never matches (world.c) */
 }
 
 static ChunkDesc sdf_table[] = {   /* 0x4eb798 */
-    {"SDFC", sdfc, 0x800}, {"SOBJ", sobj, 0x800}, {"SGEO", sgeo, 0x800},
-    {"SCHK", schk, 0xc00}, {"LOBJ", lobj, 0xc00}, {"EXIT", exit_check, 0x1000},
+    {"SDFC", sdfc, 0x800}, {"SOBJ", Objects_Sobj, 0x800}, {"SGEO", sgeo, 0x800},
+    {"SCHK", schk, 0xc00}, {"LOBJ", Objects_Lobj, 0xc00}, {"EXIT", Objects_Exit, 0x1000},
 };
 
 /* 0x494b40: the structures under n get their effect by their flags' bits 10-11 (0x4eb7f8, 13 bytes
@@ -277,6 +308,18 @@ static void spawn(const uint8_t *rec, int kind)
     f->pad = pad;
 }
 
+/* 0x494720: a vehicle's COLP words as the entity's record (0x3c bytes from the game heap): three 4s,
+   then the twelve words in the order 7 6 5 4 11 10 9 8 3 2 1 0 */
+static void *colp_record(const int32_t x[12])
+{
+    int32_t *r = calloc(1, 0x3c);
+    if (!r) return NULL;
+    static const uint8_t order[12] = {7, 6, 5, 4, 11, 10, 9, 8, 3, 2, 1, 0};
+    r[0] = r[1] = r[2] = 4;
+    for (int i = 0; i < 12; i++) r[3 + i] = x[order[i]];
+    return r;
+}
+
 int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)arg, (void)end;
@@ -303,8 +346,7 @@ int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end)
     switch (cls) {
     case 1: case 8: case 9:
         if (!(x.node = Obj_Node(NULL, rec, nm, true, false))) return 0;
-        /* the vehicle's .vcf (0x485030) is not ported yet: it fails as a missing one does */
-        ok = 0;
+        ok = Vehicle_Load(&x, Obj_Name(rec, exe_str(0x4a8100)));   /* ".vcf" */
         break;
     case 2: case 3: case 4: case 7: case 10: case 0xb: case 0xc: case 0x50: case 0x52: case 0x53:
         if (!(x.node = Obj_Node(NULL, rec, nm, true, true))) return 0;
@@ -325,8 +367,7 @@ int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end)
             x.node->child = NULL;
             Node_Free(x.node);
         } else {
-            /* a vehicle's 0x494720 record (x.has_x) comes with the .vcf */
-            if (!Entity_Add(x.node, NULL, x.has_b ? x.b : NULL)) {
+            if (!Entity_Add(x.node, x.has_x ? colp_record(x.x) : NULL, x.has_b ? x.b : NULL)) {
                 plat_log("Interstate '76 cannot create entity - The world is full!");
                 return 0;
             }
@@ -364,7 +405,7 @@ bool Objects_Scrounge(const char *path)
 }
 
 static ChunkDesc odef_table[] = {   /* 0x4eb768 */
-    {"OREV", Rev_Check, 0x2004}, {"OBJ", Objects_Obj, 0x400}, {"EXIT", exit_check, 0x1000},
+    {"OREV", Rev_Check, 0x2004}, {"OBJ", Objects_Obj, 0x400}, {"EXIT", Objects_Exit, 0x1000},
 };
 
 int Objects_Odef(const uint8_t *payload, void *name, const uint8_t *end)
@@ -379,7 +420,8 @@ void Objects_Init(void)
     Entity_Init();
     World_ListInit();
     Lod_Init();
-    Collide_Init();   /* after 0x41fbc0, 0x4088a0 and 0x428d80, whose callbacks are for vehicles */
+    Vehicle_Init();   /* 0x41fbc0, 0x4088a0 (its AI part not yet) and 0x428d80 */
+    Collide_Init();
     Chunks_Init();
     g_spawn_count[0] = g_spawn_count[1] = 0;   /* 0x461??? at the mission's end */
 }

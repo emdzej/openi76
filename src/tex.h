@@ -19,6 +19,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Tex_Bind 0x47bb20: owner's texture name to a material (a .tmt or a .map), unless owner has it already */
+bool Tex_Bind(uintptr_t owner, const char *name, const char *material);
 /* Tex_Get 0x47c320: owner's texture name (a .tmt or a .map), its current frame's pixels; NULL if none */
 const Texture *Tex_Get(uintptr_t owner, const char *name);
 /* Tex_SetFrame 0x47c200: dimension d's counter to value; with update, the frame is recomputed */

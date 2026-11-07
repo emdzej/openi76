@@ -11,6 +11,7 @@
 #pragma once
 #include "scene.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct Entity {
@@ -42,6 +43,13 @@ Entity *Entity_Add(Node *n, void *a, const int32_t *b);
 bool Class_IsStructure(int cls);
 /* Class_Set 0x425700: the node's class; structures but 4 use class 2's entry */
 void Class_Set(Node *n, int cls);
+/* Class data keeps the original's 32-bit layout: its scalars at the original's offsets, and its pointers
+   (whose words stay 0) in a table after it, one slot per word: Data_Ptr(d, off) */
+uint8_t *Data_New(size_t n);
+void **Data_Ptr(uint8_t *d, uint32_t off);
+void Data_Free(uint8_t *d);
+#define VEH_SIZE 0x50c   /* a vehicle's data (classes 1, 8, 9: 0x429210) */
+
 /* Class_Free 0x4258c0: the class's destructor for its data */
 void Class_Free(int cls, uint8_t *data);
 /* for tests: the port's classes in the table's order (n of them) */
@@ -75,4 +83,7 @@ typedef struct Chunk {
 } Chunk;
 bool Chunk_Add(Node *n, int32_t a, int32_t b, const Frame *f, const int32_t p[4], const float box[6]);
 /* for tests: node's chunks (NULL and *count 0 if none) */
+/* 0x45afa0: the 13 names (16 bytes each, read 13 apart from names) of n's chunks; false without a record */
+bool Chunk_SetNames(const Node *n, const char *names);
+const char *Chunk_Name(const Node *n, int i);
 const Chunk *Chunk_List(const Node *n, int *count);

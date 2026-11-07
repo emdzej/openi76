@@ -48,6 +48,44 @@ static void frame(Out *o, const Frame *f)
 
 static int budget;
 
+/* the vehicle data's pointer words (vehicle.c, entity.c) */
+static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
+                                    0x3c4, 0x3c8, 0x3cc, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x408, 0x40c, 0x410,
+                                    0x414, 0x418, 0x41c, 0x440, 0x508};
+
+static void hex(Out *o, const uint8_t *p, int n)
+{
+    for (int i = 0; i < n; i++) out(o, "%02x", p[i]);
+}
+
+/* class data: a vehicle's raw words and what its pointers point to (a node's name, the AI block's CRC, the
+   0x508 block), the parts' and wheels' raw words */
+static void class_data(Out *o, const Node *n)
+{
+    uint8_t *d = n->data;
+    int c = n->cls;
+    if (c == 1 || c == 8 || c == 9) {
+        out(o, " v");
+        hex(o, d, VEH_SIZE);
+        out(o, " vp");
+        for (size_t i = 0; i < sizeof veh_ptrs / sizeof veh_ptrs[0]; i++) {
+            void *p = *Data_Ptr(d, veh_ptrs[i]);
+            out(o, " %x:", veh_ptrs[i]);
+            if (!p) out(o, "-");
+            else if (veh_ptrs[i] == 0x108) out(o, "%08x", crc32(p, 0xa9d8));
+            else if (veh_ptrs[i] == 0x508) hex(o, p, c == 9 ? 0x18 : 0x54);
+            else name8(o, ((const Node *)p)->name);
+        }
+        return;
+    }
+    static const struct { int cls, size; } small[] = {{30, 0x88}, {20, 8}, {21, 0x2c}, {22, 0x18}, {23, 0x20}, {24, 0x18}, {7, 0xa0}};
+    for (size_t i = 0; i < sizeof small / sizeof small[0]; i++)
+        if (c == small[i].cls) {
+            out(o, " d");
+            hex(o, d, small[i].size);
+        }
+}
+
 static void node(Out *o, const Node *n, int depth)
 {
     for (; n && budget > 0; n = n->next, budget--) {
@@ -66,7 +104,8 @@ static void node(Out *o, const Node *n, int depth)
             out(o, " d");
             for (int i = 0; i < size; i++)
                 if (n->cls == 10 || i < 0x10 || i >= 0x18) out(o, "%02x", n->data[i]);
-        }
+        } else if (n->data)
+            class_data(o, n);
         out(o, "\n");
         const LodRec *r = Lod_Find(n);
         if (r) {
@@ -120,7 +159,12 @@ size_t Objects_Dump(char *buf, size_t cap)
         int g = 0;
         if (e->node && e->node->cls > 10 && e->node->cls < 0xe)
             for (const void *const *c = e->a; c && g < 100000; c = (const void *const *)c[2]) g++;
-        out(&o, " g%d\n", g);
+        out(&o, " g%d", g);
+        if (e->has_a && e->a && !(e->node && e->node->cls > 10 && e->node->cls < 0xe)) {
+            out(&o, " a");
+            hex(&o, e->a, 0x3c);
+        }
+        out(&o, "\n");
         if (e->node) node(&o, e->node, 0);
     }
     out(&o, "world");

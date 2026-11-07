@@ -92,10 +92,32 @@ static void set_type(Node *n, const Frame *f)
 }
 
 /* 0x46b480 */
+/* 0x46b950: a vehicle's radius covers its COLP box (the entity's record: three counts, then the twelve
+   words, whose corners are picked by the counts), plus 0.1 (0x4a6524) */
+static void vehicle_radius(Entity *e)
+{
+    const int32_t *r = e->a;
+    const float *f = (const float *)r;
+    if (!r) return;
+    int i6 = r[0] + 2, i10 = r[1] + 6, i14 = r[2] + 10;
+    const int c[8][3] = {{3, 8, 11}, {i6, 8, 11}, {i6, 8, i14}, {3, 8, i14},
+                         {3, i10, 11}, {i6, i10, 11}, {i6, i10, i14}, {3, i10, i14}};
+    float best = -1e30f;
+    for (int k = 0; k < 8; k++) {
+        float dx = F32(SUB(f[c[k][0]], e->c[0])), dy = F32(SUB(f[c[k][1]], e->c[1]));
+        double dzu = SUB(f[c[k][2]], e->c[2]);   /* fst: dz stays unrounded on the stack, times its float */
+        double s = ADD(ADD(MUL(dzu, F32(dzu)), MUL(dy, dy)), MUL(dx, dx));
+        if (s > best) best = F32(s);   /* fcom: unordered does not take it */
+    }
+    double nr = ADD(fpu_sqrt(best), 0.1f);
+    if (nr > e->r) e->r = F32(nr);
+}
+
 static void register_entity(Entity *e)
 {
     switch (e->node->cls) {
-    case 1: case 9:   /* 0x46b950, the vehicles: not ported yet */
+    case 1: case 9:   /* 0x46b950 */
+        vehicle_radius(e);
         return;
     case 2: case 7: case 8: case 10:
         coll_type = 0x2000;

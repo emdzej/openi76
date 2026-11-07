@@ -126,6 +126,22 @@ static TexUse *use_new(uintptr_t owner, const char *name, Material *m)
     return u;
 }
 
+bool Tex_Bind(uintptr_t owner, const char *name, const char *material)
+{
+    if (!owner || !name || !material) return false;
+    if (use_find(owner, name)) return true;
+    Material *m = mat_find(material);
+    if (m) m->users++;
+    else {
+        const char *dot = strchr(material, '.');
+        m = !dot || crt_stricmp(dot, ".map") == 0 ? mat_plain(material) : mat_tmt(material);
+        if (!m) return false;
+    }
+    use_new(owner, name, m);
+    /* animated materials start a timer here (0x47eac0 / 0x47eb50): not yet ported */
+    return true;
+}
+
 const Texture *Tex_Get(uintptr_t owner, const char *name)
 {
     if (!owner || !name) return NULL;
