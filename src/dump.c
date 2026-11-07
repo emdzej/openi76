@@ -590,6 +590,27 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 13: {   /* eight sub-steps of 0.05 driving at 12 m/s forward, throttle 0.8 and steering 0.3 (the
+                        last four braking, steering -0.5) */
+            float v[3], thr = 0.8f, st = 0.3f, sp = 12;
+            for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f;
+            memcpy(n->data + 0xbc, v, 12);
+            memcpy(n->data + 0xac, &sp, 4);
+            for (int j = 0; j < 8; j++) {
+                if (j == 4) thr = -1, st = -0.5f;
+                memcpy(n->data + 0xe4, &thr, 4);
+                memcpy(n->data + 0xe0, &st, 4);
+                Vehicle_Physics(n, 0.05f);
+                uint8_t b[0x44 + 0x28 + sizeof(Frame)];
+                Frame f = n->frame;
+                f.pad = 0;
+                memcpy(b, n->data + 0xa4, 0x44);
+                memcpy(b + 0x44, n->data + 0x454, 0x28);
+                memcpy(b + 0x44 + 0x28, &f, sizeof f);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

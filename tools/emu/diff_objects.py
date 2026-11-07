@@ -287,8 +287,23 @@ def call_settle(exe, n, fpcw):
     restore()
 
 
+def call_physics(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    m = struct.unpack("<9f", exe.read(n + 0x18, 36))
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    exe.write(d + 0xBC, struct.pack("<fff", *(f32(m[6 + k] * 12.0) for k in range(3))))
+    exe.write(d + 0xAC, struct.pack("<f", 12))
+    for j in range(8):
+        exe.write(d + 0xE4, struct.pack("<f", 0.8 if j < 4 else -1))
+        exe.write(d + 0xE0, struct.pack("<f", 0.3 if j < 4 else -0.5))
+        exe.call(0x472360, n, struct.unpack("<I", struct.pack("<f", 0.05))[0], fpcw=fpcw)
+        f = bytearray(exe.read(n + 0x18, 0x40))
+        f[0x24:0x28] = bytes(4)
+        CALL_OUT.append((exe.read(d + 0xA4, 0x44) + exe.read(d + 0x454, 0x28) + bytes(f)).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -410,6 +425,7 @@ def original():
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         exe.stub(0x45D7C0, lambda *a: 0, 3)   # an impact's damage
+        exe.stub(0x42A5D0, lambda *a: 0, 2)   # the terrain's wear
 
         def skid(w, braking):   # 0x4301f0 as the port's stub: only the new mark's flag (+0x48)
             wd = struct.unpack("<I", exe.read(w + 0x70, 4))[0]

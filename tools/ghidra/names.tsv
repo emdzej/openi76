@@ -476,3 +476,5 @@
 00430140	Wheel_Bottom	physics	high	a wheels world place less its radius +0x1c
 00430120	Wheel_Ground	physics	high	a wheels data +0x2c
 00430130	Wheel_Travel	physics	high	a wheels data +0x24
+00472360	Vehicle_Physics	physics	high	a vehicles physics sub-step; ported, diffed (damage stubbed)
+0042a5d0	Terrain_Wear	damage	med	rough ground damages a random part by the terrain class +0x10 times dt

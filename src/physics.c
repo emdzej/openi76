@@ -1169,3 +1169,79 @@ void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float 
     put32(d + 0xc8, 0);
     put32(d + 0xd0, 0);
 }
+
+/* 0x42a5d0: the wear of rough ground (the terrain class's +0x10 times dt summed at +0x458, a random part
+   damaged per whole unit, 0x42bac0, 0x42bf90, 0x42d230): with the damage, not ported yet */
+static void terrain_wear(Node *n, float amount) { (void)n, (void)amount; }
+/* 0x4683c0: a sound by number at a node: no sound yet */
+static void sound_id(int id, Node *n, int a) { (void)id, (void)n, (void)a; }
+
+void Vehicle_Physics(Node *n, float dt)
+{
+    Vehicle_Collide(n, dt);
+    Vehicle_Upright(n);
+    uint8_t *d = n->data;
+    if (rd32(d + 0x454) & 0x8020) put32(d + 0xe4, 0xbf800000);   /* dying: braking */
+    Vehicle_Steer(n);
+    static const uint32_t wo[6] = {0x3ac, 0x3a8, 0x3bc, 0x3b8, 0x3b4, 0x3b0};
+    Node *w[6];
+    for (int i = 0; i < 6; i++) w[i] = slot(d, wo[i]);
+    uint32_t flags = 0;
+    float speed = 0, acc[3] = {0, 0, 0};
+    Vehicle_Drive(n, &flags, (float *)(d + 0xbc), &speed, acc, (float *)(d + 0xc8), &n->frame, dt);   /* in place */
+    memcpy(d + 0xd4, acc, 12);
+    putf(d + 0xac, fabsf(speed));
+    if (rd32(d + 0xac) > 0x38d1b717) putf(d + 0xb0, F32(DIV(1.0f, rdf(d + 0xac))));
+    else put32(d + 0xb0, 0x7149f2ca);
+    uint8_t *engine = slot(d, 0x3c4)->data;
+    int reverse = (uint32_t)rd32(d + 0xe8) > 0x80000000u;
+    if (flags & 4) {   /* in the air: the wheels hang */
+        Vehicle_Brake(n, rd32(d + 0x454), flags & 2);
+        put32(d + 0x454, flags);
+        for (int i = 0; i < 6; i++)
+            if (i < 4 || w[i]) Wheel_Contact(w[i], 1, 0, 0);
+        Engine_Step(engine, rdf(d + 0xe4), rdf(d + 0xac), rd32(d + 0x454), reverse, rd32(d + 0x104));
+        return;
+    }
+    uint32_t old = rd32(d + 0x454);
+    if (old & 4) {   /* landed: more than 35 m (0x4a6780) below where it left the ground kills */
+        if (!(old & 0x8020) && !below_eq(SUB(rdf(d + 0x474), n->frame.pos[1]), 35.0) && !(n->flags & 0x20)) {
+            Vehicle_Kill(n);
+        } else {
+            static const float at[3] = {0, -0.2f, 0};
+            float nv[3], back[3];
+            for (int k = 0; k < 3; k++) back[k] = -rdf(d + 0xbc + 4 * k);
+            memcpy(nv, d + 0x460, 12);
+            sound_id(4, n, 0);
+            impact_damage(n, 0, (const uint8_t *)back, nv, (const uint8_t *)at);
+        }
+    }
+    old = rd32(d + 0x454);
+    put32(d + 0x454, flags);
+    for (int i = 0; i < 6; i++)
+        if (w[i]) putf(w[i]->data + 0x20, speed);   /* 0x42fea0 (the four main ones unchecked) */
+    /* the ground under the vehicle (or, on its back, under its box's bottom): its class, height and
+       normal; +0x46c gravity times the normal's y cubed */
+    float p[3];
+    for (int k = 0; k < 3; k++) p[k] = F32(n->frame.pos[k]);
+    if (fbits(n->frame.m[4]) > 0x80000000u) {
+        float b = rdf(d + 0x34), q[3];
+        for (int k = 0; k < 3; k++) q[k] = F32(ADD(MUL(n->frame.m[3 + k], b), p[k]));
+        memcpy(p, q, sizeof q);
+    }
+    put32(d + 0x45c, Terrain_Class(p[0], p[2]));
+    float h, nv[3];
+    Ground_Height(p[0], p[1], p[2], &h, nv);
+    memcpy(d + 0x460, nv, 12);
+    float ny = rdf(d + 0x464);
+    putf(d + 0x46c, F32(MUL(MUL(MUL(ny, ny), ny), 9.8f)));   /* 0x4a678c */
+    if (!(rd32(d + 0x454) & 4)) putf(d + 0x474, h);
+    Vehicle_Settle(n, acc, old & 0x202, 0, dt);
+    Vehicle_Brake(n, old, flags & 2);
+    if ((int32_t)fbits(speed) > 0x40f4cccd && !(n->flags & 0x20)) {   /* faster than 7.65 */
+        int32_t tc = rd32(d + 0x45c);
+        float wear = (float)rd32(g_world.lights + 0x14 * (uint32_t)tc + 0x10);   /* 0x48e360 */
+        terrain_wear(n, F32(MUL(wear, dt)));
+    }
+    Engine_Step(engine, rdf(d + 0xe4), speed, flags, reverse, rd32(d + 0x104));
+}

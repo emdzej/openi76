@@ -81,3 +81,8 @@ int Vehicle_Collide(Node *n, float dt);
    with keep, or when the wheels' plane fits the up axis better, set on that plane. mode (the step's flags
    0x202) keeps the turn */
 void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float dt);
+/* Vehicle_Physics 0x472360: a vehicle's sub-step: the contact, the righting, the steering, the driving
+   step (its velocity, turn, acceleration +0xd4 and speed), then in the air the wheels hanging, on the
+   ground the landing (a fall over 35 m kills), the ground under it (+0x45c, +0x460, +0x46c, +0x474), the
+   settling and the brakes; the terrain's wear when fast; the engine */
+void Vehicle_Physics(Node *n, float dt);

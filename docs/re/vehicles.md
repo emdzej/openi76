@@ -216,7 +216,7 @@ the per-frame physics calls it too.
 
 The comparisons on floats' bits as signed integers are the original's, kept.
 
-## The physics step (being ported)
+## The physics step (ported but the damage)
 
 The class 1 per-frame handler 0x429c70 runs fixed sub-steps from the vehicle's timer (+0x444: 0x451250
 counts them by the frame's step, at most 20; 0x4512d0 hands them out). Each sub-step runs 0x42b830 (the
@@ -242,6 +242,7 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Corners_Hit 0x47a8d0 | the body's four corners (+4) swept against the terrain (below) |
 | Vehicle_Collide 0x472890 | the contact (+0x38) answered (below); the damage 0x45d7c0 and the sound not yet |
 | Vehicle_Settle 0x470030 | the body on its wheels (below) |
+| Vehicle_Physics 0x472360 | the sub-step: all of the above in order, the ground under the vehicle (+0x45c, +0x460, +0x46c = 9.8 n.y³, +0x474 the height while on the ground), the landing (a fall of 35 m kills, else the landing's sound 4 and damage), the wheels' speeds, the terrain's wear over 7.65 m/s (0x42a5d0, not yet), the engine |
 
 ### The body on its wheels (Vehicle_Settle 0x470030)
 
