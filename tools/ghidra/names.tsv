@@ -831,3 +831,10 @@
 0x458980	Weapon_IsOn
 0x458340	Weapons_Tick
 0x458710	Weapon_Fire
+0x45d420	Muzzle_Pick
+0x46ae70	Pick_Along
+0x46add0	Axes_Alike
+0x421ba0	Radar_Target
+0x421d30	Radar_KindTarget
+0x421be0	Radar_Lock
+0x421c30	Radar_Locked

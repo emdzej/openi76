@@ -3,6 +3,8 @@
 #include "chunks.h"
 #include "clock.h"
 #include "combat.h"
+#include "collide.h"
+#include <math.h>
 #include "crt.h"
 #include "effects.h"
 #include "exe.h"
@@ -698,7 +700,7 @@ void Weapons_Tick(void)
             }
             /* each shot at its time in the frame, but ordnance 1 and 0x12's all at once below */
             if (d->v[8] != 1 && d->v[8] != 0x12) {
-                if (g_weapon_fire) g_weapon_fire(w, d, n, left);
+                (g_weapon_fire ? g_weapon_fire : Weapon_Fire)(w, d, n, left);
                 n--;
             }
             if (most < left) most = left;
@@ -714,11 +716,126 @@ void Weapons_Tick(void)
             w->v1c = 0;
         }
         if (n > 0) {
-            if (g_weapon_fire) g_weapon_fire(w, d, n, F32(MUL(most, 0.3333333432674408f)));   /* 0x4a621c */
+            (g_weapon_fire ? g_weapon_fire : Weapon_Fire)(w, d, n, F32(MUL(most, 0.3333333432674408f)));   /* 0x4a621c */
             if (w->v24 == 0 && getf(&d->v[3]) > getf(&w->v20)) {
                 w->v1c = d->v[3];
                 w->v20 = 0;
             }
         }
     }
+}
+
+/* ---- a shot (0x458710) ---- */
+
+void (*g_weapon_launch)(Launch *l, float late);   /* 0x458f40 */
+
+/* not ported yet, as the effects and the audio: 0x454940 the muzzle's flash, 0x433b70 the gun's
+   animation (the vehicle's +0x400 / +0x404 node), 0x468580 / 0x4685d0 the shot's sound by name */
+static void muzzle_flash(Node *muzzle) { (void)muzzle; }
+static void gun_animation(Node *vehicle, int32_t which) { (void)vehicle, (void)which; }
+static void shot_sound(const char *name, Node *at, int spatial) { (void)name, (void)at, (void)spatial; }
+/* 0x433730: a type 3 mortar's muzzle raised for its target's range (0x45ddb0); not ported yet */
+static void mortar_elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v) { (void)vehicle, (void)muzzle, (void)target, (void)v; }
+
+/* the vehicle's radar (its data's +0x434, set by the radar part's start 0x41fff0, not ported yet: none) */
+static Node *radar_of(Node *vehicle)
+{
+    if (!vehicle || !vehicle->data) return NULL;
+    return *(Node **)Data_Ptr(vehicle->data, 0x434);
+}
+
+/* 0x421ba0: the radar's current target (its list's head, when alive); 0x421d30: the target the radar
+   holds for a weapon kind (1, 2, 8, 0x10); 0x421c30 / 0x421be0: the locks for kinds 1, 2, 4 */
+static Node *radar_target(Node *vehicle, int kind)
+{
+    Node *r = radar_of(vehicle);
+    (void)kind;
+    if (r) plat_log("OpenI76: a radar's target (0x421ba0-0x421d30) is not ported");
+    return NULL;
+}
+
+/* 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
+static int axes_alike(Node *a, Node *b)
+{
+    Frame fa, fb;
+    Node_FrameIn(&fa, a, NULL);
+    Node_FrameIn(&fb, b, NULL);
+    return fabs(ADD(ADD(MUL(fa.m[7], fb.m[7]), MUL(fa.m[8], fb.m[8])), MUL(fa.m[6], fb.m[6]))) > 0.8399999737739563;
+}
+
+/* 0x45d420 / 0x46ae70: the nearest moving entity but the vehicle's within 650 m of the muzzle, its axis
+   along the muzzle's (0x46add0), ahead of it and within the cone dot^2 > 0.883 d^2 */
+static Node *muzzle_pick(Node *muzzle, Node *vehicle)
+{
+    if (!muzzle) return NULL;
+    Frame f;
+    Node_FrameIn(&f, muzzle, NULL);
+    float p[3] = {F32(f.pos[0]), F32(f.pos[1]), F32(f.pos[2])};
+    const float *dir = &f.m[6];
+    double best = 422500.0;   /* 0x4a64f8 */
+    Node *got = NULL;
+    for (Cell *c = g_coll_moving; c; c = c->next) {
+        Entity *e = c->value;
+        Node *o = e->node;
+        if (o == vehicle) continue;
+        float q[3], a[3], d[3];
+        Frame_Points(&q, (const float(*)[3])e->c, 1, &o->frame);   /* 0x471b30's centre, and 0x4240e0 */
+        for (int i = 0; i < 3; i++) a[i] = F32(fpu_sub(p[i], q[i]));
+        if (!(ADD(ADD(MUL(a[1], a[1]), MUL(a[2], a[2])), MUL(a[0], a[0])) <= 422500.0)) continue;
+        if (!axes_alike(muzzle, o)) continue;
+        for (int i = 0; i < 3; i++) d[i] = F32(fpu_sub(q[i], p[i]));
+        double dot = ADD(ADD(MUL(dir[1], d[1]), MUL(dir[2], d[2])), MUL(dir[0], d[0]));
+        float dotf = F32(dot);
+        if (!(dot >= 0.0f)) continue;   /* 0x4a64d8 */
+        double l = ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]));
+        if (!(MUL(l, 0.8830221891403198) < MUL(dotf, dotf))) continue;   /* 0x4a6500 */
+        if (!(best > l)) continue;
+        best = l;
+        got = o;
+    }
+    return got;
+}
+
+void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
+{
+    Node *vehicle = w->hp->vehicle;
+    muzzle_flash(w->muzzle);
+    if (d->kind == 1) {
+        gun_animation(vehicle, d->index);
+        shot_sound(w->sound, w->muzzle, 0);
+    } else if (d->kind == 2)
+        shot_sound(w->sound, w->muzzle, !(d->index >= 3 && d->index <= 6));
+    else
+        shot_sound(w->sound, w->muzzle, d->kind == 5);
+    Launch l = {0};
+    l.type = d->v[8];
+    l.vehicle = vehicle;
+    l.w8 = d->v[5];
+    l.w14 = d->v[0];
+    l.w18 = d->v[2];
+    l.muzzle = w->muzzle;
+    l.n = n;
+    /* the ammunition, but for the user's free weapons outside a network game */
+    if (!(g_weapons_free == 1 && g_user_entity && vehicle == g_user_entity->node && !g_net_game)) {
+        w->v18 -= (uint32_t)n;
+        if ((int32_t)w->v18 < 0) w->v18 = 0;
+    }
+    switch (l.type) {
+    case 1:
+    case 2:
+    case 6: l.target = radar_target(vehicle, w->kind); break;
+    case 3:
+        if (!(vehicle->flags & 0x20)) {
+            l.target = muzzle_pick(w->muzzle, vehicle);   /* 0x45d420, then locked by 0x421be0 */
+            radar_target(vehicle, w->kind);
+        } else
+            l.target = radar_target(vehicle, w->kind);   /* 0x421c30 */
+        break;
+    default: l.target = radar_target(vehicle, 0); break;
+    }
+    /* 0x4098e0 with types 3 and 8 and a target: a no-op */
+    if (d->kind == 3 && d->index == 3) mortar_elevation(vehicle, w->muzzle, l.target, d->v[5]);
+    l.w28 = d->v[9];
+    Class_Velocity(vehicle, l.v, &l.speed);
+    if (n > 0 && g_weapon_launch) g_weapon_launch(&l, late);
 }

@@ -153,3 +153,51 @@ words it uses:
 
 Checked: `diff_objects --call trigger` (each vehicle's triggers pulled before three ticks of 0.06, 0.2
 and 0.015 s, the firings logged, every instance's words after each) on t01 and s04.
+
+## A shot (0x458710)
+
+For n shots of an instance, late s into the frame:
+1. **Effects and sound (not ported yet).** The muzzle's flash (0x454940). By the def's kind (+0x54):
+   - kind 1: the gun's animation (0x433b70, the vehicle's +0x400 or +0x404 node by the def's index) and
+     the instance's sound (+0x2c, 0x468580);
+   - kind 2: that sound, placed (0x4685d0) unless the index is 3-6;
+   - kind 5: placed;
+   - any other kind: not placed.
+2. **The launch record** (0x38 bytes), filled as below.
+3. **The ammunition** (+0x18) loses n, at least 0. The exception is the user's vehicle with free weapons
+   (0x4db474 = 1) outside a network game.
+4. **The target, by the ordnance's type:**
+   - 1, 2, 6: the radar's target for the instance's kind (0x421d30; a turret's, kind 4, 0x421ba0);
+   - 3, on a vehicle without flag 0x20: the pick along the muzzle (0x45d420 → 0x46ae70), then locked on
+     the radar (0x421be0); with the flag: the radar's lock (0x421c30);
+   - others: the radar's current target (0x421ba0).
+   The radar lives at the vehicle's +0x434, set by the radar part's start (0x41fff0, not ported yet), so
+   for now every radar lookup finds none, on both sides of the check.
+5. **The mortar's elevation.** A kind 3, index 3 def raises the muzzle for the target (0x433730 with
+   0x45ddb0; not ported yet).
+6. **The launch.** The vehicle's velocity and speed go into the record, then the launch (0x458f40) runs
+   when n > 0.
+
+**The pick (0x46ae70).** It starts from the muzzle's world place, along its z axis. Over the moving
+collision entities except the vehicle's:
+- within 650 m of the muzzle (squared, from the entity's centre);
+- the entity's z axis alike or opposite to the muzzle's, beyond 0.84 (0x46add0);
+- ahead (dot not negative) and within the cone `dot² > 0.883 x distance²`.
+The nearest such entity is the target.
+
+| Record | What |
+|---|---|
+| +0 | the ordnance's type (def +0x78) |
+| +4 | the vehicle |
+| +8 | def +0x6c |
+| +0xc | the vehicle's speed |
+| +0x10 | the launch sets it |
+| +0x14, +0x18 | def +0x58, +0x60 |
+| +0x1c | the muzzle |
+| +0x20 | n |
+| +0x24 | the target |
+| +0x28 | def +0x7c |
+| +0x2c | the vehicle's velocity |
+
+Checked: `diff_objects --call shot` (each of a vehicle's weapons with 1 and 2 shots: the record and the
+ammunition) on t01, t05 and s04.

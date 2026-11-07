@@ -351,6 +351,19 @@ const char *Dump_CallOut(void)
     return call_out;
 }
 
+static Node *g_launch_n;
+static WeaponInst *g_launch_w;
+
+static void log_launch(Launch *l, float late)
+{
+    int32_t v[14] = {l->type, l->vehicle == g_launch_n, l->w8, 0, l->w14, l->w18, l->muzzle == g_launch_w->muzzle,
+                     l->n, l->target != NULL, l->w28, 0, 0, 0, 0};
+    memcpy(&v[3], &l->speed, 4);
+    memcpy(&v[10], l->v, 12);
+    memcpy(&v[13], &late, 4);
+    call_line(v, sizeof v);
+}
+
 static void log_fire(WeaponInst *w, const WeaponDef *d, int n, float late)
 {
     int32_t v[4] = {(int32_t)(w - g_weapons), (int32_t)(d - g_weapon_defs), n, 0};
@@ -950,6 +963,25 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 32: {   /* a shot (0x458710, its launch 0x458f40 logged): each of n's weapons fired with 1 then 2 shots
+                        0.01 s late; the launch's record (the vehicle and muzzle as whether they are n's, the
+                        target as whether there is one) and the late time, then the ammunition */
+            g_weapon_launch = log_launch;
+            for (int i = 0; i < g_weapon_count; i++) {
+                WeaponInst *w = &g_weapons[i];
+                if (!w->hp || w->hp->vehicle != n) continue;
+                for (int k = 1; k <= 2; k++) {
+                    g_fpu_round = FPU_DOWN;
+                    g_launch_n = n;
+                    g_launch_w = w;
+                    Weapon_Fire(w, &g_weapon_defs[w->def], k, 0.01f);
+                    int32_t v = (int32_t)w->v18;
+                    call_line(&v, sizeof v);
+                }
+            }
+            g_weapon_launch = NULL;
             break;
         }
         case 31: {   /* the triggers' timing (0x458340, its firing 0x458710 logged): n's triggers pulled before

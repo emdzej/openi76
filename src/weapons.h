@@ -105,3 +105,21 @@ extern void (*g_weapon_click)(void);
 /* Weapons_Tick 0x458340: each instance's timers (+0x1c the pause, +0x20 the interval, +0x24 the burst's
    shots left) and its trigger (+0x44): the frame's step spent shot by shot (docs/re/weapons.md "Firing") */
 void Weapons_Tick(void);
+
+typedef struct {            /* 0x458710's record for the launch 0x458f40 */
+    int32_t type;           /* +0: the ordnance's type (def +0x78) */
+    Node *vehicle;          /* +4 */
+    int32_t w8;             /* +8: def +0x6c */
+    float speed;            /* +0xc: the vehicle's speed */
+    int32_t w10;            /* +0x10: set by the launch */
+    int32_t w14, w18;       /* +0x14: def +0x58, +0x18: def +0x60 */
+    Node *muzzle;           /* +0x1c */
+    int32_t n;              /* +0x20: the shots */
+    Node *target;           /* +0x24: the radar's (none until the radar is ported) */
+    int32_t w28;            /* +0x28: def +0x7c */
+    float v[3];             /* +0x2c: the vehicle's velocity */
+} Launch;
+extern void (*g_weapon_launch)(Launch *l, float late);
+/* Weapon_Fire 0x458710: n shots of w: the flash and the sound (not ported), the ammunition, the radar's
+   target by the ordnance's type, then the launch (0x458f40) late s into the frame */
+void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late);
