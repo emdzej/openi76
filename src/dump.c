@@ -414,6 +414,14 @@ static void log_click(void)
 int Dump_CallVehicles(int which, int upside)
 {
     int k = 0;
+    /* the view, as diff_objects.py makes it (a user's death sets the death camera on it) */
+    static Surface screen;
+    screen.pitch = screen.w = 640;
+    screen.h = 480;
+    screen.x1 = 639;
+    screen.y1 = 479;
+    View_Create(&g_view, &screen, 1.5707964f, 1.0f, 150.0f, 1.0f);
+    g_screen = &screen;
     for (Cell *c = g_class_nodes; c; c = c->next) {
         Node *n = c->value;
         if (!n || n->cls != 1) continue;
@@ -1069,7 +1077,8 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 39: {   /* the chase camera (0x405450, 0x4055e0) on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
+        case 39: case 40: {   /* the chase camera (0x405450, 0x4055e0; 40 the track view 0x406bb0, 0x403540, with track_pitch_delta
+                        3 and track_yaw_delta 8) on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
                         range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
                         about y before the third; after each the view's camera and eye */
             Entity *e = Entity_OfNode(n);
@@ -1086,13 +1095,17 @@ int Dump_CallVehicles(int which, int upside)
             g_clock_step = 0.06f;
             int32_t td = 3;
             memcpy(INPUT_AT(0x4def8c), &td, 4);
-            Camera_SetMode(e, 0xf);
+            int32_t tp = 3, ty = 8;
+            memcpy(INPUT_AT(0x4def94), &tp, 4);
+            memcpy(INPUT_AT(0x4def9c), &ty, 4);
+            Camera_SetMode(e, which == 39 ? 0xf : 0xfefe);
             for (int k = 0; k < 5; k++) {
                 if (k == 2)
                     for (int j = 0; j < 9; j += 2)
                         if (j != 4) n->frame.m[j] = -n->frame.m[j];
                 g_fpu_round = FPU_DOWN;
-                Camera_Chase();
+                if (which == 39) Camera_Chase();
+                else Camera_Track();
                 uint8_t b[0x40 + 24];
                 memcpy(b, &g_view.cam, 0x24);
                 memset(b + 0x24, 0, 4);

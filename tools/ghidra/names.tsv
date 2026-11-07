@@ -1034,3 +1034,5 @@
 004199a0	AI_TargetSeen	ai	high	0x419930's opposite; ported
 004099e0	AI_SightTurn	ai	high	one line of sight a frame while the user hides; ported
 00409a20	AI_UserHidden	ai	high	0x505458; ported
+00406bb0	Camera_TrackStart	camera	high	mode 0xfefe, the death's: the chase steered by track_pitch/yaw; ported
+00403540	Camera_Track	camera	high	the track view's frame; ported, diffed

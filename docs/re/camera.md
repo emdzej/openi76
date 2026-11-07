@@ -26,7 +26,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0x17 | 0x406450 | 0x406560 | 4 | |
 | 0x18 | 0x406950 | 0x406a60 | 4 | |
 | 0x19 | 0x404890 | 0x404520 | 0 | `Camera_PilotStart`, `Camera_Pilot` |
-| 0xfefe | 0x406bb0 | 0x403540 | 6 | |
+| 0xfefe | 0x406bb0 | 0x403540 | 6 | `Camera_TrackStart`, `Camera_Track` |
 
 `Camera_SetMode` 0x407010 (entity, mode) does nothing while the sub-mode is 5, or for a mode not in the
 table. Otherwise it calls the start. Then, unless the new sub-mode is 2, it calls 0x428890 (the HUD's) and
@@ -156,6 +156,31 @@ degrees and the yaw (0x4a8684) to pi. Its per-frame function is `Camera_Chase` 0
 track_distance 3 and steps of 0.06, and starts the chase on each vehicle. It runs five frames, turning the
 vehicle half round about y before the third, and compares the view's camera and eye after each. It is
 identical on t01, t03, t05, t12, s01, s04 and s07.
+
+## The track view (mode 0xfefe, the death's)
+
+`Camera_TrackStart` 0x406bb0 is set when the user's vehicle dies (0x42a523, 0x42b01d and 0x42c83a, each
+then the HUD's 0x428890 and `track_yaw_delta` set to 8, so the camera circles the wreck). The start:
+
+- remakes the view at the old camera, as the chase's does;
+- sets the entity, the cockpit flag 0 and the sub-mode 6;
+- sets both heading quaternions from `Camera_Heading` (the chase takes the node's whole frame);
+- installs `Camera_Track` 0x403540.
+
+`Camera_Track` does nothing for an entity without a node. Its frame is the chase's (`Camera_Chase` step 2
+on), with these differences:
+
+1. **The pitch's target** (0x4a8670) moves by `track_pitch_delta` (0x4def94) degrees each frame. It is
+   kept in [1 degree, pi/2]: the bottom tested on the unrounded sum, the top on the float's bits.
+2. **The yaw's target** (0x4a8674) moves by `track_yaw_delta` (0x4def9c) degrees. Past 1000 turns either
+   way (|yaw| over 6283.1855) it becomes the eased yaw (0x4a8684) taken within a turn by `fprem1`, plus
+   2pi when negative. The target's own remainder is also worked out and dropped (a quirk, kept).
+3. **The easing.** The distance, then the pitch, then the yaw ease toward their targets as the chase's
+   distance does: k = 2·step, with the roll's tests.
+4. **The place.** The frame is placed at the entity's centre, not raised by 2.
+
+**Checked.** `--call track` (case 40) runs as `--call camera` does, with track_pitch_delta 3 and
+track_yaw_delta 8. Identical on t01, t05, t12, s01 and s04.
 
 ## The script's cameras (0x452d00-0x453a70)
 

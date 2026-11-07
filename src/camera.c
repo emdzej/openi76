@@ -26,10 +26,10 @@ int32_t g_cockpit = 1, g_camera_mode;
 /* the pilot's glance: the targets (0x4a86bc pitch, 0x4a86c4 yaw, 0x4a86cc roll) and the eased angles
    (0x4a86c0, 0x4a86c8, 0x4a86d0) */
 static float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
-/* the other modes' parameters: the chase's pitch 0x4a8680 and yaw 0x4a8684, its distance's target 0x4a867c
-   and the eased distance 0x4a868c (5.5 at the reset); 0x4a8670 and 0x4a8674 (pi/6 and 0 at the reset)
-   belong to modes not ported yet */
-static float chase_pitch, chase_yaw, dist_to, dist;
+/* the other modes' parameters: the chase's pitch 0x4a8680 and yaw 0x4a8684, the track view's targets for
+   them 0x4a8670 and 0x4a8674 (pi/6 and 0 at the reset), the distance's target 0x4a867c and the eased
+   distance 0x4a868c (5.5 at the reset) */
+static float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist;
 /* the heading's quaternions: the target 0x4a869c and the eased 0x4a86ac */
 static float q_to[4], q_cur[4];
 
@@ -42,7 +42,7 @@ typedef struct {
     int32_t cockpit, mode;
     View view;
     Entity *entity;
-    float chase_pitch, chase_yaw, dist_to, dist, q_to[4], q_cur[4];
+    float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist, q_to[4], q_cur[4];
     float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
 } CamState;
 static CamState stack[8];
@@ -53,7 +53,7 @@ static int below(double a, double b) { return a < b || a != a || b != b; }
 static void cam_save(CamState *c)
 {
     *c = (CamState){g_camera_fn, g_cockpit, g_camera_mode, g_view, g_camera_entity, chase_pitch, chase_yaw,
-                    dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll};
+                    pitch_aim, yaw_aim, dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll};
     memcpy(c->q_to, q_to, sizeof q_to);
     memcpy(c->q_cur, q_cur, sizeof q_cur);
 }
@@ -76,6 +76,8 @@ int Camera_Pop(void)
     g_camera_entity = c->entity;
     chase_pitch = c->chase_pitch;
     chase_yaw = c->chase_yaw;
+    pitch_aim = c->pitch_aim;
+    yaw_aim = c->yaw_aim;
     dist_to = c->dist_to;
     dist = c->dist;
     memcpy(q_to, c->q_to, sizeof q_to);
@@ -181,8 +183,8 @@ void View_Init(int reset, Surface *surface)
     g_camera_mode = 0;
     pitch_to = pitch = yaw_to = yaw = 0;   /* the roll's are not reset (quirk, kept) */
     /* 0x4a86d8 = 0: not ported yet */
-    chase_pitch = 0.52359879f;   /* 0x3f060a92 */
-    chase_yaw = 0;
+    pitch_aim = chase_pitch = 0.52359879f;   /* 0x3f060a92 */
+    yaw_aim = chase_yaw = 0;
     dist_to = dist = 5.5f;
     Camera_SetMode(g_user_entity, 0x19);   /* the start's mode, through the table 0x4a86e8 */
 }
@@ -256,19 +258,73 @@ void Camera_ChaseStart(Entity *e)
     g_camera_fn = Camera_Chase;
 }
 
+/* the distance's target: track_distance within [1, 10] (the test against 10 on the float's bits) */
+static void distance_aim(void)
+{
+    double td = (double)rd32(INPUT_AT(0x4def8c));
+    dist_to = F32(td);
+    if (below(td, 1.0)) dist_to = 1.0f;
+    if ((int32_t)fbits(dist_to) > 0x41200000) dist_to = 10.0f;
+}
+
+static void chase_place(Entity *e, float k, int raised);
+
 void Camera_Chase(void)
 {
     if (!g_camera_entity) g_camera_entity = g_user_entity;
     Entity *e = g_camera_entity;
     float step = g_clock_step;
-    /* the distance: track_distance within [1, 10], eased at 2 per second */
+    /* the distance eased at 2 per second */
     float k = F32(MUL(step, 2.0f));   /* 0x4a5044 */
-    double td = (double)rd32(INPUT_AT(0x4def8c));
-    dist_to = F32(td);
-    if (below(td, 1.0)) dist_to = 1.0f;
-    if ((int32_t)fbits(dist_to) > 0x41200000) dist_to = 10.0f;
+    distance_aim();
     dist = ease_at(dist, dist_to, step, 1, 2.0f);
-    /* behind by the entity's radius times the distance, at most 150, turned by the pitch and the yaw */
+    chase_place(e, k, 1);
+}
+
+void Camera_Track(void)
+{
+    if (!g_camera_entity) g_camera_entity = g_user_entity;
+    Entity *e = g_camera_entity;
+    if (!e->node) return;
+    float step = g_clock_step;
+    const float deg = exe_f32(0x4a5020);
+    float k = F32(MUL(step, 2.0f));
+    /* the pitch's target moved by track_pitch_delta, within [1 degree, pi/2] (the top on the bits) */
+    double pa = ADD(MUL((double)rd32(INPUT_AT(0x4def94)), deg), pitch_aim);
+    pitch_aim = F32(pa);
+    if (below(pa, deg)) pitch_aim = 0.017453292f;   /* 0x3c8efa35 */
+    if ((int32_t)fbits(pitch_aim) > 0x3fc90fda) memcpy(&pitch_aim, &(uint32_t){0x3fc90fda}, 4);
+    /* the yaw's moved by track_yaw_delta; past 1000 turns either way it becomes the eased yaw within a
+       turn (the target's own remainder is worked out and dropped: quirk, kept) */
+    double ya = ADD(MUL((double)rd32(INPUT_AT(0x4def9c)), deg), yaw_aim);
+    yaw_aim = F32(ya);
+    if (fabs(ya) > exe_f32(0x4a5048)) {   /* 6283.1855 */
+        float r = remainderf(chase_yaw, 6.2831855f);   /* fprem1 by 0x40c90fdb */
+        if (fbits(r) > 0x80000000u) r = F32(ADD(r, exe_f32(0x4a504c)));
+        yaw_aim = r;
+    }
+    distance_aim();
+    dist = ease_at(dist, dist_to, step, 1, 2.0f);
+    chase_pitch = ease_at(chase_pitch, pitch_aim, step, 1, 2.0f);
+    chase_yaw = ease_at(chase_yaw, yaw_aim, step, 1, 2.0f);
+    chase_place(e, k, 0);   /* at the centre itself */
+}
+
+void Camera_TrackStart(Entity *e)
+{
+    if (g_camera_mode == 4) Camera_Pop();
+    view_again();
+    g_camera_entity = e;
+    g_cockpit = 0;
+    g_camera_mode = 6;
+    heading(q_cur, e);
+    memcpy(q_to, q_cur, sizeof q_to);
+    g_camera_fn = Camera_Track;
+}
+
+/* the chase's frame (raised: its centre 2 up, the chase's): behind by the entity's radius times the distance, at most 150, turned by the pitch and the yaw */
+static void chase_place(Entity *e, float k, int raised)
+{
     Frame m, a, t;
     const Frame *id = (const Frame *)exe_data(0x4db298, sizeof m);
     memcpy(&m, id, sizeof m);
@@ -304,7 +360,7 @@ void Camera_Chase(void)
     float p[3];
     Frame_Points(&p, (const float(*)[3])e->c, 1, &e->node->frame);
     a.pos[0] = p[0];
-    a.pos[1] = ADD(p[1], 2.0f);   /* 0x4a5044 */
+    a.pos[1] = raised ? ADD(p[1], 2.0f) : p[1];   /* 0x4a5044 */
     a.pos[2] = p[2];
     Frame_Mul(&t, &m, &a);
     m = t;
@@ -319,6 +375,7 @@ static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
     {0xf, Camera_ChaseStart},
     {0x19, Camera_PilotStart},
+    {0xfefe, Camera_TrackStart},
 };
 
 void Camera_SetMode(Entity *e, int32_t mode)

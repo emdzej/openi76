@@ -38,3 +38,8 @@ void Camera_Chase(void);
    from it (0 when empty), the glance's targets read from the input again */
 int Camera_Push(void);
 int Camera_Pop(void);
+/* Camera_TrackStart 0x406bb0 (mode 0xfefe, the death's): the chase's frame steered by the player, from where
+   the camera was; Camera_Track 0x403540: the pitch (1 degree to pi/2) and yaw aimed by track_pitch_delta
+   and track_yaw_delta, the distance by track_distance, each eased at 2 per second */
+void Camera_TrackStart(Entity *e);
+void Camera_Track(void);

@@ -1,5 +1,6 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "camera.h"
 #include "ordnance.h"
 #include "classes.h"
 #include "collide.h"
@@ -1102,8 +1103,7 @@ float Side_Whole(const uint8_t *d, uint32_t side)
 }
 
 /* not ported yet: the sparks (0x45c780, "CHUNK4" at the point), the death's other steps (0x46fdb0, the
-   AI's death 0x488950, the guns' 0x455370, the engine's sound 0x476440, the death camera 0x407010 with
-   0xfefe, the HUD 0x428890) */
+   AI's death 0x488950, the guns' 0x455370, the engine's sound 0x476440) */
 static void sparks(const float at[3]) { (void)at; }
 static void death_steps(Node *n, int user) { (void)n, (void)user; }
 
@@ -1179,6 +1179,7 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
         Node_SetFlags(n, 0x200);
         if (g_user_entity && g_user_entity->node == n) {
             g_input_menu = 0;   /* 0x480680 */
+            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera; the HUD's 0x428890 not ported */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
         }
@@ -1373,7 +1374,8 @@ void Vehicle_Wreck(Node *n, int start)
         sound(2, n);
         sound(7, n);
         if (g_user_entity && g_user_entity->node == n) {
-            g_input_menu = 0;   /* 0x480680; the death camera (0x407010 with 0xfefe) and the HUD (0x428890) */
+            g_input_menu = 0;   /* 0x480680 */
+            Camera_SetMode(g_user_entity, 0xfefe);   /* the death camera; the HUD's 0x428890 not ported */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
         } else {
