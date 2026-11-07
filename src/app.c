@@ -102,7 +102,8 @@ static bool viewer_init(const char *mission)
 /* Render_World 0x407550, its ported parts */
 static void viewer_frame(void)
 {
-    if (g_detail.b[DET_CLEAR]) Surface_Fill(&surf, 0);
+    /* with DET_SHADOWS the original clears the shadow mask's surface (0x58d890) here; no shadows are
+       drawn yet */
     Terrain_Draw(&view);
     Roads_Draw(&view);
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);

@@ -554,7 +554,8 @@ Everything in a frame goes through a queue sorted by depth (0x48d0c0-0x48e110), 
 Render_World draws a frame in this order:
 
 1. 0x46d300, then 0x471390 when 0x4a847c is 1.
-2. Surface_Fill(0x58d890, 0) when the detail byte 0x5e14d6 is set.
+2. Surface_Fill(0x58d890, 0), the shadow mask's surface, when the detail byte 0x5e14d6 (shadows) is set.
+   The screen is not cleared.
 3. A yaw-only frame from the camera at 0x58c4a0.
 4. Terrain_Draw 0x48e8d0, the roads 0x491180, then the object and entity drawers 0x46bdc0, 0x46d3d0,
    0x424b90, 0x46ebb0, 0x46c9b0, 0x42edc0, 0x46e360, and the hook at 0x58dc54. All of these queue their
