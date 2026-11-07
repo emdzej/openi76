@@ -31,6 +31,9 @@ static float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
    distance 0x4a868c (5.5 at the reset) */
 static float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist;
 static float over_h;   /* 0x4a866c: the overview's height over the ground (100 at its start) */
+/* the mounted views': 0x4a8678 (set 0, not read by them), the roll 0x4a8688 (which their starts leave as
+   it was) and the offset 0x4a8690-0x4a8698 */
+static float p78, mount_roll, mount_at[3];
 /* the heading's quaternions: the target 0x4a869c and the eased 0x4a86ac */
 static float q_to[4], q_cur[4];
 
@@ -45,7 +48,7 @@ typedef struct {
     Entity *entity;
     float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist, q_to[4], q_cur[4];
     float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
-    float over_h;
+    float over_h, p78, mount_roll, mount_at[3];
 } CamState;
 static CamState stack[8];
 static int32_t top = 8;
@@ -55,7 +58,8 @@ static int below(double a, double b) { return a < b || a != a || b != b; }
 static void cam_save(CamState *c)
 {
     *c = (CamState){g_camera_fn, g_cockpit, g_camera_mode, g_view, g_camera_entity, chase_pitch, chase_yaw,
-                    pitch_aim, yaw_aim, dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll, over_h};
+                    pitch_aim, yaw_aim, dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll, over_h, p78, mount_roll, {0}};
+    memcpy(c->mount_at, mount_at, sizeof mount_at);
     memcpy(c->q_to, q_to, sizeof q_to);
     memcpy(c->q_cur, q_cur, sizeof q_cur);
 }
@@ -85,6 +89,9 @@ int Camera_Pop(void)
     memcpy(q_to, c->q_to, sizeof q_to);
     memcpy(q_cur, c->q_cur, sizeof q_cur);
     over_h = c->over_h;
+    p78 = c->p78;
+    mount_roll = c->mount_roll;
+    memcpy(mount_at, c->mount_at, sizeof mount_at);
     pitch = c->pitch;
     yaw = c->yaw;
     roll = c->roll;
@@ -409,10 +416,45 @@ void Camera_Overview(void)
     View_SetCamera(&g_view, &f);
 }
 
+/* the mounted views' starts: the pitch 0, the yaw, the offset (x, 0, z) */
+static void mount_start(Entity *e, float yaw, float x, float z)
+{
+    if (g_camera_mode == 4) Camera_Pop();
+    view_again();
+    g_camera_entity = e;
+    g_cockpit = 0;
+    chase_pitch = 0;
+    chase_yaw = yaw;
+    p78 = 0;
+    g_camera_mode = 1;
+    mount_at[0] = x;
+    mount_at[1] = 0;
+    mount_at[2] = z;
+    g_camera_fn = Camera_Mounted;
+}
+
+void Camera_MountFrontStart(Entity *e) { mount_start(e, 0, -1.5f, 0.2f); }          /* 0xbfc00000, 0x3e4ccccd */
+void Camera_MountBackStart(Entity *e) { mount_start(e, 3.1415925f, -1.5f, -0.25f); }  /* 0x40490fda, 0xbe800000 */
+
+void Camera_Mounted(void)
+{
+    if (!g_camera_entity) g_camera_entity = g_user_entity;
+    Entity *e = g_camera_entity;
+    Frame a, f;
+    Frame_Euler(&a, chase_pitch, chase_yaw, mount_roll, mount_at[0], mount_at[1], mount_at[2]);
+    for (int i = 0; i < 3; i++) a.pos[i] = ADD(e->c[i], a.pos[i]);
+    Frame_Mul(&f, &a, &e->node->frame);
+    double g = ADD(Terrain_Height(f.pos[0], f.pos[2]), 0.5f);   /* 0x4a5068 */
+    if (g > f.pos[1]) f.pos[1] = g;
+    View_SetCamera(&g_view, &f);
+}
+
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
     {0xf, Camera_ChaseStart},
+    {0x12, Camera_MountFrontStart},
+    {0x13, Camera_MountBackStart},
     {0x14, Camera_ChaseLeftStart},
     {0x15, Camera_ChaseRightStart},
     {0x16, Camera_OverviewStart},

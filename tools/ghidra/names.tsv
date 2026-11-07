@@ -1040,3 +1040,6 @@
 00406070	Camera_ChaseRightStart	camera	high	mode 0x15: the chase at a yaw of 30 degrees; ported, diffed
 00406200	Camera_OverviewStart	camera	high	mode 0x16 (F10): straight down; ported
 00406340	Camera_Overview	camera	high	the overview's frame; ported, diffed
+00405b10	Camera_MountFrontStart	camera	high	mode 0x12 (F7): on the left side looking ahead; ported
+00405d80	Camera_MountBackStart	camera	high	mode 0x13 (F8): looking back; ported
+00405c70	Camera_Mounted	camera	high	the mounted views' frame; ported, diffed

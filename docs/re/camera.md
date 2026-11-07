@@ -18,8 +18,8 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0xf | 0x405450 | 0x4055e0 | 1 | `Camera_ChaseStart`, `Camera_Chase` |
 | 0x10 | 0x405000 | 0x405190 | 1 | |
 | 0x11 | 0x406d40 | | 8 | |
-| 0x12 | 0x405b10 | 0x405c70 | | |
-| 0x13 | 0x405d80 | 0x405c70 | | |
+| 0x12 | 0x405b10 | 0x405c70 | 1 | `Camera_MountFrontStart`, `Camera_Mounted` |
+| 0x13 | 0x405d80 | 0x405c70 | 1 | `Camera_MountBackStart`, `Camera_Mounted` |
 | 0x14 | 0x405ee0 | 0x4055e0 | 1 | `Camera_ChaseLeftStart` |
 | 0x15 | 0x406070 | 0x4055e0 | 1 | `Camera_ChaseRightStart` |
 | 0x16 | 0x406200 | 0x406340 | 3 | `Camera_OverviewStart`, `Camera_Overview` |
@@ -179,6 +179,26 @@ Each frame:
 
 **Checked.** `--call overview` (case 41, overview_zoom_delta 20), `chase14` and `chase15` (42, 43) are
 identical on t01, t05 and s01.
+
+## The mounted views (0x12, 0x13)
+
+The starts 0x405b10 (F7) and 0x405d80 (F8):
+
+- remake the view at the old camera;
+- set the entity, the cockpit flag 0 and the sub-mode 1;
+- set the pitch 0x4a8680 to 0 and 0x4a8678 to 0;
+- set the yaw 0x4a8684: 0 (ahead) for 0x12, pi (behind) for 0x13;
+- set the offset 0x4a8690-0x4a8698: (-1.5, 0, 0.2) for 0x12, (-1.5, 0, -0.25) for 0x13.
+
+Each frame, `Camera_Mounted` 0x405c70:
+
+1. Takes `Frame_Euler` of (pitch, yaw, the roll 0x4a8688) at the offset. The starts never set the roll;
+   it keeps whatever it held.
+2. Adds the entity's centre (+4, floats) to the frame's place (doubles).
+3. Multiplies by the node's frame, so the camera rides on the vehicle's left side.
+4. Keeps the frame 0.5 over the ground.
+
+Checked: `--call mount12` and `mount13` (cases 44, 45), identical on t01, t05 and s01.
 
 ## The track view (mode 0xfefe, the death's)
 

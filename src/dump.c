@@ -1077,10 +1077,10 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 39: case 40: case 41: case 42: case 43: {
+        case 39: case 40: case 41: case 42: case 43: case 44: case 45: {
                      /* a camera mode on n's entity: 39 the chase (0x405450, 0x4055e0), 40 the track view
                         (0x406bb0, 0x403540), 41 the overview (0x406200, 0x406340), 42 and 43 the side chases
-                        (0x405ee0, 0x406070); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
+                        (0x405ee0, 0x406070), 44 and 45 the mounted views (0x405b10, 0x405d80); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
                         on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
                         range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
                         about y before the third; after each the view's camera and eye */
@@ -1103,8 +1103,9 @@ int Dump_CallVehicles(int which, int upside)
             memcpy(INPUT_AT(0x4def9c), &ty, 4);
             int32_t oz = 20;
             memcpy(INPUT_AT(0x4defbc), &oz, 4);
-            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15};
-            static void (*const frames[])(void) = {Camera_Chase, Camera_Track, Camera_Overview, Camera_Chase, Camera_Chase};
+            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15, 0x12, 0x13};
+            static void (*const frames[])(void) = {Camera_Chase, Camera_Track, Camera_Overview, Camera_Chase, Camera_Chase,
+                                                   Camera_Mounted, Camera_Mounted};
             Camera_SetMode(e, modes[which - 39]);
             for (int k = 0; k < 5; k++) {
                 if (k == 2)

@@ -51,3 +51,10 @@ void Camera_ChaseRightStart(Entity *e);
    entity, overview_zoom_delta scaling the height (100 at the start; within 4 radii and 0.85 of the range) */
 void Camera_OverviewStart(Entity *e);
 void Camera_Overview(void);
+/* Camera_MountFrontStart 0x405b10 (mode 0x12, F7) and Camera_MountBackStart 0x405d80 (0x13, F8): fixed on
+   the vehicle at (-1.5, 0, 0.2) looking ahead and at (-1.5, 0, -0.25) looking back; Camera_Mounted
+   0x405c70: that frame (Frame_Euler, its place moved by the entity's centre) in the node's, at least 0.5
+   over the ground */
+void Camera_MountFrontStart(Entity *e);
+void Camera_MountBackStart(Entity *e);
+void Camera_Mounted(void);
