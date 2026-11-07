@@ -10,6 +10,8 @@
 #include "vfs_host.h"
 #include "vfs_zfs.h"
 #include "mission.h"
+#include "entity.h"
+#include "objects.h"
 #include "world.h"
 #include "render/light.h"
 #include "render/palette.h"
@@ -40,6 +42,13 @@ int main(void)
     CHECK(Chunks_Check(Terrain_Table(), 4, 0x4eb8e8));
     CHECK(Chunks_Check(Mission_Table(), 7, 0x4e9770));
     CHECK(Chunks_Check(Roads_Table(), 5, 0x4eb618));
+    CHECK(Chunks_Check(Objects_Tables(0), 3, 0x4eb768));
+    CHECK(Chunks_Check(Objects_Tables(1), 6, 0x4eb798));
+    int nc;
+    const int32_t *cls = Class_Table(&nc);
+    CHECK(nc * 52 == 0x4d419c - 0x4d3c20);
+    for (int i = 0; i < nc; i++) CHECK(cls[i] == (int32_t)exe_u32(0x4d3c20 + 52u * (uint32_t)i));
+    Objects_Init();
     CHECK(Mission_Load("t01.msn") && g_mission_kind == 2 && g_mission_number == 1 && g_world.sky[0]);
     ChunkDesc top[] = {
         {"WDEF", h_wdef, 0x2006}, {"TDEF", Terrain_Tdef, 0x2006}, {"RDEF", h_any, 0x2006}, {"ODEF", h_any, 0x2006},

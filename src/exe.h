@@ -20,6 +20,7 @@ const uint8_t *exe_data(uint32_t va, size_t len);
 /* Little-endian reads at va; 0 if unavailable. */
 uint32_t exe_u32(uint32_t va);
 uint16_t exe_u16(uint32_t va);
+float exe_f32(uint32_t va);
 /* The NUL-terminated string at va, or "" if unavailable. */
 const char *exe_str(uint32_t va);
 

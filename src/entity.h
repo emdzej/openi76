@@ -1,0 +1,78 @@
+/* Entities and classes (0x423b90-0x4258c0, 0x45ada0, 0x492ac0; docs/re/objects.md): the world's objects
+   that the game runs and draws, each a node tree with a class.
+
+   - The entity array (0x547e60, at most 256 of 0x78 bytes) is what the drawer walks.
+   - A class (0x425700, the table 0x4d3c20) gives a node its data (+0x70) and puts it on the class lists
+     (0x54f884, 0x54f888), which the simulation steps. The port has the table's classes in its order; the
+     data of those whose constructors are not ported yet stays NULL.
+   - The name table (0x54f7a8) finds an entity's node by its record's name.
+   - The chunk manager (0x45ada0) is the first entity of every mission, a group with no node of its own,
+     and holds the destruction chunks of the structures (SCHK, Chunk_Add). */
+#pragma once
+#include "scene.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct Entity {
+    Node *node;          /* +0 */
+    float c[3];          /* +4: the centre of the node's box */
+    float r;             /* +0x10 */
+    int32_t has_a;       /* +0x14 */
+    void *a;             /* +0x18: a vehicle's (0x494720) */
+    int32_t b[5];        /* +0x1c: an SDFC's five words */
+    int32_t has_b;       /* +0x30 */
+    uint32_t rest[17];   /* +0x34 */
+} Entity;
+
+#define MAX_ENTITIES 0x100
+extern Entity g_entities[MAX_ENTITIES];   /* 0x547e60 */
+extern int g_entity_count;                /* 0x4d3b5c */
+extern Entity *g_user_entity;             /* 0x4d3b64 */
+
+typedef void (*EntityFn)(Entity *);
+/* Entity_Init 0x423b90: an empty array, no callbacks, the name table */
+void Entity_Init(void);
+/* 0x423cf0: fn is called with every entity added */
+void Entity_OnAdd(EntityFn fn);
+/* Entity_Add 0x423d30: the first free entry (or a new one) for the node; its centre and radius from the
+   node's meshes. A node with flag 0x10 is the user's. NULL when full (the original's fatal at 256). */
+Entity *Entity_Add(Node *n, void *a, const int32_t *b);
+
+/* Class_IsStructure 0x42e5a0 (a node's) and 0x42e5e0 (a class): 2, 3, 4, 0xb, 0xc */
+bool Class_IsStructure(int cls);
+/* Class_Set 0x425700: the node's class; structures but 4 use class 2's entry */
+void Class_Set(Node *n, int cls);
+/* Class_Free 0x4258c0: the class's destructor for its data */
+void Class_Free(int cls, uint8_t *data);
+/* for tests: the port's classes in the table's order (n of them) */
+const int32_t *Class_Table(int *n);
+
+/* a cell of the original's lists (0x450db0, 12 bytes): pushed at the front */
+typedef struct Cell {
+    struct Cell *next, *prev;
+    void *value;
+} Cell;
+Cell *List_Push(Cell *head, Cell **prev, void *value);
+extern Cell *g_class_nodes, *g_class_cells;   /* 0x54f884, 0x54f888 */
+extern int g_class_count[2];                   /* 0x4d3c18, 0x4d3c1c */
+
+/* the name table 0x54f7a8: Names_Add 0x4240a0 / 0x492b00, Names_Find 0x492bd0 (the latest first) */
+bool Names_Add(const char *name, Node *n);
+Node *Names_Find(const char *name);
+int Names_Count(void);
+
+/* Chunks_Init 0x45ada0: the chunk table, the chunk manager's node and entity (0x4dc428); its noise
+   table (0x461750) and debris pool are not ported yet */
+void Chunks_Init(void);
+extern Node *g_chunk_mgr;
+/* Chunk_Add 0x45ae40: a destruction chunk of node: at most 10 a node, in the hash 0x570aa8 (0x71 buckets
+   by the node's address) */
+typedef struct Chunk {
+    int32_t a, b;        /* the record's first two words */
+    Frame frame;         /* its frame; the word at +0x24 is the original's stack */
+    int32_t p[4];        /* 0, 0, 0, the record's +0x4c */
+    float box[6];        /* -half, +half */
+} Chunk;
+bool Chunk_Add(Node *n, int32_t a, int32_t b, const Frame *f, const int32_t p[4], const float box[6]);
+/* for tests: node's chunks (NULL and *count 0 if none) */
+const Chunk *Chunk_List(const Node *n, int *count);

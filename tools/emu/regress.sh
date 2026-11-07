@@ -26,4 +26,14 @@ for m in "" --down; do
     echo "[$t $n ${m:-(nearest)}] $(echo "$out" | grep -c 'identical') lines identical"
   done <<< "$list"
 done
+# the objects of every mission (a load starts rounding to nearest, as the game's first does)
+if [ -z "$1" ]; then
+  for f in ${OPENI76_DATA:-cd}/MISSIONS/*.MSN; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" | tr 'A-Z' 'a-z')
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" 2>&1) || fail=1
+    echo "$out" | grep -q identical || echo "$out" | tail -6
+  done
+  echo "[diff_objects] every mission done"
+fi
 exit $fail

@@ -1,6 +1,7 @@
 /* The mission file (mission.h). */
 #include "mission.h"
 #include "crt.h"
+#include "objects.h"
 #include "roads.h"
 #include "terrain.h"
 #include "world.h"
@@ -9,8 +10,9 @@
 
 int g_mission_number, g_mission_kind;
 
-/* the handlers of the steps not ported yet (0x484620 objects 0x494140, 0x484640 0x493530, 0x484660
-   0x492f70): the chunk is read past */
+/* the handlers of the steps not ported yet (0x484640 0x493530, 0x484660 0x492f70; EXIT 0x484820, which
+   ends in a fatal message without a user vehicle, and vehicles are not ported yet): the chunk is read
+   past */
 static int later(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)c, (void)arg, (void)end;
@@ -19,7 +21,7 @@ static int later(const uint8_t *c, void *arg, const uint8_t *end)
 
 static ChunkDesc table[] = {   /* 0x4e9770 */
     {"WDEF", World_Wdef, 0x2006}, {"TDEF", Terrain_Tdef, 0x2006}, {"RDEF", Roads_Rdef, 0x2006},
-    {"ODEF", later, 0x2006},      {"LDEF", later, 0x2006},        {"ADEF", later, 0x2006},
+    {"ODEF", Objects_Odef, 0x2006},      {"LDEF", later, 0x2006},        {"ADEF", later, 0x2006},
     {"EXIT", later, 0x2000},
 };
 

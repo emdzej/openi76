@@ -93,6 +93,14 @@ uint16_t exe_u16(uint32_t va)
     return p ? rd16(p) : 0;
 }
 
+float exe_f32(uint32_t va)
+{
+    uint32_t u = exe_u32(va);
+    float f;
+    memcpy(&f, &u, 4);
+    return f;
+}
+
 const char *exe_str(uint32_t va)
 {
     for (int i = 0; i < nsec; i++) {

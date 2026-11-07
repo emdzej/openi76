@@ -9,7 +9,7 @@ typedef struct {
     char outro[13];        /* 0x58dca0: payload +0x11 */
     char npt[16];          /* 0x5ad300: payload +0x45 */
     char sky[16];          /* 0x58c490: payload +0x52, the sky's .map */
-    char scrounge[16];     /* payload +0x5f, a .sdf (0x494a30, not ported yet) */
+    char scrounge[16];     /* payload +0x5f, a .sdf (Objects_Scrounge 0x494a30) */
     char zmap[16];         /* 0x4db010: payload +0x79 */
     uint8_t lights[0xa0];  /* 0x5e3020 (0x4931e0): payload +0x8a, 8 records of 5 dwords */
     float range;           /* 0x4a8470: payload +0x12a, an int; the view's range when 0x5e14da is set */

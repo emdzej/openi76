@@ -215,3 +215,69 @@
 00453a70	Buf_ReadLine	misc	high	a line of a buffer, past an end of line and the white space after it
 00491180	Roads_Draw	roads	high	the road quads into the queue as occluders; ported, diffed
 00491650	Roads_DrawObjects	roads	med	the objects' road faces into the queue
+0041f2c0	Node_InitHeaps	scene	high	the node and class-data heaps
+0041f320	Node_Create	scene	high	a cleared 0xb0 node with the identity frame, pushed under its parent; ported, diffed
+0041f440	Node_Ref	scene	high	+1 reference on a node and its descendants; ported, diffed
+0041f4b0	Node_Free	scene	high	unlinks and drops a reference; frees at none; ported (0x41f5e0 not)
+00484850	Node_New	scene	high	Node_Create and the 8-byte name; ported
+00484880	Node_Find	scene	high	depth-first by 8-byte name through siblings; ported
+0042e680	Node_Parent	scene	high	the parent, back along the previous-sibling links; ported
+0042eb90	Node_Bounds	scene	high	the box of the meshes in the node's space; ported, diffed
+0042ec00	Node_BoundsList	scene	high	the node and its siblings into a box; ported
+0042e9f0	Node_Radius	scene	high	the distance from a point to the farthest vertex; ported, diffed
+0042ea90	Node_Radius2List	scene	high	the largest squared distance, node and siblings; ported
+0048e110	World_ListInit	scene	high	the world list 0x5e3018 empty
+0048e120	World_Add	scene	high	centre and radius, then onto the world list through +0x60; ported, diffed
+0047d6c0	Lod_Init	lod	high	the level-of-detail hash 0x57f558; ported
+0047d700	Lod_Add	lod	high	a mesh name per state and level; ported, diffed
+0047dc70	Lod_Select	lod	high	the mesh of a level, loaded when the name changes; ported, diffed
+0047da30	Lod_Remove	lod	high	a node's record and its meshes; ported
+00423b90	Entity_Init	entity	high	the entity array, callbacks, name table; ported in part
+00423cf0	Entity_OnAdd	entity	high	a callback for every entity added; ported
+00423d10	Entity_OnRemove	entity	high	a callback for every entity removed
+00423d30	Entity_Add	entity	high	an entity for a node, its centre and radius; ported, diffed
+00425700	Class_Set	entity	high	the node's class: data, references, the class lists; ported, diffed
+004258c0	Class_Free	entity	high	the class's destructor; ported for ported classes
+0042e5a0	Class_IsStructureNode	entity	high	classes 2, 3, 4, 0xb, 0xc
+0042e5e0	Class_IsStructure	entity	high	classes 2, 3, 4, 0xb, 0xc
+0042e620	Node_IsUser	entity	high	flag 0x10
+0042e640	Class_IsMoving	entity	high	classes 1, 7, 9
+00450db0	List_Push	misc	high	a 12-byte cell at a list's front
+00492ac0	Names_Init	entity	high	the name table: 0x800 entries
+00492b00	Names_Add	entity	high	a name and its node; its growth takes success for failure; ported
+00492bd0	Names_Find	entity	high	by name, the latest first; ported
+004240a0	Entity_Name	entity	high	Names_Add on the entity name table 0x54f7a8; ported
+0045ada0	Chunks_Init	chunks	high	the chunk table, the chunk manager node and entity; ported in part
+0045ae40	Chunk_Add	chunks	high	a destruction chunk of a node (10 at most); ported, diffed
+004306a0	Structure_New	class	high	class 2/4 data: 0x30 bytes, strength 400; ported
+00430e20	Structure_SetStrength	class	high	the strength twice; ported
+004345f0	Class10_New	class	high	class 10 data: 0x14 bytes; ported
+004348a0	Class10_Set	class	high	three words scaled; ported
+00434910	Class10_SetStrength	class	high	the strength twice; ported
+00492c50	Obj_Name	objects	high	8 characters, top bits cleared, plus an extension; NULL for null; ported
+00494140	Objects_Odef	objects	high	ODEF: OREV, OBJ, EXIT (0x4eb768); ported, diffed
+00494170	Objects_Obj	objects	high	an OBJ record: spawn points, vehicles, structures; ported (vehicles not)
+00494790	Obj_Node	objects	high	a node for an object record; ported, diffed
+00493ed0	Obj_Tree	objects	high	an SGEO's node tree and levels of detail; ported, diffed
+00493c50	Obj_Lists	objects	high	the SGEO lists' addresses
+00494480	Sdf_Load	objects	high	a structure's .sdf (0x4eb798); ported, diffed
+004944e0	Sdf_Sdfc	objects	high	SDFC; ported (the .xdf not)
+004949a0	Sdf_Sobj	objects	high	SOBJ: the node's mesh; ported
+00494560	Sdf_Sgeo	objects	high	SGEO; ported
+004945c0	Sdf_Schk	objects	high	SCHK: destruction chunks; ported
+004934c0	Sdf_Lobj	objects	high	LOBJ: a light; ported
+00494b40	Sdf_ChildEffects	objects	high	the children's effects by flags; ported (the .xdf not)
+00494a30	Objects_Scrounge	objects	high	the scrounge: a class 5 node on the world list and its .sdf; ported, diffed
+004626f0	Spawn_Add	objects	high	spawn and regen points; ported, diffed
+00493210	Xdf_Load	effects	med	an effect .xdf into an 8-byte name; may make nodes
+0043a1f0	Light_Add	light	high	a node's dynamic light, not under the sun; ported, diffed
+00469bd0	Collide_Init	collide	high	the lists and the entity callbacks; ported in part
+00469c10	Collide_Add	collide	high	an entity into the collision world; ported, diffed
+0046b480	Collide_Register	collide	high	the collision type by class; ported (vehicles not)
+0046b830	Collide_SetType	collide	high	the type per node, the face meshes; ported, diffed
+00478e70	Coll_MeshBuild	collide	high	a node's faces in the world; ported, diffed
+00479020	Coll_MeshFree	collide	high	ported
+00477200	Collide_Ground	collide	high	classes 11-13: their walkable faces; ported
+00477510	Coll_GroundFaces	collide	high	the meshes' faces with normal y above 0.4; ported
+004240e0	Entity_WorldSphere	entity	high	the entity's centre in the world and its radius
+00484820	Mission_Exit	world	high	no user vehicle: fatal

@@ -6,6 +6,7 @@
 #include "exe.h"
 #include "math3d.h"
 #include "mission.h"
+#include "objects.h"
 #include "pcx.h"
 #include "platform.h"
 #include "res.h"
@@ -52,6 +53,7 @@ static bool viewer_init(const char *mission)
         plat_log(m);
         return false;
     }
+    Objects_Init();
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
         plat_log(m);

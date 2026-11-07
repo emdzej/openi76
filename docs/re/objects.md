@@ -1,8 +1,14 @@
 # Objects: scene nodes, structures and their drawing
 
-What a mission's ODEF puts in the world, and how its meshes reach the screen. **Not ported yet**: this
-page is the map for that work. "Confirmed" means read in the disassembly; the rest is from the
-decompile and still to check.
+What a mission's ODEF puts in the world, and how its meshes reach the screen.
+
+**Ported** (src/scene.c, lod.c, entity.c, objects.c, collide.c): the data layer, from ODEF to the
+entities, their node trees, levels of detail, destruction chunks, lights, spawn points, the scrounge,
+the world list and the collision set-up. `tools/emu/diff_objects.py` finds the port's state identical to
+the original's for all 40 missions on disc 1.
+
+**Not yet:** the vehicles (`.vcf`, 0x485030), the effects (`.xdf`, 0x493210), the constructors of the
+classes other than 2, 4 and 10, LDEF and ADEF, and the drawing below.
 
 ## The chain
 
@@ -165,10 +171,60 @@ It is read by 0x484300, in sequence, with the table 0x4eb798 and the node as the
   LOD is the previous one. Otherwise it loads the name (Geom_Get), but only when the name differs; it
   releases the old previous and calls Tex_Refresh(node).
 
+## The set-up before a mission
+
+WinMain runs a list of set-up functions before each mission (after Shell_Load). Those the objects need,
+in its order, are Objects_Init:
+
+1. Entity_Init 0x423b90.
+2. World_ListInit 0x48e110.
+3. Lod_Init 0x47d6c0.
+4. Collide_Init 0x469bd0. Its entity callback (0x469c10) comes after those of 0x41fbc0 (radar),
+   0x4088a0 (AI) and 0x428d80 (artillery), which only act on vehicles.
+5. Chunks_Init 0x45ada0. The chunk manager it makes is always entity 0.
+
+The effects' set-up 0x453ed0 comes before Chunks_Init and loads three `.xdf` files, each of which
+registers a class.
+
+WDEF loads the scrounge (0x494a30) right after it reads the scrounge's name. The scrounge is a class 5
+node with a zero rotation and half extents of 50, put on the world list before its `.sdf` is read.
+
+## The collision set-up (0x469c10)
+
+Every entity added goes through 0x469c10.
+
+- **0x46b480** picks a collision type by class: 0x2000 for 2, 7, 8 and 10; 0x3000 for 3, 0xb and 0xc;
+  0x5000 for 4. Classes 1 and 9 (vehicles) go to 0x46b950. It sets the entity's +0x14 to 3.
+- **0x46b830** walks the tree in world frames. A node without a type of its own (flags & 0xf000) takes
+  that one. A node not drawn, of class 0x37, or without a mesh gets 0x1000.
+  - For 0x3000 it builds a face mesh in the world (0x478e70, the node's +0x80): the vertices, then each
+    face of 3 corners or more with its plane. The normal is rounded and then negated; d is negated and
+    then rounded.
+  - A mesh that cannot be built sets 0x1000, but the type is then written over it: such a node keeps
+    0x3000 without a mesh.
+- **Static entities** (not 1, 7 or 9) go on the list 0x577180, with a box on the ground plane at +0x50:
+  the centre in the world ± the radius.
+- **Classes 11–13** (0x477200) collect into their +0x18 the faces whose normal y is above 0.4 (the
+  bits compared as an integer). With class 0xc, only those of class 0xd nodes count.
+
+## Quirks kept
+
+- Node_Bounds and Node_Radius also walk the node's siblings.
+- Lod_Select on a node without a record returns false. So a structure whose mesh came from SOBJ
+  contributes nothing to the bounds.
+- World_Add links through +0x60, the sibling link, so it splices the world list into sibling chains.
+- Obj_Tree's fold walks +0x68 (previous sibling or parent), not the real parent.
+- A `null` named record without a rotation is reset to the identity, position included.
+- Obj_Tree keeps at most 80 records.
+- The name table's growth takes HeapReAlloc's success for failure. The port's table never fills.
+- A dropped vehicle leaves the root 0x50a394 pointing at a freed node. The port clears it.
+
 ## The reference: the original's load in the emulator
 
 `tools/emu/mission.py t01.msn` runs Mission_Load 0x484410 in Unicorn. The files come from the port's
 resource layer, and the user vehicle is WinMain's default `vppirna1` (0x58dcd0, copied from 0x4a8448
-before the shell's choice; without it ODEF ends in "No User vehicle in mission"). For t01 it reads 494
-files and makes 93 entities (the user at 0x548ec8) and 718 scene nodes, at most 4 levels deep. The
-port's objects layer is checked against these trees.
+before the shell's choice; without it the mission's EXIT 0x484820 ends in "No User vehicle in mission").
+With the set-up above (mission.INITS), t01 reads 494 files and makes 94 entities and 719 scene nodes, at
+most 4 levels deep. `diff_objects.py` runs the same load with the pieces the port lacks answered as the
+port answers them: vehicles fail, the `.xdf` gives "null", and LDEF and ADEF are skipped. ADEF would add
+a reference to the trees the AI names.

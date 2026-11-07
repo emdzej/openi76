@@ -89,7 +89,14 @@ def crt_stubs(exe):
     exe.stub(0x496DF0, lambda c, m: (0x8 if c in b" \t\n\v\f\r" else 0) & m, 2)
 
 
-def load_mission(name, log=None):
+# WinMain's per-mission set-up before Mission_Load, in its order (0x401?? loop after Shell_Load)
+INITS = [0x466DD0, 0x46FA50, 0x44E330, 0x450E90, 0x480250, 0x421FC0, 0x423B90, 0x450D90, 0x425570,
+         0x481BE0, 0x450410, 0x48D710, 0x48E110, 0x4812E0, 0x47D6C0, 0x47DF40, 0x47BAB0, 0x47E890,
+         0x454B50, 0x41FBC0, 0x426070, 0x42D830, 0x453ED0, 0x454840, 0x4088A0, 0x428D80, 0x469BD0,
+         0x45ADA0, 0x45C190]
+
+
+def setup(log=None):
     exe = x86.Exe()
     exe_ref[0] = exe
     exe.uc.mem_map(0, 0x1000)   # FS:[0]
@@ -107,6 +114,18 @@ def load_mission(name, log=None):
     exe.stub_pointer(0x58DC5C, lambda *a: 0, 5)
     exe.stub(0x44E380, lambda size: exe.alloc(size), 1)
     exe.stub(0x44F600, lambda size, flags: exe.alloc(size), 2)
+    # the clock and the message queue: fixed (a zero local time, tick 0, no messages)
+    exe.stub_import("GetTickCount", lambda: 0, 0)
+    exe.stub_import("PeekMessageA", lambda *a: 0, 5)
+    exe.stub_import("GetLocalTime", lambda p: exe.write(p, bytes(16)), 1)
+    exe.stub_import("GetSystemTime", lambda p: exe.write(p, bytes(16)), 1)
+    return exe, lib
+
+
+def load_mission(name, log=None, inits=INITS):
+    exe, lib = setup(log)
+    for f in inits:
+        exe.call(f, limit=200_000_000)
     # WinMain's default user vehicle (0x58dcd0 from 0x4a8448, `vppirna1`), before the shell's choice
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
     p = exe.put(name.encode() + b"\0")

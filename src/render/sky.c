@@ -29,7 +29,6 @@ static View saved;  /* 0x4eda20 */
 
 static bool below(double a, double b) { return a < b || isnan(a) || isnan(b); }      /* C0 */
 static bool below_eq(double a, double b) { return a <= b || isnan(a) || isnan(b); }  /* C0 | C3 */
-static float exe_f32(uint32_t va) { float f; memcpy(&f, exe_data(va, 4), 4); return f; }
 static uint32_t bits(float f) { uint32_t b; memcpy(&b, &f, 4); return b; }
 /* fadd 1.5 * 2^52 (0x4db2d8) and the low dword */
 static int32_t magic(double d) { return isnan(d) ? 0 : (int32_t)(uint32_t)(uint64_t)(int64_t)fpu_round(d); }

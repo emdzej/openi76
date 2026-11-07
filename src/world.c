@@ -1,5 +1,6 @@
 /* The world definition (world.h). */
 #include "world.h"
+#include "objects.h"
 #include "chunks.h"
 #include "res.h"
 #include "terrain.h"
@@ -50,7 +51,8 @@ int World_Wrld(const uint8_t *c, void *arg, const uint8_t *end)
     name(g_world.sky, sizeof g_world.sky, p + 0x52);
     name(g_world.npt, sizeof g_world.npt, p + 0x45);
     name(g_world.zmap, sizeof g_world.zmap, p + 0x79);
-    name(g_world.scrounge, sizeof g_world.scrounge, p + 0x5f);   /* 0x494a30, not ported yet */
+    name(g_world.scrounge, sizeof g_world.scrounge, p + 0x5f);
+    Objects_Scrounge(g_world.scrounge);
     Terrain_SetTextures((const char *)p + 0x6c);
     memcpy(g_world.intro, p + 4, 13);
     memcpy(g_world.outro, p + 0x11, 13);
