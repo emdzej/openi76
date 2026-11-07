@@ -131,3 +131,17 @@
 0047d160	Geom_Release
 0047d850	Geom_CopyObject
 0047db20	Geom_SelectState
+00484300	Bwd2_Read
+00484390	Bwd2_ReadHeader
+00484680	Rev_Check
+004843c0	Bwd2_Header
+00484410	Mission_Load
+00494bc0	Terrain_ReadTdef
+00494c10	Terrain_Zmap
+00494c80	Terrain_Zone
+00494d50	Terrain_MapFile
+00494d10	Terrain_ZoneData
+00494d00	Terrain_ZoneMap
+00494d20	Terrain_UnmapFile
+0048e8d0	Terrain_Draw
+00407550	Render_World
