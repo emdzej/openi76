@@ -243,8 +243,19 @@ def call_collide(exe, n, fpcw):
     exe.write(n + 0x18, f0)
 
 
+def call_ground(exe, n, fpcw):
+    pos = struct.unpack("<3d", exe.read(n + 0x40, 24))
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    u = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]
+    for off in ((0, 0, 0), (3, 0, -2), (-7, 10, 4.5), (40.3, -2, 17.9)):
+        p = [f32(f32(pos[k]) + f32(off[k])) for k in range(3)]
+        o = exe.put(bytes(16))
+        exe.call(0x477290, *(u(x) for x in p), o, o + 4, fpcw=fpcw)
+        CALL_OUT.append(exe.read(o, 16).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

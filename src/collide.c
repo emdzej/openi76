@@ -301,6 +301,6 @@ void Ground_Height(float px, float py, float pz, float *out, float normal[3])
         if (normal) memcpy(normal, nl, sizeof nl);
     } else {
         *out = F32(Terrain_Height(px, pz));
-        if (normal) memset(normal, 0, 3 * sizeof *normal);   /* the terrain's normal 0x491bf0: not ported yet */
+        if (normal) Terrain_Normal(normal, px, pz);
     }
 }

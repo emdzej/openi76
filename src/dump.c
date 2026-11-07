@@ -312,7 +312,7 @@ size_t Objects_Dump(char *buf, size_t cap)
    class list's order */
 #include "physics.h"
 /* the calls' results, a line per vehicle (Dump_CallOut) */
-static char call_out[1 << 16];
+static char call_out[1 << 20];
 static size_t call_len;
 static void call_line(const void *p, size_t n)
 {
@@ -529,6 +529,17 @@ int Dump_CallVehicles(int which, int upside)
             }
             memcpy(n->data, save, sizeof save);
             n->frame = f0;
+            break;
+        }
+        case 11: {   /* the ground and its normal under the vehicle, and off it by (3, 0, -2), (-7, 10, 4.5),
+                        (40.3, -2, 17.9) */
+            static const float off[4][3] = {{0, 0, 0}, {3, 0, -2}, {-7, 10, 4.5f}, {40.3f, -2, 17.9f}};
+            for (int j = 0; j < 4; j++) {
+                float p[3], b[4] = {0, 0, 0, 0};
+                for (int k = 0; k < 3; k++) p[k] = (float)n->frame.pos[k] + off[j][k];
+                Ground_Height(p[0], p[1], p[2], &b[0], b + 1);
+                call_line(b, sizeof b);
+            }
             break;
         }
         case 3: {   /* the brakes released */
