@@ -6,6 +6,7 @@
 #include "platform.h"
 #include "render/fpu.h"
 #include "render/light.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -228,6 +229,14 @@ void Node_WorldPos(float out[3], const Node *n)
     if (n) Node_FrameIn(&f, n, NULL);
     else identity(&f);
     for (int k = 0; k < 3; k++) out[k] = fpu_f32(f.pos[k]);
+}
+
+void Node_SetYaw(Node *n, float a)
+{
+    /* fsincos (0x452a70), its results stored as floats */
+    float s = fpu_f32(sin(a)), c = fpu_f32(cos(a));
+    float m[9] = {c, 0, -s, 0, 1, 0, s, 0, c};
+    memcpy(n->frame.m, m, sizeof m);
 }
 
 Node *Node_Find(Node *n, const char *name)

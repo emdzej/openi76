@@ -74,7 +74,22 @@ SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
               41: (0x24,)}   # 41: the pad word of a frame 0x433370 copies from its stack (garbage)
 # --call NAME [times]: after the start, a per-frame function on every listed vehicle (the port's
 # Dump_CallVehicles), with the vehicles' death and the sounds stubbed
-CALLS = {"upright": (0, 0x46FE20)}
+def call_wheels(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    tc = struct.unpack("<I", exe.read(d + 0x45C, 4))[0]
+    for o in (0x3AC, 0x3A8, 0x3BC, 0x3B8):
+        w = struct.unpack("<I", exe.read(d + o, 4))[0]
+        exe.call(0x42FFB0, w, 0, struct.unpack("<I", struct.pack("<f", 0.3))[0], 0, tc, fpcw=fpcw)
+
+
+def call_steer(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    exe.write(d + 0xE0, struct.pack("<f", 0.37))
+    exe.call(0x475CB0, n, fpcw=fpcw)
+
+
+# each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -206,7 +221,11 @@ def original():
                     d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
                     exe.write(d + 0xC8, bytes(12))
                     exe.write(d + 0x460, struct.pack("<fff", 0, 1, 0))
-                exe.call(CALLS[CALL][1], n, 0, limit=50_000_000, fpcw=exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
+                fpcw = exe.uc.reg_read(x86_const.UC_X86_REG_FPCW)
+                if callable(CALLS[CALL][1]):
+                    CALLS[CALL][1](exe, n, fpcw)
+                else:
+                    exe.call(CALLS[CALL][1], n, 0, limit=50_000_000, fpcw=fpcw)
             c = nxt
         print(f"--call {CALL}: {k} vehicles", file=sys.stderr)
     m = Mem(exe)

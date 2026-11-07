@@ -62,6 +62,8 @@ void Node_Attach(Node *n, Node *p);
 void Node_FrameIn(Frame *out, const Node *n, const Node *upto);
 /* Node_WorldPos 0x42e780: the node's position in the world (Node_FrameIn's), as floats; NULL: 0 */
 void Node_WorldPos(float out[3], const Node *n);
+/* Node_SetYaw 0x42e450: the node's axes turned by a about y (the position kept) */
+void Node_SetYaw(Node *n, float a);
 /* Node_Find 0x484880: depth first from n, through its siblings, the node named name (8 bytes) */
 Node *Node_Find(Node *n, const char *name);
 /* Node_Bounds 0x42eb90: the box of the node's meshes and its siblings' (and their children's), in the

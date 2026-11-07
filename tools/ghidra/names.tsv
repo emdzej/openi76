@@ -428,3 +428,10 @@
 0042b790	Vehicle_Kill	vehicle	high	flag 0x20 and 0x429eb0 unless dying; ported
 0046fe20	Vehicle_Upright	physics	high	on its back at rest: the user is turned over, others die; ported, diffed
 004683c0	Sound_At	audio	med	a sound by id at a node
+00475cb0	Vehicle_Steer	physics	high	the front wheels turned by +0xe0 times -pi/4; ported, diffed
+0042e450	Node_SetYaw	scene	high	the axes turned about y; ported
+0042ffb0	Wheel_Contact	physics	high	ground, bumps, spring target, filtered travel, wheel height; ported, diffed
+00453ea0	Filter_Step	entity	high	two-pole filter step; ported
+0048e350	Terrain_Rough	terrain	high	the terrain class record +8 (0x5e3028)
+0048e360	Terrain_ClassInt	terrain	med	the terrain class record +0x10 as a float
+0042fea0	Wheel_SetX	physics	med	a wheel data +0x20

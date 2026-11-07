@@ -58,6 +58,8 @@ void Data_Free(uint8_t *d);
 void Class_Free(int cls, uint8_t *data);
 /* Filter_Init 0x453df0: a two-pole filter (0x28 bytes) of damping a and period p */
 void Filter_Init(uint8_t *f, float a, float p);
+/* Filter_Step 0x453ea0: the filter's next output for the input x (kept as a double, returned unrounded) */
+double Filter_Step(uint8_t *f, float x);
 /* Class_Unlist 0x4257c0: a live node's class data freed (cls and data cleared), then the node off the
    class lists, with the reference Class_Set took */
 void Class_Unlist(Node *n);

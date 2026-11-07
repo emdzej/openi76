@@ -394,6 +394,21 @@ void Filter_Init(uint8_t *f, float a, float p)
     memcpy(f + 0x20, &z, 8);
 }
 
+double Filter_Step(uint8_t *f, float x)
+{
+    double k0, k1, g, y1;
+    memcpy(&k0, f, 8);
+    memcpy(&k1, f + 8, 8);
+    memcpy(&g, f + 0x10, 8);
+    memcpy(&y1, f + 0x18, 8);
+    double y2;
+    memcpy(&y2, f + 0x20, 8);
+    double y = fpu_sub(fpu_sub(fpu_mul(g, x), fpu_mul(k1, y2)), fpu_mul(y1, k0));
+    memcpy(f + 0x20, f + 0x18, 8);
+    memcpy(f + 0x18, &y, 8);
+    return y;
+}
+
 /* class 30 (a wheel), 0x42faf0: 0x88 bytes */
 static uint8_t *class30_new(void)
 {

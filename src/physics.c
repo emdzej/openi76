@@ -7,6 +7,7 @@
 #include "exe.h"
 #include "terrain.h"
 #include "weapons.h"
+#include "world.h"
 #include "render/fpu.h"
 #include <math.h>
 #include <string.h>
@@ -25,6 +26,7 @@ static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 static int below(double a, double b) { return a < b || a != a || b != b; }
+static int below_eq(double a, double b) { return a <= b || a != a || b != b; }
 static Node *slot(uint8_t *d, uint32_t off) { return *Data_Ptr(d, off); }
 
 /* 0x42fe30: a wheel's ground height under its place, into its data's +0x2c and +0x30; +0x34 = 0 (the
@@ -155,4 +157,46 @@ int Vehicle_Upright(Node *n)
         put32(d + 0x454, rd32(d + 0x454) & ~0x200);
     }
     return 0;
+}
+
+void Vehicle_Steer(Node *n)
+{
+    uint8_t *d = n->data;
+    float a = F32(MUL(rdf(d + 0xe0), exe_f32(0x4a67bc)));   /* 0x42d390; -pi/4 */
+    Node_SetYaw(slot(d, 0x3ac), a);
+    Node_SetYaw(slot(d, 0x3a8), a);
+}
+
+static float terrain_rough(int tclass) { return rdf(g_world.lights + 0x14 * (uint32_t)tclass + 8); }   /* 0x48e350 */
+
+void Wheel_Contact(Node *w, int hold, float force, int tclass)
+{
+    uint8_t *d = w->data;
+    float p[3], h;
+    Node_WorldPos(p, w);
+    Ground_Height(p[0], p[1], p[2], &h, NULL);
+    putf(d + 0x2c, h);
+    /* the ground's bumps: an 8 by 8 table by the wheel's whole metres, by the terrain's roughness */
+    int ix = (int)(int64_t)p[0] & 7, iz = (int)(int64_t)p[2] & 7;   /* _ftol */
+    float r = terrain_rough(tclass), bump = exe_f32(0x4a5ba8 + 4 * (uint32_t)(ix + iz * 8)), y;
+    y = F32(ADD(MUL(r, bump), h));
+    if (rd32(d + 0x44)) {
+        int32_t rb;
+        memcpy(&rb, &r, 4);
+        if (rb < 0x3dcccccd) y = F32(ADD(MUL(bump, exe_f32(0x4a5ce4)), y));   /* below 0.1: 0.1 more */
+    }
+    /* the ground's rise since the last step, and the spring's target */
+    float rise = F32(SUB(y, rdf(d + 0x30))), s;
+    if (hold) s = rdf(d + 0x3c);
+    else s = F32(ADD(MUL(SUB(rise, rdf(d + 0x34)), exe_f32(0x4a5ce8)), force));
+    put32(d + 0x40, hold);
+    if (!below_eq(rdf(d + 0x3c), s)) put32(d + 0x40, 1);
+    putf(d + 0x30, y);
+    putf(d + 0x34, rise);
+    double f = Filter_Step(d + 0x58, s);
+    float t = F32(f);
+    if (below(f, rdf(d + 0x3c))) t = rdf(d + 0x3c);
+    else if (below(rdf(d + 0x38), t)) t = rdf(d + 0x38);
+    putf(d + 0x24, t);
+    w->frame.pos[1] = ADD(rdf(d + 0x28), t);
 }

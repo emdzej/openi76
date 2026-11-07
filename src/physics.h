@@ -14,3 +14,9 @@ void Vehicle_Kill(Node *n);
    (+0x460) but reversed: a stuck object stops turning (+0xc8), the user's (or Taurus's, +0x454 bit
    0x10000) is turned back over, any other dies. 1 when it is not resting on its back or side */
 int Vehicle_Upright(Node *n);
+/* 0x475cb0: the front wheels (0x3ac, 0x3a8) turned by the steering (+0xe0) times -pi/4 */
+void Vehicle_Steer(Node *n);
+/* Wheel_Contact 0x42ffb0: a wheel's ground (+0x2c) and its bumps (+0x30, the rise +0x34), the spring's
+   target (force plus the rise's change by 5, or at hold the top +0x3c), the filtered travel (+0x24,
+   within [+0x3c, +0x38]) and the wheel's height (+0x28 plus the travel); +0x40 1 at the top */
+void Wheel_Contact(Node *w, int hold, float force, int tclass);

@@ -326,6 +326,19 @@ int Dump_CallVehicles(int which, int upside)
         }
         switch (which) {
         case 0: Vehicle_Upright(n); break;
+        case 1: {   /* the steering at 0.37 */
+            const float st = 0.37f;
+            memcpy(n->data + 0xe0, &st, 4);
+            Vehicle_Steer(n);
+            break;
+        }
+        case 2: {   /* the four main wheels, free, a force of 0.3, the vehicle's terrain class */
+            static const uint32_t w[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
+            int32_t tc;
+            memcpy(&tc, n->data + 0x45c, 4);
+            for (int i = 0; i < 4; i++) Wheel_Contact(*Data_Ptr(n->data, w[i]), 0, 0.3f, tc);
+            break;
+        }
         }
     }
     return k;
