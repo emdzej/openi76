@@ -1,9 +1,13 @@
 /* The game's clock (0x450e30-0x4512d0): the frame's time step and the mission's time. */
 #pragma once
+#include <stdint.h>
 
 extern float g_clock_time;   /* 0x4db140: the mission's time in seconds (0x450f40) */
 extern float g_clock_dt;     /* 0x4db12c: the frame's step (0x450e50) */
 extern float g_clock_step;   /* 0x4db138: the step as clamped to [0.001, 0.2] (0x450f30); 0.06 at first */
+extern float g_clock_inv;    /* 0x4db130: 1 / g_clock_dt (0x450e60) */
+extern float g_clock_game;   /* 0x4db134: the game's time (0x450e70) */
+extern uint32_t g_play_state;   /* 0x4db008: the play's state; any of 0x3e (a menu, the map, a pause) stops the clock */
 
 /* Timer_Init 0x451210: t[0] the rate 1 / period (1e30 for a period not above 1e-4), t[1] = t[2] = 0 */
 void Timer_Init(float t[3], float period);
@@ -14,3 +18,6 @@ void Clock_Init(void);
 void Timer_Count(float t[3], float dt);
 /* Timer_Next 0x4512d0: the next sub-step's length, 0 when there are none left */
 float Timer_Next(float t[3]);
+/* Clock_Tick 0x450fa0 (each frame): the step since the last tick (GetTickCount, here plat_ms), within
+   [0.001, 0.2], added to the times; the frame's step is it, at most 1 */
+void Clock_Tick(void);

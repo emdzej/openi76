@@ -427,3 +427,24 @@ void Class_StartAll(void)
         g_class_count[0]--;
     }
 }
+
+void Class_Frame(int which)
+{
+    for (Cell *c = g_class_nodes, *next; c; c = next) {
+        next = c->next;
+        Node *n = Node_Live(c->value);
+        if (!n) {   /* freed: off both lists */
+            for (Cell *k = g_class_cells; k; k = k->next)
+                if (k->value == c) {
+                    List_Remove(&g_class_cells, k);
+                    g_class_count[0]--;
+                    break;
+                }
+            List_Remove(&g_class_nodes, c);
+            g_class_count[1]--;
+            continue;
+        }
+        int i = handler_index(n->cls);
+        if (i >= 0 && handlers[i].update[which]) handlers[i].update[which](n);
+    }
+}

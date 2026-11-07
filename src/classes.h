@@ -8,6 +8,9 @@
    has no per-frame handler leave the class list (with Class_Set's reference); the second list
    (0x54f888) is emptied. */
 void Class_StartAll(void);
+/* Class_Frame 0x425a20 (which 0) and 0x425b00 (which 1): every listed node's per-frame handler (the
+   class table's word 3 or 4); a freed node leaves both lists */
+void Class_Frame(int which);
 /* the entity of n's root (0x424060), NULL if none */
 struct Entity *Entity_OfNode(Node *n);
 /* Node_Root 0x42e6b0 */

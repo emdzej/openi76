@@ -492,3 +492,6 @@
 00475ee0	Tyre_Step	physics	med	the tyres sounds and a flats damage
 00481d00	User_Controls	input	med	the input actions to the user vehicle (throttle +0xe4, steering +0xe0, ...)
 00480870	Input_Poll	input	med	polls the devices, then User_Controls
+00425a20	Class_Frame0	classes	high	every listed nodes per-frame handler (word 3); ported
+00425b00	Class_Frame1	classes	high	the same with word 4; ported
+00450fa0	Clock_Tick	clock	high	the frame step from GetTickCount, clamped; ported
