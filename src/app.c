@@ -152,6 +152,7 @@ static bool play_init(void)
     char v[16];
     if (plat_param("tick", v, sizeof v)) g_clock_fake_ms = 0, tick_ms = atof(v);
     Class_StartAll();
+    AI_Begin();   /* 0x408cf0 */
     Clock_Init();
     if (!Input_Init()) {
         plat_log("OpenI76: the input's tables are missing");

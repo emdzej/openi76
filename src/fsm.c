@@ -6,6 +6,7 @@
 #include "exe.h"
 #include "platform.h"
 #include "res.h"
+#include "orders.h"
 #include "vfs.h"
 #include "render/fpu.h"
 #include <stdio.h>
@@ -324,10 +325,21 @@ static void action(uint32_t m, int32_t index)
     switch (code) {
     case 0: break;   /* null */
     case 1: E(m, 0); later(0x40a550); break;   /* behave */
-    case 2: b = E(m, 1); a = E(m, 0); (void)a, (void)b; later(0x40cc10); break;   /* attack: order 0 */
-    case 3: E(m, 0); later(0x40cc10); break;   /* sit: order 0x1f */
-    case 4: E(m, 0); later(0x40cc10); break;   /* goto: the path and the speed, order 0x16 */
-    case 5: E(m, 1); E(m, 0); later(0x40cc10); break;   /* guard: order 0x20 */
+    case 2: b = E(m, 1); a = E(m, 0); AI_Order(a, b, 0, g_fsm_slow); break;   /* attack */
+    case 3: AI_Order(E(m, 0), NULL, 0x1f, g_fsm_slow); break;                  /* sit */
+    case 4: case 64: case 92: {   /* goto, evade, race: the path (+0x8c) and the speed (+0x80) first */
+        a = E(m, 0);
+        if (!a) break;   /* the original would crash */
+        uint8_t *ai = *Data_Ptr(a->data, 0x108);
+        int32_t path = (int32_t)(g_fsm.paths + (uint32_t)I(m, 1) * 0x58);
+        float speed = (float)I(m, 2);
+        memcpy(ai + 0x8c, &path, 4);
+        memcpy(ai + 0x80, &speed, 4);
+        b = code == 4 ? NULL : E(m, 3);
+        AI_Order(a, b, code == 4 ? 0x16 : code == 64 ? 0x18 : 0x1a, g_fsm_slow);
+        break;
+    }
+    case 5: b = E(m, 1); a = E(m, 0); AI_Order(a, b, 0x20, g_fsm_slow); break;   /* guard */
     case 6: E(m, 0); later(0x40a640); break;   /* do */
     case 7: SET(A(m, 0), I(m, 1)); break;      /* set */
     case 8: SET(A(m, 0), I(m, 0) + 1); break;  /* inc */
@@ -383,7 +395,21 @@ static void action(uint32_t m, int32_t index)
     case 45: E(m, 0); SET(m + M_FLAG, later(0x40b0c0)); break;   /* isAttacked */
     case 46: E(m, 0); later(0x40a870); break;  /* whoAttacked */
     case 47: SET(A(m, 0), I(m, 1)); break;     /* setId */
-    case 48: E(m, 0); E(m, 2); E(m, 1); E(m, 0); later(0x40cc10); break;   /* follow: order 0x1e */
+    case 48: {   /* follow: the leader (+0xa990), +0xa98c and the distances (+0xa980, +0xa984) first */
+        a = E(m, 0);
+        if (!a) break;
+        uint8_t *ai = *Data_Ptr(a->data, 0x108);
+        *(Node **)Data_Ptr(ai, 0xa990) = E(m, 2);
+        int32_t w = I(m, 3);
+        float f4 = (float)I(m, 4), f5 = (float)I(m, 5);
+        memcpy(ai + 0xa98c, &w, 4);
+        memcpy(ai + 0xa980, &f4, 4);
+        memcpy(ai + 0xa984, &f5, 4);
+        b = E(m, 1);
+        a = E(m, 0);
+        AI_Order(a, b, 0x1e, g_fsm_slow);
+        break;
+    }
     case 49: E(m, 0); later(0x40f0d0); break;  /* teleport */
     case 50: E(m, 0); later(0x40b110); break;  /* destroy */
     case 51: later(0x44e6e0); break;           /* playMovie */
@@ -399,7 +425,6 @@ static void action(uint32_t m, int32_t index)
     case 61: SET(m + M_FLAG, later(0x453050)); break;    /* camIsArrived */
     case 62: SET(m + M_FLAG, later(0x480720)); break;    /* isKeypress */
     case 63: E(m, 0); later(0x40b600); break;  /* triggerGate */
-    case 64: E(m, 1); E(m, 0); later(0x40cc10); break;   /* evade: order 0x18 */
     case 65: E(m, 0); later(0x40b310); break;  /* toggleAvoid */
     case 66: SET(m + M_FLAG, later(0x40b2d0)); break;    /* allBlgDead */
     case 67: E(m, 0); SET(m + M_FLAG, later(0x409770)); break;   /* allEnemyDead */
@@ -424,10 +449,9 @@ static void action(uint32_t m, int32_t index)
     case 86: E(m, 0); SET(m + M_FLAG, later(0x40b7a0)); break;   /* isAirborne */
     case 87: later(0x40f0d0); break;           /* teleportOffset (the node not refreshed) */
     case 88: E(m, 0); SET(m + M_FLAG, later(0x40af90)); break;   /* isGroovesFault */
-    case 89: E(m, 0); later(0x40cc10); break;  /* hide: order 0x21 */
-    case 90: E(m, 0); later(0x42d5a0); break;  /* startCar */
+    case 89: AI_Order(E(m, 0), NULL, 0x21, g_fsm_slow); break;   /* hide */
+    case 90: if ((a = E(m, 0))) Engine_Start(a); break;          /* startCar */
     case 91: E(m, 0); later(0x40b7c0); break;  /* setLights */
-    case 92: E(m, 0); E(m, 3); later(0x40cc10); break;   /* race: order 0x1a */
     case 93: E(m, 0); later(0x429080); break;  /* setArtillery */
     case 94: E(m, 0); later(0x4290a0); break;  /* setArtilleryRate */
     case 95: later(0x40b700); break;           /* stopCB */

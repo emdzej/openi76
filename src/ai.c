@@ -1,6 +1,7 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
 #include "fsm.h"
+#include "orders.h"
 #include "terrain.h"
 #include "render/fpu.h"
 #include <string.h>
@@ -81,7 +82,22 @@ void AI_Init(void)
        0x40b7f0, the skill tables 0x40b380) come with the driving */
 }
 
+int g_user_pressed_prev;
+
+bool AI_UserInScene(Node *n)
+{
+    return g_user_entity && g_user_entity->node == n && !g_user_pressed_prev;
+}
+
+void AI_Begin(void)
+{
+    g_ai_user = g_user_entity ? g_user_entity->node : NULL;
+    g_user_pressed = g_user_pressed_prev = 0;
+}
+
 void AI_Frame(void)
 {
+    g_user_pressed_prev = g_user_pressed;   /* 0x409b50 */
+    g_user_pressed = 0;
     Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
 }

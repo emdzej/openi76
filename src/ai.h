@@ -19,3 +19,11 @@ extern int g_user_pressed;
    the melee 0x408e20 instead). Not ported yet: each AI vehicle's look-ahead box (+0x9d40-+0x9d54), the
    frame's ends (0x409b50, 0x40f0a0, 0x40f050, 0x40f060, 0x40fad0) and the radar's (0x421e30) */
 void AI_Frame(void);
+/* 0x505490: g_user_pressed as the frame began (0x409b50 moves it there and clears it) */
+extern int g_user_pressed_prev;
+/* AI_UserInScene 0x409b80: n is the user's vehicle while the script did not hold the controls last frame
+   (outside network play) */
+bool AI_UserInScene(Node *n);
+/* AI_Begin 0x408cf0 (WinMain, after the load): the user's node noted (0x409b20), the flags cleared; the
+   bridges' 0x4109b0 is not ported yet */
+void AI_Begin(void);

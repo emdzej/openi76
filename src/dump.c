@@ -834,6 +834,17 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
         len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x consts", f, (int)g_game_state, fbits32(g_fsm_end_time));
         for (int32_t i = 0; i < g_fsm.n_consts && len + 16 < cap; i++) len += (size_t)snprintf(o + len, cap - len, " %x", (uint32_t)Fsm_Word(g_fsm.consts + (uint32_t)i * 4));
         len += (size_t)snprintf(o + len, cap - len, "\n");
+        for (int t = 0; t < AI_TEAMS; t++)   /* each AI vehicle: its tactics' stack and its controls */
+            for (int i = 0; i < g_team_count[t] && i < 0x40 && len + 400 < cap; i++) {
+                Node *n = g_teams[t][i]->node;
+                uint8_t *ai = *Data_Ptr(n->data, 0x108), *d = n->data;
+                int32_t top;
+                memcpy(&top, ai + 0xa93c, 4);
+                len += (size_t)snprintf(o + len, cap - len, " ai %d.%d top %d w4 %x", t, i, top, *(uint32_t *)(ai + 4));
+                for (int k = 0; k <= top && k < 0x32; k++) len += (size_t)snprintf(o + len, cap - len, " %x", *(uint32_t *)(ai + 0xa874 + 4 * k));
+                len += (size_t)snprintf(o + len, cap - len, " | %08x %08x %x %x %08x\n", *(uint32_t *)(d + 0xe0), *(uint32_t *)(d + 0xe4),
+                                        *(uint32_t *)(d + 0x104), *(uint32_t *)(d + 0x454), *(uint32_t *)(d + 0x450));
+            }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {
             uint32_t sp = (uint32_t)Fsm_Word(m + 0x10b0);
             len += (size_t)snprintf(o + len, cap - len, " ip %x flag %x", ((uint32_t)Fsm_Word(m + 0x10a8) - g_fsm.code) / 8, (uint32_t)Fsm_Word(m + 0x10a0));

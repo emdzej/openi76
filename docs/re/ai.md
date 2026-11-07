@@ -36,7 +36,10 @@ It runs for vehicles (classes 1 and 9; class 8, the artillery, is skipped).
 
 `AI_Order` 0x40cc10 (vehicle, target, order, slow flag) is how the script drives a vehicle. A script
 calls it again each frame (an order and then a yield, in a loop), and each call also runs the tactic's
-frame. Not ported yet; the layout below is from the disassembly.
+frame. Ported (`src/orders.c`): the port reads the table from the exe and calls each function by its
+address. Ported so far: 0x417a10 (accepts any target), sit's frame 0x40a580 (also guard's and hide's),
+and hide's enter 0x40a600 and leave 0x40a620. The others do nothing and answer 0, and the port logs each
+once. The weapons' list (0x408c40) and the aim (0x40f410) are not ported yet.
 
 **The target.** The AI block's +0xa9b4 keeps the target with a reference tagged "ai". When the target is
 freed (`Node_Live`), or 0x417a10 refuses it (it always accepts), 0x40a500 stops the vehicle: the
@@ -73,3 +76,20 @@ goto, 0x18 evade, 0x1a race, 0x1e follow, 0x1f sit, 0x20 guard, 0x21 hide.
    while +0xa98c is set).
 
 The tactics' functions are 87, from 0x40a580 to 0x41d760 (about 36 KB).
+
+**The small steps:**
+
+- sit's frame 0x40a580: a vehicle only (else the fatal "FSM - only vehicles can sit"). A dead one is
+  noted once in the AI block's +4 (the reporter is a no-op). Then the steering is 0, the throttle -1, and
+  0x409bc0.
+- 0x409bc0: an order on the user's vehicle (0x505498, set by 0x409b20 after the load) sets 0x505494. That
+  holds the user's controls (`Input_Poll`). `AI_Frame` first moves it to 0x505490 and clears it (0x409b50).
+- hide enters with `Engine_Stop` 0x42d560 and `Vehicle_SetMode(n, 0)` 0x42d500, and leaves with
+  `Engine_Start` 0x42d5a0 (the action startCar) and the mode 3.
+- `AI_Stop` 0x40a500: 0x409bc0, then the throttle is `Vehicle_Throttle(n, -1) × 0.9999`.
+- `Vehicle_Throttle` 0x474eb0: away from the camera (`View_Distance(n, 25)` is 2), or for class 9, the wanted
+  value itself. Otherwise a search over six halvings from half the wanted value: `Vehicle_Force` on the
+  node's forward axis, keeping the last value that does not slide.
+
+Checked: `diff_fsm.py` now dumps each AI vehicle's tactics' stack and controls each frame, with the orders
+running and the unported tactic functions stubbed on both sides. It is identical on all 40 missions.

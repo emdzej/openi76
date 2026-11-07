@@ -20,7 +20,7 @@ DT = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
 DT = struct.unpack("<f", struct.pack("<f", DT))[0]   # as the port's float
 
 # 0x40d0d0's callees that the port's actions answer with 0 for now (src/fsm.c "later")
-LATER = {0x40A550: 2, 0x40CC10: 4, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1E0: 1, 0x41F280: 1,
+LATER = {0x40A550: 2, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1E0: 1, 0x41F280: 1,
          0x41F130: 1, 0x46FA70: 3, 0x40B6C0: 2, 0x40B6E0: 3, 0x409590: 4, 0x40B190: 4, 0x40A970: 2,
          0x40A9E0: 3, 0x40AAA0: 1, 0x40AF00: 3, 0x40B550: 3, 0x40AF30: 1, 0x40AF70: 1, 0x40AFE0: 1,
          0x40A9A0: 1, 0x40B010: 3, 0x40B060: 3, 0x409810: 2, 0x40B0C0: 1, 0x40A870: 4, 0x40F0D0: 6,
@@ -29,7 +29,24 @@ LATER = {0x40A550: 2, 0x40CC10: 4, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1
          0x40B2D0: 0, 0x409770: 1, 0x40B340: 2, 0x40B480: 3, 0x40B4E0: 1, 0x41AAA0: 3, 0x41A900: 7,
          0x41AB50: 1, 0x41ABF0: 1, 0x40B540: 1, 0x46FDA0: 0, 0x40B640: 2, 0x40B670: 1, 0x40B6A0: 2,
          0x46FD20: 1, 0x40B720: 1, 0x40B740: 2, 0x40B760: 2, 0x40B780: 2, 0x413570: 2, 0x40B7A0: 1,
-         0x40AF90: 1, 0x42D5A0: 1, 0x40B7C0: 2, 0x429080: 2, 0x4290A0: 2, 0x40B700: 0}
+         0x40AF90: 1, 0x40B7C0: 2, 0x429080: 2, 0x4290A0: 2, 0x40B700: 0}
+
+
+# the AI's orders (0x40cc10) run; the tactics' functions the port has not ported yet are stubbed, and so are
+# the weapons' list (0x408c40), the aim (0x40f410) and the sounds
+TACTICS_PORTED = {0, 0x417A10, 0x40A580, 0x40A600, 0x40A620}
+AI_LATER = {0x408C40: 1, 0x40F410: 3, 0x4683C0: 3}
+
+
+def tactic_functions(exe):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    fns = set()
+    for i in range(0x22):
+        b = 0x4A9400 + i * 0x1354
+        fns |= {u(b + 4), u(b + 8), u(b + 0x1300)}
+        fns |= {u(b + 0x3C + 8 * k) for k in range(u(b + 0x38))}
+        fns |= {u(b + 0x90 + 0x1D8 * k) for k in range(u(b + 0x8C))}
+    return fns - TACTICS_PORTED
 
 
 def word(exe, m, v, code, ncode, consts, nconsts):
@@ -56,6 +73,11 @@ def original():
     fpcw = exe.uc.reg_read(x86_const.UC_X86_REG_FPCW)   # the rounding the load left, as the game goes on
     for f, k in LATER.items():
         exe.stub(f, lambda *a: 0, k)
+    for f, k in AI_LATER.items():
+        exe.stub(f, lambda *a: 0, k)
+    exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
+    for f in tactic_functions(exe):
+        exe.stub(f, lambda *a: 0, 2)
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     out, t = [], 0.0
     for fr in range(FRAMES):
@@ -68,6 +90,15 @@ def original():
         state = struct.unpack("<i", exe.read(0x4A80F4, 4))[0]
         s = f"frame {fr} state {state} end {u(0x5054B0):08x} consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))
         out.append(s)
+        for team in range(8):
+            for i in range(min(u(0x505460 + 4 * team), 0x40)):
+                n = u(u(0x4EDC30 + 0x100 * team + 4 * i))
+                d = u(n + 0x70)
+                ai = u(d + 0x108)
+                top = struct.unpack("<i", exe.read(ai + 0xA93C, 4))[0]
+                s = f" ai {team}.{i} top {top} w4 {u(ai + 4):x}" + "".join(f" {u(ai + 0xA874 + 4 * k):x}" for k in range(0, min(top + 1, 0x32)))
+                s += f" | {u(d + 0xE0):08x} {u(d + 0xE4):08x} {u(d + 0x104):x} {u(d + 0x454):x} {u(d + 0x450):08x}"
+                out.append(s)
         m = u(0x4A88EC)
         while m:
             sp = u(m + 0x10B0)

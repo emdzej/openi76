@@ -612,3 +612,15 @@
 0040a500	AI_Stop	ai	med	the throttle to 0x474eb0(n, -1) x k (0x4a51c8); the user's flag 0x505494
 00408c40	AI_Weapons	ai	med	with +0xa714: the weapons' list (+0xa718) refreshed
 00409b80	AI_UserInScene	ai	med	the user's vehicle while 0x505490 is clear, outside network play
+0040a580	Tactic_SitFrame	ai	high	stand still braking (sit, guard, hide); a dead one noted in +4
+0040a600	Tactic_HideEnter	ai	high	Engine_Stop, mode 0
+0040a620	Tactic_HideLeave	ai	high	Engine_Start, mode 3
+00417a10	Tactic_AnyTarget	ai	high	returns 1
+00474eb0	Vehicle_Throttle	physics	high	the throttle nearest want that does not slide (six halvings of Vehicle_Force)
+0042d500	Vehicle_SetMode	physics	high	class 1: +0x104 = mode
+0042d560	Engine_Stop	physics	high	a running engine stops (sound 2)
+0042d5a0	Engine_Start	physics	high	a stopped engine begins to start (+0x450, 0x80000008)
+00409bc0	AI_TouchUser	ai	high	n is 0x505498: 0x505494 = 1
+00409b20	AI_NoteUser	ai	high	0x505498 = the user's node; 0x505494 = 0x505490 = 0
+00409b50	AI_FrameFlags	ai	high	0x505490 = 0x505494; 0x505494 = 0
+00408cf0	AI_Begin	ai	med	0x4109b0, then (outside the melee) 0x409b20
