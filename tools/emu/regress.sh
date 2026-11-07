@@ -41,6 +41,8 @@ if [ -z "$1" ]; then
       out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objdraw.py "$m" 40 $d 2>&1) || fail=1
       echo "$out" | grep -q " 40/40 identical" || echo "$out" | tail -6
     done
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objdraw.py "$m" 20 --inside --down 2>&1) || fail=1
+    echo "$out" | grep -q " 20/20 identical" || echo "$out" | tail -6
   done
   echo "[diff_objects (and --start), diff_objdraw] every mission done"
   # the mission's script, 150 frames of 0.1 s with the actions' game side stubbed

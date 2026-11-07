@@ -1148,7 +1148,7 @@ static void dash_sound(const char *name) { (void)name; }
 static void dash_slots(HardPoints *hp) { (void)hp; }
 
 /* 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
-static void radar_unlock(Node *v)
+void Radar_Unlock(Node *v)
 {
     Node *r = v && v->data ? *(Node **)Data_Ptr(v->data, 0x434) : NULL;
     if (!r || !r->data) return;
@@ -1228,7 +1228,7 @@ static void weapons_cycle(HardPoints *hp)
     hp->w1[0] = k;
     if (hp == user_hardpoints()) {
         dash_sound(exe_str(0x4dc378));
-        radar_unlock(hp->vehicle);
+        Radar_Unlock(hp->vehicle);
     }
 }
 

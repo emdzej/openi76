@@ -6,6 +6,7 @@
    ordered by a BSP tree of their planes (the container node's own faces only split), back to front. */
 #pragma once
 #include "math3d.h"
+#include "scene.h"
 #include "render/view.h"
 
 extern Frame g_heading;   /* 0x58c4a0: the camera's heading alone, for flag 0x40 nodes */
@@ -15,3 +16,6 @@ void Render_SetHeading(const View *view);
 void Objects_DrawInit(void);
 /* Objects_Draw 0x424b90 */
 void Objects_Draw(const View *view);
+/* Objects_DrawInside 0x435be0 (the cockpit's, after the flush): n's children at level 4 (the cockpit's
+   meshes), lit for n, ordered by their faces' BSP without n's own splitting planes, drawn at once */
+void Objects_DrawInside(const View *view, Node *n);

@@ -161,6 +161,8 @@ extern int32_t g_weapons_linked;   /* 0x4db478 */
 void Weapons_Frame(void);
 extern Node *g_dash;          /* 0x4db470 */
 extern int32_t g_dash_low;    /* 0x4dc2b4 */
+/* Radar_Unlock 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
+void Radar_Unlock(Node *v);
 /* Node_FindTexture 0x42e370 (each node looked at set to level 4) */
 Node *Node_FindTexture(Node *n, const char *name);
 /* Weapons_DisplayStart 0x4561f0: the user's dashboard's node (by the screen mode's names), the group's first

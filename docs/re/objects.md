@@ -106,7 +106,8 @@ both rounding modes, shadows included (confirmed). The headlights and the group 
   - Light_Frame 0x43a4d0 first: the lights in view. Its terrain height queries leave the FPU rounding
     down, for the rest of the frame.
   - k = 1 / view sx. Spheres are tested at 1.1 × the radius (0x4a58cc).
-  - The camera's target entity (0x4a8660, by default the user's) is skipped when 0x4a847c is set.
+  - The camera's target entity (0x4a8660, by default the user's) is skipped when 0x4a847c is set. The
+    cockpit then draws it from inside after the flush (0x435be0, docs/re/cockpit.md).
   - **Group entities** (flag 0x100) queue each child node on its own: its centre (+0x84) through its frame
     (Point_ToWorld 0x4525c0) to camera space, a sphere test at its radius (+0x90). In view, a record of
     type 7 (node flag 0x40) or 5. Fields: the node, the camera centre, the radius, the level of detail,

@@ -9,6 +9,7 @@
 #include "ai.h"
 #include "fsm.h"
 #include "camera.h"
+#include "cockpit.h"
 #include "classes.h"
 #include "clock.h"
 #include "combat.h"
@@ -143,6 +144,7 @@ static void viewer_frame(void)
     /* nor 0x42edc0, 0x46e360 and the hook */
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
+    if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0; 0x427db0 (the HUD) and the hook not ported */
     plat_present(pixels, 640, 480, 640, g_shown_pal);
 }
 

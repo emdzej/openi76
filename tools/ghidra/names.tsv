@@ -1060,3 +1060,6 @@
 00406e80	Camera_Missile	camera	high	its frame; ported, diffed
 00405000	Camera_HoodStart	camera	high	mode 0x10 (F6): on the bonnet; ported
 00405190	Camera_Hood	camera	high	the glance at (0, 0.7, 3.5) in the node's frame; ported, diffed
+00426410	Cockpit_Setup	cockpit	high	the user's cockpit: radar lock off, the dashboard's swap, the screen mode's parts (+0x420-0x438); ported but the pictures, the .tmt and the colours
+004279c0	Cockpit_Draw	cockpit	high	after the flush in the cockpit: the vehicle from inside (0x435be0) or the flat instruments; ported but the flat ones
+00435be0	Objects_DrawInside	render	high	a node's children at level 4 in the face BSP, drawn at once (the cockpit); ported, diffed

@@ -4,10 +4,22 @@
 #pragma once
 #include <stdint.h>
 #include "scene.h"
+#include "render/view.h"
 
 extern Node *g_dash_alt;    /* 0x4d52d0: the part textured zretc_6, hidden at the set-up */
 extern Node *g_dash_main;   /* 0x4d52d4: the part textured zretc_1, shown at the set-up */
 extern int32_t g_dash_on;   /* 0x550638: the swapped dashboard shown (the view 0xc) */
+
+/* Cockpit_Setup 0x426410 (the user's vehicle's start, 0x4294e0): the radar's lock let go (0x421480), the
+   dashboard's swap set up, the screen mode's parts chosen (zsy_, zcm_: the high resolutions' below mode 6,
+   the _320 ones from it; the others hidden) and kept in the data (+0x420, +0x424, +0x428, the gear's
+   +0x438), shown. Not ported yet: the instruments' pictures (ztarg, zretc), their tables (.tmt) and
+   colours */
+void Cockpit_Setup(Node *n);
+/* Cockpit_Draw 0x4279c0 (Render_World's after the flush, in the cockpit): with the detail byte 8 (the
+   default) the camera's vehicle drawn from inside (0x435be0); without it the 2D instruments, not ported
+   yet */
+void Cockpit_Draw(const View *view);
 
 /* Dash_Setup 0x4286e0 (from the cockpit's set-up 0x426410, on the user's vehicle n): the two parts found by
    their textures (Node_FindTexture, which sets each node it looks at to level 4), the main one shown, the

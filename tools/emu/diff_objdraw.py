@@ -43,8 +43,9 @@ def load(name):
 
 
 def main():
-    argv = [a for a in sys.argv if a != "--down"]
+    argv = [a for a in sys.argv if a not in ("--down", "--inside")]
     down = "--down" in sys.argv
+    inside = "--inside" in sys.argv   # the cockpit's drawer 0x435be0 on the user's vehicle, from near its eye
     name = argv[1] if len(argv) > 1 and argv[1].endswith(".msn") else "t01.msn"
     rest = [a for a in argv[1:] if not a.endswith(".msn")]
     count = int(rest[0]) if rest else 100
@@ -58,9 +59,11 @@ def main():
     lib.View_Create.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Surface)] + [ctypes.c_float] * 4
     lib.View_SetCamera.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Frame)]
     lib.Objects_Draw.argtypes = [ctypes.c_void_p]
+    lib.Objects_DrawInside.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     lib.Render_SetHeading.argtypes = [ctypes.c_void_p]
     lib.Queue_Flush.argtypes = [ctypes.c_void_p, ctypes.c_int]
     lib.Objects_DrawInit()
+    ctypes.c_int.in_dll(lib, "g_cockpit").value = 0   # as 0x4a847c below
     lib.Shadow_Init()
     exe.stub(0x4919E0, lambda *a: 0, 0)   # the headlights (vehicles only)
     exe.write(0x4A847C, bytes(4))         # the camera follows no entity
@@ -111,6 +114,13 @@ def main():
         nd = mission.u32(exe, e)
         if nd:
             ents.append(struct.unpack("<3d", exe.read(nd + 0x18 + 0x28, 24)))
+    ue = mission.u32(exe, 0x4D3B64)
+    unode = mission.u32(exe, ue) if ue else 0
+    if inside and not unode:
+        sys.exit(f"diff_objdraw {name}: no user vehicle")
+    user_pos = struct.unpack("<3d", exe.read(unode + 0x40, 24)) if unode else (0, 0, 0)
+    pe = ctypes.c_void_p.in_dll(lib, "g_user_entity").value
+    pnode = ctypes.c_void_p.from_address(pe).value if pe else None   # the entity's +0, its node
     bad = polys = drawn = textured = shadows = 0
     for i in range(count):
         v = View()
@@ -126,6 +136,8 @@ def main():
             f.m[:] = rotation(rng)
         c = rng.choice(ents) if ents else (0, 0, 0)
         d = rng.choice((rng.uniform(2, 30), rng.uniform(30, 300)))
+        if inside:   # within a metre of the user's vehicle's centre, looking every way
+            c, d = user_pos, rng.uniform(-1, 1)
         f.pos[:] = [c[0] - f.m[6] * d, c[1] - f.m[7] * d + rng.uniform(0, 10), c[2] - f.m[8] * d]
         lib.View_SetCamera(ctypes.byref(v), ctypes.byref(f))
         lib.Render_SetHeading(ctypes.byref(v))
@@ -142,17 +154,32 @@ def main():
             exe.write(a, struct.pack("<f", val))
         ctypes.c_float.in_dll(lib, "g_q_zmin").value = 0.0
         ctypes.c_float.in_dll(lib, "g_q_zmax").value = 1500.0
+        if inside:
+            rec = exe.put(struct.pack("<7I", unode, 0, 0, 0, 0, 4, 0))
+            try:
+                exe.call(0x435BE0, rec, vp, fpcw=start, limit=2_000_000_000)
+            except x86.Fault as err:
+                print(f"#{i}: the original faulted: {err}")
+                bad += 1
+                continue
+            mode.value = 1 if down else 0
+            lib.Objects_DrawInside(ctypes.byref(v), pnode)
         try:
+            if inside:
+                raise StopIteration
             exe.call(0x424B90, vp, fpcw=start, limit=500_000_000)
             cw1 = exe.uc.reg_read(X.UC_X86_REG_FPCW)   # the lights' terrain heights leave it rounding down
             exe.call(0x48D820, vp, 1, fpcw=cw1, limit=2_000_000_000)
+        except StopIteration:
+            pass
         except x86.Fault as err:
             print(f"#{i}: the original faulted: {err}")
             bad += 1
             continue
-        mode.value = 1 if down else 0
-        lib.Objects_Draw(ctypes.byref(v))
-        lib.Queue_Flush(ctypes.byref(v), 1)
+        if not inside:
+            mode.value = 1 if down else 0
+            lib.Objects_Draw(ctypes.byref(v))
+            lib.Queue_Flush(ctypes.byref(v), 1)
         polys += len(want)
         drawn += bool(want)
         textured += sum(isinstance(w[0], tuple) for w in want)

@@ -18,8 +18,9 @@
 #define F32 fpu_f32
 
 Frame g_heading;
-static int cam_follow;          /* 0x4a847c: the camera follows an entity (not drawn) */
-static Entity *cam_target;      /* 0x4a8660 */
+/* camera.c's (its header's g_view would clash with this file's) */
+extern int32_t g_cockpit;          /* 0x4a847c */
+extern Entity *g_camera_entity;    /* 0x4a8660 */
 
 static uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 /* the x87's flags of st0 : x (C0 below or unordered) */
@@ -350,6 +351,19 @@ static void draw_entity(QRec *rec, const View *view)
     o->merge = NULL;
 }
 
+void Objects_DrawInside(const View *view, Node *n)
+{
+    if (!n->child) return;
+    QObj o = {0};
+    o.node = n;
+    o.a = 4;   /* the cockpit's level */
+    start(view, &o);
+    g_mode_or = 0;
+    Light_Node(n);
+    children(n, view);
+    draw_tree();
+}
+
 /* the queue's draw functions: 0x48cd20 (type 5), 0x48ccd0 (type 6), 0x48cef0 (type 7) */
 static void type5(QRec *r, const View *v)
 {
@@ -415,9 +429,9 @@ void Objects_Draw(const View *view)
 {
     Light_Frame(view);
     Entity *target = NULL;
-    if (cam_follow) {
-        if (!cam_target) cam_target = g_user_entity;
-        target = cam_target;
+    if (g_cockpit) {   /* 0x4a847c: in the cockpit the camera's entity (0x4a8660) is drawn by the cockpit */
+        if (!g_camera_entity) g_camera_entity = g_user_entity;
+        target = g_camera_entity;
     }
     float k = F32(DIV(1.0, view->sx));   /* 0x4a58a4 */
     /* the original's lists hold 128 each on its stack; the port's take every entity */
