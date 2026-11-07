@@ -315,7 +315,7 @@ size_t Objects_Dump(char *buf, size_t cap)
    class list's order */
 #include "physics.h"
 /* the calls' results, a line per vehicle (Dump_CallOut) */
-static char call_out[1 << 20];
+static char call_out[1 << 23];
 static size_t call_len;
 static void call_line(const void *p, size_t n)
 {
@@ -687,6 +687,31 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(b, sizeof b);
             }
             g_game_options = opts;
+            break;
+        }
+        case 18: {   /* ten packets on the inner parts: the sides, the kill flag, the tyres' flag and the speed
+                        varied; then the vehicle's flags, every part's first 0x20 bytes and the guns' points */
+            static const uint16_t masks[10] = {1, 2, 3, 8, 9, 0xb, 0xf, 8, 3, 0xb};
+            for (int j = 0; j < 10; j++) {
+                uint8_t pk[0x18] = {0};
+                uint32_t a[4] = {50u * j + 7, 30u * j + 1, 1000, 13u * j};
+                uint16_t hi = j % 3 == 0;
+                memcpy(pk + 4, &masks[j], 2);
+                memcpy(pk + 6, &hi, 2);
+                memcpy(pk + 8, a, 16);
+                int32_t r = Damage_Parts(n->data, j % 5, pk, j & 1, j < 5 ? 20.0f : 40.0f);
+                uint8_t b[0x18 + 8 + 20 * 0x20 + 4 * 350];
+                memset(b, 0, sizeof b);
+                memcpy(b, pk, 0x18);
+                memcpy(b + 0x18, &r, 4);
+                memcpy(b + 0x1c, n->data + 0x454, 4);
+                for (int i = 0; i < 20; i++) {
+                    Node *pn = *Data_Ptr(n->data, 0x3a8 + 4 * i);
+                    if (pn && pn->data) memcpy(b + 0x20 + i * 0x20, pn->data, 0x18);   /* +0x18 is a pointer in some */
+                }
+                for (int i = 0; i < g_weapon_count; i++) memcpy(b + 0x20 + 20 * 0x20 + 4 * i, &g_weapons[i].v0c, 4);
+                call_line(b, sizeof b);
+            }
             break;
         }
         case 3: {   /* the brakes released */

@@ -29,3 +29,20 @@ void Vehicle_State(Node *n, float dt);
    the chassis 1.1 with kind 6. What a part cannot take stays in the packet. The packet's selected
    amounts, summed */
 int32_t Damage_Side(uint8_t *d, uint32_t side, uint8_t *p, int user);
+/* Class_Damage 0x425df0: a packet on a node through its class's damage handler (the class table's word
+   10; a structure but 4 uses class 2's); 1 when the part was used up. Ported: the engine (0x15), class
+   0x16, the wheels (0x1e), 0x17, 0x14, 0x18 and the guns (0x32) */
+int Class_Damage(Node *n, uint8_t *p, int a);
+/* Vehicle_Whole 0x42d0a0: the first 20 parts' (+0x3a8) points now over their points at whole */
+double Vehicle_Whole(uint8_t *d);
+/* Damage_Parts 0x42bf90: what is left of a packet on a random part of the side's list (+0x1a0 + 4 side
+   their count, +0x1bc + 0x44 side the parts' numbers, -1 none): with a working special of kind 9 a tenth
+   turned away; a packet aimed at the tyres (+6 bit 0) below 33 goes to the part 6 with +0x10 random. A
+   part with points takes it (Class_Damage); a used-up one with kill may kill the vehicle (0x20, 0x4020
+   for part 6), by the packet against the vehicle's wholeness and a roll; else its quarter-whole points
+   soak the amounts. The packet's amounts left, or 0 */
+int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed);
+/* Damage_Look 0x42c4b0: a part's damaged look by level 0-4: below 5 the body part (+0x408 by the table
+   0x4d5428) in states 0-3; from 5 a wheel's model in state 0, or above level 2 state 1 with the tyre
+   blown (its radius shrunk once); the entity's sphere is dropped when a mesh changed */
+void Damage_Look(uint8_t *d, uint32_t part, uint32_t level);

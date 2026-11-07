@@ -362,8 +362,25 @@ def call_side(exe, n, fpcw):
     exe.write(0x5E14E4, opts)
 
 
+def call_parts(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    masks = (1, 2, 3, 8, 9, 0xB, 0xF, 8, 3, 0xB)
+    for j in range(10):
+        pk = exe.put(struct.pack("<IHH4I", 0, masks[j], int(j % 3 == 0), 50 * j + 7, 30 * j + 1, 1000, 13 * j))
+        sp = struct.unpack("<I", struct.pack("<f", 20.0 if j < 5 else 40.0))[0]
+        r = exe.call(0x42BF90, d, j % 5, pk, j & 1, sp, fpcw=fpcw)
+        b = exe.read(pk, 0x18) + struct.pack("<i", r) + exe.read(d + 0x454, 4)
+        for i in range(20):
+            p = struct.unpack("<I", exe.read(d + 0x3A8 + 4 * i, 4))[0]
+            q = struct.unpack("<I", exe.read(p + 0x70, 4))[0] if p else 0
+            b += (exe.read(q, 0x18) + bytes(8)) if q else bytes(0x20)
+        nw = struct.unpack("<i", exe.read(0x570A64, 4))[0]
+        b += b"".join(exe.read(0x55F9C0 + 0x50 * i + 0xC, 4) for i in range(nw)) + bytes(4 * (350 - nw))
+        CALL_OUT.append(b.hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

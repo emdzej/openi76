@@ -397,3 +397,53 @@ The result is the sum of the selected amounts left. The caller passes it on to t
 
 Checked: `diff_objects.py --call side` (ten packets per vehicle) is identical on t01, s04, t15, s01, a01,
 t10 and t05.
+
+## Damage on the inner parts (0x42bf90)
+
+`Damage_Parts` 0x42bf90 (`src/damage.c`) takes what is left of a packet after `Damage_Side`. Its
+arguments are the side, a kill flag and the speed.
+
+1. **Deflected.** With a working special of kind 9 the packet is turned away a tenth of the time
+   (`rand() % 100 < 10`): its mask is cleared and the result is 0.
+2. **The part.** A packet aimed at the tyres (+6 bit 0) below 33 m/s (by the float's bits) goes to part 6,
+   and its +0x10 becomes `(rand() & 0x32) + 0x4b`. Otherwise the part is drawn from the side's list
+   (+0x1a0 + 4·side the count, +0x1bc + 0x44·side the parts' numbers, -1 none, which ends with 0) until
+   it is one that exists and is not 6.
+3. **A part with points left** takes the packet through `Class_Damage` 0x425df0, its class's damage
+   handler (the class table's word 10). For a wheel the damaged look follows (`Damage_Look` 0x42c4b0), by
+   its points' fraction (by the bits: above 0.75 level 0, 0.5 level 1, 0.25 level 2, else 3). A texture
+   swap after it (0x47c200) is written for part numbers below 5 but is passed the part + 5, so it never
+   runs. The result is the packet's sum when the handler used the part up, else 0.
+4. **A used-up part with the kill flag** may kill the vehicle:
+   - k is 0.1 for the user's vehicle (data +0 the entity) and 2.5 for the others.
+   - The vehicle dies when `sum · k > Vehicle_Whole · (rand() % 100)`: +0x454 gets 0x20, or 0x4020 for
+     part 6. `Vehicle_Whole` 0x42d0a0 is the first 20 parts' points now over their points whole, in
+     doubles.
+5. **Otherwise** the part's whole points `>> 2` soak the amounts in order (unsigned). When one is larger
+   it keeps the difference and the result is 0. Otherwise the result is the sum left.
+
+The handlers (each over the masked amounts in order; an amount larger than the points left takes them
+all and the handler returns 1):
+
+| Class | Handler | Points | What changes |
+|---|---|---|---|
+| 0x15, the engine | 0x42f380 | +0 of +4 | the power +0x18 = their fraction, at least 0.275 (0.4 for the user's or in network play) |
+| 0x16 | 0x4303f0 | +4 of +8 | +0x10 = their fraction · +0xc, at least 0.2 · +0xc |
+| 0x1e, a wheel | 0x42fca0 | +4 of +8 | the grip +0xc = fraction · +0x10, at least 0.5 (by the bits); +0x14 = (max - points) / max · (2 - +0x18) + +0x18 (2 at none). The AI's grip estimate follows (0x409be0: the AI block's +0xa994 = sqrt(average of the wheels' +0xc / data +0x110), or 1 when the average is below 0x4a5188) |
+| 0x17 | 0x430580 | +0 of +4 | with the armour bit, an amount scaled by +0x1c plus 0.5 meets the points, but the amount itself is taken. +0xc goes from +0x10 at whole to 5 at none, +0x14 from 0.5 to +0x18 |
+| 0x14 | 0x434540 | +0 | — (a test of the bit against 3, which no bit equals, would cut the third amount) |
+| 0x18 | 0x42d8a0 | +8 | the amounts are not reduced; at none +4, +8 and +0x10 are 0 |
+| 0x32, a gun | 0x456110 | the weapon instance's +0xc (unsigned) | every amount goes on |
+
+Structures, vehicles and the other classes have handlers of their own, not ported yet.
+
+`Damage_Look` 0x42c4b0 reads the table 0x4d5428 at the part number before checking it:
+
+- Below 5, the body part +0x408 + 4·entry goes to Lod state 0-3 by the level.
+- From 5 on, a wheel's model (the child of +0x3a8 + 4·entry) goes to state 0, or above level 2 to state 1
+  with the tyre blown. Blowing (0x4301a0) happens once: the radius +0x1c times 0.688, +0x44 set, and
+  tblow.wav.
+- When a mesh changed, the entity's sphere is dropped (0x4286c0).
+
+Checked: `diff_objects.py --call parts` (ten packets per vehicle, all parts' state and every gun's points
+after each) is identical on t01, s04, t15, s01, a01, t10 and t05, and upside down on t01 and s04.

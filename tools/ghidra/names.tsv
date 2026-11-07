@@ -561,9 +561,25 @@
 004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00407370	Net_Host	net	med	returns 0x4a8760
 0042bac0	Damage_Side	damage	high	a packet on a side: armour and chassis by their points times the specials' factors; ported
-0042bf90	Damage_Parts	damage	med	a packet on a random inner part of the side (or the tyres), the kill chance
+0042bf90	Damage_Parts	damage	high	a packet on a random inner part of the side (or the tyres), the kill chance; ported
 0042d920	Special_Kind	damage	high	a special's data +0
 0042d940	Special_Works	damage	high	a special's +4 above 0 or +0x10 set
-00425df0	Class_Damage	classes	high	the class table's word 10 (0x4d3c48) for the node's class
+00425df0	Class_Damage	classes	high	the class table's word 10 (0x4d3c48) for the node's class; ported for the parts
 00430900	Structure_Damage	damage	med	a structure's damage handler: destruction, explosion, chunks
 0042a5d0	Terrain_Wear	damage	med	rough ground's wear: a random side's packet
+0042f380	Engine_Damage	damage	high	class 0x15: points +0, power +0x18 at least 0.275 (0.4 the user's); ported
+004303f0	Part16_Damage	damage	high	class 0x16: points +4, +0x10 at least 0.2 of +0xc; ported
+0042fca0	Wheel_Damage	damage	high	class 0x1e: points +4, grip +0xc at least 0.5, +0x14; tells the AI; ported
+00430580	Part17_Damage	damage	high	class 0x17: points +0, +0xc and +0x14; ported
+00434540	Part14_Damage	damage	high	class 0x14: points +0 (a dead test against bit 3); ported
+0042d8a0	Part18_Damage	damage	high	class 0x18: points +8, amounts kept; ported
+00456110	Gun_Damage	damage	high	class 0x32: the weapon instance's +0xc; ported
+00409be0	AI_GripEstimate	ai	high	the AI block's +0xa994 from the wheels' grip; ported
+0042d0a0	Vehicle_Whole	damage	high	the first 20 parts' points now over whole; ported
+0042c4b0	Damage_Look	damage	high	a part's damaged look (Lod states), a wheel's blown tyre; ported
+00482f20	Lod_SetStateTree	lod	high	the state on a node and all under it; ported
+004301a0	Tyre_Blow	damage	high	once: the radius times 0.688, +0x44, tblow.wav; ported
+004286c0	Entity_DropSphere	entity	high	+0x68 -1, +0x70 0
+00456890	Gun_Points	weapons	high	the weapon instance's +0xc by its gun node
+004568d0	Gun_Whole	weapons	high	the definition's +0x5c by its gun node
+0042fd90	Wheel_Points	damage	high	a wheel's +4 and +8 (300 each without data)

@@ -3,9 +3,13 @@
 #include "classes.h"
 #include "entity.h"
 #include "exe.h"
+#include "ai.h"
+#include "crt.h"
 #include "physics.h"
+#include "weapons.h"
 #include "render/fpu.h"
 #include "render/light.h"
+#include "lod.h"
 #include <string.h>
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -261,6 +265,340 @@ int32_t Damage_Side(uint8_t *d, uint32_t side, uint8_t *p, int user)
     for (int i = 0; i < 4; i++) {
         if ((m & 3) && !no_chassis) absorb(d, 0x138 + side * 4, 0x178 + side * 4, p + 8 + 4 * i, kc);
         else if (no_chassis) put32(p + 8 + 4 * i, 0);
+    }
+    return packet_sum(p);
+}
+
+/* the weapon instance of a gun's node (0x456890, 0x4568d0's search), NULL for none */
+static WeaponInst *weapon_of(const Node *gun)
+{
+    for (int i = 0; i < g_weapon_count; i++)
+        if (g_weapons[i].gun == gun) return &g_weapons[i];
+    return NULL;
+}
+
+/* the amounts the mask selects, each in turn against the points at hp (signed): a larger amount loses the
+   points, which go to 0, and the handler stops with 1; a smaller one is taken whole */
+static int take(uint8_t *p, uint8_t *hp, int clear_amount)
+{
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i), h = rd32(hp);
+        if (a > h) {
+            put32(p + 8 + 4 * i, a - h);
+            put32(hp, 0);
+            return 1;
+        }
+        put32(hp, h - a);
+        if (clear_amount) put32(p + 8 + 4 * i, 0);
+    }
+    return 0;
+}
+
+/* 0x42f380, the engine (class 0x15): +0 the points of +4; +0x18 its power, their fraction, at least 0.275
+   (0.4 for the user's or in network play) */
+static int damage_engine(Node *n, uint8_t *p)
+{
+    uint8_t *e = n->data;
+    uint32_t b = (Node_Root(n)->flags & 0x10) ? 0x3ecccccdu : 0x3e8ccccdu;
+    float lo;
+    memcpy(&lo, &b, 4);
+    if (take(p, e, 1)) {
+        putf(e + 0x18, lo);
+        return 1;
+    }
+    putf(e + 0x18, fpu_f32(fpu_div((double)rd32(e), (double)rd32(e + 4))));
+    if (rdf(e + 0x18) < lo || rdf(e + 0x18) != rdf(e + 0x18)) putf(e + 0x18, lo);
+    return 0;
+}
+
+/* 0x4303f0, class 0x16: +4 the points of +8; +0x10 the fraction times +0xc, at least 0.2 of +0xc */
+static int damage_16(Node *n, uint8_t *p)
+{
+    uint8_t *e = n->data;
+    float lo = fpu_f32(fpu_mul(rdf(e + 0xc), exe_f32(0x4a5cf8)));
+    if (take(p, e + 4, 1)) {
+        putf(e + 0x10, lo);
+        return 1;
+    }
+    putf(e + 0x10, fpu_f32(fpu_mul(fpu_div((double)rd32(e + 4), (double)rd32(e + 8)), rdf(e + 0xc))));
+    if (rdf(e + 0x10) < lo || rdf(e + 0x10) != rdf(e + 0x10)) putf(e + 0x10, lo);
+    return 0;
+}
+
+/* 0x409be0: the AI's grip estimate (its block's +0xa994) from the four wheels' +0xc */
+static void ai_grip(Node *root)
+{
+    uint8_t *d = root->data;
+    uint8_t *ai = slot(d, 0x108) ? (uint8_t *)slot(d, 0x108) : NULL;
+    float s = rdf(slot(d, 0x3a8)->data + 0xc);
+    s = fpu_f32(fpu_add(rdf(slot(d, 0x3ac)->data + 0xc), s));
+    s = fpu_f32(fpu_add(rdf(slot(d, 0x3b8)->data + 0xc), s));
+    double avg = fpu_mul(fpu_add(rdf(slot(d, 0x3bc)->data + 0xc), s), exe_f32(0x4a51b0));
+    if (!ai) return;
+    if (!(avg >= exe_f32(0x4a5188))) putf(ai + 0xa994, 1.0f);
+    else putf(ai + 0xa994, fpu_f32(fpu_sqrt(fpu_div(fpu_f32(avg), rdf(d + 0x110)))));
+}
+
+/* 0x42fca0, a wheel (class 0x1e): +4 the points of +8; its grip +0xc the fraction times +0x10, at least
+   0.5 (by the bits), and +0x14 from +0x18 at whole to 1 at none; the AI told */
+static int damage_wheel(Node *n, uint8_t *p)
+{
+    uint8_t *e = n->data;
+    if (take(p, e + 4, 1)) {
+        put32(e + 0xc, 0x3f000000);
+        put32(e + 0x14, 0x40000000);
+        ai_grip(Node_Root(n));
+        return 1;
+    }
+    int32_t h = rd32(e + 4), m = rd32(e + 8);
+    putf(e + 0xc, fpu_f32(fpu_mul(fpu_div((double)h, (double)m), rdf(e + 0x10))));
+    if (rd32(e + 0xc) < 0x3f000000) put32(e + 0xc, 0x3f000000);
+    double one_g = fpu_sub(exe_f32(0x4a5cd4), rdf(e + 0x18));
+    putf(e + 0x14, fpu_f32(fpu_add(fpu_mul(fpu_div((double)(m - h), (double)m), one_g), rdf(e + 0x18))));
+    ai_grip(Node_Root(n));
+    return 0;
+}
+
+/* 0x430580, class 0x17: +0 the points of +4 (an armour amount scaled by +0x1c, plus 0.5, against them
+   but the amount itself taken); +0xc from +0x10 at whole to 5 at none, +0x14 from 0.5 to +0x18 */
+static int damage_17(Node *n, uint8_t *p)
+{
+    uint8_t *e = n->data;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    const float half = exe_f32(0x4a5d00), five = exe_f32(0x4a5d04);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i), v = a;
+        if (m & 8) v = (int32_t)(int64_t)fpu_add(fpu_mul((double)a, rdf(e + 0x1c)), half);
+        if (v > rd32(e)) {
+            put32(p + 8 + 4 * i, v - rd32(e));
+            put32(e, 0);
+            putf(e + 0xc, five);
+            putf(e + 0x14, half);
+            return 1;
+        }
+        put32(e, rd32(e) - a);
+        put32(p + 8 + 4 * i, 0);
+    }
+    double r = fpu_div((double)rd32(e), (double)rd32(e + 4));
+    putf(e + 0xc, fpu_f32(fpu_sub(five, fpu_mul(fpu_sub(five, rdf(e + 0x10)), r))));
+    putf(e + 0x14, fpu_f32(fpu_add(fpu_mul(fpu_sub(rdf(e + 0x18), half), r), half)));
+    return 0;
+}
+
+/* 0x434540, class 0x14: +0 the points (a test for the third amount's packet flag compares the bit with 3,
+   never true) */
+static int damage_14(Node *n, uint8_t *p) { return take(p, n->data, 1); }
+
+/* 0x42d8a0, class 0x18: +8 the points; the amounts are left as they are; at none +4, +8 and +0x10 are 0 */
+static int damage_18(Node *n, uint8_t *p)
+{
+    uint8_t *e = n->data;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i), h = rd32(e + 8);
+        if (a > h) {
+            put32(e + 8, 0);
+            put32(e + 4, 0);
+            put32(e + 0x10, 0);
+            return 1;
+        }
+        put32(e + 8, h - a);
+    }
+    return 0;
+}
+
+/* 0x456110, a gun (class 0x32): its instance's points (+0xc, unsigned); every amount goes on, 1 when one
+   was more than was left */
+static int damage_gun(Node *n, uint8_t *p)
+{
+    WeaponInst *w = weapon_of(n);
+    if (!w) return 0;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    int r = 0;
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        uint32_t a = rdu(p + 8 + 4 * i), h = (uint32_t)w->v0c;
+        if (a > h) {
+            put32(p + 8 + 4 * i, (int32_t)(a - h));
+            r = 1;
+            w->v0c = 0;
+        } else {
+            w->v0c = (int32_t)(h - a);
+            put32(p + 8 + 4 * i, 0);
+        }
+    }
+    return r;
+}
+
+int Class_Damage(Node *n, uint8_t *p, int a)
+{
+    (void)a;
+    int cls = n->cls;
+    if (Class_IsStructure(cls) && cls != 4) cls = 2;
+    switch (cls) {
+    case 0x15: return damage_engine(n, p);
+    case 0x16: return damage_16(n, p);
+    case 0x1e: return damage_wheel(n, p);
+    case 0x17: return damage_17(n, p);
+    case 0x14: return damage_14(n, p);
+    case 0x18: return damage_18(n, p);
+    case 0x32: return damage_gun(n, p);
+    /* not ported yet: 2 0x430900 (structures), 4 0x434950, 1 0x429eb0 (a vehicle's death), 9 0x431c60,
+       8 0x4289f0, 7 0x432ed0, 0xa 0x4346b0 */
+    default: return 0;
+    }
+}
+
+/* a part's points now (first) and at whole (second), by its class (0x42bf90's and 0x42d0a0's switches) */
+static int32_t part_points(const Node *n, int whole)
+{
+    if (!n) return 0;
+    const uint8_t *e = n->data;
+    switch (n->cls) {
+    case 0x14: case 0x15: case 0x17: return rd32(e + (whole ? 4 : 0));
+    case 0x16: case 0x1e: return rd32(e + (whole ? 8 : 4));
+    case 0x18: return rd32(e + (whole ? 0xc : 8));
+    case 0x32: {
+        const WeaponInst *w = weapon_of(n);
+        if (!w) return 0;
+        return whole ? g_weapon_defs[w->def].v[1] : w->v0c;
+    }
+    default: return 0;
+    }
+}
+
+double Vehicle_Whole(uint8_t *d)
+{
+    uint32_t now = 0, all = 0;
+    for (uint32_t i = 0; i < 20; i++) {
+        Node *n = slot(d, 0x3a8 + 4 * i);
+        now += (uint32_t)part_points(n, 0);
+        all += (uint32_t)part_points(n, 1);
+    }
+    return fpu_div((double)now, (double)all);
+}
+
+/* 0x482f20: the state on the node and every node under it (Lod_SetState); true if any changed */
+static bool state_tree(Node *n, int state)
+{
+    if (!n) return false;
+    bool r = Lod_SetState(n, state);
+    for (Node *c = n->child; c; c = c->next)
+        if (state_tree(c, state)) r = true;
+    return r;
+}
+
+/* 0x4301a0: a tyre blown, once: its radius (+0x1c) times 0x4a5cec, +0x44 set (the sound tblow.wav is not
+   ported yet) */
+static void tyre_blow(Node *w)
+{
+    uint8_t *e = w->data;
+    if (rd32(e + 0x44)) return;
+    putf(e + 0x1c, fpu_f32(fpu_mul(rdf(e + 0x1c), exe_f32(0x4a5cec))));
+    put32(e + 0x44, 1);
+}
+
+void Damage_Look(uint8_t *d, uint32_t part, uint32_t level)
+{
+    /* the table 0x4d5428 is read at part before the bound (parts 5 and more are the wheels' own numbers
+       plus 5, past its ten entries for the tyres' 6) */
+    uint32_t t = exe_u32(0x4d5428 + part * 4);
+    Node *tree;
+    if (part >= 5) {
+        Node *w = slot(d, 0x3a8 + t * 4);
+        if (!w) return;
+        tree = w->child;
+    } else {
+        tree = slot(d, 0x408 + t * 4);
+        if (!tree) return;
+    }
+    int state = level <= 1 ? 0 : level == 2 ? 1 : level == 3 ? 2 : 3;
+    if (part >= 5) {
+        state = 0;
+        if (level > 2) {
+            state = 1;
+            tyre_blow(slot(d, 0x3a8 + t * 4));
+        }
+    }
+    if (tree && state_tree(tree, state)) {
+        /* 0x4286c0: the entity's cached sphere (+0x68 -1, +0x70 0) */
+        Entity *e = (Entity *)slot(d, 0);
+        if (e) {
+            e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
+            e->rest[(0x70 - 0x34) / 4] = 0;
+        }
+    }
+}
+
+int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed)
+{
+    if (has_special(d, 9) && crt_rand() % 100 < 10) {   /* a working kind 9 turns a tenth away */
+        memset(p + 4, 0, 2);
+        return 0;
+    }
+    int part;
+    int32_t sb;
+    memcpy(&sb, &speed, 4);
+    if ((p[6] & 1) && sb < 0x42040000) {   /* aimed at the tyres, slower than 33 */
+        part = 6;
+        put32(p + 0x10, (crt_rand() & 0x32) + 0x4b);
+    } else {
+        do {
+            part = rd32(d + 0x1bc + (uint32_t)(side * 0x11 + crt_rand() % rd32(d + 0x1a0 + side * 4)) * 4);
+            if (part == -1) {
+                memset(p + 4, 0, 2);
+                return 0;
+            }
+        } while (!slot(d, 0x3a8 + (uint32_t)part * 4) || part == 6);
+    }
+    Node *n = slot(d, 0x3a8 + (uint32_t)part * 4);
+    if (part_points(n, 0)) {
+        int r = Class_Damage(n, p, 0);
+        n = slot(d, 0x3a8 + (uint32_t)part * 4);
+        if (n->cls == 0x1e) {
+            int32_t h, m;
+            h = n->data ? rd32(n->data + 4) : 300;   /* 0x42fd90 */
+            m = n->data ? rd32(n->data + 8) : 300;
+            float f = m ? fpu_f32(fpu_div((double)h, (double)m)) : 0.0f;
+            int32_t fb;
+            memcpy(&fb, &f, 4);
+            int level = fb > 0x3f400000 ? 0 : fb > 0x3f000000 ? 1 : fb > 0x3e800000 ? 2 : 3;
+            Damage_Look(d, (uint32_t)part + 5, (uint32_t)level);
+            /* the textures' swap after it (0x47c200, the names at 0x4d5470) is for parts below 5, never
+               reached with part + 5 */
+        }
+        return r ? packet_sum(p) : 0;
+    }
+    if (kill) {
+        float k = (Entity *)slot(d, 0) == g_user_entity ? 0.1f : 2.5f;
+        int32_t sum = packet_sum(p);
+        float r = (float)(crt_rand() % 100);
+        double h = fpu_mul(Vehicle_Whole(d), r);
+        if (fpu_mul((double)sum, k) > h) {
+            put32(d + 0x454, rd32(d + 0x454) | (part == 6 ? 0x4020 : 0x20));
+            return 0;
+        }
+    }
+    int32_t v = part_points(slot(d, 0x3a8 + (uint32_t)part * 4), 1) >> 2;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        uint32_t a = rdu(p + 8 + 4 * i);
+        if ((uint32_t)v < a) {
+            put32(p + 8 + 4 * i, (int32_t)(a - (uint32_t)v));
+            return 0;
+        }
+        put32(p + 8 + 4 * i, 0);
+        v -= (int32_t)a;
     }
     return packet_sum(p);
 }
