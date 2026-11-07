@@ -159,15 +159,42 @@ class Exe:
         self.write(self.import_slots()[name], struct.pack("<I", a))
         self.stub(a, fn, nargs, stdcall=True)
 
+    def stub_pointer(self, slot, fn, nargs):
+        """Writes a fresh stub's address at slot (a function pointer the exe calls through, cdecl)."""
+        a = self.next_stub
+        self.next_stub += 16
+        self.uc.mem_write(a, b"\xc3")
+        self.write(slot, struct.pack("<I", a))
+        self.stub(a, fn, nargs)
+
     def stub_heap(self):
-        """HeapAlloc / HeapFree / HeapReAlloc on the emulator's bump heap (zeroed with HEAP_ZERO_MEMORY)."""
+        """HeapAlloc / HeapFree / HeapReAlloc / HeapSize on the emulator's bump heap (zeroed with
+        HEAP_ZERO_MEMORY; a reallocation is a new block with the old one's bytes)."""
+        sizes = {}
+
         def alloc(heap, flags, size):
             a = self.alloc(size)
             if flags & 8:
                 self.write(a, bytes(size))
+            sizes[a] = size
+            return a
+
+        def realloc(heap, flags, p, size):
+            a = alloc(heap, flags, size)
+            old = sizes.get(p, 0)
+            if old:
+                self.write(a, self.read(p, min(old, size)))
             return a
         self.stub_import("HeapAlloc", alloc, 3)
         self.stub_import("HeapFree", lambda h, f, p: 1, 3)
+        if "HeapReAlloc" in self.import_slots():
+            self.stub_import("HeapReAlloc", realloc, 4)
+        if "HeapSize" in self.import_slots():
+            self.stub_import("HeapSize", lambda h, f, p: sizes.get(p, 0xFFFFFFFF), 3)
+        if "HeapCreate" in self.import_slots():   # one heap: handles are only passed back
+            self.stub_import("HeapCreate", lambda f, i, m: 0x5EAF0000, 3)
+            self.stub_import("HeapDestroy", lambda h: 1, 1)
+            self.stub_import("GetProcessHeap", lambda: 0x5EAF0000, 0)
 
 
 def rounding(exe, lib, argv):

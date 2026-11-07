@@ -126,8 +126,7 @@ It is read by 0x484300, in sequence, with the table 0x4eb798 and the node as the
   - The tree is then walked from the camera's far side of each plane to its near side. Each face with
     vertices is drawn straight away with DrawPoly. Its texture is Tex_Get(node, name) (0x47c320); without
     one, the mode loses its texture bits (& ~0x14).
-EOF
-echo ok
+
 ## Entities and classes
 
 - **0x423d30(node, a, b)** takes the first free entry of the entity array 0x547e60 (0x1e dwords each, at
@@ -165,3 +164,11 @@ echo ok
   0x47dc70 returns the current geometry when the LOD is unchanged. It swaps current and previous when the
   LOD is the previous one. Otherwise it loads the name (Geom_Get), but only when the name differs; it
   releases the old previous and calls Tex_Refresh(node).
+
+## The reference: the original's load in the emulator
+
+`tools/emu/mission.py t01.msn` runs Mission_Load 0x484410 in Unicorn. The files come from the port's
+resource layer, and the user vehicle is WinMain's default `vppirna1` (0x58dcd0, copied from 0x4a8448
+before the shell's choice; without it ODEF ends in "No User vehicle in mission"). For t01 it reads 494
+files and makes 93 entities (the user at 0x548ec8) and 718 scene nodes, at most 4 levels deep. The
+port's objects layer is checked against these trees.
