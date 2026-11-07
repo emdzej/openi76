@@ -351,6 +351,19 @@ const char *Dump_CallOut(void)
     return call_out;
 }
 
+static void log_fire(WeaponInst *w, const WeaponDef *d, int n, float late)
+{
+    int32_t v[4] = {(int32_t)(w - g_weapons), (int32_t)(d - g_weapon_defs), n, 0};
+    memcpy(&v[3], &late, 4);
+    call_line(v, sizeof v);
+}
+
+static void log_click(void)
+{
+    int32_t v = -1;
+    call_line(&v, sizeof v);
+}
+
 int Dump_CallVehicles(int which, int upside)
 {
     int k = 0;
@@ -937,6 +950,30 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 31: {   /* the triggers' timing (0x458340, its firing 0x458710 logged): n's triggers pulled before
+                        each of three ticks of 0.06, 0.2 and 0.015 s; each firing (the instance, the definition,
+                        the shots, the time late) and click, then every instance's +0x18-+0x24, +0x44, +0x48 */
+            float keep = g_clock_step;
+            static const float steps[3] = {0.06f, 0.2f, 0.015f};
+            g_weapon_fire = log_fire;
+            g_weapon_click = log_click;
+            for (int k = 0; k < 3; k++) {
+                for (int i = 0; i < g_weapon_count; i++)
+                    if (g_weapons[i].hp && g_weapons[i].hp->vehicle == n) g_weapons[i].v44 = 1;
+                g_clock_step = steps[k];
+                g_fpu_round = FPU_DOWN;
+                Weapons_Tick();
+                for (int i = 0; i < g_weapon_count; i++) {
+                    const WeaponInst *w = &g_weapons[i];
+                    int32_t v[6] = {(int32_t)w->v18, w->v1c, w->v20, w->v24, w->v44, w->v48};
+                    call_line(v, sizeof v);
+                }
+            }
+            g_weapon_fire = NULL;
+            g_weapon_click = NULL;
+            g_clock_step = keep;
             break;
         }
         case 30: {   /* the firing decision (0x413b10) of each of the AI block's weapons (refreshed, 0x408c40) at

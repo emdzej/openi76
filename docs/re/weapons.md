@@ -110,3 +110,46 @@ every mission (confirmed). Firing, the projectiles and the weapons' sounds are n
   - Types 0xc, 0xd and 0x11 take the tree's first texture (0x482ea0).
   - +0x40 is 1 for types 2–5, 7, 8 and 0x11.
 - **Not ported.** A heap per kind ("Ordinance %d").
+
+## Firing: the triggers' timing (0x458340)
+
+Every frame each instance spends the frame's clamped step (0x450f30) on its timers and its trigger. The
+words it uses:
+
+| Offset | What |
+|---|---|
+| instance +0x18 | the ammunition (GDFC +0x66) |
+| instance +0x1c | the pause, a float |
+| instance +0x20 | the interval to the next shot, a float |
+| instance +0x24 | the burst's shots left |
+| instance +0x44 | the trigger (pulled by 0x455350: the AI's aim, the turrets, the user's keys) |
+| instance +0x48 | fired since the trigger was last released |
+| def +0x64 | the pause after a burst (float) |
+| def +0x68 | the rate (float) |
+| def +0x70 | the burst's length |
+| def +0x78 | the ordnance's type |
+
+- **Idle.** The pause or the interval covers the step (the step not above the pause, or the interval not
+  below the step). Then:
+  - a released trigger clears +0x48;
+  - a pulled trigger that has not fired plays WCLICK.WAV (0x4765d0) and sets +0x48;
+  - the trigger is released, and the pause and the interval (when positive, as integer bits) lose the step.
+- **Otherwise the step is spent** while it stays positive and above both timers:
+  - The pause, else the interval, is used up first. When it is longer than what is left, its remainder
+    stays and nothing is left. A remainder under 0.01 s is dropped.
+  - With burst shots left, one is taken and the interval set to 1 / rate.
+  - With the trigger pulled, a new burst starts. With no ammunition it does not: the trigger is released,
+    unless the user's weapons are free (0x4db474) outside a network game (0x461900). The burst's length,
+    less the shot taken now, is clipped to the ammunition on the same terms. The interval is 1 / rate; for
+    ordnance 0xc and 0x11, on a vehicle under 20 m/s, it is `1 - (1 - interval) x 0.05 x speed`.
+  - A burst's last shot sets the pause from def +0x64 when that is longer than the interval. A new burst
+    of one with a shorter def pause takes its interval as the pause, but only when the def's pause is 0.
+  - Each shot is fired at once (0x458710, one shot, the time still left in the frame). Ordnance 1 and
+    0x12 are the exception: their shots are counted and fired together after the step.
+- **After.** The trigger is released. A pause longer than what is left loses it and clears the interval
+  and the burst. An interval longer than what is left loses it and clears the pause. Counted shots are
+  fired with a third of the latest time left. When no burst follows, a def pause longer than the
+  interval is set.
+
+Checked: `diff_objects --call trigger` (each vehicle's triggers pulled before three ticks of 0.06, 0.2
+and 0.015 s, the firings logged, every instance's words after each) on t01 and s04.

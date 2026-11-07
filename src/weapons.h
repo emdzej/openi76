@@ -96,3 +96,12 @@ void Weapons_Init(void);
 void Weapons_Faster(Node *vehicle);
 /* WEPN 0x4863d0: the chunk (header included) for x's vehicle; 0 fails the vehicle */
 int Weapons_Wepn(const uint8_t *c, ObjCtx *x);
+
+extern int32_t g_weapons_free;   /* 0x4db474 */
+extern int32_t g_net_game;       /* 0x4dc4e4 (0x461900) */
+/* the shot's firing (0x458710: n shots of w, late s into the frame), and the empty trigger's click */
+extern void (*g_weapon_fire)(WeaponInst *w, const WeaponDef *d, int n, float late);
+extern void (*g_weapon_click)(void);
+/* Weapons_Tick 0x458340: each instance's timers (+0x1c the pause, +0x20 the interval, +0x24 the burst's
+   shots left) and its trigger (+0x44): the frame's step spent shot by shot (docs/re/weapons.md "Firing") */
+void Weapons_Tick(void);

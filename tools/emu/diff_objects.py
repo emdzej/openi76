@@ -707,8 +707,34 @@ def call_fire(exe, n, fpcw):
     exe.call(0x421FC0, fpcw=fpcw)
 
 
+TRIGGER_STUBS = []
+
+
+def call_trigger(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    if not TRIGGER_STUBS:
+        exe.stub(0x458710, lambda w, d, k, late: CALL_OUT.append(
+            struct.pack("<iiiI", (w - 0x55F9C0) // 0x50, (d - 0x56F730) // 0x88, k, late).hex()), 4)
+        exe.stub(0x4765D0, lambda *a: CALL_OUT.append(struct.pack("<i", -1).hex()), 3)
+        TRIGGER_STUBS.append(1)
+    keep = exe.read(0x4DB138, 4)
+    cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
+    for step in (0.06, 0.2, 0.015):
+        for i in range(cnt):
+            w = 0x55F9C0 + i * 0x50
+            hp = u(w + 0x10)
+            if hp and u(hp) == n:
+                exe.write(w + 0x44, struct.pack("<i", 1))
+        exe.write(0x4DB138, struct.pack("<f", step))
+        exe.call(0x458340, fpcw=(fpcw & ~0xC00) | 0x400)
+        for i in range(cnt):
+            w = 0x55F9C0 + i * 0x50
+            CALL_OUT.append((exe.read(w + 0x18, 16) + exe.read(w + 0x44, 8)).hex())
+    exe.write(0x4DB138, keep)
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -1020,7 +1046,7 @@ if __name__ == "__main__":
                 print(f"line {i}:\n  orig {x}\n  port {y}")
     if os.environ.get("CALL_SHOW"):
         for x in CALL_OUT:
-            print("call", x[:8], x[8:16], x[0x6c * 2 + 8:0x6c * 2 + 32], x[(4 + 0xa8) * 2:(4 + 0xa8) * 2 + 8])
+            print("call", len(x) // 2, x[:8], x[8:16], x[16:24], x[24:32], x[0x6c * 2 + 8:0x6c * 2 + 32])
     if CALL_OUT != PORT_OUT:
         bad += 1
         print(f"--call {CALL}'s results:\n  orig {CALL_OUT}\n  port {PORT_OUT}")

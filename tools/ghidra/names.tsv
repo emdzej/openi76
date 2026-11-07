@@ -829,3 +829,5 @@
 0x414d50	Vec_Along
 0x455350	Weapon_Trigger
 0x458980	Weapon_IsOn
+0x458340	Weapons_Tick
+0x458710	Weapon_Fire

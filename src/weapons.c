@@ -1,6 +1,8 @@
 /* The weapons' loading (weapons.h). In the current rounding mode (render/fpu.h). */
 #include "weapons.h"
 #include "chunks.h"
+#include "clock.h"
+#include "combat.h"
 #include "crt.h"
 #include "effects.h"
 #include "exe.h"
@@ -604,5 +606,119 @@ void Weapons_Faster(Node *vehicle)
         }
         g_weapons[w].v0c = v0c;
         if (rate != -1) g_weapons[w].v18 = (uint32_t)rate;
+    }
+}
+
+/* ---- the triggers' timing (0x458340) ---- */
+
+int32_t g_weapons_free;   /* 0x4db474: the user's weapons need no ammunition (set by 0x455d90) */
+int32_t g_net_game;       /* 0x4dc4e4: a network game (0x461900) */
+void (*g_weapon_fire)(WeaponInst *w, const WeaponDef *d, int n, float late);   /* 0x458710 */
+void (*g_weapon_click)(void);   /* the empty click's sound (0x4765d0, "WCLICK.WAV") */
+
+static float getf(const void *p) { float f; memcpy(&f, p, 4); return f; }
+static void setf(void *p, float f) { memcpy(p, &f, 4); }
+static int32_t fbits(float f) { int32_t v; memcpy(&v, &f, 4); return v; }
+
+/* the shot interval: 1 / the rate (+0x68), and for ordnance 0xc and 0x11 slower on a vehicle under 20 m/s */
+static void interval(WeaponInst *w, const WeaponDef *d, int scaled)
+{
+    setf(&w->v20, F32(fpu_div(1.0f, getf(&d->v[4]))));   /* 0x4a61a4 */
+    if (!scaled || (d->v[8] != 0xc && d->v[8] != 0x11)) return;
+    float v[3], sp;
+    Class_Velocity(w->hp->vehicle, v, &sp);
+    if (fbits(sp) < 0x41a00000)
+        setf(&w->v20, F32(ADD(MUL(MUL(-fpu_sub(1.0f, getf(&w->v20)), 0.05000000074505806f), sp), 1.0f)));   /* 0x4a6218 */
+}
+
+void Weapons_Tick(void)
+{
+    for (int i = 0; i < g_weapon_count; i++) {
+        WeaponInst *w = &g_weapons[i];
+        const WeaponDef *d = &g_weapon_defs[w->def];
+        float left = g_clock_step, most = 0;   /* 0x450f30 */
+        int n = 0;
+        if (!(left > getf(&w->v1c)) || !(getf(&w->v20) < left)) {
+            /* idle: the trigger's click when pulled with nothing to fire, the timers run down */
+            if (w->v44 == 0 && w->v48 == 1) w->v48 = 0;
+            if (w->v44 == 1 && w->v48 == 0) {
+                if (g_weapon_click) g_weapon_click();
+                w->v48 = 1;
+            }
+            w->v44 = 0;
+            if (w->v1c > 0) setf(&w->v1c, F32(fpu_sub(getf(&w->v1c), left)));
+            if (w->v20 > 0) setf(&w->v20, F32(fpu_sub(getf(&w->v20), left)));
+            continue;
+        }
+        while (fbits(left) > 0 && getf(&w->v1c) < left && getf(&w->v20) < left) {
+            int32_t *timer = w->v1c > 0 ? &w->v1c : w->v20 > 0 ? &w->v20 : NULL;
+            if (timer) {   /* the cooldown, else the interval, used up first */
+                double x = fpu_sub(left, getf(timer));
+                left = F32(x);
+                if (x < 0.0f) {
+                    setf(timer, -left);
+                    left = 0;
+                } else
+                    *timer = 0;
+                if (fbits(left) < 0x3c23d70a) left = 0;   /* 0.01 */
+                continue;
+            }
+            if (w->v24 > 0) {   /* the burst's next shot */
+                n++;
+                w->v24--;
+                interval(w, d, 0);
+                if (w->v24 == 0 && getf(&w->v20) < getf(&d->v[3])) {
+                    w->v1c = d->v[3];
+                    w->v20 = 0;
+                }
+            } else if (w->v44 == 1) {   /* a new burst */
+                if (w->v18 == 0 && (!g_weapons_free || g_net_game)) {
+                    w->v44 = 0;
+                    left = 0;
+                    continue;
+                }
+                w->v24 = d->v[6];
+                n++;
+                w->v48 = 1;
+                w->v24--;
+                if ((int32_t)w->v18 < w->v24 && (!g_weapons_free || g_net_game)) w->v24 = (int32_t)w->v18;
+                interval(w, d, 1);
+                if (w->v24 == 0) {
+                    if (!(getf(&d->v[3]) < getf(&w->v20))) {
+                        w->v1c = d->v[3];
+                        w->v20 = 0;
+                    } else if (!(d->v[3] & 0x7fffffff)) {
+                        w->v1c = w->v20;
+                        w->v20 = 0;
+                    }
+                }
+            } else {
+                left = 0;
+                continue;
+            }
+            /* each shot at its time in the frame, but ordnance 1 and 0x12's all at once below */
+            if (d->v[8] != 1 && d->v[8] != 0x12) {
+                if (g_weapon_fire) g_weapon_fire(w, d, n, left);
+                n--;
+            }
+            if (most < left) most = left;
+        }
+        w->v44 = 0;
+        if (getf(&w->v1c) > left) {
+            if (fbits(left) > 0) setf(&w->v1c, F32(fpu_sub(getf(&w->v1c), left)));
+            w->v20 = 0;
+            w->v24 = 0;
+        }
+        if (getf(&w->v20) > left) {
+            if (fbits(left) > 0) setf(&w->v20, F32(fpu_sub(getf(&w->v20), left)));
+            w->v1c = 0;
+        }
+        if (n > 0) {
+            if (g_weapon_fire) g_weapon_fire(w, d, n, F32(MUL(most, 0.3333333432674408f)));   /* 0x4a621c */
+            if (w->v24 == 0 && getf(&d->v[3]) > getf(&w->v20)) {
+                w->v1c = d->v[3];
+                w->v20 = 0;
+            }
+        }
     }
 }
