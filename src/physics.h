@@ -30,3 +30,6 @@ void Frame_Yaw(Frame *out, float a);
 void Integrate(double p[3], float v[3], const float a[3], float dt);
 /* Integrate_Turn 0x4719f0: the same for a rotation: out the step's angles (w + a dt / 2) dt, w += a dt */
 void Integrate_Turn(float out[3], float w[3], const float a[3], float dt);
+/* Vehicle_Grip 0x4759b0: the yaw rate for the steering at speed sp, limited by the wheels' loads and the
+   ground's grip; *slide = 1 beyond twice the limit, else *grip the fraction past it */
+void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip);

@@ -311,6 +311,25 @@ size_t Objects_Dump(char *buf, size_t cap)
 /* the harness's --call (tools/emu/diff_objects.py): one function on every listed class 1 node, in the
    class list's order */
 #include "physics.h"
+/* the calls' results, a line per vehicle (Dump_CallOut) */
+static char call_out[1 << 16];
+static size_t call_len;
+static void call_line(const void *p, size_t n)
+{
+    static const char hx[] = "0123456789abcdef";
+    const uint8_t *b = p;
+    for (size_t i = 0; i < n && call_len + 3 < sizeof call_out; i++) {
+        call_out[call_len++] = hx[b[i] >> 4];
+        call_out[call_len++] = hx[b[i] & 15];
+    }
+    if (call_len + 1 < sizeof call_out) call_out[call_len++] = '\n';
+}
+const char *Dump_CallOut(void)
+{
+    call_out[call_len] = 0;
+    return call_out;
+}
+
 int Dump_CallVehicles(int which, int upside)
 {
     int k = 0;
@@ -330,6 +349,16 @@ int Dump_CallVehicles(int which, int upside)
             const float st = 0.37f;
             memcpy(n->data + 0xe0, &st, 4);
             Vehicle_Steer(n);
+            break;
+        }
+        case 4: {   /* the grip at 12 m/s, the steering at 0.37, then at 45 m/s on full lock */
+            static const float cases[][2] = {{12.0f, 0.37f}, {45.0f, 1.0f}, {30.0f, -0.8f}};
+            for (int j = 0; j < 3; j++) {
+                memcpy(n->data + 0xe0, &cases[j][1], 4);
+                struct { float yaw; int32_t slide; float grip; } r = {0, 0, 1.0f};
+                Vehicle_Grip(n, cases[j][0], &r.yaw, &r.slide, &r.grip);
+                call_line(&r, sizeof r);
+            }
             break;
         }
         case 3: {   /* the brakes released */

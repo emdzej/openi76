@@ -64,6 +64,8 @@ static void ai_add(Entity *e)
     put32(ai + 8, 1);
 }
 
+int g_user_pressed;
+
 void AI_Init(void)
 {
     memset(g_team_count, 0, sizeof g_team_count);

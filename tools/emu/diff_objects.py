@@ -93,8 +93,21 @@ def call_brake(exe, n, fpcw):
     exe.call(0x475C10, n, struct.unpack("<I", exe.read(d + 0x454, 4))[0], 0, fpcw=fpcw)
 
 
+PORT_OUT = []
+CALL_OUT = []   # the calls' results, a line per vehicle (the port's Dump_CallOut)
+
+
+def call_grip(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    for sp, st in ((12.0, 0.37), (45.0, 1.0), (30.0, -0.8)):
+        exe.write(d + 0xE0, struct.pack("<f", st))
+        r = exe.put(struct.pack("<fif", 0, 0, 1.0))
+        exe.call(0x4759B0, n, struct.unpack("<I", struct.pack("<f", sp))[0], r, r + 4, r + 8, fpcw=fpcw)
+        CALL_OUT.append(exe.read(r, 12).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -354,6 +367,8 @@ def port():
         lib.Class_StartAll()
     if CALL:
         print(f"--call {CALL}: {lib.Dump_CallVehicles(CALLS[CALL][0], int(UPSIDE))} vehicles (port)", file=sys.stderr)
+        lib.Dump_CallOut.restype = ctypes.c_char_p
+        PORT_OUT.extend(lib.Dump_CallOut().decode().split())
     buf = ctypes.create_string_buffer(64 << 20)
     lib.Objects_Dump.restype = ctypes.c_size_t
     ctypes.c_int.in_dll(lib, "g_dump_texanims").value = int(START)
@@ -373,5 +388,8 @@ if __name__ == "__main__":
             bad += 1
             if bad <= 8:
                 print(f"line {i}:\n  orig {x}\n  port {y}")
+    if CALL_OUT != PORT_OUT:
+        bad += 1
+        print(f"--call {CALL}'s results:\n  orig {CALL_OUT}\n  port {PORT_OUT}")
     print(f"[diff_objects {M}] {'identical' if not bad else f'{bad} lines differ'}")
     sys.exit(1 if bad else 0)

@@ -442,3 +442,10 @@
 004719f0	Integrate_Turn	physics	high	the rotation step; ported, diffed
 00473600	Vehicle_Drive	physics	high	the driving step: throttle, slip, integrate, turn, project on the ground (being ported)
 0042d3a0	Vehicle_Throttle	vehicle	high	data +0xe4
+004759b0	Vehicle_Grip	physics	high	the yaw rate from the steering, limited by the wheels loads and the ground; slide and grip; ported, diffed
+00475d00	Terrain_Grip	physics	high	the terrain class record +0; 0 above 0.2 with flag 0x400
+00475e60	Steer_Assist	physics	high	the users steering helped toward an airborne front wheel, clamped
+0048e330	Terrain_Friction	terrain	high	the terrain class record +0
+00409bc0	AI_PressUser	ai	med	0x505494 = 1 for the users node
+00409b50	AI_FrameFlags	ai	med	0x505490 = 0x505494, 0x505494 = 0
+00409b70	AI_UserPressed	ai	med	returns 0x505494

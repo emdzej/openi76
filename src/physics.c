@@ -1,5 +1,6 @@
 /* A vehicle's simulation (physics.h). In the current rounding mode (render/fpu.h). */
 #include "physics.h"
+#include "ai.h"
 #include "classes.h"
 #include "collide.h"
 #include "engine.h"
@@ -251,4 +252,55 @@ void Integrate_Turn(float out[3], float w[3], const float a[3], float dt)
     for (int k = 0; k < 3; k++) h[k] = F32(ADD(MUL(ad[k], 0.5f), w[k]));
     for (int k = 0; k < 3; k++) out[k] = F32(MUL(dt, h[k]));
     for (int k = 0; k < 3; k++) w[k] = F32(ADD(w[k], ad[k]));
+}
+
+/* ---- the driving step's pieces (0x473600) ---- */
+
+static uint8_t *wheel_data(uint8_t *d, uint32_t off) { return slot(d, off)->data; }
+
+/* 0x475d00: the terrain's grip under the vehicle (its class's first word, 0x48e330); 0 above 0.2 with
+   +0x454 bit 0x400 */
+static float terrain_grip(const uint8_t *d)
+{
+    float g = rdf(g_world.lights + 0x14 * (uint32_t)rd32(d + 0x45c));
+    if (!below_eq(g, 0.2f) && (rd32(d + 0x454) & 0x400)) g = 0;   /* 0x4a67a4 */
+    return g;
+}
+
+/* 0x475e60: the user's steering helped by 0.3 toward a front wheel that is off the ground (its +0x44,
+   0x4301e0), within [-1, 1] (the bounds as bits) */
+static float steer_assist(uint8_t *d, float s)
+{
+    if (rd32(wheel_data(d, 0x3ac) + 0x44)) s = F32(ADD(s, 0.3f));   /* 0x4a6808 */
+    if (rd32(wheel_data(d, 0x3a8) + 0x44)) s = F32(SUB(s, 0.3f));
+    int32_t b;
+    memcpy(&b, &s, 4);
+    if (b > 0x3f800000) return 1.0f;
+    if ((uint32_t)b > 0xbf800000u) return -1.0f;
+    return s;
+}
+
+void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip)
+{
+    uint8_t *d = n->data, *susp = wheel_data(d, 0x3c8);
+    float st = rdf(d + 0xe0);
+    /* the four wheels' loads (+0xc) */
+    float load = rdf(wheel_data(d, 0x3bc) + 0xc);
+    load = F32(ADD(rdf(wheel_data(d, 0x3a8) + 0xc), load));
+    load = F32(ADD(rdf(wheel_data(d, 0x3b8) + 0xc), load));
+    load = F32(ADD(rdf(wheel_data(d, 0x3ac) + 0xc), load));
+    double t = MUL(MUL(MUL(MUL(terrain_grip(d), rdf(d + 0x46c)), rdf(susp + 0x14)), load), 0.25f);   /* 0x4a6748 */
+    float lim = F32(t), lim2;
+    if (rd32(d + 0x454) & 0x10000) load = lim;
+    else load = F32(MUL(load, exe_f32(0x4a67f8)));   /* 7.84 */
+    lim2 = F32(MUL(lim, 2.0f));
+    if ((n->flags & 0x10) && !g_user_pressed) st = steer_assist(d, st);   /* Node_IsUser, 0x409b70 */
+    /* the yaw rate: the steering's, unless the sideways force it needs is over the load */
+    if (!below_eq(MUL(MUL(rdf(d + 0x110), sp), sp), load)) st = F32(MUL(DIV(load, sp), st));
+    else st = F32(MUL(MUL(rdf(d + 0x110), st), sp));
+    double a = fabs(MUL(st, sp));
+    float af = F32(a);
+    if (!below_eq(a, lim2)) *slide = 1;
+    else if (!below_eq(af, lim)) *grip = F32(DIV(SUB(af, lim2), SUB(lim, lim2)));
+    *yaw = st;
 }
