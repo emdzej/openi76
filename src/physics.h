@@ -86,3 +86,13 @@ void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float 
    ground the landing (a fall over 35 m kills), the ground under it (+0x45c, +0x460, +0x46c, +0x474), the
    settling and the brakes; the terrain's wear when fast; the engine */
 void Vehicle_Physics(Node *n, float dt);
+extern double g_view_pos[3];   /* 0x4a85e8: the camera's place */
+/* View_Distance 0x4042c0: 2 when n is farther than r from the camera, 1 farther than r plus the second
+   pad (both pads, 0x4a84a0 and 0x4a849c, are 0), else 0 */
+int View_Distance(const Node *n, float r);
+/* Vehicle_FarStep 0x473440: a vehicle away from the camera, once a frame: on a flat plane (+0x460 up, class
+   2), the force and the grip along its forward axis (0x474750), +0x454 bit 0x20000; the engine */
+void Vehicle_FarStep(Node *n, float dt);
+/* Vehicle_Near 0x475b40: back near the camera: on the ground under it, settled (keep, the frame's step),
+   bit 0x20000 off */
+void Vehicle_Near(Node *n);

@@ -478,3 +478,17 @@
 00430130	Wheel_Travel	physics	high	a wheels data +0x24
 00472360	Vehicle_Physics	physics	high	a vehicles physics sub-step; ported, diffed (damage stubbed)
 0042a5d0	Terrain_Wear	damage	med	rough ground damages a random part by the terrain class +0x10 times dt
+00429c70	Vehicle_Frame	vehicle	high	class 1 per-frame: physics sub-steps near the camera, the far step away; ported, diffed (damage stubbed)
+004042c0	View_Distance	view	high	2 farther than r from the camera, 1 past r plus a pad, else 0; ported
+00473440	Vehicle_FarStep	physics	high	a far vehicles step on a flat plane; ported, diffed
+00474750	Vehicle_FarDrive	physics	high	the far step proper; ported, diffed
+00475b40	Vehicle_Near	physics	high	back near the camera: on the ground, settled; ported, diffed
+00471730	Integrate_F	physics	high	Integrate with a float place; ported
+00450e90	Clock_Init	clock	high	the steps, the time, the sub-step fractions; ported
+00451250	Timer_Count	clock	high	sub-steps for the frame; ported
+00451290	Timer_CountDt	clock	high	Timer_Count for a given dt
+004512d0	Timer_Next	clock	high	the next sub-step; ported
+0042b830	Vehicle_DamageStep	damage	med	the damage per sub-step (parts, fire, death)
+00475ee0	Tyre_Step	physics	med	the tyres sounds and a flats damage
+00481d00	User_Controls	input	med	the input actions to the user vehicle (throttle +0xe4, steering +0xe0, ...)
+00480870	Input_Poll	input	med	polls the devices, then User_Controls

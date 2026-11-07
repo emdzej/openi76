@@ -2,6 +2,7 @@
 #include "physics.h"
 #include "ai.h"
 #include "classes.h"
+#include "clock.h"
 #include "collide.h"
 #include "engine.h"
 #include "entity.h"
@@ -1244,4 +1245,130 @@ void Vehicle_Physics(Node *n, float dt)
         terrain_wear(n, F32(MUL(wear, dt)));
     }
     Engine_Step(engine, rdf(d + 0xe4), speed, flags, reverse, rd32(d + 0x104));
+}
+
+double g_view_pos[3];   /* 0x4a85e8: the camera's place */
+
+int View_Distance(const Node *n, float r)
+{
+    double cx = g_view_pos[0], cy = g_view_pos[1], cz = g_view_pos[2];
+    float dx = F32(SUB(n->frame.pos[0], cx)), dy = F32(SUB(n->frame.pos[1], cy));
+    float dz = F32(SUB(F32(n->frame.pos[2]), cz));
+    double dist = ADD(ADD(MUL(dy, dy), MUL(dz, dz)), MUL(dx, dx));
+    double far = ADD(r, exe_f32(0x4a84a0)), near = ADD(r, exe_f32(0x4a849c));   /* both 0 in the data */
+    if (below(MUL(far, far), dist)) return 2;
+    if (below(MUL(near, near), dist)) return 1;
+    return 0;
+}
+
+/* 0x471730: Integrate with a float place, the half step's velocity unrounded */
+static void integrate_f(float p[3], float v[3], const float a[3], float dt)
+{
+    float ad[3];
+    double h[3];
+    for (int k = 0; k < 3; k++) ad[k] = F32(MUL(a[k], dt));
+    for (int k = 0; k < 3; k++) h[k] = ADD(MUL(ad[k], 0.5f), v[k]);   /* 0x4a66b0 */
+    for (int k = 0; k < 3; k++) p[k] = F32(ADD(MUL(h[k], dt), p[k]));
+    for (int k = 0; k < 3; k++) v[k] = F32(ADD(ad[k], v[k]));
+}
+
+static double dot_v(const float *a, const float *b) { return ADD(ADD(MUL(a[1], b[1]), MUL(a[2], b[2])), MUL(a[0], b[0])); }
+
+/* 0x474750: the far vehicle's drive, on a flat plane along its forward axis: the force (Vehicle_Force,
+   never upside down) and the grip's yaw rate (Vehicle_Grip), integrated; stopped when braking turns it
+   round or when slow without throttle; the frame on the ground's normal turned by the yaw */
+static void far_drive(Node *n, uint32_t *flags, float vel[3], float *speed, float w[3], Frame *f, float dt)
+{
+    uint8_t *d = n->data;
+    float thr = rdf(d + 0xe4);
+    if (rd32(d + 0xf0) || !rd32(d + 0x104)) thr = -1.0f;   /* parked or held: braking */
+    if (fbits(thr) > 0x80000000u && rd32(d + 0xf4)) thr = F32(MUL(thr, 2.0f));   /* 0x4a674c */
+    *flags = rd32(d + 0x454) & ~0x206u;
+    w[0] = w[1] = w[2] = 0;
+    float sp = rdf(d + 0xac);
+    if (!(fbits(sp) & 0x7fffffff) && (int32_t)fbits(thr) <= 0) {   /* still, no throttle */
+        vel[0] = vel[1] = vel[2] = 0;
+        *speed = 0;
+        *f = n->frame;
+        return;
+    }
+    float fwd[3] = {n->frame.m[6], n->frame.m[7], n->frame.m[8]}, v0[3];
+    memcpy(v0, d + 0xbc, 12);
+    if (below(dot_v(v0, fwd), 0.0f)) sp = -sp;   /* 0x4a675c */
+    float acc = 0, grip;
+    int32_t slide = 0;
+    Vehicle_Force(n, rdf(d + 0xe4), 0, fwd, *flags, &acc, &slide);
+    Vehicle_Grip(n, sp, &w[1], &slide, &grip);
+    float p[3], v[3], a[3];
+    for (int k = 0; k < 3; k++) p[k] = F32(n->frame.pos[k]);
+    v[0] = F32(MUL(fwd[0], sp));
+    v[1] = F32(MUL(sp, fwd[1]));
+    v[2] = F32(MUL(sp, fwd[2]));
+    /* the push: the forward force, and the yaw's sideways one along the x axis */
+    double k = -MUL(w[1], sp);
+    a[0] = F32(ADD(MUL(n->frame.m[0], k), MUL(fwd[0], acc)));
+    a[1] = F32(ADD(MUL(n->frame.m[1], k), MUL(fwd[1], acc)));
+    a[2] = F32(ADD(MUL(k, n->frame.m[2]), MUL(fwd[2], acc)));
+    integrate_f(p, v, a, dt);
+    if (fbits(thr) > 0x80000000u && below(dot_v(v0, v), 0.0f)) {   /* braked round: stop where it was */
+        v[0] = v[1] = v[2] = 0;
+        sp = 0;
+        for (int j = 0; j < 3; j++) p[j] = F32(n->frame.pos[j]);
+    } else {
+        double s = fpu_sqrt(dot_v(v, v));
+        sp = F32(s);
+        if ((int32_t)fbits(thr) <= 0 && fbits(sp) < 0xbf800000u && (int32_t)fbits(sp) < 0x3f800000) {
+            sp = 0;   /* slower than 1 without throttle */
+            v[0] = v[1] = v[2] = 0;
+        } else if (below(dot_v(v, fwd), 0.0f)) {
+            sp = -sp;
+        }
+    }
+    float nv[3];
+    memcpy(nv, d + 0x460, 12);
+    Frame fr, yaw, t;
+    Frame_UpFwd(&fr, nv, fwd);
+    *f = fr;
+    Frame_Yaw(&yaw, F32(-MUL(w[1], dt)));
+    Frame_Mul(&t, &yaw, f);
+    *f = t;
+    for (int j = 0; j < 3; j++) f->pos[j] = p[j];
+    memcpy(vel, v, sizeof v);
+    *speed = sp;
+}
+
+void Vehicle_FarStep(Node *n, float dt)
+{
+    if (n->flags & 0x20) return;
+    uint8_t *d = n->data;
+    static const float up[3] = {0, 1, 0};
+    Vehicle_Brake(n, rd32(d + 0x454), 0);
+    if (!(rd32(d + 0x454) & 0x20000)) {   /* just gone far: on flat ground */
+        memcpy(d + 0x460, up, 12);
+        put32(d + 0x46c, 0x411ccccd);   /* 9.8 */
+    }
+    float speed = 0;
+    far_drive(n, (uint32_t *)(d + 0x454), (float *)(d + 0xbc), &speed, (float *)(d + 0xc8), &n->frame, dt);   /* in place */
+    double a = fabs((double)speed);
+    putf(d + 0xac, F32(a));
+    if (!below_eq(a, 1e-4f)) putf(d + 0xb0, F32(DIV(1.0f, rdf(d + 0xac))));   /* 0x4a6774 */
+    else put32(d + 0xb0, 0x7149f2ca);
+    put32(d + 0x45c, 2);
+    memcpy(d + 0x460, up, 12);
+    put32(d + 0x454, rd32(d + 0x454) | 0x20000);
+    int reverse = (uint32_t)rd32(d + 0xe8) > 0x80000000u;
+    Engine_Step(slot(d, 0x3c4)->data, rdf(d + 0xe4), speed, rd32(d + 0x454), reverse, rd32(d + 0x104));
+}
+
+void Vehicle_Near(Node *n)
+{
+    uint8_t *d = n->data;
+    static const float none[3] = {0, 0, 0};
+    float p[3], h, nv[3];
+    for (int k = 0; k < 3; k++) p[k] = F32(n->frame.pos[k]);
+    Ground_Height(p[0], p[1], p[2], &h, nv);
+    n->frame.pos[1] = h;
+    memcpy(d + 0x460, nv, 12);
+    Vehicle_Settle(n, none, 0, 1, g_clock_dt);   /* 0x450e50 */
+    put32(d + 0x454, rd32(d + 0x454) & ~0x20000u);
 }

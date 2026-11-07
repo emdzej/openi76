@@ -12,3 +12,5 @@ void Class_StartAll(void);
 struct Entity *Entity_OfNode(Node *n);
 /* Node_Root 0x42e6b0 */
 Node *Node_Root(Node *n);
+/* Vehicle_Frame 0x429c70: class 1's first per-frame handler, the simulation */
+void Vehicle_Frame(Node *n);

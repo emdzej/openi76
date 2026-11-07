@@ -218,12 +218,17 @@ The comparisons on floats' bits as signed integers are the original's, kept.
 
 ## The physics step (ported but the damage)
 
-The class 1 per-frame handler 0x429c70 runs fixed sub-steps from the vehicle's timer (+0x444: 0x451250
+The class 1 per-frame handler **Vehicle_Frame 0x429c70** (ported) runs fixed sub-steps from the vehicle's timer (+0x444: 0x451250
 counts them by the frame's step, at most 20; 0x4512d0 hands them out). Each sub-step runs 0x42b830 (the
 damage and the death) and then **0x472360**, the physics. A vehicle far from the camera (0x4042c0, 25
 units) takes the cheaper 0x473440 once a frame instead. 0x472360 calls, in order: 0x472890 (the
 suspension and the collisions), Vehicle_Upright 0x46fe20, Vehicle_Steer 0x475cb0, then **Vehicle_Drive
 0x473600**, the wheels' contact (Wheel_Contact 0x42ffb0), the terrain class and Engine_Step.
+
+The sub-steps: n = ftol(20 dt) + 1 (at most 20), each dt × 1/n from a table (0x55f748) Clock_Init 0x450e90
+fills for 1-19 each mission in the current rounding mode; its entry 20 is the next variable (0x55f798,
+a count), so a frame of 0.95 s or more would get steps of almost nothing. A step that leaves the node
+changed (+8) ends the frame early, skipping the tyres' step 0x475ee0 (not yet, nor the damage's 0x42b830).
 
 Ported and diffed with `diff_objects.py --call` (a function on every vehicle after the start pass, its
 results compared), or with `diff_phys.py` (direct calls on random inputs):
@@ -242,6 +247,7 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Corners_Hit 0x47a8d0 | the body's four corners (+4) swept against the terrain (below) |
 | Vehicle_Collide 0x472890 | the contact (+0x38) answered (below); the damage 0x45d7c0 and the sound not yet |
 | Vehicle_Settle 0x470030 | the body on its wheels (below) |
+| Vehicle_FarStep 0x473440 | away from the camera (View_Distance 0x4042c0 with 25: the camera at 0x4a85e8, two pads of 0 in the data) one step a frame on a flat plane (+0x460 up, class 2, bit 0x20000): the force and the grip along the forward axis, integrated (0x471730), stopped when braked round or slower than 1 without throttle, the frame on the normal turned by the yaw (0x474750); Vehicle_Near 0x475b40 puts it back on the ground (settled with `keep`) when it comes near |
 | Vehicle_Physics 0x472360 | the sub-step: all of the above in order, the ground under the vehicle (+0x45c, +0x460, +0x46c = 9.8 n.y³, +0x474 the height while on the ground), the landing (a fall of 35 m kills, else the landing's sound 4 and damage), the wheels' speeds, the terrain's wear over 7.65 m/s (0x42a5d0, not yet), the engine |
 
 ### The body on its wheels (Vehicle_Settle 0x470030)

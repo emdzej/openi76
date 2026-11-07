@@ -333,6 +333,37 @@ static void start_class9(Node *n)
 
 static void no_start(Node *n) { (void)n; }
 
+/* 0x42b830: the damage's per-step part (the parts' state, fire, the death): not ported yet */
+static void damage_step(Node *n, float dt) { (void)n, (void)dt; }
+/* 0x475ee0: the tyres' sounds and a flat's damage ("tflat.wav", "fdmg1.wav"): not ported yet */
+static void tyre_step(Node *n, uint32_t flags, int32_t tclass) { (void)n, (void)flags, (void)tclass; }
+
+/* 0x429c70: a vehicle's frame. Near the camera (within 25) the physics in sub-steps of at most 0.05 (the
+   timer +0x444), each with the damage, until a step leaves the node changed (+8); away from it (or dying)
+   one cheap step a frame */
+void Vehicle_Frame(Node *n)
+{
+    uint8_t *d = n->data;
+    float *t = (float *)(d + 0x444);
+    if (View_Distance(n, 25.0f) == 2 || (n->flags & 0x20)) {
+        float dt = g_clock_dt;   /* 0x450e50 */
+        damage_step(n, dt);
+        if (!(n->flags & 0x20)) Vehicle_FarStep(n, dt);
+        Timer_Init(t, 0.05f);   /* 0x3d4ccccd */
+    } else {
+        if (rd32(d + 0x454) & 0x20000) Vehicle_Near(n);
+        Timer_Count(t, g_clock_dt);
+        for (;;) {
+            float s = Timer_Next(t);
+            if (!(s > 0)) break;
+            damage_step(n, s);
+            Vehicle_Physics(n, s);
+            if (n->state) return;
+        }
+    }
+    tyre_step(n, (uint32_t)rd32(d + 0x454), rd32(d + 0x45c));
+}
+
 /* a per-frame handler not ported yet: present so that the class keeps its nodes listed */
 static void later(Node *n) { (void)n; }
 
@@ -343,7 +374,7 @@ static const struct {
 } handlers[] = {
     {2, start_structure, {NULL, NULL}},     /* 0x4306c0 */
     {4, start_structure, {NULL, NULL}},     /* 0x434930 */
-    {1, start_vehicle, {later, later}},     /* 0x4294e0; 0x429c70, 0x429d70 */
+    {1, start_vehicle, {Vehicle_Frame, later}},   /* 0x4294e0; 0x429c70, 0x429d70 */
     {9, start_class9, {later, NULL}},       /* 0x4313f0; 0x4314a0 */
     {8, start_artillery, {later, NULL}},    /* 0x428910; 0x428950 */
     {7, start_class7, {later, NULL}},       /* 0x432b90; 0x432c70 */

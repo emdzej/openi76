@@ -1,5 +1,7 @@
 /* A text dump of the objects' state, for the diff harness (tools/emu/diff_objects.py prints the
    original's in the same form). Floats are their bits. */
+#include "clock.h"
+#include "classes.h"
 #include "collide.h"
 #include "crt.h"
 #include "ai.h"
@@ -607,6 +609,30 @@ int Dump_CallVehicles(int which, int upside)
                 memcpy(b, n->data + 0xa4, 0x44);
                 memcpy(b + 0x44, n->data + 0x454, 0x28);
                 memcpy(b + 0x44 + 0x28, &f, sizeof f);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
+        case 14: {   /* frames of 0.06 driving at throttle 0.8: six with the camera at the vehicle, four with it
+                        1000 away, two back at it */
+            float v[3], thr = 0.8f, st = 0.2f, sp = 12;
+            for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f;
+            memcpy(n->data + 0xbc, v, 12);
+            memcpy(n->data + 0xac, &sp, 4);
+            memcpy(n->data + 0xe4, &thr, 4);
+            memcpy(n->data + 0xe0, &st, 4);
+            Clock_Init();
+            g_clock_dt = 0.06f;
+            for (int j = 0; j < 12; j++) {
+                for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k] + (j >= 6 && j < 10 ? 1000 : 0);
+                Vehicle_Frame(n);
+                uint8_t b[0x44 + 0x28 + 12 + sizeof(Frame)];
+                Frame f = n->frame;
+                f.pad = 0;
+                memcpy(b, n->data + 0xa4, 0x44);
+                memcpy(b + 0x44, n->data + 0x454, 0x28);
+                memcpy(b + 0x6c, n->data + 0x444, 12);
+                memcpy(b + 0x78, &f, sizeof f);
                 call_line(b, sizeof b);
             }
             break;
