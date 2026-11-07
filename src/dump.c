@@ -332,6 +332,12 @@ int Dump_CallVehicles(int which, int upside)
             Vehicle_Steer(n);
             break;
         }
+        case 3: {   /* the brakes released */
+            uint32_t f;
+            memcpy(&f, n->data + 0x454, 4);
+            Vehicle_Brake(n, f, 0);
+            break;
+        }
         case 2: {   /* the four main wheels, free, a force of 0.3, the vehicle's terrain class */
             static const uint32_t w[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
             int32_t tc;

@@ -200,3 +200,21 @@ void Wheel_Contact(Node *w, int hold, float force, int tclass)
     putf(d + 0x24, t);
     w->frame.pos[1] = ADD(rdf(d + 0x28), t);
 }
+
+/* 0x4301f0: a braking wheel on the ground lays a skid mark (0x46bcc0, a new one 0x46bc40 with +0x48 = 1)
+   and, two times in three (rand), a puff of dust (0x45c780) behind it; +0x48 = 0 otherwise. Not ported
+   yet (the marks and the particles): only +0x48 is kept */
+static void wheel_skid(Node *w, int braking)
+{
+    if (!braking || rd32(w->data + 0x40)) put32(w->data + 0x48, 0);
+    else if (!rd32(w->data + 0x48)) put32(w->data + 0x48, 1);   /* a new mark */
+}
+
+void Vehicle_Brake(Node *n, uint32_t flags, int braking)
+{
+    uint8_t *d = n->data;
+    if (braking && !(flags & 0x8020)) put32(d + 0x454, rd32(d + 0x454) | 2);
+    else put32(d + 0x454, rd32(d + 0x454) & ~2);
+    wheel_skid(slot(d, 0x3bc), braking);
+    wheel_skid(slot(d, 0x3b8), braking);
+}

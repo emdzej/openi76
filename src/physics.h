@@ -20,3 +20,6 @@ void Vehicle_Steer(Node *n);
    target (force plus the rise's change by 5, or at hold the top +0x3c), the filtered travel (+0x24,
    within [+0x3c, +0x38]) and the wheel's height (+0x28 plus the travel); +0x40 1 at the top */
 void Wheel_Contact(Node *w, int hold, float force, int tclass);
+/* Vehicle_Brake 0x475c10: +0x454 bit 2 while braking (unless flags has 0x8020), and the rear wheels'
+   skids (0x4301f0, not ported yet) */
+void Vehicle_Brake(Node *n, uint32_t flags, int braking);

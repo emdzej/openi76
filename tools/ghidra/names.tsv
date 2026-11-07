@@ -435,3 +435,5 @@
 0048e350	Terrain_Rough	terrain	high	the terrain class record +8 (0x5e3028)
 0048e360	Terrain_ClassInt	terrain	med	the terrain class record +0x10 as a float
 0042fea0	Wheel_SetX	physics	med	a wheel data +0x20
+00475c10	Vehicle_Brake	physics	high	flag 2 while braking, the rear wheels skids; ported (the skids stubbed)
+004301f0	Wheel_Skid	physics	high	skid marks 0x46bcc0/0x46bc40 and dust 0x45c780 (rand % 3)
