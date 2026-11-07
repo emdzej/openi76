@@ -4,6 +4,7 @@
 #include "avoid.h"
 #include "clock.h"
 #include "combat.h"
+#include "weapons.h"
 #include "crt.h"
 #include "damage.h"
 #include "drive.h"
@@ -1431,8 +1432,22 @@ int AI_TacticCall(uint32_t va, Node *n, Node *t)
 
 static int generic(int order) { return order >= 0 && order <= 0xf && order != 7; }
 
-/* 0x40f410: the aim at the target; not ported yet */
-static void aim(Node *n, uint8_t *ai, Node *t) { (void)n, (void)ai, (void)t; }
+/* 0x40f410: each of the block's weapons fired at t when the decision says so (0x413b10 with its muzzle's
+   frame, 0x4551d0; its trigger 0x455350) */
+static void aim(Node *n, uint8_t *ai, Node *t)
+{
+    if (!t) return;   /* the original reads through it: following without a leader does not happen */
+    for (int i = 0; i < rd32(ai + 0xa718); i++) {
+        int32_t inst = rd32(ai + 0xa71c + i * 4), fact[8];
+        WeaponInst *w = &g_weapons[inst];
+        if (w->hp->vehicle != n) plat_log(exe_str(0x4a92a8));   /* 0x458980: "weapons index out of order" */
+        if (w->index != inst) plat_log("OpenI76: a freed weapon's frame (0x4551d0 leaves it unset)");
+        Frame mz;
+        Node_FrameIn(&mz, w->muzzle, NULL);
+        memcpy(fact, ai + 0xa738 + i * 0x20, sizeof fact);
+        if (AI_ShouldFire(n, t, rdf(ai + 0xa828), rdf(ai + 0xa824), fact, &mz)) w->v44 = 1;
+    }
+}
 
 void AI_Order(Node *n, Node *t, int order, int slow)
 {

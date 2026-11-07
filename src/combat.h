@@ -34,3 +34,7 @@ void Weapons_Refresh(Node *n);
 void AI_Ram(Node *n, Node *t);
 /* AI_Closest 0x4139f0: when p1 moving at v1 and p2 at v2 come closest; 1e7 for nearly equal velocities */
 double AI_Closest(const float p1[3], const float v1[3], const float p2[3], const float v2[3]);
+/* AI_ShouldFire 0x413b10: whether a fires the weapon whose facts (Weapons_Refresh's 0x20 bytes) and muzzle
+   frame (0x4551d0's) are given at t now, by the weapon's kind (docs/re/ai.md "Firing"): skill the AI
+   block's +0xa828, aim its +0xa824 (1, 1 for the turrets). It draws from rand. */
+int AI_ShouldFire(Node *a, Node *t, float skill, float aim, const int32_t fact[8], const Frame *mz);

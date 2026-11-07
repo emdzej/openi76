@@ -939,6 +939,46 @@ int Dump_CallVehicles(int which, int upside)
             *Data_Ptr(ai, 0x9d2c) = NULL;
             break;
         }
+        case 30: {   /* the firing decision (0x413b10) of each of the AI block's weapons (refreshed, 0x408c40) at
+                        the user's vehicle, at the block's skill and at 1, then with the user's vehicle 30 m
+                        ahead of n: each answer and the rand seed after it */
+            Node *t = g_user_entity ? g_user_entity->node : NULL;
+            uint8_t *ai = *Data_Ptr(n->data, 0x108);
+            if (!t || t == n || !ai) break;
+            int round0 = g_fpu_round;
+            int32_t one = 1;
+            memcpy(ai + 0xa714, &one, 4);
+            Weapons_Refresh(n);
+            int32_t cnt;
+            memcpy(&cnt, ai + 0xa718, 4);
+            double keep[3];
+            memcpy(keep, t->frame.pos, sizeof keep);
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass) {
+                    for (int k = 0; k < 3; k++) t->frame.pos[k] = n->frame.pos[k] + (double)n->frame.m[6 + k] * 30.0;
+                    Rel_Clear();
+                }
+                for (int i = 0; i < cnt; i++) {
+                    int32_t inst, fact[8];
+                    memcpy(&inst, ai + 0xa71c + i * 4, 4);
+                    memcpy(fact, ai + 0xa738 + i * 0x20, sizeof fact);
+                    Frame mz;
+                    Node_FrameIn(&mz, g_weapons[inst].muzzle, NULL);
+                    float skills[2], aim;
+                    memcpy(&skills[0], ai + 0xa828, 4);
+                    skills[1] = 1.0f;
+                    memcpy(&aim, ai + 0xa824, 4);
+                    for (int k = 0; k < 2; k++) {
+                        g_fpu_round = round0;
+                        uint32_t w[2] = {(uint32_t)AI_ShouldFire(n, t, skills[k], aim, fact, &mz), crt_seed()};
+                        call_line(w, sizeof w);
+                    }
+                }
+            }
+            memcpy(t->frame.pos, keep, sizeof keep);
+            Rel_Clear();
+            break;
+        }
         case 29: {   /* the line of sight (0x413570) from n to the user's vehicle and back, then the terrain's
                         line (0x45cfd0) from 3 m above n's place to 50, 150 and 400 m along its z axis, 0, 5 and 2 m
                         lower: each answer, the line's point */

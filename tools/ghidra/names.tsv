@@ -824,3 +824,8 @@
 0x409aa0	AI_ClearOfTeam0
 0x413570	AI_CanSee
 0x45cfd0	Terrain_Line
+0x413b10	AI_ShouldFire
+0x40f410	AI_Aim
+0x414d50	Vec_Along
+0x455350	Weapon_Trigger
+0x458980	Weapon_IsOn

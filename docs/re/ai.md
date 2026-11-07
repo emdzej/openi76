@@ -39,7 +39,7 @@ calls it again each frame (an order and then a yield, in a loop), and each call 
 frame. Ported (`src/orders.c`): the port reads the table from the exe and calls each function by its
 address. Ported so far: 0x417a10 (accepts any target), sit's frame 0x40a580 (also guard's and hide's),
 and hide's enter 0x40a600 and leave 0x40a620. The others do nothing and answer 0, and the port logs each
-once. The aim (0x40f410) is not ported yet.
+once. The aim (0x40f410) is ported ("Firing" below).
 
 **The target.** The AI block's +0xa9b4 keeps the target with a reference tagged "ai". When the target is
 freed (`Node_Live`), or 0x417a10 refuses it (it always accepts), 0x40a500 stops the vehicle: the
@@ -583,3 +583,61 @@ After nine halvings `to` is the last mid point. A walk that ends clear returns 0
 
 Checked: `diff_objects --call see` (both directions to the user's vehicle, and lines 3 m above each
 vehicle to 50, 150 and 400 m along its axis, 0, 5 and 2 m down) on t01, t05 and s04.
+
+## Firing (0x40f410, 0x413b10)
+
+**The aim (0x40f410).** After each order (unless the target is the vehicle itself), the AI block's weapons
+(Weapons_Refresh's list, +0xa718 and on) are each put to the decision with the target, using the muzzle's
+world frame (0x4551d0). A yes pulls the trigger: instance +0x44 = 1 (0x455350). Following (0x1e) aims at
++0xa990 while +0xa98c is set. The turrets (0x428e80) use the same decision with skill and aim 1. The
+triggers are read by the weapons' frame (0x455d90, 0x458340; not ported yet).
+
+**The decision (0x413b10)** goes by the facts' kind (+4) and type (+0). Its inputs are skill (+0xa828)
+and aim (+0xa824). Every roll is `rand() % n`.
+- **Kinds 1, 2, and kind 4 types 4-10 (and outside 1-13): guns.**
+  - Roll three times mod 1000; their sum must not exceed skill x 6000.
+  - The shot's velocity is the muzzle's z axis x the ordnance's speed (facts +0x14, a float) + a's
+    velocity.
+  - Its lead time is the closest approach of the shot from the muzzle to t's centre (moving with t's
+    velocity; 0 for non-vehicles). Each difference is rounded to floats; 1e7 below 0.01.
+  - The lead time is then jittered: `(rand % 1000 - 500) x F32((1 - aim) x 1.1) x 0.0005`, and clamped
+    at 0. At 4 s or more: no.
+  - The miss is the distance between the shot and t's centre at that time. The tolerance comes from the
+    ground distance a-t: 3 m within 12, 6 within 25, else 10. Kind 4 scales it by 0.7; t not a vehicle
+    gets 20 m. The miss must be under the tolerance.
+  - t must be in sight (`AI_CanSee`).
+  - Then every vehicle in the collision lists is checked, other than a and t, on a's team (node flags'
+    bits 16-18) and within 100 m over the ground. For each, the shot's closest approach to it is found
+    (negative times count as 0; 4 s or more is ignored). If it comes within 8 m: no when that vehicle is
+    within 8 m of a (squared distance under 64), and no when it passes within 2 m. With no user entity
+    any such check answers no.
+- **Kind 3: mortars.**
+  - Type 3: two rolls mod 1000, their sum at most skill x 3500. The shell flies at 500 m/s along a's z
+    axis (or against it, when the muzzle's axis faces away). It is led to t's closest approach. That
+    must come within 0.2 s and at non-negative time. It must land within 20 m of where t will then be
+    (0x413810), over the ground.
+  - Types 0-2 (k, R, lim) = (0.3, 80, 400), (0.25, 80, 400), (0.4, 80, 150). The point R m along the
+    muzzle's axis from where a's velocity takes it in k s must lie within sqrt(lim) of where t will be in
+    k s, over the ground. Any other type is reported, and the original's three values are then unset.
+- **Kind 4, types 1-3 and 0xb-0xd.**
+  - A roll mod 5000 at most skill² x 1000.
+  - t's centre within 250 m of the muzzle (squared under 62500, not tiny).
+  - The direction to it, by the fast inverse square root, within 0.95 of the muzzle's axis within 25 m,
+    else 0.85. The cosine is compared as float bits.
+  - Types 1 and 0xb also need t's axis against the muzzle's beyond 0.7 (0.75 beyond 25 m), either way.
+  - Then in sight.
+- **Kind 5.** Within 20 m (the frames' places, in space). t's centre beyond 0.6 of the muzzle's axis.
+  The direction is normalised by the frames' distance, not by the muzzle's own (a quirk). A tiny
+  distance answers yes.
+- **Kind 6: dropped behind.** Only when all of these hold:
+  - t is a vehicle;
+  - a is not a helicopter, has +0xe8 at least 1, and is not airborne (a vehicle's +0x454 bit 2);
+  - t lies behind a's motion.
+  t's time to reach a is the ground distance over t's speed: 9.9 s under 0.001 m/s, at most 7 s,
+  negatives down to -1 count as 0. Fires when a's place is within 2.5 m of where t will be then.
+- **Kind 0** reports "Weapon with no type"; **any other kind** reports "Unknown weapon type". Both
+  answer no.
+
+Checked: `diff_objects --call fire` (each AI weapon at the user's vehicle, at the block's skill and at 1,
+and again with the user's vehicle 30 m ahead; the answers and the rand seed after each) on t01, t05, s04
+and s07.
