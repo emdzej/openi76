@@ -44,9 +44,15 @@ void Cockpit_Setup(Node *n);
    yet: the flat cockpit's gauge frames and the handset (0x426970); the specials' panel is Specials_Frame */
 void Cockpit_Frame(Node *n);
 /* Cockpit_Draw 0x4279c0 (Render_World's after the flush, in the cockpit): with the detail byte 8 (the
-   default) the camera's vehicle drawn from inside (0x435be0); without it the 2D instruments, not ported
-   yet */
+   default) the camera's vehicle drawn from inside (0x435be0); without it (F1 again in the pilot's view)
+   the flat cockpit: the gauges' surfaces at the screen mode's places, then the reticles by the windows
+   and the glance. Then, in either, the handset's picture at the bottom centre */
 void Cockpit_Draw(const View *view);
+/* 0x4279a0 (1) and 0x4279b0 (0): the flat cockpit's gauges hidden or shown */
+void Cockpit_Gauges(int hide);
+/* Handset_Toggle 0x426940 (a CB message's sound, 0x46fc00, not ported yet), Handset_IsOn 0x426960 */
+void Handset_Toggle(void);
+int32_t Handset_IsOn(void);
 
 /* Specials_Setup 0x42dc00 (the user's start, after the weapons' display): the panel's node by its texture
    (zbks_.map, zbks_320.map below mode 6; the other's hidden) into the data's +0x43c, then drawn whole

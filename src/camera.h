@@ -85,3 +85,6 @@ void Camera_Hood(void);
    frame; 1 s after it is gone the state is popped and its frame run */
 void Camera_MissileStart(Entity *e);
 void Camera_Missile(void);
+/* Camera_GlanceCmp 0x4034f0: the pilot's glance's yaw (0x4a86c8) against a: -1 below (or unordered), 0
+   equal, 1 above */
+int Camera_GlanceCmp(float a);

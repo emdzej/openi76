@@ -100,14 +100,30 @@ only here. Nothing is drawn in network play in the state 0x10, or without an ent
   child in the node's frame into the face BSP as an entity's children are (0x434a40, 0x434e70), and
   draws the tree back to front through DrawPoly at once. There are no splitting planes from the node's
   own mesh, and the queue is not used. The cockpit therefore covers the world drawn before it.
-- **Byte clear:** the flat instruments. From the table 0x4d4b8c (0x18 bytes a gauge and a screen mode,
-  9 gauges 8 modes apart), each gauge's surface is drawn at its place. It is a strip of frames
-  (0x43df60) or a whole picture (0x43d910, mode 5). Their surfaces are filled the frame the table's flag
-  0x4d4b90 is 0: the radar's, the weapons' display's, 0x550110, 0x54f9d8, 0x54f958, 0x54f910, 0x5501d8,
-  0x471040's and 0x42d9c0's. Then the reticles (0x54f898, 0x5500e0) are drawn at the view's centre,
-  each when its side's window is open or busy and the glance's yaw is past about 88 degrees that way
-  (0x4034f0), or when both windows are shut and the glance is within 4 degrees. Not ported yet.
-- **Then**, with 0x54f908 set, the picture 0x5501a8 at the bottom centre. Not ported yet.
+- **Byte clear:** the flat cockpit (F1 again in the pilot's view flips the byte, 0x404380). Outside the
+  camera mode 2, and unless the gauges are hidden (0x4d4b90, set by 0x4279a0 and cleared by 0x4279b0), the
+  nine gauges are drawn from the table 0x4d4b80. Each entry is 0x18 bytes: the surface, the kind, x, y, w
+  and h. There is one entry per gauge and screen mode, 8 modes apart. The table's first entry, which no
+  mode uses, doubles as globals: its y is the high resolutions' flag 0x4d4b8c and its w the gauges'
+  hidden flag 0x4d4b90.
+  - The surfaces are written into the table each frame: the radar's display (the radar data's +0x80,
+    0x421dc0), the weapons' display (0x456630), the warning lights, the compass, the speedometer and the
+    tachometer (only while their pictures are there), the gear, the specials' panel (0x42d9c0) and the
+    mirror's texture (0x471040, while the mirror is on).
+  - Kind 1 is scaled into w x h (0x43df60, mode 5), used only at the screen modes 6 and 7. Any other kind
+    goes through the remap table bottom up (0x43d910, mode 5). At 640 x 480 (mode 5) every gauge is kind 0.
+  - The speedometer and the tachometer are animated textures of their own (`zsped301.tmt`, `zrpms301.tmt`,
+    the high resolutions' `101`, opened by the set-up with 0x47bd70 and closed with 0x47c030). The
+    cockpit's frame sets their frame to the needle's (+0x48, 0-29) for the user's vehicle.
+  - The reticles follow at a share of the screen (0x4a593c across; 0x4a5934 or 0x4a594c down). The side
+    one (0x54f898) shows when that side's window is wound down or its gun out and the glance's yaw is past
+    about 88 degrees that way (0x4034f0). The front one (0x5500e0) shows with both windows shut and the
+    glance within 4 degrees.
+- **Then, in either cockpit**, the handset's picture (0x5501a8, while 0x54f908 is set) is drawn at the
+  bottom centre. The handset is the CB radio (`zcbhd301.tmt`, 0x426970 in the cockpit's frame). A CB
+  message's sound (0x46fc00) calls it up (0x426940), and with both windows shut it comes up a frame at a
+  time, frames 0 then 1. Otherwise it goes down a frame a call until it is gone. The sounds are not
+  ported, so it never comes up yet.
 
 **Checked:** `diff_objdraw.py --inside` calls 0x435be0 and the port's drawer with views within a metre
 of the user's vehicle's centre looking every way, and compares every polygon. 20/20 and 30/30 are
@@ -146,6 +162,11 @@ target (`Radar_Current`) when the user's vehicle is a vehicle and nothing holds 
 
 `Cockpit_Init` 0x426070 (WinMain's, before the play) loads the corners and makes the bar. It also resets
 the instruments' surfaces and last states.
+
+**Checked (flat):** `--call flat` (case 57) clears the detail byte 8 and runs the cockpit's set-up. It
+then draws five frames of the cockpit's frame and drawing on a cleared 640 x 480 screen, with the gauges
+hidden before the fourth. The reticle-only frames are identical. The others differ in the first gauge,
+the radar's display, which is not ported yet.
 
 **Checked:** `--call hud` (case 54) runs the radar's frames, its next contact, 0x426070 and the pilot's
 view. It then draws four frames on a cleared 640 x 480 screen, the vehicle turned before the third and

@@ -231,6 +231,56 @@ void Tex_Restore(uintptr_t owner, const char *name, int keep)
     u->flags &= ~1u;
 }
 
+uintptr_t Tex_Open(const char *name)
+{
+    if (!name) return 0;
+    Material *m = mat_find(name);
+    if (m) m->users++;
+    else {
+        const char *dot = strchr(name, '.');
+        m = !dot || crt_stricmp(dot, ".map") == 0 ? mat_plain(name) : mat_tmt(name);
+        if (!m) return 0;
+    }
+    /* the use is its own owner (0x47ce00); animated materials start a timer here: not yet ported */
+    TexUse *u = calloc(1, sizeof *u);
+    u->owner = (uintptr_t)u;
+    copy15(u->name, name);
+    u->mat = m;
+    copy15(u->frame, m->frames[0]);
+    u->flags = 2;
+    u->next = uses;
+    uses = u;
+    return u->owner;
+}
+
+bool Tex_Close(uintptr_t owner)
+{
+    bool any = false;
+    for (TexUse **pp = &uses; *pp;) {
+        TexUse *u = *pp;
+        if (u->owner != owner) {
+            pp = &u->next;
+            continue;
+        }
+        any = true;
+        if (u->flags & 1) free((void *)u->pixels);
+        else if (!(u->flags & 2)) Tex_PixelsRelease(u->frame);
+        Material *m = u->mat;
+        *pp = u->next;
+        free(u);
+        if (m && --m->users == 0) {   /* the last user: the material unlisted and freed */
+            for (Material **mp = &materials; *mp; mp = &(*mp)->next)
+                if (*mp == m) {
+                    *mp = m->next;
+                    break;
+                }
+            free(m->frames);
+            free(m);
+        }
+    }
+    return any;
+}
+
 bool Tex_Refresh(uintptr_t owner)
 {
     bool any = false;

@@ -18,6 +18,8 @@ void Mirror_Setup(void);
    ported yet): on the user's vehicle the flag 0, the texture's own copy given up (Tex_Restore), the mask
    freed */
 void Mirror_End(Node *n);
+/* 0x471040: the mirror's texture's surface while it is on (the flat cockpit's gauge), else NULL */
+Surface *Mirror_Surface(void);
 /* Mirror_Toggle 0x4712e0 (the key command 0xb, on the user's node): the flag flipped, the part shown or
    hidden */
 void Mirror_Toggle(Node *n);

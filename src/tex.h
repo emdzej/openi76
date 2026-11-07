@@ -32,6 +32,12 @@ Surface Tex_Writable(uintptr_t owner, const char *name);
 /* Tex_Restore 0x47c890: owner's own copy of texture name (Tex_Writable's) given up for the shared pixels;
    with keep, the copy kept and the shared pixels copied over it */
 void Tex_Restore(uintptr_t owner, const char *name, int keep);
+/* Tex_Open 0x47bd70: a texture by its material's name (a .tmt or a .map) on an owner of its own, returned
+   (0 when none): the cockpit's flat gauges */
+uintptr_t Tex_Open(const char *name);
+/* Tex_Close 0x47c030: every texture of the owner released (its pixels, its material when no one else
+   uses it); false when it has none */
+bool Tex_Close(uintptr_t owner);
 /* Tex_Refresh 0x47c1b0: the owner's textures fetch their pixels again */
 bool Tex_Refresh(uintptr_t owner);
 /* Tex_Pixels 0x47dfc0: a frame's pixels by name, counted (Tex_PixelsRelease 0x47e4e0 drops the count) */

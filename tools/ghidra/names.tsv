@@ -1101,3 +1101,15 @@
 0042dfc0	Specials_Draw	cockpit	high	the panel whole: brackets, housings, diodes, plates, counters; ported, diffed
 0042d9d0	Specials_Frame	cockpit	high	the panel's frame: plates, diodes on change, rolling counters; ported, diffed
 0042dcd0	Specials_Counter	cockpit	high	a special's four rolling digits; ported, diffed
+0047bd70	Tex_Open	tex	high	a texture on an owner of its own (the use is its owner, 0x47ce00); ported
+0047c030	Tex_Close	tex	high	every texture of an owner released, its material when unused; ported
+004034f0	Camera_GlanceCmp	camera	high	the glance's yaw against a: -1 below or unordered, 0 equal, 1 above; ported
+00426970	Handset_Frame	cockpit	high	the CB handset's picture up or down a frame (zcbhd .tmt); ported
+00426940	Handset_Toggle	cockpit	high	the handset called up or let go; ported
+00426960	Handset_IsOn	cockpit	high	the handset's flag 0x54fa18; ported
+004279a0	Cockpit_GaugesOff	cockpit	high	the flat gauges hidden (0x4d4b90 = 1); ported
+004279b0	Cockpit_GaugesOn	cockpit	high	the flat gauges shown (0x4d4b90 = 0); ported
+00471040	Mirror_Surface	cockpit	high	the mirror's surface while on, else 0; ported
+00456630	Dash_Surface	weapons	high	the weapons' display's surface 0x570a70
+0042d9c0	Specials_Surface	cockpit	high	the specials' panel's surface 0x550968
+00421dc0	Radar_Surface	radar	high	the radar data's +0x80, the display's surface

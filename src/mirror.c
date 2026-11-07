@@ -86,6 +86,8 @@ void Mirror_Setup(void)
     else Node_SetFlags(*Data_Ptr(d, 0x42c), 1);
 }
 
+Surface *Mirror_Surface(void) { return g_mirror_on ? &surf : NULL; }
+
 void Mirror_End(Node *n)
 {
     if (!(n->flags & 0x10)) return;   /* 0x42e620 */

@@ -1132,6 +1132,41 @@ def call_wdash(exe, n, fpcw):
         CALL_OUT.append((struct.pack("<I", c) + exe.read(hp + 0x28, 48) + exe.read(0x4DC258, 100)).hex())
 
 
+def call_flat(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    e = next((0x547E60 + i * 0x78 for i in range(0x100) if u(0x547E60 + i * 0x78) == n), 0)
+    if not e or not u(0x4D3B64) or u(u(0x4D3B64)) != n or not u(n + 0x70):
+        return
+    exe.stub(0x4765D0, lambda *x: 0, 3)   # a sound
+    d = u(n + 0x70)
+    det = bytearray(exe.read(0x4DAF38 + 3 * 14, 14))   # the detail: a fast machine's, the flat cockpit
+    det[8] = 0
+    exe.write(0x5E14D0, bytes(det))
+    make_view(exe, rd)
+    px = exe.put(bytes(640 * 480))
+    exe.write(0x58D860 + 0x10, struct.pack("<I", px))
+    exe.write(0x58D860 + 0x28, struct.pack("<I", 1))
+    exe.write(0x4A8488 + 0x38, struct.pack("<I", 0x58D860))
+    exe.write(0x4A8480, bytes(4))
+    exe.write(0x4A8660, struct.pack("<I", e))
+    exe.call(0x426070, limit=500_000_000, fpcw=rd)
+    exe.call(0x426410, n, limit=500_000_000, fpcw=rd)
+    for k in range(5):
+        eng = u(d + 0x3C4)
+        if eng and u(eng + 0x70):
+            exe.write(u(eng + 0x70) + 0x1C, struct.pack("<f", 1500.0 * k + 700.5))
+            exe.write(u(eng + 0x70) + 0x24, struct.pack("<f", 37.25 * k - 5.0))
+        exe.write(d + 0x104, struct.pack("<i", k))
+        if k == 3:
+            exe.call(0x4279A0, limit=1_000_000)   # the gauges hidden
+        exe.call(0x421FC0, limit=50_000_000, fpcw=rd)
+        exe.call(0x426B60, n, limit=500_000_000, fpcw=rd)
+        exe.write(px, bytes(640 * 480))
+        exe.call(0x4279C0, 0x4A8488, limit=500_000_000, fpcw=rd)
+        CALL_OUT.append(struct.pack("<I", zlib.crc32(exe.read(px, 640 * 480))).hex())
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1206,7 +1241,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None

@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "math3d.h"
 #include "objects.h"
+#include "render/surface.h"
 #include <stdint.h>
 
 typedef struct {           /* 0x58 bytes */
@@ -160,6 +161,7 @@ extern int32_t g_weapons_linked;   /* 0x4db478 */
    actions, then every instance's timers (Weapons_Tick) and the dashboard (Weapons_DisplayFrame) */
 void Weapons_Frame(void);
 extern Node *g_dash;          /* 0x4db470 */
+extern Surface g_dash_surf;   /* 0x570a70: the dashboard texture's surface (0x456630) */
 /* Radar_Unlock 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
 void Radar_Unlock(Node *v);
 /* Node_FindTexture 0x42e370 (each node looked at set to level 4) */

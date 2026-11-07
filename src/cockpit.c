@@ -1,5 +1,6 @@
 /* The cockpit's dashboard swap (0x4286e0-0x428890); see cockpit.h */
 #include "cockpit.h"
+#include "mirror.h"
 #include "crt.h"
 #include "camera.h"
 #include "clock.h"
@@ -106,6 +107,16 @@ static Surface bar;
 static int32_t bar_w;
 static uint8_t bar_edge, level_colour[4];
 static Surface zone_surf, light_surf, compass_surf, gear_surf;   /* 0x550140, 0x550110, 0x54f9d8, 0x5501d8 */
+/* the flat cockpit: its three animated gauges' own textures (zcbhd301 / zrpms301 / zsped301.tmt, the
+   high resolutions' 101; 0x5ad1d4, 0x5ad1d0, 0x5ad1cc), their frames' pictures and surfaces (the handset
+   0x54f908 / 0x5501a8, the tachometer 0x54fa40 / 0x54f910, the speedometer 0x54f8d0 / 0x54f958), the
+   gauges hidden (0x4d4b90, the table's first entry's width word), the handset's frame (0x54f9cc, -1 for
+   none) and whether it is called up (0x54fa18) */
+static Surface spec_surf;   /* 0x550968, the specials' panel's (below) */
+static uintptr_t tmt_hand, tmt_rpm, tmt_sped;
+static const Texture *hand_pic, *rpm_pic, *sped_pic;
+static Surface hand_surf, rpm_surf, sped_surf;
+static int32_t flat_hidden, hand_frame = -1, hand_on;
 static int scaled;   /* 0x4d4b8c: the high resolutions' parts (screen modes below 6) */
 /* the instruments' last states: the gear 0x54f950 (-1 at the set-up) and the compass's degrees 0x5501a0
    (-500); the lights' 0x54fa20 and the diagram's 0x550180 below */
@@ -144,8 +155,14 @@ void Cockpit_Setup(Node *n)
     /* the third is tried a second time when missing (quirk, kept: the same name again) */
     if (!pic[2] && (pic[2] = Tex_Pixels(exe_str(pics[2] + (uint32_t)hires * 0xd))))
         pic_surf[2] = Surface_Make(pic[2]->w, pic[2]->h, (uint8_t *)pic[2]->pixels);
-    /* not ported yet: the flat gauges' tables (zcbhd, zrpms, zsped .tmt, 0x5ad1d4, 0x5ad1d0, 0x5ad1cc; 0x4d4b90
-       = 0) */
+    /* the flat gauges' animated textures, those of a last set-up closed first */
+    if (tmt_rpm) Tex_Close(tmt_rpm), tmt_rpm = 0;
+    if (tmt_sped) Tex_Close(tmt_sped), tmt_sped = 0;
+    if (tmt_hand) Tex_Close(tmt_hand), tmt_hand = 0;
+    tmt_hand = Tex_Open(exe_str(0x4d4b30 + (uint32_t)hires * 0xd));   /* 0x47bd70 */
+    tmt_rpm = Tex_Open(exe_str(0x4d4b50 + (uint32_t)hires * 0xd));
+    tmt_sped = Tex_Open(exe_str(0x4d4b70 + (uint32_t)hires * 0xd));
+    flat_hidden = 0;
     /* the health bar's colours: white, green, yellow, red (0x54fa54, 0x54fa50, 0x54fa4c, 0x54fa48) */
     level_colour[3] = (uint8_t)Color_Match(1.0f, 1.0f, 1.0f);
     level_colour[2] = (uint8_t)Color_Match(fhex(0x3ea4a4a5), fhex(0x3f1c9c9d), fhex(0x3ea4a4a5));
@@ -157,6 +174,11 @@ void Cockpit_Setup(Node *n)
 
 void Cockpit_Init(void)
 {
+    tmt_rpm = tmt_sped = tmt_hand = 0;   /* not closed (the free, 0x426260, closes them) */
+    rpm_pic = sped_pic = hand_pic = NULL;
+    hand_frame = -1;
+    hand_on = 0;
+    flat_hidden = 0;
     hires = -1;
     gauge_d = -500.0f;
     zone_surf = light_surf = compass_surf = gear_surf = Surface_Make(0, 0, NULL);
@@ -332,7 +354,15 @@ static void speedometer(Node *n)
     if (fbits(v) > 0x80000000u) v = 0;
     needle(nd, MUL(v, exe_f32(0x4a592c)));              /* 0x4a592c */
     needle_frame(nd, v, exe_f32(0x4a5930));
-    /* with the flat cockpit, the user's zsped .tmt frame and its surface (0x54f958): not ported yet */
+    /* the flat cockpit's: the user's zsped frame by the needle's, its picture a surface (none when missing) */
+    if (g_detail.b[8] || !g_user_entity || g_user_entity->node != n) return;
+    const char *name = exe_str(0x4d4b70 + (uint32_t)hires * 0xd);
+    if (!Tex_SetFrame(tmt_sped, name, 0, rd32(nd->data + 0x48), true)) return;
+    if ((sped_pic = Tex_Get(tmt_sped, name))) {
+        sped_surf = Surface_Make(sped_pic->w, sped_pic->h, (uint8_t *)sped_pic->pixels);
+        return;
+    }
+    sped_surf = Surface_Make(0, 0, NULL);
 }
 
 /* the tachometer (+0x3fc) by the engine's revolutions (+0x3c4's +0x1c, at most 8400 by the bits), 0.028125
@@ -345,7 +375,11 @@ static void tachometer(Node *n)
     if ((int32_t)fbits(v) > 0x46034000) v = 8400.0f;
     needle(nd, MUL(v, exe_f32(0x4a5908)));            /* 0x4a5908 */
     needle_frame(nd, v, exe_f32(0x4a5918));
-    /* with the flat cockpit, the user's zrpms .tmt frame and its surface (0x54f910): not ported yet */
+    /* the flat cockpit's: the user's zrpms frame (the surface kept when the picture is missing) */
+    if (g_detail.b[8] || !g_user_entity || g_user_entity->node != n) return;
+    const char *name = exe_str(0x4d4b50 + (uint32_t)hires * 0xd);
+    if (!Tex_SetFrame(tmt_rpm, name, 0, rd32(nd->data + 0x48), true)) return;
+    if ((rpm_pic = Tex_Get(tmt_rpm, name))) rpm_surf = Surface_Make(rpm_pic->w, rpm_pic->h, (uint8_t *)rpm_pic->pixels);
 }
 
 /* the pictures' levels: off 100, green 67-99, yellow 34-66, red 1-33, dark 0 (each table 5 of 0x18 bytes, a
@@ -443,6 +477,40 @@ static void gear(Node *n)
     Tex_PutRegion((uintptr_t)part, tex, exe_str(0x4d42a8 + 0x10u * (uint32_t)g), exe_str(0x4d5258), &gear_surf);
 }
 
+void Handset_Toggle(void)
+{
+    if (!hand_on) hand_frame = 0;
+    hand_on = hand_on == 0;
+}
+
+int32_t Handset_IsOn(void) { return hand_on; }   /* 0x426960 */
+
+/* 0x426970: the handset's picture (zcbhd .tmt), the user's CB radio: called up and both windows shut, it
+   comes up a frame (0, then 1 and held there); else it goes down a frame a call until it is gone */
+static void handset(void)
+{
+    int32_t was = hand_frame;
+    const char *name = exe_str(0x4d4b30 + (uint32_t)hires * 0xd);
+    Node *u = g_user_entity ? g_user_entity->node : NULL;   /* 0x423fc0, unchecked */
+    if (hand_on == 1 && Window_Closed(u, 2) && Window_Closed(u, 1)) {
+        if (hand_frame == -1) return;
+        if (!Tex_SetFrame(tmt_hand, name, 0, hand_frame, true)) return;
+        if ((hand_pic = Tex_Get(tmt_hand, name))) hand_surf = Surface_Make(hand_pic->w, hand_pic->h, (uint8_t *)hand_pic->pixels);
+        if (hand_frame > 0) return;
+        hand_frame++;
+        return;
+    }
+    if (hand_frame < 0 || --hand_frame < 0) {
+        if (hand_frame != was) {
+            hand_pic = NULL;   /* 0x4392b0 */
+            hand_surf = Surface_Make(0, 0, NULL);
+        }
+        return;
+    }
+    if (!Tex_SetFrame(tmt_hand, name, 0, hand_frame, true)) return;
+    if ((hand_pic = Tex_Get(tmt_hand, name))) hand_surf = Surface_Make(hand_pic->w, hand_pic->h, (uint8_t *)hand_pic->pixels);
+}
+
 void Cockpit_Frame(Node *n)
 {
     if (!scaled) {
@@ -455,7 +523,7 @@ void Cockpit_Frame(Node *n)
     warning_lights(n);
     compass(n);
     gear(n);
-    /* not ported yet: the user's handset picture (0x426970, the flat cockpit's) */
+    if (g_user_entity && g_user_entity->node == n) handset();   /* 0x426970 */
     Specials_Frame(n);   /* 0x42d9d0 */
 }
 
@@ -472,7 +540,6 @@ static int spec_loaded;
 #define SPEC_DIGIT(d, k) spec_words[8 + 4 * (d) + (k)]
 #define spec_hires spec_words[23]
 static Node *spec_dash;   /* 0x4d5814: the panel's node (zbks_.map) */
-static Surface spec_surf; /* 0x550968 */
 
 static const char *spec_tex(void) { return exe_str(0x4d57f8 + (uint32_t)spec_hires * 0xd); }   /* zbks_320.map, zbks_.map */
 static const char *spec_name(uint32_t base, int k) { return exe_str(base + (uint32_t)(k * 0x10) + (uint32_t)spec_hires); }
@@ -587,16 +654,56 @@ void Specials_Frame(Node *v)
     }
 }
 
+void Cockpit_Gauges(int hide) { flat_hidden = hide; }   /* 0x4279a0, 0x4279b0 */
+
+/* the flat cockpit's reticle at a share of the screen (0x4a593c across; down 0x4a5934 or 0x4a594c),
+   through the remap table bottom up */
+static void reticle(Surface *dst, Surface *pic, uint32_t down)
+{
+    int32_t x = (int32_t)MUL((double)dst->pitch, exe_f32(0x4a593c)), y = (int32_t)MUL((double)dst->h, exe_f32(down));
+    Surface_Blit(dst, pic, x, y, 5);
+}
+
 void Cockpit_Draw(const View *view)
 {
     if (g_net_game && g_play_state == 0x10) return;
     if (!g_camera_entity) g_camera_entity = g_user_entity;
     Entity *e = g_camera_entity;
     if (!e) return;
+    Surface *dst = view->surface;
     if (g_detail.b[8]) Objects_DrawInside(view, e->node);   /* 0x435be0 */
-    /* else the 2D instruments (the table 0x4d4b8c by the screen mode, 0x43df60, 0x43d910) and the
-       reticles by the windows (0x433cb0, 0x433c10, 0x433c50, 0x4034f0): not ported yet */
-    /* then, with 0x54f908 set, the picture 0x5501a8 at the bottom centre: not ported yet */
+    else if (dst && g_camera_mode != 2) {
+        /* the nine gauges, by the screen mode (the table 0x4d4b80: 0x18 bytes a gauge and a mode, 8 modes a
+           gauge: the surface, the kind, x, y, w, h). Their surfaces are filled in while they are shown:
+           the radar's display (0x421dc0: not ported, none), the weapons' (0x456630), the warning lights,
+           the compass, the speedometer and the tachometer (when their pictures are there), the gear, the
+           specials' panel (0x42d9c0) and the mirror's texture (0x471040, while it is on) */
+        if (!flat_hidden) {
+            Surface *gauge[9] = {NULL, &g_dash_surf, &light_surf, &compass_surf, sped_pic ? &sped_surf : NULL,
+                                 rpm_pic ? &rpm_surf : NULL, &gear_surf, &spec_surf, Mirror_Surface()};
+            for (int g = 0; g < 9; g++) {
+                const uint8_t *t = exe_data(0x4d4b80 + 0x18u * (uint32_t)(g_detail.b[DET_SCREEN] + 8 * g), 0x18);
+                if (!gauge[g]) continue;
+                int32_t x = rd32(t + 8), y = rd32(t + 0xc);
+                /* kind 1, the low modes' scaled ones (Sprite_Draw's mode 5, not ported yet: nothing drawn) */
+                if (rd32(t + 4) == 1) Sprite_Draw(dst, gauge[g], x, y, rd32(t + 0x10) + x, rd32(t + 0x14) + y, 5, 0);
+                else Surface_Blit(dst, gauge[g], x, y, 5);
+            }
+        }
+        /* the reticles: a side's when its window is wound down or its gun out and the glance is past 88
+           degrees that way (0x3fc49809, 0xbfb96c7d); the front one with both windows shut and the glance
+           within 4 degrees (0xbd8efa35, 0x3d8efa35) */
+        Node *v = e->node;
+        if ((Window_Open(v, 1) || Window_Busy(v, 1)) && Camera_GlanceCmp(fhex(0x3fc49809)) == 1)
+            reticle(dst, &pic_surf[1], 0x4a5934);
+        if ((Window_Open(v, 2) || Window_Busy(v, 2)) && Camera_GlanceCmp(fhex(0xbfb96c7d)) == -1)
+            reticle(dst, &pic_surf[1], 0x4a5934);
+        if (Window_Closed(v, 1) && Window_Closed(v, 2) && Camera_GlanceCmp(fhex(0xbd8efa35)) == 1 &&
+            Camera_GlanceCmp(fhex(0x3d8efa35)) == -1)
+            reticle(dst, &pic_surf[2], 0x4a594c);
+    }
+    /* the handset's picture at the bottom centre, in either cockpit */
+    if (hand_pic && dst) Surface_Blit(dst, &hand_surf, dst->pitch / 2 - hand_surf.pitch / 2, dst->h - hand_surf.h, 5);
 }
 
 void Dash_Setup(Node *n)

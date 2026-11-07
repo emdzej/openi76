@@ -1335,6 +1335,46 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 57: {   /* the flat cockpit on the user's vehicle: the class 3 detail with byte 8 clear, a 640 x 480
+                        view on a cleared screen, the camera's entity the user's, the cockpit's initialisation
+                        (0x426070) and set-up (0x426410); five frames, each with the gear k, the engine's
+                        revolutions 1500 k + 700.5 and speed 37.25 k - 5, the gauges hidden before the fourth
+                        (0x4279a0), the relations' cache emptied, the cockpit's frame (0x426b60) and its drawing
+                        (0x4279c0); after each the screen's CRC-32 */
+            Entity *e = Entity_OfNode(n);
+            uint8_t *d = n->data;
+            if (!e || !g_user_entity || g_user_entity->node != n || !d) break;
+            Settings_Defaults(3);
+            g_detail.b[8] = 0;
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            View_Create(&g_view, &sf, 1.5707964f, 1.0f, 150.0f, 1.0f);
+            g_camera_mode = 0;
+            g_camera_entity = e;
+            Cockpit_Init();
+            Cockpit_Setup(n);
+            for (int k = 0; k < 5; k++) {
+                Node *eng = *Data_Ptr(d, 0x3c4);
+                if (eng && eng->data) {
+                    float rpm = 1500.0f * (float)k + 700.5f, sp = 37.25f * (float)k - 5.0f;
+                    memcpy(eng->data + 0x1c, &rpm, 4);
+                    memcpy(eng->data + 0x24, &sp, 4);
+                }
+                put32(d + 0x104, k);
+                if (k == 3) Cockpit_Gauges(1);
+                Rel_Clear();
+                g_fpu_round = FPU_DOWN;
+                Cockpit_Frame(n);
+                memset(px, 0, sizeof px);
+                Cockpit_Draw(&g_view);
+                uint32_t c = crc32(px, sizeof px);
+                call_line(&c, sizeof c);
+
+            }
+            break;
+        }
         case 38: {   /* the turrets (0x455560) after the radar's frame (as in 37), three frames, every vehicle given
                         a current weapon (the hard points' +4, -1 at the load) so that the turrets turn */
             for (int i = 0; i < g_hardpoint_count; i++)

@@ -33,6 +33,12 @@ static float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
 /* the other modes' parameters: the chase's pitch 0x4a8680 and yaw 0x4a8684, the track view's targets for
    them 0x4a8670 and 0x4a8674 (pi/6 and 0 at the reset), the distance's target 0x4a867c and the eased
    distance 0x4a868c (5.5 at the reset) */
+int Camera_GlanceCmp(float a)   /* 0x4034f0 */
+{
+    if (yaw < a || yaw != yaw || a != a) return -1;
+    return yaw == a ? 0 : 1;
+}
+
 static float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist;
 static float over_h;   /* 0x4a866c: the overview's height over the ground (100 at its start) */
 /* the mounted views': 0x4a8678 (set 0, not read by them), the roll 0x4a8688 (which their starts leave as
