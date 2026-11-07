@@ -322,8 +322,20 @@ def call_frame(exe, n, fpcw):
         CALL_OUT.append((exe.read(d + 0xA4, 0x44) + exe.read(d + 0x454, 0x28) + exe.read(d + 0x444, 12) + bytes(f)).hex())
 
 
+def call_sway(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    exe.write(0x4DB12C, struct.pack("<f", 0.06))
+    out = exe.put(bytes(0x40))
+    for j in range(12):
+        exe.write(d + 0xD4, struct.pack("<fff", (j % 3) - 1.0, 0.5 * j - 2.0, (5 - j) * 1.5))
+        exe.call(0x470D40, out, n, fpcw=fpcw)
+        f = bytearray(exe.read(out, 0x40))
+        f[0x24:0x28] = bytes(4)
+        CALL_OUT.append(bytes(f).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

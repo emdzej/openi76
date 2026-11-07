@@ -637,6 +637,18 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 15: {   /* the cockpit's sway over twelve frames of 0.06, the acceleration changing */
+            g_clock_dt = 0.06f;
+            for (int j = 0; j < 12; j++) {
+                float a[3] = {(float)(j % 3) - 1.0f, 0.5f * (float)j - 2.0f, (float)(5 - j) * 1.5f};
+                memcpy(n->data + 0xd4, a, 12);
+                Frame f;
+                Cockpit_Sway(&f, n);
+                f.pad = 0;
+                call_line(&f, sizeof f);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);
