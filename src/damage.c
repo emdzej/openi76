@@ -197,7 +197,7 @@ void Vehicle_State(Node *n, float dt)
 static int special_kind(const Node *s) { return s ? rd32(s->data) : 0; }
 static int special_works(const Node *s) { return s && (rd32(s->data + 4) >= 1 || rd32(s->data + 0x10) != 0); }
 
-static bool is_vehicle(const Node *n) { return n->cls == 1 || n->cls == 8 || n->cls == 9; }   /* 0x42e570 */
+static bool is_vehicle(const Node *n) { return n && (n->cls == 1 || n->cls == 8 || n->cls == 9); }   /* 0x42e570 */
 
 /* 0x42d460: the first working special of the kind among the three (+0x3ec, +0x3f0, +0x3f4) */
 static Node *special_of(uint8_t *d, int kind)

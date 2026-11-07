@@ -23,7 +23,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0x14 | 0x405ee0 | 0x4055e0 | 1 | `Camera_ChaseLeftStart` |
 | 0x15 | 0x406070 | 0x4055e0 | 1 | `Camera_ChaseRightStart` |
 | 0x16 | 0x406200 | 0x406340 | 3 | `Camera_OverviewStart`, `Camera_Overview` |
-| 0x17 | 0x406450 | 0x406560 | 4 | |
+| 0x17 | 0x406450 | 0x406560 | 4 | `Camera_TargetStart`, `Camera_Target` |
 | 0x18 | 0x406950 | 0x406a60 | 4 | |
 | 0x19 | 0x404890 | 0x404520 | 0 | `Camera_PilotStart`, `Camera_Pilot` |
 | 0xfefe | 0x406bb0 | 0x403540 | 6 | `Camera_TrackStart`, `Camera_Track` |
@@ -199,6 +199,44 @@ Each frame, `Camera_Mounted` 0x405c70:
 4. Keeps the frame 0.5 over the ground.
 
 Checked: `--call mount12` and `mount13` (cases 44, 45), identical on t01, t05 and s01.
+
+## The target view (0x17)
+
+`Camera_TargetStart` 0x406450 (F5) does nothing without a radar target (`Radar_Current` 0x421ba0). From
+any sub-mode but 4 it first pushes the camera's state; with the stack full (top under 1) it does nothing.
+Then it remakes the view at the old camera, and sets the entity, the cockpit flag 0 and the sub-mode 4.
+It installs `Camera_Target` 0x406560.
+
+Each frame keeps the vehicle's place (0x4ed8a0).
+
+- **With a target**, the time left (0x4ed89c) becomes 3 and the target's place is kept (0x4ed8b8).
+- **Without one**, the time left drops by the step. While it stays above 0 the camera still looks from
+  the last place. Then the state is popped (when the stack holds one) and the restored mode's frame runs
+  at once. With nothing to pop the original calls its own frame again, without end; the port returns.
+
+These words are outside the state block, so the stack does not keep them.
+
+**The look** (0x4066b0, target t and vehicle s) is camF12's construction with its own constants:
+
+- the point 3 over t;
+- the direction s minus (t less 2 in y);
+- the point moved by -7.5 along the direction (an add of n·(-7.5), not camF12's subtraction: under the
+  game's rounding down the two differ);
+- within 33.3, the tilt min((1/length - 0.03)·7.5, pi/6), the frame's place n·(-7.5), placed at t
+  raised 3;
+- at least 0.5 over the ground.
+
+The starts of the modes in sub-mode 4 (0x17, 0x18) push, and the other starts pop from sub-mode 4. So a
+preset chosen from the target view returns through the stack.
+
+Checked: `--call target` (case 46) runs the radar's frame twice, takes the next contact (0x421540) and
+runs five frames. On s07 and a01 a target starts the view, and both are identical. On t01, t05, s01 and
+s04 no vehicle has an enemy contact at the load, so only the lost-target path (the pop) is checked
+there; it is identical too.
+
+The check found a deviation of the port in the radar: `Radar_Next`'s and `Radar_Prev`'s enemy test read
+the contact's node flags before the targetable test 0x42d340. The original tests first, and its 0x42e570
+answers 0 for no node, so a contact without one is skipped.
 
 ## The track view (mode 0xfefe, the death's)
 

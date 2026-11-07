@@ -451,8 +451,9 @@ static uint8_t *radar_working(Node *v)
 static bool enemy(const Contact *c, uint32_t own)
 {
     Node *o = *c->node;
+    if (!Vehicle_Targetable(o)) return false;   /* first: a contact without a node is no vehicle */
     uint32_t t = (o->flags & 0x70000) >> 16;
-    return Vehicle_Targetable(o) && t != 0 && t != ((own & 0x70000) >> 16);
+    return t != 0 && t != ((own & 0x70000) >> 16);
 }
 
 /* where 0x421540 and 0x421640 start: the chosen one (from the one after it) or the list's head */

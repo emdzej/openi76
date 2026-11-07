@@ -58,3 +58,8 @@ void Camera_Overview(void);
 void Camera_MountFrontStart(Entity *e);
 void Camera_MountBackStart(Entity *e);
 void Camera_Mounted(void);
+/* Camera_TargetStart 0x406450 (mode 0x17, F5): with a radar target only, the camera's state pushed (sub-mode
+   4); Camera_Target 0x406560: from over the target looking back at the vehicle; 3 s after the target is
+   lost the state is popped and its own frame run */
+void Camera_TargetStart(Entity *e);
+void Camera_Target(void);

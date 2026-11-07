@@ -1043,3 +1043,6 @@
 00405b10	Camera_MountFrontStart	camera	high	mode 0x12 (F7): on the left side looking ahead; ported
 00405d80	Camera_MountBackStart	camera	high	mode 0x13 (F8): looking back; ported
 00405c70	Camera_Mounted	camera	high	the mounted views' frame; ported, diffed
+00406450	Camera_TargetStart	camera	high	mode 0x17 (F5): the radar target's view, pushed; ported, diffed
+00406560	Camera_Target	camera	high	the target view's frame, popped 3 s after the target is lost; ported, diffed
+004066b0	Camera_TargetLook	camera	high	over the target looking back at the vehicle; ported, diffed

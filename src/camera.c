@@ -4,6 +4,7 @@
 #include "exe.h"
 #include "input.h"
 #include "physics.h"
+#include "radar.h"
 #include "scene.h"
 #include "settings.h"
 #include "terrain.h"
@@ -449,6 +450,76 @@ void Camera_Mounted(void)
     View_SetCamera(&g_view, &f);
 }
 
+/* the target views' state, outside the camera's block: the time left after the target is lost (0x4ed89c),
+   the vehicle's place (0x4ed8a0) and the target's last (0x4ed8b8) */
+static float target_left;
+static double self_at[3], target_at[3];
+
+/* 0x4066b0: the camera 3 over the target t, 7.5 back from it along the line to s (2 below t's place), its
+   frame tilted down when within 33.3 (camF12's construction, its own constants) */
+static void target_look(const double t[3], const double s[3])
+{
+    float p[3] = {F32(t[0]), F32(ADD(t[1], 3.0f)), F32(t[2])};   /* 0x4a5028 */
+    float v[3] = {F32(SUB(s[0], t[0])), F32(SUB(s[1], SUB(t[1], 2.0))), F32(SUB(s[2], t[2]))};   /* 0x4a50c0 */
+    double k = Fast_InvSqrt(ADD(ADD(MUL(v[1], v[1]), MUL(v[2], v[2])), MUL(v[0], v[0])));
+    float kf = F32(k);
+    float n[3] = {F32(MUL(v[0], k)), F32(MUL(kf, v[1])), F32(MUL(kf, v[2]))};
+    for (int i = 0; i < 3; i++) p[i] = F32(ADD(MUL(n[i], -7.5f), p[i]));   /* 0x4a50c8 */
+    Frame f;
+    Frame_FromDir(&f, p, n);
+    if ((int32_t)fbits(kf) > 0x3cf5c28f) {
+        double a0 = MUL(SUB(kf, 0.03f), 7.5f);   /* 0x4a50cc, 0x4a50d0 */
+        float tilt = F32(a0);
+        if (!below(a0, 0.52359879f)) tilt = 0.52359879f;   /* 0x4a503c, 0x3f060a92 */
+        double hk = Fast_InvSqrt(ADD(MUL(n[2], n[2]), MUL(n[0], n[0])));
+        Frame r, m;
+        Frame_AxisAngle(&r, -tilt, F32(MUL(hk, n[2])), 0, F32(-MUL(n[0], hk)));
+        for (int i = 0; i < 3; i++) f.pos[i] = MUL(n[i], -7.5f);
+        r.pos[0] = t[0];
+        r.pos[1] = ADD(t[1], 3.0);   /* 0x4a50d8 */
+        r.pos[2] = t[2];
+        Frame_Mul(&m, &f, &r);
+        f = m;
+    }
+    double g = ADD(Terrain_Height(f.pos[0], f.pos[2]), 0.5f);   /* 0x4a5068 */
+    if (g > f.pos[1]) f.pos[1] = g;
+    View_SetCamera(&g_view, &f);
+}
+
+void Camera_TargetStart(Entity *e)
+{
+    if (!Radar_Current(e->node)) return;
+    /* the camera's state kept (when not already in a sub-mode 4 view), to come back to */
+    if (g_camera_mode != 4 && !Camera_Push()) return;
+    view_again();
+    g_camera_entity = e;
+    g_cockpit = 0;
+    g_camera_mode = 4;
+    g_camera_fn = Camera_Target;
+}
+
+void Camera_Target(void)
+{
+    if (!g_camera_entity) g_camera_entity = g_user_entity;
+    Node *n = g_camera_entity->node;
+    memcpy(self_at, n->frame.pos, sizeof self_at);
+    Node *t = Radar_Current(n);
+    if (t) {
+        target_left = 3.0f;   /* 0x40400000 */
+        memcpy(target_at, t->frame.pos, sizeof target_at);
+    } else {
+        /* lost: the last place for 3 s, then the view it came from */
+        double l = SUB(target_left, g_clock_step);
+        target_left = F32(l);
+        if (!(l > 0.0)) {
+            /* with nothing to pop the original calls this frame again, without end */
+            if (Camera_Pop() && g_camera_fn) g_camera_fn();
+            return;
+        }
+    }
+    target_look(target_at, self_at);
+}
+
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
@@ -458,6 +529,7 @@ static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0x14, Camera_ChaseLeftStart},
     {0x15, Camera_ChaseRightStart},
     {0x16, Camera_OverviewStart},
+    {0x17, Camera_TargetStart},
     {0x19, Camera_PilotStart},
     {0xfefe, Camera_TrackStart},
 };
