@@ -212,3 +212,44 @@ void Roads_Free(void)
     }
     g_roads_ready = 0;
 }
+
+void Roads_Nearest(float x, float z, RoadPiece **piece, int32_t *index)
+{
+    if (!g_roads) {
+        *piece = NULL;
+        return;
+    }
+    struct { double d; RoadPiece *p; } kept[8];
+    int n = 0;
+    double most = 1e30;
+    for (RoadPiece *p = g_roads; p; p = p->next) {
+        double a = SUB(x, p->c[0]), b = SUB(z, p->c[2]);
+        double d = ADD(MUL(a, a), MUL(b, b));
+        if (d > most) continue;
+        if (n < 8) kept[n].d = d, kept[n++].p = p;
+        else kept[0].d = d, kept[0].p = p;   /* over the farthest */
+        for (bool swapped = true; swapped && n > 1;) {   /* farthest first */
+            swapped = false;
+            for (int i = 0; i < n - 1; i++)
+                if (kept[i].d < kept[i + 1].d) {
+                    __typeof__(kept[0]) t = kept[i];
+                    kept[i] = kept[i + 1], kept[i + 1] = t;
+                    swapped = true;
+                }
+        }
+        most = kept[0].d;
+    }
+    most = 1e30;
+    for (int k = 0; k < n; k++) {
+        RoadPiece *p = kept[k].p;
+        for (int i = 0; i < p->n; i++) {
+            double a = SUB(p->pts[i][3], x), b = SUB(p->pts[i][5], z);
+            double d = ADD(MUL(a, a), MUL(b, b));
+            if (d <= most) {
+                *piece = p;
+                *index = i;
+                most = d;
+            }
+        }
+    }
+}

@@ -93,3 +93,75 @@ The tactics' functions are 87, from 0x40a580 to 0x41d760 (about 36 KB).
 
 Checked: `diff_fsm.py` now dumps each AI vehicle's tactics' stack and controls each frame, with the orders
 running and the unported tactic functions stubbed on both sides. It is identical on all 40 missions.
+
+## The path search (0x412db0)
+
+`src/nav.c`. The goto family of tactics (goto 0x16, evade 0x18, race 0x1a) search a path from the vehicle
+to the script path's current point (+0x88 the path, +0xa0 the point's index), a little each frame, and
+then follow it (tactic 0x17 and its kin). Confirmed against the disassembly; `diff_objects.py --call search`
+compares the AI block's answer for every vehicle and the first three script paths' two ends.
+
+**The pool.** 1000 nodes of 0x80 bytes at 0x58dcf0, a free list (0x505534) through +0x60, in use 0x4a92d8
+and its high-water mark 0x505528. 0x40fda0 (from 0x4088a0) links them all. At a search's end the list is
+relinked through the first high-water + 2 nodes (capped at 999 when more than 999 are in use) and the
+last node's link (0x5ad0d0) cleared. With fewer than 1000 in use and a high-water past 998 the original
+writes links past the pool, into the skill tables at 0x5ad0f0; the port stops at the pool's end.
+
+| Offset | Field |
+|---|---|
+| 0, 4 | the cell's x, z (ints, multiples of 10) |
+| 8 | its children's count (8, or 9 with a bridge) |
+| 0xc | the key, z * 100000 + x |
+| 0x10 | on a road: the terrain's class (0x48e380) 2-4 |
+| 0x14 | it has a bridge's link (set only on expansion; a fresh node keeps the old value) |
+| 0x18, 0x20, 0x28, 0x30 | f, g, the step's cost, h (doubles) |
+| 0x38 | the parent |
+| 0x3c-0x5c | the children |
+| 0x64, 0x68 | the balance in tree 0 and tree 1 (0 left-heavy, 1 right-heavy, 2 even) |
+| 0x6c / 0x70, 0x74 / 0x78 | tree 0's left / right, tree 1's |
+
+Tree 0 (AI block +0x9cf4) holds every node by its key; tree 1 (+0x9cf0) the open ones by f, then the key.
+Both are AVL trees (0x41cea0 insert, 0x41d010 take the first, 0x41cbf0 remove with 0x41cb20, 0x41cfb0
+find, rotations 0x41cdb0 and 0x41c9d0).
+
+**A call.** With tree 0 empty the search starts: the vehicle's x and z (its frame's doubles) chopped,
+divided by 10 (ldiv) and rounded up when the remainder is over 5 (so not for negative ones), are the start
+cell. If the start and the point are both within 111 (squared) of their nearest road points (0x490f80,
+either edge) on one RSEG, the road's lane between them is the path (0x412a00) and the call answers 0.
+Otherwise the start node is expanded (0x4126b0: its eight neighbours at 10 m, and a bridge's far end) and
+its children costed and put in both trees. The start itself is in neither.
+
+Then the best open node is taken; while tree 1 still has nodes, it is over 11 m (121 squared, float) from
+the point and fewer than 100 have been expanded this call, it is expanded. Each child:
+
+- g = the parent's step + g.
+- The step: the terrain's class 2-4 costs 0.5 (and marks it on a road), 6-7 0.5, any other 15, plus 1e6
+  on the terrain's flag (0x48e280) when +0x9d14 is set; times 1.4142135 (double) diagonally.
+- f = step + h + g, h still the pool's old value.
+- If tree 0 has its cell already, the old node is kept: when the new route is cheaper (step + g), it is
+  re-parented and the costs passed down its children (0x412c50, which re-steps a straight step made
+  diagonal x 1.4142135, or the reverse x 0.70710679). The new node goes back to the free list.
+- Otherwise h = (max - min) + min x 1.414 of |point - cell| per axis (floats), f again, and it joins both
+  trees.
+
+A failed allocation stops the search. The expansions are added to +0x7c and to the caller's count. Unless
+the last node taken is within 11 m or the pool ran out, the call answers 1 and the next one goes on
+(that last node, taken from tree 1, is not expanded again). Otherwise the path to it is written, the pool
+freed, +0x7c and both trees cleared, and the call answers 0.
+
+**The path** (0x412420), into the AI block's +0xac (the count) and +0xb0 (0x14 a point: x, z, on a road,
+on a bridge), +0xa8 the point being driven to set to 0 (0x411fb0):
+
+1. A start alone or one step: the cells as they are.
+2. Otherwise from the last node back (0x411850), a point wherever the step's direction, the road flag or
+   the bridge flag changes; reversed.
+3. 0x412030: from each point, the run of open-ground points going the same general way (0x410a00's
+   table of eight directions) is cut to its end, unless sampling the line toward it (5 m steps, from 0
+   while below 1 / length + 1 in steps of 1 / length: a quirk, so the line is sampled well past its end)
+   meets the terrain's flag; then one point short, and so on.
+4. 0x410e40: a run of road points is cut to its last one on the first's RSEG (0x490f80, kept per point).
+5. 0x4116a0: two road points of one RSEG become the lane between them (0x411310): along the strip in its
+   direction, or round a loop's join when the strip's ends meet within 9 m and that way is shorter, each
+   point 2.45 m in from the right edge going forward, the left going back (0x410b20).
+6. 0x411a20 moves a bridge's two points onto its deck (not ported yet; without the bridges' links no point
+   is a bridge's).

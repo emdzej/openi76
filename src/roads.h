@@ -39,3 +39,8 @@ void Roads_Ground(void);
 void Roads_Free(void);
 /* for tests */
 const void *Roads_Table(void);
+/* Roads_Nearest 0x490f80: the road point nearest (x, z) by its right side, among the pieces whose sphere's
+   centre is nearest: each piece in turn joins at most eight kept in order, but only one no farther than the
+   farthest kept (a quirk: a farther one is dropped even with room). *piece is NULL without roads (the
+   index is then left alone). */
+void Roads_Nearest(float x, float z, RoadPiece **piece, int32_t *index);

@@ -1,5 +1,6 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
+#include "nav.h"
 #include "fsm.h"
 #include "orders.h"
 #include "terrain.h"
@@ -78,7 +79,8 @@ void AI_Init(void)
     memset(g_team_count, 0, sizeof g_team_count);
     memset(g_teams, 0, sizeof g_teams);
     Entity_OnAdd(ai_add);
-    /* the removal callback 0x408660 and the rest of the set-up (0x40fda0, 0x40fac0, 0x40f0b0, 0x40d0b0,
+    Nav_Init();   /* 0x40fda0 */
+    /* the removal callback 0x408660 and the rest of the set-up (0x40fac0, 0x40f0b0, 0x40d0b0,
        0x40b7f0, the skill tables 0x40b380) come with the driving */
 }
 

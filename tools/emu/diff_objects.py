@@ -462,8 +462,31 @@ def call_wreck(exe, n, fpcw):
         CALL_OUT.append(b.hex())
 
 
+def call_search(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    d = u(n + 0x70)
+    ai = u(d + 0x108)
+    for pi in range(min(u(0x4A88E0), 3)):
+        for end in range(2):
+            path = u(0x4A88DC) + pi * 0x58
+            npts = u(path + 0x50)
+            exe.call(0x40F6A0, ai, path, fpcw=fpcw)
+            exe.write(ai + 0xA0, struct.pack("<i", npts - 1 if end else 0))
+            total = exe.put(bytes(4))
+            for j in range(300):
+                r = exe.call(0x412DB0, ai, total, 0, limit=500_000_000, fpcw=fpcw)
+                CALL_OUT.append((struct.pack("<i", r) + exe.read(total, 4) + exe.read(ai + 0x7C, 4) + exe.read(ai + 0x9CF0, 8)).hex())
+                if not r:
+                    break
+            np = struct.unpack("<i", exe.read(ai + 0xAC, 4))[0]
+            if np < 0 or np > 2000:
+                np = 0
+            CALL_OUT.append((exe.read(ai + 0x7C, 0xC) + exe.read(ai + 0x8C, 0x24) + exe.read(ai + 0xB0, np * 0x14)).hex())
+    exe.write(ai + 0x88, bytes(4))
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

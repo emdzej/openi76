@@ -316,6 +316,9 @@ size_t Objects_Dump(char *buf, size_t cap)
 /* the harness's --call (tools/emu/diff_objects.py): one function on every listed class 1 node, in the
    class list's order */
 #include "physics.h"
+#include "nav.h"
+#include "fsm.h"
+static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 /* the calls' results, a line per vehicle (Dump_CallOut) */
 static char call_out[1 << 23];
 static size_t call_len;
@@ -789,6 +792,38 @@ int Dump_CallVehicles(int which, int upside)
                 }
                 call_line(b, sizeof b);
             }
+            break;
+        }
+        case 23: {   /* the path search (0x412db0) to the script's first three paths' first and last points,
+                        called until done (at most 300 times): each call's answer, the nodes and the trees,
+                        then the AI block's path (+0x7c-+0xb0 but the path's address, and the points) */
+            uint8_t *ai = *Data_Ptr(n->data, 0x108);
+            for (int pi = 0; pi < g_fsm.n_paths && pi < 3; pi++)
+                for (int end = 0; end < 2; end++) {
+                    uint32_t path = g_fsm.paths + (uint32_t)pi * 0x58;
+                    int32_t npts = Fsm_Word(path + 0x50);
+                    put32(ai + 0xa0, end ? npts - 1 : 0);   /* 0x40f6a0 */
+                    put32(ai + 0x88, (int32_t)path);
+                    put32(ai + 0xa4, npts);
+                    put32(ai + 0xa8, 0);
+                    int32_t total = 0;
+                    for (int j = 0; j < 300; j++) {
+                        int32_t r = Nav_Search(ai, &total), w[5] = {r, total};
+                        memcpy(w + 2, ai + 0x7c, 4);
+                        memcpy(w + 3, ai + 0x9cf0, 8);
+                        call_line(w, sizeof w);
+                        if (!r) break;
+                    }
+                    int32_t np;
+                    memcpy(&np, ai + 0xac, 4);
+                    if (np < 0 || np > 2000) np = 0;
+                    static uint8_t b[0x30 + 2000 * 0x14];
+                    memcpy(b, ai + 0x7c, 0xc);
+                    memcpy(b + 0xc, ai + 0x8c, 0x24);
+                    memcpy(b + 0x30, ai + 0xb0, (size_t)np * 0x14);
+                    call_line(b, 0x30 + (size_t)np * 0x14);
+                }
+            put32(ai + 0x88, 0);   /* an arena address here, the original's pointer there */
             break;
         }
         case 3: {   /* the brakes released */

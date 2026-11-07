@@ -624,3 +624,40 @@
 00409b20	AI_NoteUser	ai	high	0x505498 = the user's node; 0x505494 = 0x505490 = 0
 00409b50	AI_FrameFlags	ai	high	0x505490 = 0x505494; 0x505494 = 0
 00408cf0	AI_Begin	ai	med	0x4109b0, then (outside the melee) 0x409b20
+0x40fda0	Nav_Init
+0x40fdf0	Nav_Reset
+0x412db0	Nav_Search
+0x412670	Nav_PoolTake
+0x4125c0	Nav_NodeNew
+0x4126b0	Nav_Expand
+0x412c50	Nav_Repath
+0x412920	Nav_Before
+0x412990	Nav_After
+0x41cea0	Nav_TreeInsert
+0x41cfb0	Nav_TreeFind
+0x41d010	Nav_TreePop
+0x41cbf0	Nav_TreeRemove
+0x41cb20	Nav_TreeSwapLast
+0x41cdb0	Nav_RotateInsert
+0x41c9d0	Nav_RotateRemove
+0x412420	Nav_PathOut
+0x411850	Nav_CellsBack
+0x412030	Nav_CutRuns
+0x410a00	Nav_SameWay
+0x410e40	Nav_JoinRoads
+0x4116a0	Nav_AlongRoads
+0x411310	Nav_RoadFollow
+0x410b20	Nav_LanePoint
+0x41ba40	Road_Dir
+0x4111a0	Road_Count
+0x4110f0	Road_Loop
+0x411220	Road_Shorter
+0x41ac40	Road_Next
+0x41ada0	Road_SamePoint
+0x41ae90	Road_Same
+0x411a20	Nav_OntoBridges
+0x411fb0	Nav_PathStore
+0x412a00	Nav_OnOneRoad
+0x490f80	Roads_Nearest
+0x4109b0	Nav_Bridges
+0x4100a0	Nav_BridgeLinks
