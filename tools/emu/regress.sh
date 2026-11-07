@@ -17,7 +17,8 @@ diff_sky 300
 diff_roads 300
 diff_clip 1000
 diff_draw 1000
-diff_engine 5000"}
+diff_engine 5000
+diff_phys 2000"}
 fail=0
 for m in "" --down; do
   while read -r t n; do

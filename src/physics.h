@@ -23,3 +23,10 @@ void Wheel_Contact(Node *w, int hold, float force, int tclass);
 /* Vehicle_Brake 0x475c10: +0x454 bit 2 while braking (unless flags has 0x8020), and the rear wheels'
    skids (0x4301f0, not ported yet) */
 void Vehicle_Brake(Node *n, uint32_t flags, int braking);
+/* Frame_Yaw 0x451820: the identity turned by a about y */
+void Frame_Yaw(Frame *out, float a);
+/* Integrate 0x471860: one step of p (doubles) and v under the acceleration a: v + a dt / 2 for dt, then
+   v += a dt */
+void Integrate(double p[3], float v[3], const float a[3], float dt);
+/* Integrate_Turn 0x4719f0: the same for a rotation: out the step's angles (w + a dt / 2) dt, w += a dt */
+void Integrate_Turn(float out[3], float w[3], const float a[3], float dt);

@@ -437,3 +437,8 @@
 0042fea0	Wheel_SetX	physics	med	a wheel data +0x20
 00475c10	Vehicle_Brake	physics	high	flag 2 while braking, the rear wheels skids; ported (the skids stubbed)
 004301f0	Wheel_Skid	physics	high	skid marks 0x46bcc0/0x46bc40 and dust 0x45c780 (rand % 3)
+00451820	Frame_Yaw	math	high	the identity turned about y; ported, diffed
+00471860	Integrate	physics	high	position and velocity step under an acceleration; ported, diffed
+004719f0	Integrate_Turn	physics	high	the rotation step; ported, diffed
+00473600	Vehicle_Drive	physics	high	the driving step: throttle, slip, integrate, turn, project on the ground (being ported)
+0042d3a0	Vehicle_Throttle	vehicle	high	data +0xe4

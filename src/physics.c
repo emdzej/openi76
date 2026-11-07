@@ -218,3 +218,37 @@ void Vehicle_Brake(Node *n, uint32_t flags, int braking)
     wheel_skid(slot(d, 0x3bc), braking);
     wheel_skid(slot(d, 0x3b8), braking);
 }
+
+/* ---- the step's integrators ---- */
+
+void Frame_Yaw(Frame *out, float a)
+{
+    float s = F32(sin(a)), c = F32(cos(a));   /* fsincos 0x452a70 */
+    memcpy(out, exe_data(0x4db298, sizeof *out), sizeof *out);
+    out->m[0] = c;
+    out->m[2] = -s;
+    out->m[6] = s;
+    out->m[8] = c;
+}
+
+void Integrate(double p[3], float v[3], const float a[3], float dt)
+{
+    float ad[3], h[3];
+    for (int k = 0; k < 3; k++) ad[k] = F32(MUL(dt, a[k]));
+    for (int k = 0; k < 3; k++) h[k] = F32(ADD(MUL(ad[k], 0.5f), v[k]));   /* 0x4a66b0 */
+    double x = MUL(h[0], dt);   /* x's product added unrounded, y's and z's as floats */
+    float y = F32(MUL(dt, h[1])), z = F32(MUL(dt, h[2]));
+    p[0] = ADD(x, p[0]);
+    p[1] = ADD(p[1], y);
+    p[2] = ADD(p[2], z);
+    for (int k = 0; k < 3; k++) v[k] = F32(ADD(v[k], ad[k]));
+}
+
+void Integrate_Turn(float out[3], float w[3], const float a[3], float dt)
+{
+    float ad[3], h[3];
+    for (int k = 0; k < 3; k++) ad[k] = F32(MUL(dt, a[k]));
+    for (int k = 0; k < 3; k++) h[k] = F32(ADD(MUL(ad[k], 0.5f), w[k]));
+    for (int k = 0; k < 3; k++) out[k] = F32(MUL(dt, h[k]));
+    for (int k = 0; k < 3; k++) w[k] = F32(ADD(w[k], ad[k]));
+}
