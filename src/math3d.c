@@ -206,3 +206,40 @@ int Frame_Project(Frame *out, const float plane[4], const float l[3])
     out->m[8] = F32(ADD(out->m[8], 1.0));
     return 1;
 }
+
+void Plane_Normal(float out[3], const float a[3], const float b[3], const float c[3])
+{
+    float u[3], v[3];
+    for (int k = 0; k < 3; k++) u[k] = F32(SUB(b[k], a[k]));
+    v[0] = F32(SUB(c[0], a[0]));
+    v[1] = F32(SUB(c[1], a[1]));
+    double vz = SUB(c[2], a[2]);   /* its first use unrounded */
+    v[2] = F32(vz);
+    float n0 = F32(SUB(MUL(vz, u[1]), MUL(v[1], u[2])));
+    float n1 = F32(SUB(MUL(v[0], u[2]), MUL(v[2], u[0])));
+    float n2 = F32(SUB(MUL(v[1], u[0]), MUL(v[0], u[1])));
+    double r = Fast_InvSqrt(ADD(ADD(MUL(n1, n1), MUL(n2, n2)), MUL(n0, n0)));
+    out[0] = F32(MUL(n0, r));
+    out[1] = F32(MUL(n1, r));
+    out[2] = F32(MUL(r, n2));
+}
+
+void Frame_UpFwd(Frame *out, const float up[3], const float fwd[3])
+{
+    const float *a = up, *b = fwd;
+    float x[3], z[3];
+    x[0] = F32(SUB(MUL(a[1], b[2]), MUL(a[2], b[1])));
+    x[1] = F32(SUB(MUL(a[2], b[0]), MUL(b[2], a[0])));
+    x[2] = F32(SUB(MUL(b[1], a[0]), MUL(a[1], b[0])));
+    double r = Fast_InvSqrt(ADD(ADD(MUL(x[1], x[1]), MUL(x[2], x[2])), MUL(x[0], x[0])));
+    for (int k = 0; k < 3; k++) x[k] = F32(MUL(x[k], r));
+    z[0] = F32(SUB(MUL(a[2], x[1]), MUL(a[1], x[2])));
+    z[1] = F32(SUB(MUL(a[0], x[2]), MUL(a[2], x[0])));
+    z[2] = F32(SUB(MUL(a[1], x[0]), MUL(a[0], x[1])));
+    Frame f;
+    memset(&f, 0, sizeof f);
+    memcpy(f.m, x, sizeof x);
+    memcpy(f.m + 3, a, 3 * sizeof *a);
+    memcpy(f.m + 6, z, sizeof z);
+    *out = f;
+}

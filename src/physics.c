@@ -1022,3 +1022,150 @@ int Vehicle_Collide(Node *n, float dt)
     Vehicle_Brake(n, rd32(d + 0x454), 1);
     return 1;
 }
+
+/* 0x470ca0: the acceleration's parts along f and across it (along r), as the wheels' load shifts forward
+   (o1) and sideways (o2) */
+static void load_shift(const float a[3], const float f[3], const float r[3], float *o1, float *o2)
+{
+    float p[3], t[3];
+    Vec_Split(a, f, p, t);
+    *o1 = F32(SUB(SUB(MUL(MUL(p[1], f[1]), -0.008f), MUL(MUL(p[2], f[2]), 0.008f)), MUL(MUL(p[0], f[0]), 0.008f)));
+    *o2 = F32(SUB(SUB(MUL(MUL(t[1], r[1]), -0.008f), MUL(MUL(t[2], r[2]), 0.008f)), MUL(MUL(t[0], r[0]), 0.008f)));
+}
+
+static float wheel_floor(Node *w) { return rdf(w->data + 0x2c); }   /* 0x430120: the wheel's ground */
+
+void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float dt)
+{
+    uint8_t *d = n->data;
+    Node *w[4] = {slot(d, 0x3ac), slot(d, 0x3a8), slot(d, 0x3bc), slot(d, 0x3b8)};
+    Node *w4 = slot(d, 0x3b4), *w5 = slot(d, 0x3b0);
+    const float *m = n->frame.m;
+    float fwd[3] = {m[6], m[7], m[8]}, right[3] = {m[0], m[1], m[2]}, f0[3] = {m[6], m[7], m[8]};
+    int32_t tc = rd32(d + 0x45c);
+    /* the springs, loaded by the acceleration: front left (o1 - o2), front right, rear left, rear right */
+    float o1, o2;
+    load_shift(acc, fwd, right, &o1, &o2);
+    Wheel_Contact(w[0], 0, F32(SUB(o1, o2)), tc);
+    Wheel_Contact(w[1], 0, F32(ADD(o2, o1)), tc);
+    Wheel_Contact(w[2], 0, F32(-ADD(o2, o1)), tc);
+    Wheel_Contact(w[3], 0, F32(SUB(o2, o1)), tc);
+    if (w4) Wheel_Contact(w4, 0, 0, tc);
+    if (w5) Wheel_Contact(w5, 0, 0, tc);
+    /* the heights to hold above the ground: the wheels' bottoms when upright enough (the up axis's y over
+       +0x478), else the box's bottom (+0x34) under its corners (the fourth corner at the first wheel, the
+       third at the second, the first at the third, the second at the fourth) */
+    int up = !below_eq(m[4], rdf(d + 0x478));
+    float y[4];
+    if (up) {
+        for (int i = 0; i < 4; i++) {
+            float p[3];
+            Node_WorldPos(p, w[i]);   /* 0x430140: the wheel's bottom, less its radius (+0x1c) */
+            y[i] = F32(SUB(p[1], rdf(w[i]->data + 0x1c)));
+        }
+    } else {
+        static const int at[4] = {2, 3, 1, 0};
+        for (int i = 0; i < 4; i++) {
+            float p[1][3];
+            memcpy(p[0], d + 4 + 12 * i, 12);
+            memcpy(&p[0][1], d + 0x34, 4);
+            Frame_Points(p, (const float (*)[3])p, 1, &n->frame);
+            y[at[i]] = p[0][1];
+        }
+    }
+    /* the deepest into the ground */
+    float g = F32(SUB(wheel_floor(w[0]), y[0]));
+    for (int i = 1; i < 4; i++) {
+        double t = SUB(wheel_floor(w[i]), y[i]);
+        if (!below_eq(t, g)) g = F32(t);
+    }
+    /* the wheels off the ground (more than 1e-4 above it once the deepest is out): a turn to bring each
+       down (bits 8, 4, 2, 1 of lift) */
+    const float pi = from_bits(0x40490fdb), pi2 = from_bits(0x3fc90fdb);   /* 0x4a6634, 0x4a6630 */
+    float r[3] = {0, 0, 0};
+    int32_t lift = 0;
+    if (!below_eq(ADD(SUB(y[0], wheel_floor(w[0])), g), 1e-4f)) {   /* 0x4a6628 */
+        r[2] = F32(SUB(r[2], pi2));
+        lift = 8;
+        r[0] = from_bits(0xc0490fdb);
+    }
+    if (!below_eq(ADD(SUB(y[1], wheel_floor(w[1])), g), 1e-4f)) {
+        r[0] = F32(SUB(r[0], pi));
+        lift |= 4;
+        r[2] = F32(ADD(r[2], pi2));
+    }
+    if (!below_eq(ADD(SUB(g, wheel_floor(w[2])), y[2]), 1e-4f)) {
+        r[0] = F32(ADD(r[0], pi));
+        lift |= 2;
+        r[2] = F32(SUB(r[2], pi2));
+    }
+    if (!below_eq(ADD(SUB(g, wheel_floor(w[3])), y[3]), 1e-4f)) {
+        r[0] = F32(ADD(r[0], pi));
+        lift |= 1;
+        r[2] = F32(ADD(r[2], pi2));
+    }
+    if (!up) {
+        r[0] = -r[0];
+        r[2] = -r[2];
+    }
+    /* eased from the angular velocity's x and z by 2 dt (when 2 dt is in [0, 0.95]) unless within 0.005 */
+    double su = MUL(dt, 2.0f);   /* 0x4a6638 */
+    float sf = F32(su);
+    if (!below(su, 0.0f) && (int32_t)fbits(sf) <= 0x3f733333) {
+        double e = SUB(r[0], rdf(d + 0xc8));
+        float ef = F32(e);
+        if (!below(fabs(e), 0.005)) r[0] = F32(ADD(MUL(MUL(dt, ef), 2.0f), rdf(d + 0xc8)));   /* 0x4a6640 */
+    }
+    if (fbits(sf) <= 0x80000000u && (int32_t)fbits(sf) <= 0x3f733333) {
+        double e = SUB(r[2], rdf(d + 0xd0));
+        float ef = F32(e);
+        if (!below(fabs(e), 0.005)) r[2] = F32(ADD(MUL(MUL(dt, ef), 2.0f), rdf(d + 0xd0)));
+    }
+    /* out of the ground along its normal */
+    float nv[3];
+    memcpy(nv, d + 0x460, 12);
+    for (int k = 0; k < 3; k++) n->frame.pos[k] = ADD(MUL(nv[k], g), n->frame.pos[k]);
+    /* turned about the pivot for the lifted wheels (+0x488, a local x and z for each lift) */
+    Frame fr;
+    float tiny = exe_f32(0x4a6648);   /* 1e-8 */
+    if (below(MUL(r[0], r[0]), tiny) && below(MUL(r[1], r[1]), tiny) && below(MUL(r[2], r[2]), tiny)) {
+        fr = n->frame;
+    } else {
+        float a = rdf(d + 0x488 + 8 * (uint32_t)lift), b = rdf(d + 0x48c + 8 * (uint32_t)lift);
+        double s0 = ADD(n->frame.pos[0], ADD(MUL(m[6], b), MUL(m[0], a)));
+        double s1 = ADD(n->frame.pos[1], ADD(MUL(m[7], b), MUL(m[1], a)));
+        double s2 = ADD(n->frame.pos[2], ADD(MUL(b, m[8]), MUL(m[2], a)));
+        Frame_Turn(&fr, &n->frame, r[0], r[1], r[2], dt);
+        double na = -a, nb = -b;
+        fr.pos[0] = ADD(s0, ADD(MUL(fr.m[0], na), MUL(fr.m[6], nb)));
+        fr.pos[1] = ADD(s1, ADD(MUL(fr.m[1], na), MUL(fr.m[7], nb)));
+        fr.pos[2] = ADD(s2, ADD(MUL(na, fr.m[2]), MUL(fr.m[8], nb)));
+    }
+    /* the plane of the wheels' contacts (the front ones and the rear axle's middle) */
+    float wp[4][3], rm[3], pn[3];
+    for (int i = 0; i < 4; i++) Node_WorldPos(wp[i], w[i]);
+    for (int i = 0; i < 4; i++) wp[i][1] = F32(SUB(wheel_floor(w[i]), rdf(w[i]->data + 0x24)));   /* 0x430130 */
+    for (int k = 0; k < 3; k++) rm[k] = F32(MUL(F32(ADD(wp[2][k], wp[3][k])), 0.5f));   /* 0x4a664c */
+    Plane_Normal(pn, wp[1], rm, wp[0]);
+    if (!keep) {
+        /* the turned frame kept unless the plane is nearer the current up than the turned one is (or a
+           landing or a slide, mode) */
+        double a1 = ADD(ADD(MUL(m[4], fr.m[4]), MUL(m[5], fr.m[5])), MUL(m[3], fr.m[3]));
+        double a2 = ADD(ADD(MUL(m[4], pn[1]), MUL(m[5], pn[2])), MUL(m[3], pn[0]));
+        if (mode || below_eq(a2, a1)) {
+            memcpy(d + 0xc8, &r[0], 4);
+            memcpy(d + 0xd0, &r[2], 4);
+            n->frame = fr;
+            return;
+        }
+    } else if (fbits(pn[1]) > 0x80000000u) {
+        for (int k = 0; k < 3; k++) pn[k] = -pn[k];
+    }
+    /* the frame on the plane: up its normal, forward the old one levelled onto it */
+    if ((int32_t)fbits(pn[1]) > 0x38d1b717) f0[1] = F32(-DIV(ADD(MUL(pn[2], f0[2]), MUL(pn[0], f0[0])), pn[1]));
+    double pos[3] = {n->frame.pos[0], n->frame.pos[1], n->frame.pos[2]};
+    Frame_UpFwd(&n->frame, pn, f0);
+    memcpy(n->frame.pos, pos, sizeof pos);
+    put32(d + 0xc8, 0);
+    put32(d + 0xd0, 0);
+}

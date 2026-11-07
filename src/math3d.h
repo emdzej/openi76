@@ -17,6 +17,11 @@ typedef struct {
 void Frame_Invert(Frame *out, const Frame *f);
 /* Plane_From 0x452480: the plane through a, b, c (normal (b - a) x (c - a), normalized) */
 void Plane_From(float out[4], const float a[3], const float b[3], const float c[3]);
+/* Plane_Normal 0x452640: the unit normal (b - a) x (c - a) */
+void Plane_Normal(float out[3], const float a[3], const float b[3], const float c[3]);
+/* Frame_UpFwd 0x452170: the frame (at 0) whose y axis is up and whose x axis is up x fwd, normalised; z is
+   x x up. The word at +0x24 is the stack's in the original (0 here) */
+void Frame_UpFwd(Frame *out, const float up[3], const float fwd[3]);
 /* Fast_InvSqrt 0x4529a0: 1 / sqrt(x), from a table of 256 (built by InvSqrt_Init 0x4516f0) and one Newton
    step */
 double Fast_InvSqrt(double x);

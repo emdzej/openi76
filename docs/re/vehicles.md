@@ -241,6 +241,28 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Vehicle_Drive 0x473600 | the step on the wheels: integrate (0x471860, 0x4719f0), turn about the rear axle (+0x11c), project the velocity on the ground (+0x460, the normal) |
 | Corners_Hit 0x47a8d0 | the body's four corners (+4) swept against the terrain (below) |
 | Vehicle_Collide 0x472890 | the contact (+0x38) answered (below); the damage 0x45d7c0 and the sound not yet |
+| Vehicle_Settle 0x470030 | the body on its wheels (below) |
+
+### The body on its wheels (Vehicle_Settle 0x470030)
+
+After the driving step, with its acceleration a:
+
+- The springs (Wheel_Contact) get a force from a's parts along the forward axis (o1) and across it
+  (o2), each −0.008 on y and +0.008 on x and z of the part times the axis (0x470ca0): front left o1 − o2,
+  front right o1 + o2, rear left −(o1 + o2), rear right o2 − o1; the spare wheels (0x3b4, 0x3b0) none.
+- Upright (the up axis's y over +0x478), the heights held are the wheels' bottoms (their place less the
+  radius +0x1c, 0x430140); otherwise the box's bottom (+0x34) under each corner.
+- The deepest of (wheel's ground − height) lifts the body along the ground's normal (+0x460).
+- A wheel more than 1e-4 above its ground after that sets a bit of `lift` (8, 4, 2, 1 for the four) and
+  an angular velocity of whole multiples of π and π/2 on x and z (the first sets x to −π); past upright
+  both are reversed. Each is eased from the current one (+0xc8, +0xd0) by 2 dt, unless within 0.005.
+- If any is not tiny (a square over 1e-8), the frame turns by it for dt about the pivot for that `lift`
+  (+0x488 + 8 lift: a local x and z, set at the start).
+- The plane through the front wheels' contacts and the rear axle's middle (y the ground less the
+  travel +0x24; Plane_Normal 0x452640). The turned frame is kept with its x and z turn when the step
+  flagged a landing or a slide (0x202), or when the plane is no nearer the current up axis than the
+  turned frame's up. Otherwise (and always with `keep`, the plane's normal made to point up) the frame is
+  rebuilt on the plane (Frame_UpFwd 0x452170, forward levelled onto it) and the x and z turn zeroed.
 
 ### The collisions (0x472890)
 

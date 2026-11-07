@@ -75,3 +75,9 @@ int Corners_Hit(Node *n, uint8_t *c, float dt);
    a fall of more than 35 m kills. +0x454 bit 0x10 holds the ground contact until it ends: 0 then, 0 while
    it holds, 1 when answered */
 int Vehicle_Collide(Node *n, float dt);
+/* Vehicle_Settle 0x470030: the body on its wheels: the springs loaded by the acceleration acc
+   (Wheel_Contact), lifted out of the ground along its normal by the deepest wheel (or, past upright, box
+   corner), turned (the angular velocity's x and z, eased) about a pivot to bring lifted wheels down, or
+   with keep, or when the wheels' plane fits the up axis better, set on that plane. mode (the step's flags
+   0x202) keeps the turn */
+void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float dt);

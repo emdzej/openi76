@@ -469,3 +469,10 @@
 00471bb0	Point_Velocity	physics	high	a points velocity up the parents; ported, diffed
 0047a8d0	Corners_Hit	physics	high	the body corners swept against the terrain; ported, diffed
 00472890	Vehicle_Collide	physics	high	the contact at +0x38 answered: bounce, push turn, move; ported, diffed
+00470030	Vehicle_Settle	physics	high	the body on its wheels: springs loaded, lifted out, tilted to the ground or set on the wheels plane; ported, diffed
+00470ca0	Load_Shift	physics	high	the accelerations parts as the wheels load shifts
+00452640	Plane_Normal	math	high	the unit normal (b-a)x(c-a); ported
+00452170	Frame_UpFwd	math	high	a frame from up and forward; ported
+00430140	Wheel_Bottom	physics	high	a wheels world place less its radius +0x1c
+00430120	Wheel_Ground	physics	high	a wheels data +0x2c
+00430130	Wheel_Travel	physics	high	a wheels data +0x24

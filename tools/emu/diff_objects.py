@@ -254,8 +254,41 @@ def call_ground(exe, n, fpcw):
         CALL_OUT.append(exe.read(o, 16).hex())
 
 
+def call_settle(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    f0 = exe.read(n + 0x18, 0x40)
+    save = exe.read(d, 0x50C)
+    ws = [struct.unpack("<I", exe.read(d + o, 4))[0] for o in (0x3AC, 0x3A8, 0x3BC, 0x3B8)]
+    wsave = [(struct.unpack("<I", exe.read(w + 0x70, 4))[0], exe.read(struct.unpack("<I", exe.read(w + 0x70, 4))[0], 0x88),
+              exe.read(w + 0x18, 0x40)) for w in ws]
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    u = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]
+
+    def restore():
+        exe.write(d, save)
+        exe.write(n + 0x18, f0)
+        for w, (wd, b, wf) in zip(ws, wsave):
+            exe.write(wd, b)
+            exe.write(w + 0x18, wf)
+    for dy, turn, c in ((0, 0, 0), (-0.2, 0, 1), (0.4, 1, 0), (0.4, 1, 2), (0.4, 1, 3)):
+        restore()
+        y = struct.unpack("<d", exe.read(n + 0x48, 8))[0] + f32(dy)
+        exe.write(n + 0x48, struct.pack("<d", y))
+        if turn:
+            exe.write(d + 0xC8, struct.pack("<fff", 0.3, 0, -0.2))
+        acc = exe.put(struct.pack("<fff", *((0, 0, -6) if c == 1 else (1.5, -0.3, 4))))
+        exe.call(0x470030, n, acc, 0x200 if c == 2 else 0, 1 if c == 3 else 0, u(0.05), fpcw=fpcw)
+        f = bytearray(exe.read(n + 0x18, 0x40))
+        f[0x24:0x28] = bytes(4)
+        out = exe.read(d + 0xC8, 12) + bytes(f)
+        for w, (wd, _, _) in zip(ws, wsave):
+            out += exe.read(wd, 0x84) + bytes(4) + exe.read(w + 0x48, 8)   # +0x84 a pointer
+        CALL_OUT.append(out.hex())
+    restore()
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

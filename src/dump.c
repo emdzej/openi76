@@ -542,6 +542,54 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 12: {   /* the body settled on its wheels (dt 0.05): as it is with an acceleration (1.5, -0.3, 4),
+                        lowered 0.2 braking at 6, raised 0.4 turning (0.3, 0, -0.2), the same in mode 0x200,
+                        and with keep */
+            static const float cases[5][3] = {{0, 0, 0}, {-0.2f, 0, 1}, {0.4f, 1, 0}, {0.4f, 1, 2}, {0.4f, 1, 3}};
+            static const float acc0[3] = {1.5f, -0.3f, 4}, acc1[3] = {0, 0, -6}, w[3] = {0.3f, 0, -0.2f};
+            static const uint32_t wo[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
+            uint8_t save[0x50c], wsave[4][0x88];
+            Frame f0 = n->frame, wf[4];
+            memcpy(save, n->data, sizeof save);
+            for (int i = 0; i < 4; i++) {
+                Node *wn = *Data_Ptr(n->data, wo[i]);
+                memcpy(wsave[i], wn->data, 0x88);
+                wf[i] = wn->frame;
+            }
+            for (int j = 0; j < 5; j++) {
+                memcpy(n->data, save, sizeof save);
+                n->frame = f0;
+                for (int i = 0; i < 4; i++) {
+                    Node *wn = *Data_Ptr(n->data, wo[i]);
+                    memcpy(wn->data, wsave[i], 0x88);
+                    wn->frame = wf[i];
+                }
+                n->frame.pos[1] += cases[j][0];
+                if (cases[j][1] != 0) memcpy(n->data + 0xc8, w, 12);
+                int c = (int)cases[j][2];
+                Vehicle_Settle(n, c == 1 ? acc1 : acc0, c == 2 ? 0x200 : 0, c == 3, 0.05f);
+                uint8_t b[12 + sizeof(Frame) + 4 * (0x88 + 8)];
+                Frame f = n->frame;
+                f.pad = 0;
+                memcpy(b, n->data + 0xc8, 12);
+                memcpy(b + 12, &f, sizeof f);
+                for (int i = 0; i < 4; i++) {
+                    Node *wn = *Data_Ptr(n->data, wo[i]);
+                    memcpy(b + 12 + sizeof f + i * 0x90, wn->data, 0x88);
+                    memset(b + 12 + sizeof f + i * 0x90 + 0x84, 0, 4);   /* a pointer */
+                    memcpy(b + 12 + sizeof f + i * 0x90 + 0x88, &wn->frame.pos[1], 8);
+                }
+                call_line(b, sizeof b);
+            }
+            memcpy(n->data, save, sizeof save);
+            n->frame = f0;
+            for (int i = 0; i < 4; i++) {
+                Node *wn = *Data_Ptr(n->data, wo[i]);
+                memcpy(wn->data, wsave[i], 0x88);
+                wn->frame = wf[i];
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);
