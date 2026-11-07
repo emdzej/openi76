@@ -127,19 +127,19 @@ static int clip_z(const View *view, CamVert *in, int n, V6 *buf, int tex, V6 **r
     static const int f[] = {0, 1, 5, 3, 4};   /* x, y, q (u, v) */
     int all = 0xff, any = 0;
     for (int i = 0; i < n; i++) {
-        int c = below(in[i].z, view->znear) << 1 | !below(in[i].z, view->zfar);
+        int c = below(in[i].z, VIEW_ZNEAR(view)) << 1 | !below(in[i].z, VIEW_ZFAR(view));
         all &= c, any |= c;
     }
     *res = (V6 *)(void *)in;
     if (all) return 0;
     int used = 0;
     if (any & 2) {
-        n = clip_pass(*res, n, buf, BUF, 2, view->znear, 0, 0, f, tex ? 5 : 3);
+        n = clip_pass(*res, n, buf, BUF, 2, VIEW_ZNEAR(view), 0, 0, f, tex ? 5 : 3);
         if (!n) return 0;
         *res = buf, used = n;
     }
     if (any & 1) {   /* appended after the near pass's output */
-        n = clip_pass(*res, n, buf + used, BUF - used, 2, view->zfar, 1, 0, f, tex ? 5 : 3);
+        n = clip_pass(*res, n, buf + used, BUF - used, 2, VIEW_ZFAR(view), 1, 0, f, tex ? 5 : 3);
         if (!n) return 0;
         *res = buf + used;
     }

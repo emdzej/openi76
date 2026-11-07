@@ -28,19 +28,35 @@ ROUTINES = {
 OUT = 72
 
 
-class View(ctypes.Structure):   # src/render/view.h
+class Frame(ctypes.Structure):   # src/render/view.h
+    _fields_ = [("m", ctypes.c_float * 9), ("pad", ctypes.c_float), ("pos", ctypes.c_double * 3)]
+
+
+class View(ctypes.Structure):   # src/render/view.h: the original's layout, but for the 8-byte pointer at +0x38
     _fields_ = [("cx", ctypes.c_float), ("cy", ctypes.c_float), ("sx", ctypes.c_float), ("sy", ctypes.c_float),
+                ("range", ctypes.c_float), ("far_radius", ctypes.c_float), ("radius600", ctypes.c_float),
                 ("xmin", ctypes.c_float), ("ymin", ctypes.c_float), ("xmax", ctypes.c_float),
-                ("ymax", ctypes.c_float), ("surface", ctypes.c_void_p), ("znear", ctypes.c_float),
-                ("zfar", ctypes.c_float)]
+                ("ymax", ctypes.c_float), ("tan_half", ctypes.c_float), ("aspect", ctypes.c_float),
+                ("zoom", ctypes.c_float), ("surface", ctypes.c_void_p), ("cam", Frame),
+                ("centre", ctypes.c_double * 3), ("radius", ctypes.c_double), ("plane", (ctypes.c_float * 4) * 6),
+                ("near_c", (ctypes.c_float * 3) * 4), ("far_c", (ctypes.c_float * 3) * 4),
+                ("eye", ctypes.c_double * 3), ("corner", (ctypes.c_double * 3) * 4)]
 
 
-def view_record(v):
-    r = bytearray(0x140)
-    struct.pack_into("<4f", r, 0, v.cx, v.cy, v.sx, v.sy)
-    struct.pack_into("<4f", r, 0x1C, v.xmin, v.ymin, v.xmax, v.ymax)
-    struct.pack_into("<f", r, 0x108, v.znear)
-    struct.pack_into("<f", r, 0x138, v.zfar)
+assert ctypes.sizeof(View) == 0x1D8
+
+
+def clip_view(cx, cy, sx, sy, xmin, ymin, xmax, ymax, znear, zfar):
+    """a view with only what the clippers and projections read"""
+    v = View(cx=cx, cy=cy, sx=sx, sy=sy, xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax)
+    v.near_c[0][2], v.far_c[0][2] = znear, zfar
+    return v
+
+
+def view_record(v, surface=0):
+    """the original's record of a port view, the surface at its address in the emulator"""
+    r = bytearray(bytes(v))
+    struct.pack_into("<II", r, 0x38, surface, 0)
     return bytes(r)
 
 
@@ -83,9 +99,9 @@ def main():
         rng = random.Random(seed)
         bad = 0
         for i in range(count):
-            v = View(rng.uniform(300, 340), rng.uniform(220, 260), rng.uniform(200, 400), rng.uniform(200, 400),
-                     rng.choice((0.0, 20.5)), rng.choice((0.0, 10.25)), rng.choice((639.0, 600.5)),
-                     rng.choice((479.0, 400.75)), None, rng.choice((1.0, 0.5)), rng.choice((1000.0, 700.0)))
+            v = clip_view(rng.uniform(300, 340), rng.uniform(220, 260), rng.uniform(200, 400), rng.uniform(200, 400),
+                          rng.choice((0.0, 20.5)), rng.choice((0.0, 10.25)), rng.choice((639.0, 600.5)),
+                          rng.choice((479.0, 400.75)), rng.choice((1.0, 0.5)), rng.choice((1000.0, 700.0)))
             mode = rng.randrange(512)
             n, verts = polygon(rng, camera, v)
             exe.reset_heap()

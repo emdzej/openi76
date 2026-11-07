@@ -1,7 +1,8 @@
 /* The 8-bit drawing surface and the colour tables the rasterizer reads (docs/re/render.md).
 
-   The original's surface record: +0 pitch (bytes per row), +0x10 the pixels, +0x18 left, +0x1c top,
-   +0x20 right, +0x24 bottom (the viewport, inclusive), +0x28 nonzero when it can be drawn on. A row y,
+   The original's surface record: +0 pitch (bytes per row, also the width), +4 the height, +0x10 the
+   pixels, +0x18 left, +0x1c top, +0x20 right, +0x24 bottom (the viewport, inclusive), +0x28 nonzero when it
+   can be drawn on. A row y,
    column x is pixels[(y + top) * pitch + left + x]: the fillers draw relative to the viewport. The line
    rasterizer clips against the same rectangle in absolute coordinates and then adds left and top again
    (the same when the viewport is at 0, 0, as the game's is). The tables are in g_rtab below. */
@@ -14,7 +15,7 @@ typedef struct {
     int x0, y0;      /* +0x18, +0x1c: left, top */
     int x1, y1;      /* +0x20, +0x24: right, bottom (inclusive) */
     int on;          /* +0x28 */
-    int w, h;        /* the port's: the buffer's size, for checks in debug builds */
+    int w, h;        /* the buffer's size; h is the original's +4 (its +0, the pitch, is the width) */
 } Surface;
 
 /* A screen-space vertex as the polygon fillers take them (24 bytes in the original): x, y in pixels, w = 1/z

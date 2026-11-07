@@ -69,3 +69,17 @@
 00441440	Clip_Copy	render	high	clip-table entry: the input copied as it is
 00441470	Clip_Error	render	high	clip-table entry: "Error in clipping function" to the empty debug print, 0
 00402c80	Debug_Print	core	high	a bare ret: the release build's debug messages
+0043c8a0	View_Create
+0043ca60	View_SetZoom
+0043cb40	View_SetRect
+0043cf00	View_SetCamera
+0043d2d0	View_ToCamera
+0043d180	View_TestSphere
+00452480	Plane_From
+00452910	Frame_Invert
+004529a0	Fast_InvSqrt
+004516f0	InvSqrt_Init
+004392f0	Surface_SetViewport
+0043fb00	Rect_Clip
+00452a70	SinCos
+00496690	__ftol

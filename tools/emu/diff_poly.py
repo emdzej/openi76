@@ -79,10 +79,10 @@ class Surface(ctypes.Structure):   # src/render/surface.h
                 ("h", ctypes.c_int)]
 
 
-def surface_record(pitch, pixels, x0=0, y0=0, x1=W - 1, y1=H - 1, on=1):
-    """The original's surface record: +0 pitch, +0x10 pixels, +0x18 left, +0x1c top, +0x20 right, +0x24 bottom,
-    +0x28 on."""
-    return struct.pack("<IIIIIiiiii", pitch, 0, 0, 0, pixels, 0, x0, y0, x1, y1) + struct.pack("<i", on)
+def surface_record(pitch, pixels, x0=0, y0=0, x1=W - 1, y1=H - 1, on=1, height=0):
+    """The original's surface record: +0 pitch (the width), +4 the height, +0x10 pixels, +0x18 left, +0x1c top,
+    +0x20 right, +0x24 bottom, +0x28 on."""
+    return struct.pack("<IIIIIiiiii", pitch, height, 0, 0, pixels, 0, x0, y0, x1, y1) + struct.pack("<i", on)
 
 
 def polygon(rng, kind):

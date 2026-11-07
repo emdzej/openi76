@@ -20,7 +20,7 @@ int g_screen_h = 480;
 /* DrawPoint 0x43d390 */
 void DrawPoint(const View *view, const CamVert *v, uint8_t colour)
 {
-    if (view->znear > v->z || !(view->zfar >= v->z)) return;   /* fld near; fcomp z: C0|C3 / fld far: C0 */
+    if (VIEW_ZNEAR(view) > v->z || !(VIEW_ZFAR(view) >= v->z)) return;   /* fld near; fcomp z: C0|C3 / fld far: C0 */
     double w = DIV(1.0, v->z);
     int x = fpu_int(ADD(MUL(MUL(view->sx, v->x), w), view->cx));
     int y = fpu_int(ADD(MUL(w, MUL(v->y, view->sy)), view->cy));
@@ -59,7 +59,7 @@ static bool line_plane(CamVert *a, CamVert *b, float plane, float sa, float sb, 
 /* DrawLine 0x43d4c0 */
 void DrawLine(const View *view, CamVert *a, CamVert *b, uint8_t colour)
 {
-    float n = view->znear, f = view->zfar;
+    float n = VIEW_ZNEAR(view), f = VIEW_ZFAR(view);
     /* near: the signs of z - near; t's numerator near - z_a unrounded */
     if (!line_plane(a, b, n, F32(SUB(a->z, n)), F32(SUB(b->z, n)), SUB(n, a->z))) return;
     /* far: the signs of far - z; t's numerator is the stored float far - z_a */

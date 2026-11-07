@@ -300,3 +300,71 @@ exe's at run time (`Draw_Init`) and maps each address to its routine.
   affine filler's row-table copies landing far outside the table (its stale slot holding a pointer, say).
   That faults before anything is drawn, so the polygon is skipped, and the port does the same.
 - The release build's debug print (0x402c80) is a bare `ret`, so the clip table's error entry is silent.
+
+## The view (ported, diffed)
+
+The view record (0x1d8 bytes, `src/render/view.h`) holds the projection, the frustum and the camera.
+`tools/emu/diff_view.py` checks every routine below against the original, record for record.
+
+- **View_Create 0x43c8a0** `(out, surface, fov, aspect, range, zoom)` clamps the field of view to
+  pi/4..3pi/4 and the range to 100..1000. Like every float clamp here, it compares the floats' bits as
+  signed integers. It sets:
+  - the centre to half the surface's width (its pitch, +0) and height (+4);
+  - `tan(fov/2)` from `fsincos` (0x452a70) at +0x2c, the aspect at +0x30 and the range at +0x10;
+  - the clip rectangle from the surface's viewport.
+
+  Then it calls SetZoom and puts the camera at (0, 1, 0) with the identity rotation (0x4db298).
+- **View_SetZoom 0x43ca60** clamps the zoom to 0.5..8 and computes these values:
+
+  | Field | Value |
+  |---|---|
+  | sx | `width * zoom / 2 / tan` |
+  | sy | `-(width * zoom / 2 * (aspect / tan))` (y is up) |
+  | +0x14 | `sqrt((tan^2 + 1) * (range * zoom)^2)` |
+  | +0x18 | the same at a distance of `600 * zoom` |
+
+  Then it calls SetRect with the rectangle truncated (`__ftol`).
+- **View_SetRect 0x43cb40** sets the surface's viewport, sorted and clipped to the surface by
+  Surface_SetViewport 0x4392f0. The clip, Rect_Clip 0x43fb00, works from the sign bits of wrapping
+  differences.
+  - **Corners.** The near rectangle's corners are at z = 0.1. The far rectangle's are at
+    `z = range * zoom`, capped at 1500. The corners are what the clippers read as znear (+0x108) and zfar
+    (+0x138).
+  - **Planes.** There are six:
+    - four sides through the apex: left, right, top and bottom on the screen;
+    - the far plane through three far corners;
+    - the near plane through three near corners.
+
+    Each is turned to face the mean of the apex and the far corners.
+- **Plane_From 0x452480** takes `(b - a) x (c - a)` and normalizes it with Fast_InvSqrt 0x4529a0. That is
+  a 256-entry byte table of mantissas, indexed by the exponent's low bit and the top 7 mantissa bits, then
+  one Newton step and a factor of 1.00001.
+  - InvSqrt_Init 0x4516f0 builds the table at start; the port builds it on first use.
+  - Some products use an operand while it is still on the stack, unrounded; the port keeps those in
+    doubles.
+- **View_SetCamera 0x43cf00** takes a frame: 9 floats, then a double position at +0x28. It stores:
+  - the eye (+0x160);
+  - the far corners in world space (+0x178);
+  - their bounding box's centre (+0x80) and the largest distance from it to the eye or a corner (+0x98),
+    a sphere round the frustum;
+  - the inverse frame, Frame_Invert 0x452910 (thiscall): the transpose, and the position as
+    `-(row . pos)`.
+- **View_ToCamera 0x43d2d0** `(out, view, x, y, z)` takes the point as doubles and returns floats.
+- **View_TestSphere 0x43d180** `(view, centre, r)` tests a camera-space sphere. It returns 1 when the
+  sphere is wholly outside a plane, a negative value when it crosses one and 0 when it is inside.
+  - The near and far planes are tested by z alone.
+  - The sides are tested with `r * 1.1` and no plane distance, since they pass through the apex.
+  - Each test is a 2-bit code from the sign bits of the floats `d - r` and `d + r`.
+
+## The 3D math module (ported, diffed)
+
+`src/math3d.c` holds the module at 0x452480–0x452a90. A point is a row vector, `p' = p M + pos`. The frame
+has 9 floats, then a double position at +0x28. The routines are checked by `diff_view.py`.
+
+- **Frame_Mul 0x4527c0** `(out, a, b)` puts a inside b: `M = Ma Mb`, `pos = pos_a Mb + pos_b`. The
+  products are accumulated in the order `(k0 + k1) + k2`.
+- **Frame_Points 0x452740** `(out, in, n, frame)` transforms n float points and stores floats.
+- **Plane_Transform 0x452890** `(out, plane, frame)`:
+  - The normal is rotated to `n M` and kept unrounded on the stack.
+  - The distance becomes `d - (n M) . pos`.
+- Plane_From, Fast_InvSqrt and Frame_Invert are described above, under the view.

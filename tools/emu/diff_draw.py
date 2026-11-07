@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import x86  # noqa: E402
-from diff_clip import View, view_record  # noqa: E402
+from diff_clip import View, clip_view, view_record  # noqa: E402
 from diff_poly import MASK_STRIDE, RTAB, RTAB_SIZE, SHADOW_MASK, SHADOW_STRIDE, STALE_ROW, TEX_CACHE, Surface, \
     surface_record, texture  # noqa: E402
 
@@ -89,10 +89,8 @@ def main():
         buf = exe.put(dest)
         pixels = buf + MY * PITCH + MX
         surf = exe.put(surface_record(PITCH, pixels, 0, 0, W - 1, H - 1, 1))
-        v = View(320.0, 240.0, 300.0, 300.0, 0.0, 0.0, float(W), float(H), None, 1.0, 1000.0)
-        rec = bytearray(view_record(v))
-        struct.pack_into("<I", rec, 0x38, surf)
-        vp = exe.put(bytes(rec))
+        v = clip_view(320.0, 240.0, 300.0, 300.0, 0.0, 0.0, float(W), float(H), 1.0, 1000.0)
+        vp = exe.put(view_record(v, surf))
         ip = exe.put(verts)
         tex = texture(rng)
         tp = exe.put(tex)
