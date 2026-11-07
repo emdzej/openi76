@@ -68,6 +68,10 @@ CI and don't tag releases until the game is ported and the user asks.
    describe layouts, formulas and addresses.
 5. Community knowledge (Open76, the "That Tony" hackingonspace posts, old modding notes) may inform format
    understanding; the exe is the authority and no code is copied.
+6. **Explain the game, not only port it.** Keep `docs/re/` and `docs/formats/` accurate as each subsystem is
+   ported. When the game plays through, write `docs/guide/theory.md` (docs/re/port-plan.md step 13), the
+   theory of operation: how the game was designed and how it works, in prose, for someone who wants to build
+   such a game. No decompiler text, no game data, no addresses in the main text.
 
 ## Game data
 

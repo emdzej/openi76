@@ -195,7 +195,8 @@ Write one page per format under `docs/formats/` (internal; not published).
 
 ## 13. Theory of operation (after the port)
 
-- A published guide to how the game works, written from the finished port.
+- A published guide to how the game works (`docs/guide/theory.md`, AGENTS.md rule 6), written from the
+  finished port.
   It is for someone who wants to learn how to build a game like this, not a
   reverse-engineering log. It covers:
   - the program: start-up, the file index and archives, the frame loop, the
