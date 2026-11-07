@@ -2,6 +2,7 @@
 #include "render/sprite.h"
 #include "render/view.h"
 #include <stdlib.h>
+#include <string.h>
 
 Surface Surface_Make(int w, int h, uint8_t *pixels)
 {
@@ -60,4 +61,37 @@ void Sprite_Draw(Surface *dst, const Surface *src, int x0, int y0, int x1, int y
         s += row[f < fy];
         fy = f;
     }
+}
+
+void Surface_Blit(Surface *dst, const Surface *src, int x, int y, int mode)
+{
+    if (!dst->on || !src->on) return;
+    int r[4] = {dst->x0 + x, dst->y0 + y, 0, 0};
+    r[2] = src->x1 - src->x0 + r[0];
+    r[3] = src->y1 - src->y0 + r[1];
+    const int c[4] = {dst->x0, dst->y0, dst->x1, dst->y1};
+    if (Rect_Clip(r, c) < 0) return;
+    int sx = src->x0 - dst->x0 - x + r[0], sy = src->y0 - dst->y0 - y + r[1];
+    int w = r[2] - r[0] + 1, h = r[3] - r[1] + 1;
+    uint8_t *d = dst->pixels + r[1] * dst->pitch + r[0];
+    const uint8_t *s = src->pixels + src->pitch * sy + sx;
+    int step = src->pitch;
+    const uint8_t *t;
+    switch (mode) {
+    case 1: t = g_rtab + RT_REMAP; break;
+    case 2: t = g_rtab + RT_TBL; break;
+    /* mode 4: the table 0x5c0150 for rows of 8 or more, the remap table for narrower ones (quirk, kept) */
+    case 4: t = g_rtab + (w < 8 ? RT_REMAP : 0x11000); break;
+    case 5:   /* mode 1 with the source's rows read bottom up */
+        t = g_rtab + RT_REMAP;
+        s = src->pixels + (src->h - sy - 1) * src->pitch + sx;
+        step = -src->pitch;
+        break;
+    default: t = NULL; break;
+    }
+    for (; h > 0; h--, d += dst->pitch, s += step)
+        if (t)
+            for (int i = 0; i < w; i++) d[i] = t[(unsigned)s[i] << 8 | d[i]];
+        else
+            memcpy(d, s, (size_t)w);
 }

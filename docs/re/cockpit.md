@@ -30,6 +30,65 @@ It runs from the user's vehicle's start (0x4294e0), before the camera's `View_In
 **Checked:** `diff_objects --start` now runs the original's set-up rather than stubbing it. The data's
 part pointers (compared as nodes), the flags and the levels are identical on t01 and s01.
 
+## The cockpit's frame, Cockpit_Frame 0x426b60
+
+The vehicles' second per-frame handler (0x429d70) runs it for the user's vehicle (node flag 0x10), and
+then the engine's sound 0x468ac0 (not ported). In order:
+
+1. **The scales**, the first time only (0x425e50, flag 0x54fa10, cleared by the mission's cockpit
+   initialisation 0x426070). Each is 100 / a full count, as a float. They cover the 8 armour and chassis
+   words (data +0x158-0x174), and the engine (+0x3c4), the suspension (+0x3c8), the brakes (+0x3cc) and
+   the four tyres (+0x3b8, +0x3bc, +0x3a8, +0x3ac) by their getters' second count.
+2. **The needles.** Classes 35 and 36 keep their start frame in their data. A needle's frame is that frame
+   turned about y: the sine and cosine of the angle in a frame {c 0 -s; 0 1 0; s 0 c}. The degrees are the
+   value times a constant, less 360 above 180 (tested before rounding); the radians are stored at +0x44.
+   - The speedometer (+0x3f8) reads the engine's +0x24, at most 150 and 0 when negative (by its bits),
+     1.8533 degrees each.
+   - The tachometer (+0x3fc) reads the engine's +0x1c, at most 8400 by the bits, 0.028125 degrees each.
+   - Each also keeps a frame number for the flat gauges, the value times 0.19333 or 0.003625 truncated,
+     at most 29, at +0x48. With the flat cockpit the user's frame of `zsped`/`zrpms` is chosen and made a
+     surface (not ported yet).
+3. **The damage diagram** (0x427090), on the part at +0x420 and the texture `zsy_`. It has 8 zones:
+   front, left, right and back armour, then the same four of the chassis. Each is the data's +0x138 word
+   times its scale plus 0.5, truncated. Five levels cover the ranges: off 100, green 67-99, yellow 34-66,
+   red 1-33, dark 0 (tables of 0x18 bytes: a name of 16, then the range). The loop takes each level for
+   every zone in turn (zones in the order front, right, back, left armour, then front, right, back, left
+   chassis). When a zone's level differs from its last (0x550180) it pastes the level's picture at the
+   zone's region. The dark level also plays CWSTAT.WAV.
+4. **The warning lights** (0x4274d0), on +0x424's `zsy_` texture: the engine, the suspension, the brakes
+   and the four tyres, as percentages the same way, with the last levels at 0x54fa20. The dark level plays
+   CWSTAT.WAV and the part's GDSGC21-24.WAV.
+5. **The compass**, on +0x428's `zcm_` texture: the plain heading (0x42e440, the relations' cache's
+   +4, not the direction-turned one), plus 2pi when negative, in degrees. When it differs from the last
+   (0x5501a0) the strip `3left`-`3right` is copied into `3compass_window` from that fraction of a turn
+   along it.
+6. **The gear's indicator**, on +0x438's `zgear101.map`. When the gear (+0x104) changes it plays
+   VSHIF1A.WAV, clears `prnd` with `prndback` and pastes the `arrow` at the gear's region (park, reverse,
+   neutral, drive, second, first).
+7. Not ported yet: the handset (0x426970, the flat cockpit's) and the special weapons' panel (0x42d9d0,
+   its set-up 0x42dc00).
+
+The region names in the high resolutions drop their first character ("3farm" becomes "farm": the name
+pointer plus 0x4d4b8c).
+
+**Pasting pictures into textures.** The vehicles' ETBL tables name regions. Kind 1 (0x4e9228) gives a
+texture's regions, kind 0 (0x4e922c) a picture file's.
+
+- **`Tex_PutRegion` 0x481420.** It finds the picture's region (0x4815f0, the first kind 0 table having
+  it, which also gives the picture's name) and the texture's region (0x481570). It then makes the owner's
+  texture its own copy (`Tex_Writable` 0x47c650, the texture use's flag 1; the copy is freed when the
+  frame changes). The picture's region becomes the viewport. The picture's y counts from its bottom:
+  (x, h - y) to (x + w - 1, h - y - h' + 1). The viewport is blitted through the remap table (0x43d910
+  mode 1) at the texture region's x and (texture height - y - h').
+- **`Tex_PutStrip` 0x4819f0** copies a window of the first region's size (mode 0). The window starts at
+  the first's x plus (last x - first x) times the fraction, rounded; at the first's own x it is the
+  last's. Its viewport is one column and one row wider than 0x481420's.
+
+**Checked:** `--call cockpit` (case 53) runs five frames on the user's vehicle. Before each it changes the
+armour, the gear, the engine's revolutions and speed, empties the relations' cache, and turns the vehicle
+before the third. It compares the needles' frames and words and the CRC-32 of the four textures. It is
+identical on t01, s01, a01 and t10. Through it the harness stopped stubbing 0x481420.
+
 ## The drawing, Cockpit_Draw 0x4279c0
 
 Render_World calls it after the queue's flush when the cockpit flag 0x4a847c is 1. In the cockpit,

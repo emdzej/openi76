@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "render/sprite.h"
 
 typedef struct Material {   /* 0x34 bytes */
     struct Material *next;
@@ -173,7 +174,11 @@ bool Tex_SetFrame(uintptr_t owner, const char *name, int d, int value, bool upda
     const Material *m = u->mat;
     u->count[d] = (d ? m->stride[d - 1] : 1) * value;
     if (update) {
-        if (!(u->flags & 2)) Tex_PixelsRelease(u->frame);
+        if (u->flags & 1) {   /* a private copy (Tex_Writable) is freed */
+            free((void *)u->pixels);
+            u->flags &= ~1u;
+        } else if (!(u->flags & 2))
+            Tex_PixelsRelease(u->frame);
         int f = 0;
         for (int i = 0; i < m->dims; i++) f += u->count[i];
         copy15(u->frame, m->frames[f]);
@@ -181,6 +186,32 @@ bool Tex_SetFrame(uintptr_t owner, const char *name, int d, int value, bool upda
         u->flags |= 2;
     }
     return true;
+}
+
+Surface Tex_Writable(uintptr_t owner, const char *name)
+{
+    if (!owner || !name) return Surface_Make(0, 0, NULL);
+    TexUse *u = use_find(owner, name);
+    if (!u) {
+        Tex_Get(owner, name);
+        if (!(u = use_find(owner, name))) return Surface_Make(0, 0, NULL);
+    }
+    if (!(u->flags & 1)) {
+        if (u->flags & 2) {
+            u->pixels = Tex_Pixels(u->frame);
+            u->flags &= ~2u;
+        }
+        const Texture *src = u->pixels;
+        if (!src) return Surface_Make(0, 0, NULL);
+        size_t size = (size_t)src->w * (size_t)src->h + 8;
+        Texture *copy = malloc(size);
+        if (!copy) return Surface_Make(0, 0, NULL);
+        memcpy(copy, src, size);
+        u->pixels = copy;
+        u->flags |= 1;
+        Tex_PixelsRelease(u->frame);
+    }
+    return Surface_Make(u->pixels->w, u->pixels->h, ((Texture *)u->pixels)->pixels);
 }
 
 bool Tex_Refresh(uintptr_t owner)

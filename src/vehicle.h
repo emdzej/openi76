@@ -17,6 +17,16 @@ extern struct Cell *g_radar;      /* 0x4e9c20: the user's object loads its own .
 /* the per-mission set-up of WinMain's that concerns vehicles: the radar's 0x41fbc0 and the artillery's
    0x428d80 entity callbacks (before the collision's) */
 void Vehicle_Init(void);
+/* The effect tables (ETBL) as the cockpit's pictures use them. Kind 1 (0x4e9228) names a texture and its
+   regions; kind 0 (0x4e922c) names a picture file and regions of it. A region is 0x20 bytes: a name of 16,
+   then x, y, w, h. Etbl_Region 0x481570: table's region by name (NULL if none). Etbl_Source 0x4815f0: the
+   first kind 0 region of the name, with its table's name (13 characters); an empty name and zeros if none */
+typedef struct {
+    char name[16];
+    int32_t x, y, w, h;
+} EtblSource;
+const uint8_t *Etbl_Region(const char *table, const char *region);
+EtblSource Etbl_Source(const char *region);
 /* Vehicle_Load 0x485030: x->node's .vcf (path: the record's name and .vcf); the user's (node flag 0x10)
    is g_user_vcf's, and the node takes its name */
 bool Vehicle_Load(ObjCtx *x, const char *path);

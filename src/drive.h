@@ -10,6 +10,9 @@
    this frame (combat.c's cache); AI_HeadingNow computes it. */
 float AI_Heading(Node *n);
 float AI_HeadingNow(Node *n);
+/* Node_Heading 0x422200 (0x42e440): the same entry's plain heading, atan2 of the z axis's x and z, whatever
+   the vehicle's direction (the compass's) */
+float Node_Heading(Node *n);
 /* Angle_Diff 0x4137c0: b - a folded once into [-pi, pi] */
 double Angle_Diff(float a, float b);
 /* Dir_Cos 0x40f2d0: the cosine between b - a and p - a (1 when either is under 0.01 long) */

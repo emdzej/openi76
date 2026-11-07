@@ -961,6 +961,52 @@ def call_dash(exe, n, fpcw):
     exe.write(0x4DB008, bytes(4))
 
 
+def call_cockpit(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n or not u(n + 0x70):
+        return
+    for a, k in ((0x4765D0, 3), (0x426970, 0), (0x42D9D0, 1)):   # a sound; the handset, the specials' panel
+        exe.stub(a, lambda *x: 0, k)
+    d = u(n + 0x70)
+    hi = int(exe.read(0x5E14D0, 1)[0] < 6)
+    for k in range(5):
+        if k == 2:
+            for j in (0, 2, 6, 8):
+                a = n + 0x18 + 4 * j
+                exe.write(a, struct.pack("<I", u(a) ^ 0x80000000))
+        for i in range(8):
+            full = struct.unpack("<i", exe.read(d + 0x158 + 4 * i, 4))[0]
+            q = full * (4 - k)
+            v = (abs(q) // 4) * (1 if q >= 0 else -1) - i   # C's division
+            exe.write(d + 0x138 + 4 * i, struct.pack("<i", max(v, 0)))
+        exe.write(d + 0x104, struct.pack("<i", k))
+        eng = u(d + 0x3C4)
+        if eng and u(eng + 0x70):
+            exe.write(u(eng + 0x70) + 0x1C, struct.pack("<f", 1500.0 * k + 700.5))
+            exe.write(u(eng + 0x70) + 0x24, struct.pack("<f", 37.25 * k - 5.0))
+        exe.call(0x421FC0, limit=50_000_000, fpcw=rd)
+        exe.call(0x426B60, n, limit=500_000_000, fpcw=rd)
+        b = bytearray(2 * 0x48 + 16)
+        for i in range(2):
+            nd = u(d + 0x3F8 + 4 * i)
+            if not nd or not u(nd + 0x70):
+                continue
+            b[0x48 * i:0x48 * i + 0x40] = exe.read(nd + 0x18, 0x40)
+            b[0x48 * i + 0x24:0x48 * i + 0x28] = bytes(4)
+            b[0x48 * i + 0x40:0x48 * i + 0x48] = exe.read(u(nd + 0x70) + 0x44, 8)
+        for i, (o, t) in enumerate(((0x420, 0x4D48C8), (0x424, 0x4D48E2), (0x428, 0x4D48FC), (0x438, 0x4D4916))):
+            part = u(d + o)
+            c = 0
+            if part:
+                tx = exe.call(0x47C320, part, t + hi * 0xD, limit=50_000_000, fpcw=rd)
+                if tx:
+                    w, h = struct.unpack("<ii", exe.read(tx, 8))
+                    c = zlib.crc32(exe.read(tx + 8, w * h))
+            b[0x90 + 4 * i:0x94 + 4 * i] = struct.pack("<I", c)
+        CALL_OUT.append(bytes(b).hex())
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1035,7 +1081,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -1044,7 +1090,7 @@ START_LATER = (
                # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
                0x403360, 0x42DC00, 0x471060, 0x476240,
                # the weapons' display's (0x4561f0) drawing: the surface, the diodes, the names, the counters
-               0x4392B0, 0x456C10, 0x4569B0, 0x481420, 0x456CF0)
+               0x4392B0, 0x456C10, 0x4569B0, 0x456CF0)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}
 
 

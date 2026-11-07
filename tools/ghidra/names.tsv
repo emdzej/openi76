@@ -1063,3 +1063,16 @@
 00426410	Cockpit_Setup	cockpit	high	the user's cockpit: radar lock off, the dashboard's swap, the screen mode's parts (+0x420-0x438); ported but the pictures, the .tmt and the colours
 004279c0	Cockpit_Draw	cockpit	high	after the flush in the cockpit: the vehicle from inside (0x435be0) or the flat instruments; ported but the flat ones
 00435be0	Objects_DrawInside	render	high	a node's children at level 4 in the face BSP, drawn at once (the cockpit); ported, diffed
+00426b60	Cockpit_Frame	cockpit	high	the user's: needles, damage diagram, warning lights, compass, gear; ported, diffed (not the handset, the specials' panel)
+00425e50	Cockpit_Scales	cockpit	high	once: 100 / each zone's and part's full count; ported
+00426eb0	Cockpit_Speedometer	cockpit	high	the speedometer's needle (+0x3f8) by the engine's speed; ported
+00427090	Cockpit_Diagram	cockpit	high	the damage diagram's 8 zones pasted by level; ported, diffed
+004274d0	Cockpit_Lights	cockpit	high	the 7 warning lights pasted by level; ported, diffed
+00429d70	Vehicle_Frame2	vehicle	high	class 1's second frame: the user's cockpit (0x426b60), the engine's sound (0x468ac0)
+00481420	Tex_PutRegion	tex	high	a picture region through the remap table into an owner's texture region; ported, diffed
+004819f0	Tex_PutStrip	tex	high	a window along a strip copied into a texture region (the compass); ported, diffed
+00481570	Etbl_Region	tex	high	a kind 1 ETBL table's region by name; ported
+004815f0	Etbl_Source	tex	high	the first kind 0 region of a name, with its picture's name; ported
+0047c650	Tex_Writable	tex	high	the owner's texture made its own copy (flag 1), as a surface; ported, diffed
+0043d910	Surface_Blit	render	high	a surface onto another, modes 1 remap, 2 tbl, 4, 5 flipped, else copy; ported, diffed
+00422200	Node_Heading	combat	high	the relations' cache's plain heading (+4); ported

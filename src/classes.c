@@ -375,6 +375,13 @@ void Vehicle_Frame(Node *n)
 /* a per-frame handler not ported yet: present so that the class keeps its nodes listed */
 static void later(Node *n) { (void)n; }
 
+/* 0x429d70, a vehicle's second frame: for the user's, the cockpit (0x426b60) and the engine's sound
+   (0x468ac0, not ported) */
+static void vehicle_frame2(Node *n)
+{
+    if (n->flags & 0x10) Cockpit_Frame(n);   /* 0x42e620 */
+}
+
 typedef void (*ClassFn)(Node *);
 static const struct {
     int32_t cls;
@@ -382,7 +389,7 @@ static const struct {
 } handlers[] = {
     {2, start_structure, {NULL, NULL}},     /* 0x4306c0 */
     {4, start_structure, {NULL, NULL}},     /* 0x434930 */
-    {1, start_vehicle, {Vehicle_Frame, later}},   /* 0x4294e0; 0x429c70, 0x429d70 */
+    {1, start_vehicle, {Vehicle_Frame, vehicle_frame2}},   /* 0x4294e0; 0x429c70, 0x429d70 */
     {9, start_class9, {later, NULL}},       /* 0x4313f0; 0x4314a0 */
     {8, start_artillery, {later, NULL}},    /* 0x428910; 0x428950 */
     {7, start_class7, {later, NULL}},       /* 0x432b90; 0x432c70 */

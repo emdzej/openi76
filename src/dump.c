@@ -341,6 +341,9 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "roads.h"
 #include "roadwar.h"
 #include "combat.h"
+#include "cockpit.h"
+#include "tex.h"
+#include "settings.h"
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 /* the calls' results, a line per vehicle (Dump_CallOut) */
 static char call_out[1 << 23];
@@ -1150,6 +1153,54 @@ int Dump_CallVehicles(int which, int upside)
             if (which == 50) {
                 if (g_camera_mode == 8) Camera_Pop();   /* the stack as it was for the next vehicle */
                 n->flags = flags;
+            }
+            break;
+        }
+        case 53: {   /* the cockpit's frame (0x426b60) on the user's vehicle, five frames. Before each: the armour
+                        and chassis words at (4 - k) quarters of their full less the zone's number (not below 0),
+                        the gear k, the engine's revolutions 1500 k + 700.5 and speed 37.25 k - 5, the relations'
+                        cache emptied (0x421fc0), n turned half round about y before the third. After each: the
+                        needles' frames and words +0x44, +0x48, and the CRC-32 of the cockpit's four textures */
+            uint8_t *d = n->data;
+            if (!g_user_entity || g_user_entity->node != n || !d) break;
+            int hi = g_detail.b[DET_SCREEN] < 6;
+            static const uint32_t tex[4] = {0x4d48c8, 0x4d48e2, 0x4d48fc, 0x4d4916};
+            for (int k = 0; k < 5; k++) {
+                if (k == 2)
+                    for (int j = 0; j < 9; j += 2)
+                        if (j != 4) n->frame.m[j] = -n->frame.m[j];
+                for (int i = 0; i < 8; i++) {
+                    int32_t full;
+                    memcpy(&full, d + 0x158 + 4 * i, 4);
+                    int32_t v = full * (4 - k) / 4 - i;
+                    put32(d + 0x138 + 4 * i, v < 0 ? 0 : v);
+                }
+                put32(d + 0x104, k);
+                Node *eng = *Data_Ptr(d, 0x3c4);
+                if (eng && eng->data) {
+                    float rpm = 1500.0f * (float)k + 700.5f, sp = 37.25f * (float)k - 5.0f;
+                    memcpy(eng->data + 0x1c, &rpm, 4);
+                    memcpy(eng->data + 0x24, &sp, 4);
+                }
+                Rel_Clear();
+                g_fpu_round = FPU_DOWN;
+                Cockpit_Frame(n);
+                uint8_t b[2 * 0x48 + 16];
+                memset(b, 0, sizeof b);
+                for (int i = 0; i < 2; i++) {
+                    Node *nd = *Data_Ptr(d, 0x3f8 + 4 * i);
+                    if (!nd || !nd->data) continue;
+                    memcpy(b + 0x48 * i, &nd->frame, 0x40);
+                    memset(b + 0x48 * i + 0x24, 0, 4);
+                    memcpy(b + 0x48 * i + 0x40, nd->data + 0x44, 8);
+                }
+                for (int i = 0; i < 4; i++) {
+                    Node *part = *Data_Ptr(d, i < 3 ? 0x420 + 4 * i : 0x438);
+                    const Texture *t = part ? Tex_Get((uintptr_t)part, exe_str(tex[i] + (uint32_t)hi * 0xd)) : NULL;
+                    uint32_t c = t ? crc32(t->pixels, (size_t)t->w * (size_t)t->h) : 0;
+                    memcpy(b + 0x90 + 4 * i, &c, 4);
+                }
+                call_line(b, sizeof b);
             }
             break;
         }

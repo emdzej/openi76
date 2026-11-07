@@ -5,10 +5,20 @@
 #include <stdint.h>
 #include "scene.h"
 #include "render/view.h"
+#include "render/surface.h"
 
 extern Node *g_dash_alt;    /* 0x4d52d0: the part textured zretc_6, hidden at the set-up */
 extern Node *g_dash_main;   /* 0x4d52d4: the part textured zretc_1, shown at the set-up */
 extern int32_t g_dash_on;   /* 0x550638: the swapped dashboard shown (the view 0xc) */
+
+/* Tex_PutRegion 0x481420: the picture region (Etbl_Source) drawn through the remap table onto owner's own
+   copy of texture tex (Tex_Writable) at its region (Etbl_Region); the texture's surface into *out and
+   returned (*out unchanged when nothing is drawn) */
+Surface Tex_PutRegion(uintptr_t owner, const char *tex, const char *region, const char *picture, Surface *out);
+/* Tex_PutStrip 0x4819f0: a window of a strip copied onto tex's region: the first region's size, from a
+   place f of the way along to the last's (the compass); an empty surface when nothing is drawn */
+Surface Tex_PutStrip(uintptr_t owner, const char *tex, const char *region, const char *first, const char *last,
+                     float f);
 
 /* Cockpit_Setup 0x426410 (the user's vehicle's start, 0x4294e0): the radar's lock let go (0x421480), the
    dashboard's swap set up, the screen mode's parts chosen (zsy_, zcm_: the high resolutions' below mode 6,
@@ -16,6 +26,11 @@ extern int32_t g_dash_on;   /* 0x550638: the swapped dashboard shown (the view 0
    +0x438), shown. Not ported yet: the instruments' pictures (ztarg, zretc), their tables (.tmt) and
    colours */
 void Cockpit_Setup(Node *n);
+/* Cockpit_Frame 0x426b60 (the user's vehicle's second frame, 0x429d70): the first time the parts' scales
+   (0x425e50); the speedometer's and the tachometer's needles; the damage diagram, the warning lights, the
+   compass and the gear's indicator, pasted into the cockpit's textures when they change. Not ported yet:
+   the flat cockpit's gauge frames, the handset (0x426970) and the special weapons' panel (0x42d9d0) */
+void Cockpit_Frame(Node *n);
 /* Cockpit_Draw 0x4279c0 (Render_World's after the flush, in the cockpit): with the detail byte 8 (the
    default) the camera's vehicle drawn from inside (0x435be0); without it the 2D instruments, not ported
    yet */

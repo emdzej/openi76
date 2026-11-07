@@ -76,6 +76,35 @@ static void etbl_add(const uint8_t *t)
     }
 }
 
+const uint8_t *Etbl_Region(const char *table, const char *region)
+{
+    const EffectTable *e = etables[1];
+    while (e && crt_stricmp((const char *)e->data, table) != 0) e = e->next;
+    if (!e) return NULL;
+    int32_t n = rd32(e->data + 0x11);
+    for (int32_t i = 0; i < n; i++) {
+        const uint8_t *r = e->data + 0x15 + 0x20 * i;
+        if (crt_stricmp((const char *)r, region) == 0) return r;
+    }
+    return NULL;
+}
+
+EtblSource Etbl_Source(const char *region)
+{
+    EtblSource out = {{0}, 0, 0, 0, 0};
+    for (const EffectTable *e = etables[0]; e; e = e->next) {
+        int32_t n = rd32(e->data + 0x11);
+        for (int32_t i = 0; i < n; i++) {
+            const uint8_t *r = e->data + 0x15 + 0x20 * i;
+            if (crt_stricmp((const char *)r, region) != 0) continue;
+            strncpy(out.name, (const char *)e->data, 0xd);
+            out.x = rd32(r + 0x10), out.y = rd32(r + 0x14), out.w = rd32(r + 0x18), out.h = rd32(r + 0x1c);
+            return out;
+        }
+    }
+    return out;   /* the name 0x4e9230 (empty) and zeros */
+}
+
 /* ---- the .vdf ---- */
 
 /* VDFC 0x4856b0: the class, its mass, the SDFC-like five words */

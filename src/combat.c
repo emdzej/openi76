@@ -56,7 +56,7 @@ void Node_CentreNow(float out[4], Node *n)
    first: its distances from that one's centre less the other's, rounded so, its headings each from the
    difference taken its own way. The port orders the nodes by when they were made (Node.serial), as the
    heap hands them out. The original's hash chains only find entries; a list does the same. */
-typedef struct { Node *n; float h, c[4]; } RelNode;
+typedef struct { Node *n; float hp, h, c[4]; } RelNode;   /* hp (+4) the plain heading, h (+8) the vehicles' by direction */
 typedef struct { Node *lo, *hi; float d2, d3, a_lh, a_hl, v_lh[3]; } RelPair;   /* v_lh: hi's centre less lo's */
 #define REL_NODES 200
 #define REL_PAIRS 2048
@@ -75,6 +75,8 @@ static const RelNode *rel_node_of(Node *n)
     RelNode *e = rel_nodes < REL_NODES ? &rel_node[rel_nodes++] : &spare;   /* the original runs off its table */
     if (e == &spare) plat_log("OpenI76: the relations' node table is full");
     e->n = n;
+    const float *m = n->frame.m;
+    e->hp = fabsf(m[6]) == 0 && fabsf(m[8]) == 0 ? 0 : F32(atan2(m[6], m[8]));   /* fpatan */
     e->h = AI_HeadingNow(n);
     Node_CentreNow(e->c, n);
     return e;
@@ -104,6 +106,7 @@ static const RelPair *rel_pair_of(Node *a, Node *b)
 }
 
 float AI_Heading(Node *n) { return rel_node_of(n)->h; }
+float Node_Heading(Node *n) { return rel_node_of(n)->hp; }
 
 void Node_Centre(float out[4], Node *n) { memcpy(out, rel_node_of(n)->c, 4 * sizeof out[0]); }
 
