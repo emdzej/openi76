@@ -30,6 +30,45 @@ class TerrEdge(ctypes.Structure):
                 ("d", ctypes.c_double)]
 
 
+def random_view(lib, rng, mode):
+    """A view (the port's View_Create, View_SetCamera) over the random zones of setup_grid (cells 3072-3840):
+    level-ish like a car's camera or any rotation, the eye from under the ground to 500 m above it."""
+    px = ctypes.create_string_buffer(640 * 480)
+    s = Surface(640, ctypes.cast(px, ctypes.c_void_p), 0, 0, 639, 479, 1, 640, 480)
+    v = View()
+    mode.value = 0
+    lib.View_Create(ctypes.byref(v), ctypes.byref(s), rng.choice((math.pi / 2, rng.uniform(0.8, 2.3))),
+                    rng.uniform(0.6, 1.4), rng.choice((150.0, rng.uniform(100, 1000))), 1.0)
+    f = Frame()
+    if rng.random() < 0.5:
+        yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.6, 0.3)
+        cy, sy, cp, sp = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
+        f.m[:] = [cy, 0, -sy, sy * sp, cp, cy * sp, sy * cp, -sp, cy * cp]
+    else:
+        f.m[:] = rotation(rng)
+    x, z = rng.uniform(-200, 4000), rng.uniform(-200, 4000)
+    mode.value = 0
+    gh = lib.Terrain_Height(x, z)
+    f.pos[:] = [x, gh + rng.choice((rng.uniform(-1, 0.05), rng.uniform(0.5, 5), rng.uniform(5, 500))), z]
+    mode.value = 0
+    lib.View_SetCamera(ctypes.byref(v), ctypes.byref(f))
+    v._surface = (s, px)   # kept alive
+    return v
+
+
+def setup(argv0=None):
+    """The emulator, the port and their common set-up for the terrain tests."""
+    exe = x86.Exe()
+    lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    argv, down = x86.rounding(exe, lib, sys.argv)
+    lib.View_Create.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Surface)] + [ctypes.c_float] * 4
+    lib.View_SetCamera.argtypes = [ctypes.POINTER(View), ctypes.POINTER(Frame)]
+    lib.Terrain_Height.restype = ctypes.c_double
+    lib.Terrain_Height.argtypes = [ctypes.c_double] * 2
+    exe.call(0x4516F0)   # the inverse square root's table
+    return exe, lib, argv, down
+
+
 def main():
     exe = x86.Exe()
     lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
@@ -68,25 +107,7 @@ def main():
         lib.Terr_Plane(ctypes.byref(e), *p)
         w = exe.read(out, 24)
         check("plane", w[:12] + w[16:] == bytes(e)[:12] + bytes(e)[16:], f"{w.hex()} {bytes(e).hex()}")
-        # the pass: a view over the random zones (cells 3072-3840)
-        s = Surface(640, None, 0, 0, 639, 479, 1, 640, 480)
-        v = View()
-        mode.value = 0
-        lib.View_Create(ctypes.byref(v), ctypes.byref(s), rng.choice((math.pi / 2, rng.uniform(0.8, 2.3))),
-                        rng.uniform(0.6, 1.4), rng.choice((150.0, rng.uniform(100, 1000))), 1.0)
-        f = Frame()
-        if rng.random() < 0.5:   # level-ish, as a car's camera
-            yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.6, 0.3)
-            cy, sy, cp, sp = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
-            f.m[:] = [cy, 0, -sy, sy * sp, cp, cy * sp, sy * cp, -sp, cy * cp]
-        else:
-            f.m[:] = rotation(rng)
-        x, z = rng.uniform(-200, 4000), rng.uniform(-200, 4000)
-        mode.value = 0
-        gh = lib.Terrain_Height(x, z)
-        f.pos[:] = [x, gh + rng.choice((rng.uniform(-1, 0.05), rng.uniform(0.5, 5), rng.uniform(5, 500))), z]
-        mode.value = 0
-        lib.View_SetCamera(ctypes.byref(v), ctypes.byref(f))
+        v = random_view(lib, rng, mode)
         vp = exe.put(view_record(v))
         for a in ints:
             exe.write(a, bytes(4))

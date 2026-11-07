@@ -1,6 +1,7 @@
 /* The terrain's renderer (0x48e8d0-0x491180; docs/re/terrain.md, "The renderer"). */
 #pragma once
 #include <stdint.h>
+#include "render/surface.h"
 #include "render/view.h"
 
 /* an edge of the view's ground footprint (0x5e3100, 24 bytes): a plane facing the footprint's inside */
@@ -23,3 +24,36 @@ int Terrain_Visible(const View *v);
 void Terr_Plane(TerrEdge *out, const double p[3], const double q[3], const double r[3]);
 /* 0x48e3f0: the hull's key from a to b: their angle about y (0-2pi) times 1e7, plus their distance squared */
 double Terr_Key(const double a[3], const double b[3]);
+
+/* A quadtree node (0x30 bytes in the original, from the pool at 0x58dcb4): a square of 2^level cells at
+   (x, z), its four children (0: x, z; 1: x + h, z; 2: x, z + h; 3: x + h, z + h, each NULL if culled), and
+   its vertices: v[0], v[2], v[4], v[6] the corners (x, z), (x + s, z), (x + s, z + s), (x, z + s); v[1],
+   v[3], v[5], v[7] the edges' midpoints when a finer neighbour put one there (-1 none). count is the
+   vertices it has (4 + midpoints); flags the last midpoint's slot. */
+typedef struct TNode {
+    struct TNode *next;       /* +0: the leaves' list */
+    struct TNode *child[4];   /* +4 */
+    int16_t split;            /* +0x14 */
+    int16_t x, z, level;      /* +0x16 */
+    int16_t count;            /* +0x1c */
+    int16_t flags;            /* +0x1e */
+    int16_t v[8];             /* +0x20 */
+} TNode;
+
+enum { TERR_NODES = 0x40000 / 0x30, TERR_VERTS = 0x1a5e0 / 12 };
+extern TNode *g_terr_leaves;              /* 0x5824a4: the leaves, in order */
+extern float (*g_terr_vert)[3];           /* 0x58dcb0: the vertices (cells, raw height; camera space once transformed) */
+extern int32_t g_terr_nverts;             /* 0x5e30e8 */
+extern float g_terr_split;                /* 0x5e30c8: |sx| / (pitch / 2) * lod */
+extern float g_terr_eye[3];               /* 0x5e30f4, 0x5e30f8, 0x5e30fc: the eye in cells (y * 0.625) */
+extern int32_t g_terr_eye_x, g_terr_eye_z; /* 0x5e30d4, 0x5e30d8 */
+extern float g_terr_low;                  /* 0x5e30f0: the lowest vertex's height (m) */
+
+/* Terrain_Draw 0x48e8d0: the view's terrain into the render queue (or, with the eye under the ground, the
+   surface filled with colour 0xb4) */
+void Terrain_Draw(const View *v);
+/* Surface_Fill 0x439390 */
+void Surface_Fill(Surface *s, uint8_t c);
+/* the patch drawer Terrain_Draw ends with (0x48f7b0, or 0x48ffa0 with the setting DET_TERRTEX); tests
+   replace it */
+extern void (*g_terr_patches)(void);

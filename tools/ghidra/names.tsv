@@ -180,3 +180,13 @@
 0048e820	Terrain_Setup	terrain	high	lod, cell size, zone grid
 00494bc0	Terrain_Tdef	terrain	high	the TDEF walk: TREV, ZMAP, ZONE, EXIT
 0044e260	Settings_Defaults	settings	high	the detail preset by machine class
+0048e8d0	Terrain_Draw	terrain	high	the view's terrain: footprint, quadtree (rounding down), vertices, then the patch drawer; ported, diffed
+0048f090	Terr_Quad	terrain	high	the quadtree: cull, node, split test, four children, stitching
+0048f270	Terr_Cull	terrain	high	a square's circle (s/2 * 1.42) against the footprint's edges
+0048f720	Terr_Split	terrain	high	split when the far corner is within sqrt(k) * s of the eye
+0048f360	Terr_Stitch	terrain	high	the midpoint vertices between a split node and its unsplit neighbour
+0048f330	Terr_AddLeaf	terrain	high	appends a leaf to the list 0x5824a4
+00491d90	Terr_NewNode	terrain	high	a 0x30-byte node, its corner vertices
+00491e90	Terr_NewVert	terrain	high	a vertex (x, raw height, z) in cells
+00492090	Terr_Transform	terrain	high	the vertices into camera space; the queue's zmin/zmax
+00439390	Surface_Fill	render	high	fills an 8-bit surface with one colour
