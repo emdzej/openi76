@@ -173,6 +173,11 @@ bool Draw_Init(char *err, size_t cap)
     return true;
 }
 
+int Draw_Clip(const View *view, void *out, void *in, int n, int mode)
+{
+    return clip_table[mode & 0x1ff] ? clip_table[mode & 0x1ff](view, out, in, n, mode) : 0;
+}
+
 /* DrawPoly 0x43d730 */
 void DrawPoly(const View *view, void *verts, int n, PolyArg arg, int mode)
 {

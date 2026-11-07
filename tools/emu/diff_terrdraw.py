@@ -46,6 +46,7 @@ def main():
     for a in (0x48F7B0, 0x48FFA0):
         exe.stub(a, lambda: 0, 0)
     exe.stub(0x439390, lambda s, c: 0, 2)
+    ctypes.c_void_p.in_dll(lib, "g_terr_patches").value = None   # the port's drawer, off
     leaves_p = ctypes.POINTER(TNode).in_dll(lib, "g_terr_leaves")
     nverts = ctypes.c_int32.in_dll(lib, "g_terr_nverts")
     vert_p = ctypes.POINTER(ctypes.c_float).in_dll(lib, "g_terr_vert")

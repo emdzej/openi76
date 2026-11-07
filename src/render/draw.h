@@ -21,6 +21,9 @@ bool Draw_Init(char *err, size_t cap);
    projected and filled per mode (9 bits). One vertex is a point, two a line. The clippers may modify the
    vertices (see clip.h). */
 void DrawPoly(const View *view, void *verts, int n, PolyArg arg, int mode);
+/* the clip table's routine for a mode (0x4d7488[mode]): in's n vertices clipped and projected into out
+   (which may be in); the vertices left */
+int Draw_Clip(const View *view, void *out, void *in, int n, int mode);
 /* DrawPoint 0x43d390: a 2 x 2 dot, drawn only when the screen is taller than 480 rows. */
 void DrawPoint(const View *view, const CamVert *v, uint8_t colour);
 /* DrawLine 0x43d4c0: a, b clipped to the near and far planes in place (x, y, z only), projected and drawn;

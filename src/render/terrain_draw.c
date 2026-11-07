@@ -2,7 +2,10 @@
    rounding down. */
 #include "render/terrain_draw.h"
 #include "math3d.h"
+#include "render/draw.h"
+#include "render/light.h"
 #include "render/queue.h"
+#include "res.h"
 #include "settings.h"
 #include "terrain.h"
 #include "render/fpu.h"
@@ -30,7 +33,12 @@ float g_terr_eye[3];
 int32_t g_terr_eye_x, g_terr_eye_z;
 float g_terr_low;
 static const View *cur_view;             /* 0x5e30d0 */
-void (*g_terr_patches)(void);
+TerrLevel g_terr_level[7];
+float g_terr_sun[3];
+float g_terr_ambient;
+static float sun_sign;                   /* 0x58a4c0: -1 */
+static void draw_patches(void);
+void (*g_terr_patches)(void) = draw_patches;
 
 static bool below(double a, double b) { return a < b || isnan(a) || isnan(b); }      /* C0 */
 static bool below_eq(double a, double b) { return a <= b || isnan(a) || isnan(b); }  /* C0 | C3 */
@@ -404,6 +412,169 @@ void Terrain_Draw(const View *v)
     g_fpu_round = saved;
     if (g_terr_leaves) {
         transform();
-        if (g_terr_patches) g_terr_patches();
+        if (g_terr_patches) g_terr_patches();   /* the tests' replacement; else as the original */
+    }
+}
+
+/* Terrain_LoadTextures 0x48e550: with DET_TERRTEX, the seven levels' textures (the first row's three names;
+   levels 3-6 share level 2's), their modes (0xf4, untiled, while a level's texture spans at most about one
+   unit, its bits up to 0x3f800054; else 0xf6) and their texture coordinates: a 3 x 3 grid of steps of half
+   the level's span, which is cell * 0.025 at level 0 and doubles per level. The grid goes to the slots of
+   0x4eb0f8 (the corners and midpoints, clockwise from (x, z)); the centre goes to slot 4 and the far corner
+   then overwrites it. */
+void Terrain_LoadTextures(void)
+{
+    static const int8_t slot[9] = {0, 1, 2, 7, 4, 3, 6, 5, 4};
+    if (!g_detail.b[DET_TERRTEX]) return;
+    float span = F32(MUL(g_cell, 0.025f));   /* 0x4a7500 */
+    for (int i = 0; i < 7; i++) {
+        TerrLevel *l = &g_terr_level[i];
+        l->tex.tex = i < 3 ? (const Texture *)Res_Get(g_terrain_tex[i], NULL) : g_terr_level[2].tex.tex;
+        int32_t bits;
+        memcpy(&bits, &span, 4);
+        l->mode = bits > 0x3f800054 ? 0xf6 : 0xf4;
+        float step = F32(MUL(span, 0.5f)), v = 0;
+        for (int r = 0; r < 9; r += 3) {
+            float u = 0;
+            for (int c = 0; c < 3; c++) {
+                l->uv[slot[r + c]][0] = u;
+                l->uv[slot[r + c]][1] = v;
+                u = F32(ADD(u, step));
+            }
+            v = F32(ADD(v, step));
+        }
+        span = F32(MUL(span, 2.0f));
+    }
+}
+
+/* Terrain_FreeTextures 0x48e650: a level with a texture releases the name at its index, so levels 3-5
+   release the second row's names, which it never took. (Level 6's would be the 16 bytes past the six names,
+   0x58a528; the port has none to release.) */
+void Terrain_FreeTextures(void)
+{
+    for (int i = 0; i < 6; i++)
+        if (g_terr_level[i].tex.tex) Res_Release(g_terrain_tex[i]);
+    memset(g_terr_level, 0, sizeof g_terr_level);
+}
+
+/* 0x48e690 */
+void Terrain_ReloadTextures(void)
+{
+    Terrain_FreeTextures();
+    Terrain_LoadTextures();
+}
+
+double Terrain_Shade(float a, float b, float c, float z)
+{
+    float l = F32(MUL(ADD(ADD(MUL(b, g_terr_sun[1]), MUL(c, g_terr_sun[2])), MUL(a, g_terr_sun[0])), sun_sign));
+    if (below(l, 0.0)) l = 0;
+    float f = F32(ADD(MUL(g_light_k[1], z), g_light_k[0]));
+    if (below(f, 0.75)) f = 0.75f;   /* 0x4a7560 */
+    int32_t fb;
+    memcpy(&fb, &f, 4);
+    if (fb > 0x3f800000) f = 1.0f;
+    return ADD(MUL(l, f), g_terr_ambient);
+}
+
+/* a polygon of the patch drawer into the queue: the vertices with their level's texture coordinates (slot
+   k's, plus the patch's offset in its 8 x 8 tile) and the shade q; queued at its farthest vertex once
+   clipped and projected in place (then drawn as screen-space vertices, mode bit 3, without bit 4) */
+static void patch_poly(int n, const int16_t *vi, const int *slots, const TerrLevel *l, float du, float dv,
+                       float q)
+{
+    QRec *r = Queue_New();
+    r->type = 0;
+    r->mode = l->mode;
+    r->arg = l->tex;
+    for (int k = 0; k < n; k++) {
+        const float *p = verts[vi[k]];
+        CamVert *v = &r->u.v[k];
+        v->x = p[0], v->y = p[1], v->z = p[2];
+        v->u = F32(ADD(l->uv[slots[k]][0], du));
+        v->v = F32(ADD(l->uv[slots[k]][1], dv));
+        v->q = q;
+    }
+    r->n = n;
+    float z = r->u.v[0].z;
+    for (int k = 1; k < n; k++)
+        if (!below_eq(SUB(r->u.v[k].z, z), 0.0)) z = r->u.v[k].z;
+    r->z = z;
+    r->n = Draw_Clip(cur_view, r->u.v, r->u.v, n, r->mode);
+    if (r->n) {
+        Queue_Add(r->z);
+        r->mode = (r->mode & ~0x10) | 8;
+    }
+}
+
+/* a plane's d below zero by its bits (as unsigned, above 0x80000000): the camera on its front side */
+static bool facing(const float p[4])
+{
+    uint32_t b;
+    memcpy(&b, &p[3], 4);
+    return b > 0x80000000u;
+}
+
+/* Terrain_DrawPatches 0x48ffa0 (DET_TERRTEX): every leaf into the queue, textured by its level and shaded
+   by the sun in camera space (0x5824b0) and Light_Strength2 (0x5824a0). A leaf without midpoints is one
+   quad when its two triangles (v0 v2 v4, v0 v4 v6) are near coplanar (their normals' dot above 0.995) and
+   both face the camera, else each triangle that faces it; one with midpoints is a fan about its last
+   midpoint over its other vertices, each triangle that faces the camera. A polygon's shade is from its
+   first plane and its first vertex's depth. */
+static void draw_patches(void)
+{
+    if (!g_detail.b[DET_TERRTEX]) return;   /* 0x48f7b0 is not ported yet */
+    const float *m = cur_view->cam.m, *s = g_sun;
+    g_terr_sun[0] = F32(ADD(ADD(MUL(m[3], s[1]), MUL(m[6], s[2])), MUL(m[0], s[0])));
+    g_terr_sun[1] = F32(ADD(ADD(MUL(m[7], s[2]), MUL(m[1], s[0])), MUL(m[4], s[1])));
+    g_terr_sun[2] = F32(ADD(ADD(MUL(m[5], s[1]), MUL(m[2], s[0])), MUL(m[8], s[2])));
+    g_terr_ambient = Light_Strength2();
+    sun_sign = -1.0f;
+    for (TNode *t = g_terr_leaves; t; t = t->next) {
+        const TerrLevel *l = &g_terr_level[t->level];
+        if (t->flags == 0) {
+            float p1[4], p2[4];
+            Plane_From(p1, verts[t->v[0]], verts[t->v[2]], verts[t->v[4]]);
+            Plane_From(p2, verts[t->v[0]], verts[t->v[4]], verts[t->v[6]]);
+            double dot = ADD(ADD(MUL(p2[1], p1[1]), MUL(p2[2], p1[2])), MUL(p2[0], p1[0]));
+            bool f1 = facing(p1), f2 = facing(p2);
+            if (!below_eq(dot, 0.995f) && f1 && f2) {   /* 0x4a755c */
+                float q = F32(Terrain_Shade(p1[0], p1[1], p1[2], verts[t->v[0]][2]));
+                float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));   /* 0x4a7564 */
+                int16_t vi[4] = {t->v[0], t->v[2], t->v[4], t->v[6]};
+                patch_poly(4, vi, (const int[]){0, 2, 4, 6}, l, du, dv, q);
+                continue;
+            }
+            if (f1) {
+                float q = F32(Terrain_Shade(p1[0], p1[1], p1[2], verts[t->v[0]][2]));
+                float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));
+                int16_t vi[3] = {t->v[0], t->v[2], t->v[4]};
+                patch_poly(3, vi, (const int[]){0, 2, 4}, l, du, dv, q);
+            }
+            if (f2) {
+                float q = F32(Terrain_Shade(p2[0], p2[1], p2[2], verts[t->v[0]][2]));
+                float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));
+                int16_t vi[3] = {t->v[0], t->v[4], t->v[6]};
+                patch_poly(3, vi, (const int[]){0, 4, 6}, l, du, dv, q);
+            }
+            continue;
+        }
+        /* the fan: the next slot clockwise (0x4eb0d8), past one without a vertex */
+#define NEXT(k) ((k) + 1 & 7)
+#define NEXT_V(k) (t->v[NEXT(k)] == -1 ? NEXT(NEXT(k)) : NEXT(k))
+        int pivot = t->flags, b = NEXT_V(pivot), c = NEXT_V(b);
+        float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));
+        for (int k = t->count - 2; k > 0; k--) {
+            float p[4];
+            Plane_From(p, verts[t->v[pivot]], verts[t->v[b]], verts[t->v[c]]);
+            if (facing(p)) {
+                float q = F32(Terrain_Shade(p[0], p[1], p[2], verts[t->v[pivot]][2]));
+                int16_t vi[3] = {t->v[pivot], t->v[b], t->v[c]};
+                patch_poly(3, vi, (const int[]){pivot, b, c}, l, du, dv, q);
+            }
+            b = c;
+            c = NEXT_V(c);
+        }
+#undef NEXT
+#undef NEXT_V
     }
 }

@@ -190,3 +190,9 @@
 00491e90	Terr_NewVert	terrain	high	a vertex (x, raw height, z) in cells
 00492090	Terr_Transform	terrain	high	the vertices into camera space; the queue's zmin/zmax
 00439390	Surface_Fill	render	high	fills an 8-bit surface with one colour
+0048ffa0	Terrain_DrawPatches	terrain	high	the textured patch drawer (0x5e14db): quads, triangles, fans into the queue; ported, diffed
+0048ff10	Terrain_Shade	terrain	high	a patch's light: sun on the normal, depth falloff 0.75-1, plus the ambient
+0048e550	Terrain_LoadTextures	terrain	high	the seven texture levels: textures, modes, slot coordinates (0x5821c8)
+0048e650	Terrain_FreeTextures	terrain	high	releases the levels' names and clears the levels
+0048e690	Terrain_ReloadTextures	terrain	high	free, then load
+0048e810	Terrain_Low	terrain	high	the lowest vertex's height (0x5e30f0)

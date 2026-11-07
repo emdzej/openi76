@@ -1,6 +1,7 @@
 /* The terrain's renderer (0x48e8d0-0x491180; docs/re/terrain.md, "The renderer"). */
 #pragma once
 #include <stdint.h>
+#include "render/draw.h"
 #include "render/surface.h"
 #include "render/view.h"
 
@@ -57,3 +58,22 @@ void Surface_Fill(Surface *s, uint8_t c);
 /* the patch drawer Terrain_Draw ends with (0x48f7b0, or 0x48ffa0 with the setting DET_TERRTEX); tests
    replace it */
 extern void (*g_terr_patches)(void);
+
+/* a texture level (0x5821c8, 0x68 bytes, seven of them): the texture coordinates of the patch's eight
+   vertex slots (u, v and an unused third), its texture (+0x60) and DrawPoly mode (+0x64) */
+typedef struct {
+    float uv[8][3];
+    PolyArg tex;
+    int32_t mode;
+} TerrLevel;
+extern TerrLevel g_terr_level[7];
+extern float g_terr_sun[3];   /* 0x5824b0: the sun's direction in camera space */
+extern float g_terr_ambient;  /* 0x5824a0: Light_Strength2 */
+
+/* Terrain_LoadTextures 0x48e550, Terrain_FreeTextures 0x48e650, Terrain_ReloadTextures 0x48e690 */
+void Terrain_LoadTextures(void);
+void Terrain_FreeTextures(void);
+void Terrain_ReloadTextures(void);
+/* Terrain_Shade 0x48ff10: a polygon's light: the sun on its normal (a, b, c; camera space, none from
+   behind) times a depth falloff k1 * z + k0 (g_light_k) held to 0.75-1, plus the ambient. Unrounded. */
+double Terrain_Shade(float a, float b, float c, float z);
