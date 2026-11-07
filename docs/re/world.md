@@ -5,6 +5,32 @@ A mission (`.msn`) is a BWD2 file read through the table at 0x4e9770, whose entr
 textures, time of day and lighting. Port: `src/world.c`, `src/terrain.c`, `src/render/light.c`; test
 `tests/world_test.c` (all 39 missions of disc 1).
 
+## Mission_Load 0x484410
+
+`src/mission.c`.
+
+- **The name.** It splits the name. When the file name is 3 characters and the extension is `.msn`
+  (compared ignoring case), it sets two values:
+  - the number, `atol` of the name past its first character, into 0x606e20 (0x27 otherwise);
+  - the kind, from the first character, into 0x606e24: `m` 1, `t` 2, `s` 3, anything else 0. This is
+    case-sensitive.
+- **No extension.** A name without one gets `.msn` appended.
+- **The walk.** 0x484300 walks the file in sequence with the table 0x4e9770:
+
+  | Tag | Handler | Then | Ported |
+  |---|---|---|---|
+  | WDEF | 0x4845c0 | 0x492fa0 | yes, below |
+  | TDEF | 0x4845e0 | 0x494bc0 | yes, terrain.md |
+  | RDEF | 0x484600 | 0x492cf0 (roads) | no, read past |
+  | ODEF | 0x484620 | 0x494140 (objects) | no, read past |
+  | LDEF | 0x484640 | 0x493530 | no, read past |
+  | ADEF | 0x484660 | 0x492f70 | no, read past |
+  | EXIT | 0x4843d0 | | |
+
+  Every entry has flags 0x2006, except EXIT's (0x2000).
+- **Not ported yet.** Before the walk it calls 0x494a10 (the scrounge objects' reset), 0x48c480 (the
+  path), and 0x484bc0 / 0x468800 (the CD). A missing file is a fatal message (0x402c80).
+
 ## WDEF
 
 - The handler 0x4845c0 calls 0x492fa0, which walks the WDEF payload in sequence with the table at 0x4eb5e8:

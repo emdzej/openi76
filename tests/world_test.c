@@ -8,6 +8,7 @@
 #include "vfs.h"
 #include "vfs_host.h"
 #include "vfs_zfs.h"
+#include "mission.h"
 #include "world.h"
 #include "render/light.h"
 #include "render/palette.h"
@@ -36,6 +37,8 @@ int main(void)
     Settings_Defaults(3);
     CHECK(Chunks_Check(World_Table(), 3, 0x4eb5e8));
     CHECK(Chunks_Check(Terrain_Table(), 4, 0x4eb8e8));
+    CHECK(Chunks_Check(Mission_Table(), 7, 0x4e9770));
+    CHECK(Mission_Load("t01.msn") && g_mission_kind == 2 && g_mission_number == 1 && g_world.sky[0]);
     ChunkDesc top[] = {
         {"WDEF", h_wdef, 0x2006}, {"TDEF", Terrain_Tdef, 0x2006}, {"RDEF", h_any, 0x2006}, {"ODEF", h_any, 0x2006},
         {"LDEF", h_any, 0x2006}, {"ADEF", h_any, 0x2006}, {"EXIT", h_any, 0x2000},

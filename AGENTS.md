@@ -23,8 +23,11 @@ is always opt-in: the default is the original. Additions never fork the ported c
 two seams in docs/re/port-plan.md (the framebuffer size is a parameter, the renderer splits at screen-space
 polygons). Each one gets a `--param`, a play-page setting and a line in the public status page.
 
-**State:** step 0/1 of `docs/re/port-plan.md`. The file layer (ISO 9660, raw 2352, `.cue`), the I76.ZFS
-layer, the exe check and the 8-bit presentation path work; the app shows disc 1's loading screen. Read
+**State:** step 3 of `docs/re/port-plan.md`. The file layer (ISO 9660, raw 2352, `.cue`), the I76.ZFS
+layer, the exe check, the 8-bit presentation path and the renderer's core (DrawPoly, the queue, the
+terrain, the sky; `tools/emu/regress.sh` diffs them against the original) work. The app shows disc 1's
+loading screen, or with `--param mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain and
+sky from a static camera (roads, objects and the rest of the frame are not ported yet). Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 

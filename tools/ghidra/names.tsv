@@ -132,7 +132,6 @@
 00484390	Bwd2_ReadHeader
 00484680	Rev_Check
 004843c0	Bwd2_Header
-00484410	Mission_Load
 00494bc0	Terrain_ReadTdef
 00494c10	Terrain_Zmap
 00494c80	Terrain_Zone
@@ -206,3 +205,5 @@
 004391c0	Surface_Make	render	high	a surface over a bitmap (allocated when none)
 0043df60	Sprite_Draw	render	high	the scaled sprite blitter, modes 1-5 (3: through lum, 0xff clear); mode 3 ported, diffed
 00407550	Render_World	render	high	a frame: terrain, roads, objects, the sky, the flush, the HUD
+00484410	Mission_Load	mission	high	the .msn: name to kind/number, then the table 0x4e9770; WDEF and TDEF ported
+00403360	View_Init	render	high	the main view 0x4a8488: fov pi/2, aspect, range 150 or the world's, zoom 1; then the camera modes
