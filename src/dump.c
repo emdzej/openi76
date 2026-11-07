@@ -18,6 +18,7 @@
 #include "exe.h"
 #include "lod.h"
 #include "objects.h"
+#include "objectives.h"
 #include "render/light.h"
 #include "render/fpu.h"
 #include "fsm.h"
@@ -93,7 +94,7 @@ static void class_data(Out *o, const Node *n)
             else if (veh_ptrs[i] == 0x108) {   /* the words that are addresses cleared, as tools/emu/diff_objects.py */
                 static uint8_t ai[0xa9d8];
                 memcpy(ai, p, sizeof ai);
-                static const uint16_t addr[] = {0, 0x60, 0x88, 0x8c, 0xa96c, 0xa998, 0xa9b4};
+                static const uint16_t addr[] = {0, 0x60, 0x88, 0x8c, 0xa96c, 0xa998, 0xa9b4, 0xa6e4, 0xa6e8, 0xa6ec};
                 for (size_t j = 0; j < sizeof addr / sizeof addr[0]; j++) memset(ai + addr[j], 0, 4);
                 out(o, "%08x", crc32(ai, sizeof ai));
             }
@@ -1430,7 +1431,12 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
     for (int f = 0; f < frames; f++) {
         g_clock_total = (float)((double)g_clock_total + dt);   /* to nearest, as diff_fsm.py's */
         AI_Frame();   /* the boxes, the script, the turns */
-        len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x consts", f, (int)g_game_state, fbits32(g_fsm_end_time));
+        len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x ents %x obj %x %x", f, (int)g_game_state, fbits32(g_fsm_end_time), (uint32_t)g_fsm.n_entities,
+                                (uint32_t)g_objectives.count, (uint32_t)g_objectives.failures);
+        for (int k = 0; k < 6; k++) len += (size_t)snprintf(o + len, cap - len, " %x", g_objectives.text[k] != NULL);
+        for (int k = 0; k < 16; k++) len += (size_t)snprintf(o + len, cap - len, " %x", g_objectives.failure[k] != NULL);
+        for (int k = 0; k < 6; k++) len += (size_t)snprintf(o + len, cap - len, " %x", g_objectives.flags[k]);
+        len += (size_t)snprintf(o + len, cap - len, " %x consts", (uint32_t)g_objectives.fail_except);
         for (int32_t i = 0; i < g_fsm.n_consts && len + 16 < cap; i++) len += (size_t)snprintf(o + len, cap - len, " %x", (uint32_t)Fsm_Word(g_fsm.consts + (uint32_t)i * 4));
         len += (size_t)snprintf(o + len, cap - len, "\n");
         for (int t = 0; t < AI_TEAMS; t++)   /* each AI vehicle: its tactics' stack and its controls */
@@ -1457,6 +1463,12 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 for (int k = 0; k < 4; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + 0x9d40 + 8 * (k & 1) + 0xc * (k >> 1)));
                 static const uint16_t av[] = {0x9d18, 0x9d1c, 0x9d24, 0x9d28, 0x9d30, 0x9d34};   /* the avoiding */
                 for (size_t k = 0; k < sizeof av / sizeof av[0]; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + av[k]));
+                static const uint16_t sv[] = {0xa818, 0xa81c, 0xa820, 0xa824, 0xa828, 0xa948, 0x9d14, 0xa988,
+                                              0xa6d4, 0xa6d8, 0xa6dc, 0xa6e0, 0xa93c + 0x0};   /* the script's setters' and stamps */
+                len += (size_t)snprintf(o + len, cap - len, " s");
+                for (size_t k = 0; k < sizeof sv / sizeof sv[0]; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + sv[k]));
+                len += (size_t)snprintf(o + len, cap - len, " q %x %x %x %08x", *(uint32_t *)(ai + 0xa6c8), *(uint32_t *)(ai + 0xa6cc),
+                                        *(uint32_t *)(ai + 0xa6d0), crc32(ai + 0x9d68, 100 * 0x18));   /* the control queue */
                 uint64_t pb[3];   /* the place (teleport's) and the speed's two words */
                 memcpy(pb, n->frame.pos, sizeof pb);
                 len += (size_t)snprintf(o + len, cap - len, " @ %016llx %016llx %016llx %08x %08x", (unsigned long long)pb[0], (unsigned long long)pb[1],

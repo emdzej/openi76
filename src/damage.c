@@ -9,6 +9,7 @@
 #include "scene.h"
 #include "objects.h"
 #include "ai.h"
+#include "orders.h"
 #include "crt.h"
 #include "physics.h"
 #include "weapons.h"
@@ -680,6 +681,39 @@ static void destroy_part(Node *n)
     /* network play's message (0x465520 with the data's +8) is not ported */
 }
 
+/* Structure_Destroy 0x430750 (the script's destroy): a crash packet (mask 8, the points plus one at +0x14)
+   at no place (0x425df0). A structure is then marked (+0x28 = 1) and its first node flagged 0x1000000
+   explodes: a class 3 does not; the others by the data's +0x10 (x1_bldx1, 0x4d539c, for "null") with the
+   data's +0x18 sound (not ported), and +0x28 = 2. Its light goes (flag 0x800); network play's message is
+   not ported */
+void Structure_Destroy(Node *n)
+{
+    uint8_t p[0x1c];
+    memset(p, 0, sizeof p);
+    uint16_t eight = 8;
+    memcpy(p + 4, &eight, 2);
+    put32(p + 0x14, rd32(n->data) + 1);
+    float at[3] = {0, 0, 0};
+    Class_Damage(n, p, at);
+    uint8_t *d = n->data;
+    if (!Class_IsStructure(n->cls)) return;
+    put32(d + 0x28, 1);
+    Node *x = find_flag(n, 0x1000000);
+    if (x && d) {
+        float w[3];
+        Node_WorldPos(w, x);   /* 0x42e780 */
+        if (n->cls != 3) {
+            uint8_t name[8];
+            if (crt_strnicmp((const char *)d + 0x10, exe_str(0x4a90f4), 8) == 0) memcpy(name, exe_str(0x4d539c), 8);
+            else memcpy(name, d + 0x10, 8);
+            Explosion_Spawn(name, x, w[0], w[1], w[2], NULL);   /* 0x4540d0 */
+            /* the sound: 0x4683c0 (7) for "null", else 0x468580 by the data's +0x18 */
+        }
+        put32(d + 0x28, 2);
+    }
+    if (n->flags & 0x800) Light_Remove(n, &n->flags);   /* 0x43a400 */
+}
+
 /* 0x430900's lethal branch: as a part (0x430e40), from the entity's sphere dropped and the points at 0,
    and the collision refitted at the end (0x46b280) */
 static void structure_destroy(Node *n)
@@ -1197,6 +1231,43 @@ static void explosion_packet(uint8_t p[0x1c], const Node *x)
     memcpy(p + 0xc, &a, 4);
 }
 
+/* AI_Struck 0x40fc80: an AI vehicle's memory of being hit, for the script and the tactics. Outside network
+   play, on a vehicle n hit by kind (the impact's: 1 a vehicle, 2 a structure, 4 nothing, 0x10 a shot or an
+   explosion, 0x18 a shot that rams) from the vehicle src through by:
+   - kind 2 or 4, or no source: the time (+0x9d00, the game's clock);
+   - a vehicle source: unless by's data word +0x44 is 0 (a shot's definition +0x58; with no data the
+     original reads its stack, here taken as set), the frame (0x505518) it was rammed (+0xa6d8, kind 0
+     or 1, the source at +0xa6e4) or shot (+0xa6d4, the source at +0xa6e8); always the frame it was
+     attacked (+0xa6dc, +0xa6ec) and the time (+0xa6f0); and once dead whether the user did it (+0xa6e0) */
+static void ai_struck(Node *src, uint32_t kind, Node *n, Node *by)
+{
+    if (!is_vehicle(n) || g_net_game) return;   /* 0x42e570, 0x461900 */
+    uint8_t *ai = n->data ? *Data_Ptr(n->data, 0x108) : NULL;   /* 0x42d5e0, 0x42d380 */
+    if (!ai) return;   /* the original would crash */
+    if ((kind & 6) || !src) {
+        putf(ai + 0x9d00, g_clock_game);   /* 0x450e70 */
+        return;
+    }
+    if (!is_vehicle(src)) return;
+    int not_counted = by && by->data ? rd32(by->data + 0x44) == 0 : 1;
+    if (!not_counted) {
+        if (!(kind & 0x18)) {
+            put32(ai + 0xa6d8, g_ai_frames);
+            *(Node **)Data_Ptr(ai, 0xa6e4) = src;
+        } else {
+            put32(ai + 0xa6d4, g_ai_frames);
+            *(Node **)Data_Ptr(ai, 0xa6e8) = src;
+        }
+    }
+    put32(ai + 0xa6dc, g_ai_frames);
+    *(Node **)Data_Ptr(ai, 0xa6ec) = src;
+    putf(ai + 0xa6f0, g_clock_game);
+    if (rd32(n->data + 0x454) & 0x20) {
+        if (!g_user_entity) put32(ai + 0xa6e0, 0);
+        else if (g_user_entity->node == src) put32(ai + 0xa6e0, 1);
+    }
+}
+
 int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at)
 {
     /* 0x45dbb0 (0x4dc464) is never set: the user is never spared */
@@ -1227,17 +1298,22 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
             knock(n, nv, fpu_f32(fpu_mul((double)amount, exe_f32(0x4a62c8))));   /* 0.02 */
     }
     put32(p, 0);
+    Node *by = NULL;   /* the packet's +0, the source credited (the port keeps it here) */
     if (!src) kind = 4;
-    else if (src->cls == 1 || src->cls == 8 || src->cls == 9) kind = 1;   /* the source in +0, not kept here */
+    else if (src->cls == 1 || src->cls == 8 || src->cls == 9) kind = 1, by = src;
     else if (Class_IsStructure(src->cls)) kind = 2;
-    else if (src->cls == 0x33) kind = (p[4] & 8) ? 0x18 : 0x10;
-    else if (src->cls == 0x34) kind = 0x10;
-    (void)kind;
+    else if (src->cls == 0x33) {
+        kind = (p[4] & 8) ? 0x18 : 0x10;
+        by = src->data ? *(Node **)Data_Ptr(src->data, 0xc) : NULL;   /* 0x45ceb0: the shot's owner */
+    } else if (src->cls == 0x34) {
+        kind = 0x10;
+        by = src->data ? *(Node **)Data_Ptr(src->data, 0xc) : NULL;   /* 0x454380: the explosion's */
+    }
     Node_Ref(n);
     Class_Damage(n, p, at);
     Node *live = Node_Live(n);
     if (live) Node_Unref(live);
-    /* with a source, the kill's credit and messages (0x40fc80 with the kind) are not ported yet */
+    if (by && live) ai_struck(by, (uint32_t)kind, live, src);   /* 0x40fc80 (its mask argument unread) */
     return live != NULL;
 }
 

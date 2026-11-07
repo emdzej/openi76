@@ -258,6 +258,12 @@ static void ai_skills(uint8_t *ai, int a, int b, int c, int d)
     putf(ai + 0xa828, skill[2][d]);
 }
 
+float AI_SkillAt(int table, int level)
+{
+    /* the tables lie 0x20 apart in the bss with zeros between (setSkill reads 0x5ad0ec + 4 x level) */
+    return level >= 1 && level <= 5 ? skill[table][level - 1] : 0.0f;
+}
+
 /* 0x40fb20: a vehicle's AI block (0xa9d8 bytes from the game heap 0x44e380, not cleared) */
 static uint8_t *ai_new(void)
 {

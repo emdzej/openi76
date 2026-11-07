@@ -92,3 +92,6 @@ void Splash(float x, float z, float radius, int32_t force, Node *src, Node *exce
 int Radar_Hidden(Node *n);
 /* Vehicle_Targetable 0x42d340: a vehicle not off (0x200); a car (class 1) only with +0x454 bit 1 */
 int Vehicle_Targetable(const Node *n);
+/* Structure_Destroy 0x430750 (the script's destroy): a crash packet worth its points, then the explosion
+   at its node flagged 0x1000000 */
+void Structure_Destroy(Node *n);

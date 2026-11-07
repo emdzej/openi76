@@ -65,6 +65,8 @@ void Class_Set(Node *n, int cls);
    (whose words stay 0) in a table after it, one slot per word: Data_Ptr(d, off) */
 uint8_t *Data_New(size_t n);
 void **Data_Ptr(uint8_t *d, uint32_t off);
+/* the AI's skill tables (0x5ad0f0, 0x5ad110, 0x5ad130, 0x5ad150) at level 1-5; 0 outside (the bss between) */
+float AI_SkillAt(int table, int level);
 void Data_Free(uint8_t *d);
 #define VEH_SIZE 0x50c   /* a vehicle's data (classes 1, 8, 9: 0x429210) */
 

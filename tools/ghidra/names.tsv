@@ -2,11 +2,11 @@
 00401000	Shell_Load	shell	med	looks up ShellMain / ShellWindowProc in the front-end DLL with GetProcAddress
 004031d0	Fatal_Message	app	med	message box with the game title; default text "not enough memory"
 00407070	Opponents_Load	world	med	reads multicar.def and the NVCL*.vcf opponent vehicle files
-0041e5e0	Objectives_LoadText	mission	med	the mission's objective text file (.npt) for the Notepad
+0041e5e0	Objectives_LoadText	mission	high	the mission's objective text file (.npt); ported as Objectives_Load
 0041e950	Notepad_Init	hud	med	the Notepad device context and font; loads cnote.wav
-0041f0b0	Objective_Reveal	mission	med	un-hides an objective
-0041f130	Objective_Succeed	mission	med	marks an objective succeeded
-0041f1e0	Objective_Fail	mission	med	marks an objective failed
+0041f0b0	Objective_Reveal	mission	high	un-hides an objective; ported
+0041f130	Objective_Succeed	mission	high	marks an objective succeeded; ported
+0041f1e0	Objective_Fail	mission	high	marks an objective failed; ported
 00439c80	Font_AddResource	gfx	med	installs ee_____.ttf through a .fot font resource
 00484c20	Cd_FindByLabel	files	med	finds the CD drive by volume label (I76_CD)
 00484db0	Files_Init	files	high	start-up: the CD by label, the xyzzy probe, then i76.zix (fatal without it)
@@ -209,7 +209,7 @@
 00492f20	Roads_First	roads	high	the pieces' list 0x4eb6f8
 004909e0	Roads_Setup	roads	high	names, textures, the pieces on the ground and their spheres
 00490de0	Roads_Names	roads	high	the 30 road texture names: defaults, then <mission>.rtm
-00453a70	Buf_ReadLine	misc	high	a line of a buffer, past an end of line and the white space after it
+00453a70	Buf_ReadLine	misc	high	a line of a buffer, past an end of line and the white space after it; ported
 00491180	Roads_Draw	roads	high	the road quads into the queue as occluders; ported, diffed
 00491650	Roads_DrawObjects	roads	med	the objects' road faces into the queue
 0041f2c0	Node_InitHeaps	scene	high	the node and class-data heaps
@@ -980,3 +980,33 @@
 00455080	Weapon_Facts	weapons	high	an instance's 0x20 bytes of facts for the AI's firing decision
 004333f0	Muzzle_Aim	weapons	high	a fixed gun's muzzle from its rest frame pitched at the target, within 10 degrees; ported
 00413810	AI_Predict	ai	high	where a node will be in time s (+0.09): along its velocity or round its turn; ported
+0040fc80	AI_Struck	ai	high	an AI vehicle's hit stamps (shot, rammed, attacked) and its source; ported
+0040a9e0	Fsm_IsWithin	fsm	high	two centres within a distance; ported
+0040aaa0	Fsm_IsShot	fsm	high	the shot stamp this frame or the last, cleared; ported
+0040af00	Fsm_HpLesser	fsm	high	the health under a value; ported
+0040b550	Fsm_AmmoLesser	fsm	high	a hard point's weapon's +0x18 under a value; ported
+0040af30	Fsm_IsRammed	fsm	high	the rammed stamp, cleared; ported
+0040af70	Fsm_IsDead	fsm	high	flags 0x200; ported
+0040b010	Fsm_IsWithinNav	fsm	high	within a distance of a path's first point in x and z; ported
+0040b060	Fsm_IsWithinSqNav	fsm	high	within a square of a path's first point; ported
+00409810	Fsm_IsWithinEnemy	fsm	high	a live vehicle of another team within a distance; ported
+0040b0c0	Fsm_IsAttacked	fsm	high	the attacked stamp, all three cleared; ported
+0040b2d0	Fsm_AllBlgDead	fsm	high	no structure standing; ported
+00409770	Fsm_AllEnemyDead	fsm	high	every vehicle of the other teams dead; ported
+0040b4e0	Fsm_IsAtFollow	fsm	high	the follow's in-place word, cleared; ported
+0040b7a0	Fsm_IsAirborne	fsm	high	+0x454 bit 4; ported
+0040af90	Fsm_IsGroovesFault	fsm	high	the AI block's +0xa6e0; ported
+0040b480	Fsm_SetSkill	fsm	high	the four skills from the tables; ported
+0040b640	Fsm_SetAgg	fsm	high	the aggression and the tactics restarted; ported
+0040b670	Fsm_SetUserRadar	fsm	high	the user's radar toggled on a change; ported
+0040b310	Fsm_ToggleAvoid	fsm	high	+0x9d14 flipped; ported
+0040b340	Fsm_SetHeliHeight	fsm	high	a helicopter's height (0x4328f0); ported
+004328f0	Heli_SetHeight	vehicle	high	the helicopter block's +0x14, off the ground above 0; ported
+0040b7c0	Fsm_SetLights	fsm	high	the lights toggled to a state; ported
+0040b600	Fsm_TriggerGate	fsm	high	the tree's gate set going (0x433130); ported
+00433130	Gate_Trigger	classes	high	a gate's data +0x90 cleared; ported
+00429080	Fsm_SetArtillery	fsm	high	the artillery block's firing word; ported
+004290a0	Fsm_SetArtilleryRate	fsm	high	the artillery block's how-seldom word; ported
+0040b740	Fsm_SetSiren	fsm	high	aps2.wav on or off (audio not ported)
+004763e0	Siren_Sound	audio	med	aps2.wav played or stopped on a vehicle
+0041f280	Objectives_FailExcept	mission	high	failAllObj's objective less one; ported

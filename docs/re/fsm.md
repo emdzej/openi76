@@ -107,7 +107,7 @@ isEqualId, isArrived, isKeypress, teleport and teleportOffset.
   or above it.
 - `isGreater`: `*a1 < *a0`. `isLesser`: `*a0 < *a1`.
 - `successAll` (1), `failAll` (0) and `failAllObj` (0): the end's state and time (`*a0` seconds from now).
-  Then 0x41f280 marks the objectives (`-1` all; failAllObj `*a1`), which is not ported yet.
+  Then 0x41f280 notes failAllObj's objective (see "The objectives").
 - `isArrived` (0x40a9a0): the vehicle's AI block +0x9c is 1 (the goto's path ended); the test clears it.
 - `isKeypress`: the menu's poll (0x480720, `Input_MenuPoll`), true on a key; the intros end on Escape
   this way and then teleport the user.
@@ -116,31 +116,107 @@ isEqualId, isArrived, isKeypress, teleport and teleportOffset.
   with the speed along its heading. `teleportOffset` passes `*a4` and `*a5` too, offsets in hundredths.
 - Code 22, `playScene`, falls to the default: the original's fatal ("Uknown fsm prototype").
 
-**Not ported yet** (the port answers 0), by what they call:
+**The conditions** (each sets the machine's flag):
 
-- **The AI's orders**, through 0x40cc10 (vehicle, target, order, 0x5054ac): attack 0, sit 0x1f, goto 0x16
-  (the AI block's +0x8c the path, +0x80 the speed), guard 0x20, evade 0x18, follow 0x1e (+0xa990 the
-  leader, +0xa98c, +0xa980, +0xa984), race 0x1a, hide 0x21. behave (0x40a550) and do (0x40a640) too.
-- **The conditions on vehicles:**
-  - test 0x40a970, isWithin 0x40a9e0, isShot 0x40aaa0, hpLesser 0x40af00, ammoLesser 0x40b550;
-  - isRammed 0x40af30, isDead 0x40af70, isLit 0x40afe0;
-  - isWithinNav 0x40b010, isWithinSqNav 0x40b060, isWithinEnemy 0x409810, isAttacked 0x40b0c0;
-  - allBlgDead 0x40b2d0, allEnemyDead 0x409770, isAtFollow 0x40b4e0, canSee 0x413570 (ported: docs/re/ai.md "Line of sight");
-  - isAirborne 0x40b7a0, isGroovesFault 0x40af90;
-  - whoRammed 0x40a670, whoShot 0x40a770, whoAttacked 0x40a870, nearestEnemy 0x409590, nearestBlg 0x40b190.
-- **The objectives:** success 0x41f1e0, fail 0x41f130, 0x41f280.
-- **The CB radio:** cb 0x46fa70, cbPrior 0x40b6c0, cbFromPrior 0x40b6e0, cbFrom 0x40b6a0, killCB
-  0x46fd20, stopCB 0x40b700, isCBEmpty 0x46fda0.
+- `isWithin` (0x40a9e0): the two centres (0x4223e0, each as first asked this frame) closer than `*a2` in
+  space; the squares summed y, z, then x, against `*a2` squared as an integer.
+- `isWithinNav` / `isWithinSqNav` (0x40b010, 0x40b060): the vehicle `*a1` within `*a2` of the first point
+  of path `*a0`, in x and z (as a circle, or a square).
+- `isWithinEnemy` (0x409810): a live vehicle of another team (1 to 7) within `*a1` in x and z.
+- `isShot`, `isRammed`, `isAttacked` (0x40aaa0, 0x40af30, 0x40b0c0): the AI block's stamp (+0xa6d4,
+  +0xa6d8, +0xa6dc) is this AI frame's or the last's (0x505518); the stamp is then cleared to -10
+  (isAttacked clears all three). The stamps come from 0x40fc80, which an impact (0x45d7c0) calls on an
+  AI vehicle hit through a vehicle: rammed by a vehicle, shot by a shot or an explosion (the owner as the
+  source), unless the impacting node's data word +0x44 is 0 (a shot's definition +0x58). Attacked is
+  stamped either way, with the time (+0xa6f0) and the source (+0xa6ec). A dead vehicle's +0xa6e0 says
+  whether the user did it (`isGroovesFault`, 0x40af90). A structure or no source stamps +0x9d00, the
+  time only.
+- `hpLesser` (0x40af00): the health (0x40aae0, in percent) under `*a2`.
+- `ammoLesser` (0x40b550): among the AI's weapons (+0xa718, +0xa71c), the one in hard point `*a1` has its
+  +0x18 under `*a2`, unsigned.
+- `isDead` (0x40af70): flags 0x200. `allEnemyDead` (0x409770): every vehicle of the other teams has +0x454
+  bit 0x20. `allBlgDead` (0x40b2d0): no structure on the collision lists is left standing.
+- `isAtFollow` (0x40b4e0): the follow's "in place" (+0xa988), cleared.
+- `isAirborne` (0x40b7a0): +0x454 bit 4, as the bit itself (4).
+- `test` and `isLit` are "not implemented" in the original: always 0. `isCBEmpty` (0x40b630) is the CB
+  queue (0x4dd904) being empty; the CB is not ported, so it always is.
+
+**The setters:**
+
+- `setSkill` (0x40b480): the skill tables (0x5ad0ec + 4 × level) into +0xa820 and +0xa81c by `*a1`, +0xa824
+  and +0xa828 by `*a2`.
+- `setAgg` (0x40b640): +0xa818 = `*a1` - 1, and the tactics' state started anew (0x40cbb0).
+- `setAvoid` (+0x9d14), `toggleAvoid` (0x40b310, the same word flipped), `setMaxAttackers` (+0xa948).
+- `setHeliHeight` (0x40b340): a helicopter's block (+0x508) +0x14 gets the height as a float. The original
+  passes it as an int, and above 0 it clears +0x454 bit 0x80.
+- `setLights` (0x40b7c0): the lights toggled when +0x454 bit 0x40 differs from `*a1`.
+- `triggerGate` (0x40b600): the tree's first class 7 node's data +0x90 cleared.
+- `setArtillery`, `setArtilleryRate` (0x429080, 0x4290a0): the artillery block's +0x4c and +0x50.
+- `setUserRadar` (0x40b670): the user's radar toggled (0x4214c0) when `*a0` differs from the last value
+  (0x4a89a8, which is never reset between missions).
+- `behave` and `do` are "not implemented". `setSiren` (0x40b740) only plays or stops aps2.wav.
+
+**The finders** put an entity record's number into `*a1`. That is the record already holding the node,
+or a new one at the table's end named `NoLabel<count>`, with a reference on the node (there is room for
+200 more):
+
+- `whoRammed`, `whoShot`, `whoAttacked` (0x40a670, 0x40a770, 0x40a870) take the AI block's source
+  (+0xa6e4, +0xa6e8, +0xa6ec). With none, the original stops on a fatal error.
+- `nearestEnemy` (0x409590) takes the nearest live vehicle in x and z of the other teams. Team 0 counts
+  only in network play or the melee. With none, the record past the end is cleared and its number is
+  given, and the count does not grow.
+- `nearestBlg` (0x40b190) takes the nearest standing structure on the collision lists. With none
+  standing, it takes the last fallen one met (a quirk). With nothing, the original stops on a fatal error.
+
+**The objectives** (0x41e5e0-0x41f280, src/objectives.c):
+
+- After the mission's load, WinMain reads its .npt text (the world's +0x45).
+  - Lines are read by 0x453a70: one end of line, then up to 0x100 characters, then the white space after.
+  - Up to six lines are objectives; one starting `[hidden]` is hidden.
+  - A `[failure]` line, which counts as one of the six, switches to up to sixteen failure texts.
+  - The count is 0x5ad1e0 (-1 without the file). The texts are at 0x5ad1e8 and 0x5ad200, and the flags
+    at 0x5ad240: 1 hidden, 2 succeeded, 4 failed.
+- `success` (0x41f130) and `fail` (0x41f1e0) set an objective's bit 2 or 4, unless it already has either.
+  `reveal` (0x41f0b0) clears bit 1.
+- `failAllObj`'s objective less one goes to 0x5ad258. `successAll` and `failAll` pass -1, so it is -2
+  then.
+- The chime (cnote.wav) and the Notepad are not ported.
+
+**The scripted driving** (0x41a820-0x41abf0) is a queue of 100 controls in the AI block. Each entry at
++0x9d68 is 0x18 bytes: +0 the throttle, +4 the steering, +8 the gear's sign, +0xc the handbrake, and
++0x10 and +0x14 two words of 0-10. It is taken from +0xa6c8 and added at +0xa6cc, and +0xa6d0 is set
+once it runs empty.
+
+- `controlAll` (0x41a900) queues all six values:
+  - the throttle and steering in hundredths (-100 to 100, else 0);
+  - the handbrake, 0 or 1 (else 0);
+  - the sign, -1 or 1 (else 1);
+  - the two words, each kept only within 0-10.
+  A full queue is a fatal error in the original.
+- `control` (0x41aaa0) queues the throttle and steering with the last entry's handbrake and sign (with
+  the queue empty, the vehicle's own: +0xf0 and the truncated +0xe8).
+- `driveControl` (0x41ab50) gives a live vehicle the next entry as its throttle (+0xe4), steering
+  (+0xe0), handbrake (+0xf0) and sign (+0xe8), then touches the user (0x409bc0). With the queue empty it
+  clears them (the sign 1) and sets the drive mode 3.
+- `controlDone` (0x41abf0) is +0xa6d0.
+
+**destroy** (0x40b110) kills a vehicle (0x42b790) and sets its throttle to -1. For a standing structure
+it calls 0x430750: a crash packet (mask 8) worth its points plus one goes through the class's damage. The
+structure is marked (+0x28 = 1), and its first node flagged 0x1000000 explodes, unless it is class 3.
+The explosion is named by the data's +0x10, or x1_bldx1 for "null"; the data's +0x18 sound is not
+ported. Then +0x28 = 2 and its light goes. A dead one is refused.
+
+**The CB radio** (cb 0x46fa70 and cbPrior, cbFromPrior, cbFrom, killCB, stopCB) is the speech queue
+(0x4dd904). With speech off (0x5e14e1 or 0x5e14e0 under 2), it returns at once and queues nothing. The
+port has no audio and runs that way, so `isCBEmpty` is always true. The script never reads the
+results.
+
+**Not ported yet** (the port answers 0):
+
 - **The cameras:** pushCam 0x452d00 (with 0x428880), popCam 0x452d60, camObjObj 0x452f10, camObjDir
   0x452d90, camPosObj and camTransObj 0x453060, camPosDir and camTransDir 0x453440, camF12 0x4537a0,
   camIsArrived 0x453050.
-- **The rest:**
-  - destroy 0x40b110, playMovie 0x44e6e0;
-  - triggerGate 0x40b600, toggleAvoid 0x40b310, setHeliHeight 0x40b340, setSkill 0x40b480;
-  - control, controlAll, driveControl and controlDone (0x41aaa0, 0x41a900, 0x41ab50, 0x41abf0);
-  - reveal 0x40b540, setAgg 0x40b640, setUserRadar 0x40b670, salvage 0x40b720, setSiren 0x40b740;
-  - setAvoid 0x40b760, setMaxAttackers 0x40b780, startCar 0x42d5a0, setLights 0x40b7c0;
-  - setArtillery 0x429080, setArtilleryRate 0x4290a0.
+- playMovie 0x44e6e0, and salvage 0x40b720 (the shell's salvage list, 0x488a40).
 
 After the action, ip moves to the next pair and the arguments' pointer goes back to 0x1000.
 
@@ -152,5 +228,6 @@ the original's, and an address fits the original's 32-bit fields (the AI block's
 entities' nodes (+0x58) are host pointers, kept beside the arena.
 
 Checked: `diff_fsm.py` (150 frames of 0.1 s, the actions not ported answering 0 on both sides: each
-frame's constants, the end, and every machine's ip, flag, pointers and stack, in the rounding the load leaves)
+frame's objectives, constants and end, every AI vehicle's state with the setters' and the stamps' words, and
+every machine's ip, flag, pointers and stack, in the rounding the load leaves)
 is identical on all 40 missions of disc 1.

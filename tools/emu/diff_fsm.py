@@ -10,6 +10,7 @@ import ctypes
 import os
 import struct
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(__file__))
 import mission  # noqa: E402
@@ -20,16 +21,10 @@ DT = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
 DT = struct.unpack("<f", struct.pack("<f", DT))[0]   # as the port's float
 
 # 0x40d0d0's callees that the port's actions answer with 0 for now (src/fsm.c "later")
-LATER = {0x40A550: 2, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1E0: 1, 0x41F280: 1,
-         0x41F130: 1, 0x46FA70: 3, 0x40B6C0: 2, 0x40B6E0: 3, 0x409590: 4, 0x40B190: 4, 0x40A970: 2,
-         0x40A9E0: 3, 0x40AAA0: 1, 0x40AF00: 3, 0x40B550: 3, 0x40AF30: 1, 0x40AF70: 1, 0x40AFE0: 1,
-         0x40B010: 3, 0x40B060: 3, 0x409810: 2, 0x40B0C0: 1, 0x40A870: 4,
-         0x40B110: 1, 0x44E6E0: 2, 0x428880: 0, 0x452D00: 0, 0x452D60: 0, 0x452F10: 5, 0x452D90: 7,
-         0x453060: 4, 0x453440: 6, 0x4537A0: 4, 0x453050: 0, 0x40B600: 1, 0x40B310: 1,
-         0x40B2D0: 0, 0x409770: 1, 0x40B340: 2, 0x40B480: 3, 0x40B4E0: 1, 0x41AAA0: 3, 0x41A900: 7,
-         0x41AB50: 1, 0x41ABF0: 1, 0x40B540: 1, 0x46FDA0: 0, 0x40B640: 2, 0x40B670: 1, 0x40B6A0: 2,
-         0x46FD20: 1, 0x40B720: 1, 0x40B740: 2, 0x40B760: 2, 0x40B780: 2, 0x40B7A0: 1,
-         0x40AF90: 1, 0x40B7C0: 2, 0x429080: 2, 0x4290A0: 2, 0x40B700: 0}
+LATER = { 0x44E6E0: 2, 0x428880: 0, 0x452D00: 0,
+         0x452D60: 0, 0x452F10: 5, 0x452D90: 7, 0x453060: 4, 0x453440: 6, 0x4537A0: 4, 0x453050: 0,
+         0x40B720: 1,
+         0x40B740: 2,}   # 0x40B740: the siren's sound
 
 
 # the AI's orders (0x40cc10) run; the tactics' functions the port has not ported yet are stubbed, and so are
@@ -80,12 +75,12 @@ def original():
     exe.call(0x484410, p, limit=2_000_000_000)
     from unicorn import x86_const
     fpcw = exe.uc.reg_read(x86_const.UC_X86_REG_FPCW)   # the rounding the load left, as the game goes on
+    exe.call(0x41E5E0, limit=200_000_000, fpcw=fpcw)   # the objectives (WinMain's next call)
     for f, k in LATER.items():
         exe.stub(f, lambda *a: 0, k)
     for f, k in AI_LATER.items():
         exe.stub(f, lambda *a: 0, k)
     exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
-    exe.stub(0x421E30, lambda *a: 0, 0)   # the radar's (not ported)
     for f in tactic_functions(exe):
         exe.stub(f, lambda *a: 0, 2)
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
@@ -96,7 +91,7 @@ def original():
         exe.call(0x409020, 0, limit=2_000_000_000, fpcw=fpcw)   # AI_Frame: the boxes, the script, the turns
         code, ncode, consts, nconsts = u(0x4A88FC), u(0x4A8900), u(0x4A88F4), u(0x4A88F8)
         state = struct.unpack("<i", exe.read(0x4A80F4, 4))[0]
-        s = f"frame {fr} state {state} end {u(0x5054B0):08x} consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))
+        s = f"frame {fr} state {state} end {u(0x5054B0):08x} ents {u(0x4A88E8):x} obj" + "".join(f" {u(0x5AD1E0 + 4 * k) if k in (0, 1, 0x1E) else u(0x5AD1E0 + 4 * k) != 0 if k < 0x18 else u(0x5AD1E0 + 4 * k):x}" for k in range(0x1F)) + " consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))
         out.append(s)
         for team in range(8):
             for i in range(min(u(0x505460 + 4 * team), 0x40)):
@@ -117,6 +112,9 @@ def original():
                     h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
                 s += f" w {u(ai + 0xA6F4):x} {h:08x} {u(ai + 0xA82C):08x}"
                 s += "".join(f" {u(ai + w):08x}" for w in (0x9D40, 0x9D48, 0x9D4C, 0x9D54, 0x9D18, 0x9D1C, 0x9D24, 0x9D28, 0x9D30, 0x9D34))
+                s += " s" + "".join(f" {u(ai + w):08x}" for w in (0xA818, 0xA81C, 0xA820, 0xA824, 0xA828, 0xA948, 0x9D14, 0xA988,
+                                                                 0xA6D4, 0xA6D8, 0xA6DC, 0xA6E0, 0xA93C))   # the script's setters' and stamps
+                s += f" q {u(ai + 0xA6C8):x} {u(ai + 0xA6CC):x} {u(ai + 0xA6D0):x} {zlib.crc32(exe.read(ai + 0x9D68, 100 * 0x18)):08x}"   # the control queue
                 s += " @ " + " ".join(f"{q:016x}" for q in struct.unpack("<3Q", exe.read(n + 0x40, 24)))   # the place (teleport's)
                 s += f" {u(d + 0xAC):08x} {u(d + 0xB0):08x}"
                 out.append(s)
@@ -143,6 +141,7 @@ def port():
     lib.Objects_Init()
     lib.Mission_Load.argtypes = [ctypes.c_char_p]
     lib.Mission_Load(M.encode())
+    lib.Objectives_Load()
     ctypes.c_float.in_dll(lib, "g_clock_total").value = 0.0
     buf = ctypes.create_string_buffer(64 << 20)
     lib.Dump_Fsm.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int, ctypes.c_float]

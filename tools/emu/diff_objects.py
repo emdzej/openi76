@@ -947,6 +947,7 @@ def class_data(m, cls, d):
                 ai[0x88:0x90] = bytes(8)   # the paths followed and the script's (addresses)
                 ai[0xA998:0xA99C] = bytes(4)
                 ai[0xA9B4:0xA9B8] = bytes(4)   # the target (its contact's node)
+                ai[0xA6E4:0xA6F0] = bytes(12)   # who rammed, shot and attacked it (0x40fc80)
                 s += f"{zlib.crc32(bytes(ai)):08x}"
             elif o == 0x508:
                 s += m.raw(p, 0x18 if cls == 9 else 0x54).hex()
@@ -1042,7 +1043,7 @@ def original():
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
-        for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x40FC80, 5), (0x46FDB0, 1),
+        for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x46FDB0, 1),
                      (0x488950, 1), (0x455370, 1), (0x476440, 2), (0x407010, 2), (0x428890, 0),
                      # the wreck's (0x42c580): the sound's pitch, debris thrown, fires
                      (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):

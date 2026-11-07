@@ -18,6 +18,7 @@
 #include "math3d.h"
 #include "mission.h"
 #include "objects.h"
+#include "objectives.h"
 #include "pcx.h"
 #include "platform.h"
 #include "res.h"
@@ -85,6 +86,7 @@ static bool viewer_init(const char *mission)
         plat_log(m);
         return false;
     }
+    Objectives_Load();   /* 0x41e5e0, after 0x484410 in WinMain */
     Sky_Init();
     Roads_Setup(mission);
     /* WinMain: the colours of black (0x58dcbc) and of the first grey that is not 0xff (0x58dcb8), the lum

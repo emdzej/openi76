@@ -36,8 +36,9 @@ camera. With `--param play=1` too it runs the game loop's ported parts: the vehi
 pilot's camera (docs/re/camera.md) and the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. Not ported yet: the other camera modes and the cockpit, the
-mission's script's actions (its machines run: docs/re/fsm.md), the effects but the guns' (the user fires, the guns' shots fly with their tracers and hit with their
-explosions and splash, docs/re/weapons.md; the turrets turn; the other ordnance and the wrecks' effects are not ported), the AI's driving (its tactics, line of sight and firing decision are ported: docs/re/ai.md; the radar's contacts and targets too, not its display: docs/re/weapons.md), the HUD, the shell and audio. Read
+mission's script's cameras, movies and salvage (its machines, conditions, orders, objectives and the rest
+of its actions run: docs/re/fsm.md), the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
+splash; the turrets turn and the artillery fires: docs/re/weapons.md; the wrecks' effects are not ported), the AI's driving (its tactics, line of sight and firing decision are ported: docs/re/ai.md; the radar's contacts and targets too, not its display: docs/re/weapons.md), the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 
