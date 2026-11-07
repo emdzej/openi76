@@ -22,6 +22,7 @@ typedef struct {
     int32_t a, b;     /* +0x30, +0x34: copied into a merge's member */
     int32_t c;        /* +0x38 */
     void *merge;      /* +0x3c: type 6, its merge (set by the flush) */
+    void *ent;        /* +0x40: type 6, the entity */
 } QObj;
 
 typedef struct QRec {
@@ -78,5 +79,12 @@ void Queue_Flush(const View *view, int end_merges);
 void Queue_SetDraw(int type, QDrawFn fn);
 /* what draws the polygons: DrawPoly, unless a test replaces it (NULL restores it) */
 void Queue_SetPoly(QPolyFn fn);
+/* DrawPoly, or what replaces it (for the object drawers, which call DrawPoly directly in the original) */
+void Queue_Poly(const View *view, void *verts, int n, PolyArg arg, int mode);
+/* Queue_AddMerge 0x48d450: node (a class 0x34 object) into the merge of target's root (at most 8 members, at
+   most 20 merges) */
+void Queue_AddMerge(void *node, void *target);
+/* Queue_FindMerge: a culled entity's merge, if any (the drawer clears its bucket and node) */
+QMerge *Queue_FindMerge(void *node);
 /* Queue_FindMember 0x48d400: the merge member for node, its bucket set; NULL if none */
 void *Queue_FindMember(void *node, int32_t bucket);

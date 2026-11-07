@@ -23,6 +23,10 @@ double Fast_InvSqrt(double x);
 void InvSqrt_Init(void);
 /* Frame_Mul 0x4527c0: a's frame inside b's (out = a then b: M = Ma Mb, pos = pos_a Mb + pos_b) */
 Frame *Frame_Mul(Frame *out, const Frame *a, const Frame *b);
+/* Point_ToWorld 0x4525c0: a float point through a frame, the result in doubles (the products are exact,
+   the sums each rounded: ((m6 z + m3 y) + m0 x) + pos for x, ((m1 x + m4 y) + m7 z) for y, ((m2 x + m8 z)
+   + m5 y) for z) */
+void Point_ToWorld(double out[3], const float p[3], const Frame *f);
 /* Frame_Points 0x452740: n float points through a frame */
 void Frame_Points(float (*out)[3], const float (*in)[3], int n, const Frame *f);
 /* Plane_Transform 0x452890: a plane (n, d) into a frame's space: n M, d - (n M) . pos */

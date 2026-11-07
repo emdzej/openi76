@@ -92,122 +92,88 @@ It is read by 0x484300, in sequence, with the table 0x4eb798 and the node as the
 
 ## Drawing
 
-- **Render_World** calls the object drawer 0x424b90 after the terrain and roads.
-  - It walks the entity array 0x547e60 (count 0x4d3b5c).
-  - For each entity that is not the player's camera target: its sphere goes to camera space (0x4525c0,
-    View_ToCamera) and is tested (View_TestSphere). The entity is then sorted by 0x42e640 into one of
-    two lists, with the bit 0x100 when it crosses a plane.
-  - Group entities (flag 0x100) queue their children instead.
-  - An entity that is out of view is dropped from the merges.
-  - The queued records are types 3, 5, 6, 7 and 0xb (render.md, "The render queue").
-- **The queue's draw functions** for those types:
-  - 0x48cd20 (type 5): 0x4352e0 or 0x4356f0, else 0x434f10.
-  - 0x48ccd0 (type 6): 0x4352e0 or 0x4356f0.
-  - 0x48cef0 (type 7): a flat mesh in the heading frame. Its q is 0.9 (0x3f666666), and the mode comes
-    from the face's flags.
-  - 0x48cd60 (types 3, 11): 0x4a3c20.
-  - 0x48cd80 (type 10).
-- **A node's mesh, 0x434f10.**
-  - It lights the node (0x43a7c0) and selects its level of detail (0x47dc70).
-  - Each face becomes a record from the pool 0x5509e4:
+Ported in src/render/obj_draw.c and checked against the original by `tools/emu/diff_objdraw.py`: every
+polygon drawn (colour or texture, mode, vertices with their light) is identical in all 40 missions, in
+both rounding modes (confirmed). The shadows, the headlights and the group entities' records (types 5 and
+7) are not covered: the first two are not ported, and no mission has a group child at load.
 
-    | Offset | Field |
-    |---|---|
-    | +4 | n |
-    | +8 | node |
-    | +0xc | texture name |
-    | +0x1c | colour |
-    | +0x20 | mode |
-    | +0x24 | centre, in camera space |
-    | +0x30 | plane, in camera space |
-    | +0x40, +0x44 | front, back |
-    | +0x48 | the vertices, 24 bytes each, with q from the light pass 0x43aa90 |
+- **Render_World 0x407550** first makes the heading frame 0x58c4a0: the camera's forward (−m2, −m8)
+  normalised in the ground plane with Fast_InvSqrt (straight down, under 1e-5 squared, gives (0, −1)), as
+  the rotation {b, 0, −a; 0, 1, 0; a, 0, b}. Then Terrain_Draw, Roads_Draw, 0x46bdc0, 0x46d3d0, the
+  object drawer 0x424b90, 0x46ebb0, 0x46c9b0, 0x42edc0, 0x46e360, a hook, Sky_Draw and the flush.
+- **Objects_Draw 0x424b90.**
+  - Light_Frame 0x43a4d0 first: the lights in view. Its terrain height queries leave the FPU rounding
+    down, for the rest of the frame.
+  - k = 1 / view sx. Spheres are tested at 1.1 × the radius (0x4a58cc).
+  - The camera's target entity (0x4a8660, by default the user's) is skipped when 0x4a847c is set.
+  - **Group entities** (flag 0x100) queue each child node on its own: its centre (+0x84) through its frame
+    (Point_ToWorld 0x4525c0) to camera space, a sphere test at its radius (+0x90). In view, a record of
+    type 7 (node flag 0x40) or 5. Fields: the node, the camera centre, the radius, the level of detail,
+    ~test & 0x100, "no children", and the node's +0x14 loses 0x11. A class 0x34 child with a merge target
+    (data +0x10) joins that merge (0x48d450) instead of being queued, its record kept at data +0x14.
+  - **Other entities**: the entity's centre (+4) through the node's frame, tested at its radius (+0x10).
+    In view, it goes on the moving list (classes 1, 7, 9) or the static list. Out of view, its merge, if
+    any, loses its node.
+  - **The level of detail** (the entity's three SDFC distances b, +0x1c): 0 without them. With detail
+    byte 9: the first i < 3 with b[i] · z · k below the radius, else 3. Without it: 3 for moving entities,
+    else 2 if b[2] · z · k is below the radius, else 3. A group child uses z · k rounded first; class
+    0x33 always 0.
+  - **Shadows** (detail byte 6), static list then moving list, within z < 50 (the bits as an integer):
+    types 0xb and 3, the entity as the node, level 3 with byte 6 = 1.
+  - **Type 6 records**: the static list, the user's headlights (0x4919e0, vehicles), the moving list,
+    each at z − r with the entity at +0x40.
+- **The queue's draw functions** (the table 0x4eb010):
+  - 0x48cd20 (type 5): "no children" → 0x4352e0; an entity → 0x4356f0; else 0x434f10.
+  - 0x48ccd0 (type 6): "no children" → 0x4352e0, else 0x4356f0.
+  - 0x48cef0 (type 7, and the merged class 0x34 nodes): the mesh in the heading frame at the node's
+    position, q 0.9 (0x3f666666), the mode `0x4d6078[flag1 + flag0·8]` (with flag2: & ~0x60 | 0xa0),
+    & the node's +0x14 & 0xff; drawn face by face.
+  - 0x48cd60 (types 3, 11): the shadow, 0x4a3c20. 0x48cd80 (type 10).
+- **The mesh drawers** share the view 0x5509f0, the level 0x550a08 (record +0x30), a mode or-ed into
+  every face 0x550a04 (record +0x34: 0x100 when crossing the frustum), the camera-space vertex buffer
+  0x58dcb0 (its q after the vertices) and a face-record cursor 0x5509e4 into the pool 0x58dcb4:
 
-  - The mode is `0x4d6078[flag1 + flag0·8]` (flag0 0 becomes 4), | 0x80 with flag2, & the node's +0x14,
-    | 0x550a04.
-  - A face whose plane's d is positive (facing away) keeps only its plane and centre.
-  - Each record is inserted into a BSP tree (0x550a50) by its centre's side of each plane on the way
-    down: front if `plane·centre + d ≥ 0x4a5e50`.
-  - The children's meshes go in the same tree (0x434e70, 0x434a40).
-  - The tree is then walked from the camera's far side of each plane to its near side. Each face with
-    vertices is drawn straight away with DrawPoly. Its texture is Tex_Get(node, name) (0x47c320); without
-    one, the mode loses its texture bits (& ~0x14).
-
-## Entities and classes
-
-- **0x423d30(node, a, b)** takes the first free entry of the entity array 0x547e60 (0x1e dwords each, at
-  most 0x100: "You had exceeded the maximum number of entities allowed") and fills it:
-  - +0 the node, +0x14 / +0x18 `a`, +0x1c five dwords of `b` and a flag at +0x30;
-  - +4 the centre of the node's box (0x42eb90), times 0.5;
-  - +0x10 a radius (0x42e9f0).
-
-  A node with flag 0x10 becomes the player's entity (0x4d3b64). Every callback of 0x54f7b8 (count
-  0x4d3b54) is then called with the entry.
-- **0x425700(node, class)** sets +0x6c and looks the class up in the table 0x4d3c20. Classes for which
-  0x42e5e0 is true count as 2, except 4. Each entry is 13 dwords: the class and 12 handlers. The first
-  handler's result becomes the node's +0x70. The node is then registered (properties `clasfn`, the lists
-  0x54f884 / 0x54f888).
-
-  The classes in the table:
-
-  | Class | Classes |
+  | Offset | Field |
   |---|---|
-  | 0 | none |
-  | 1 | the player's car? (12 handlers) |
-  | 2, 4 | structures |
-  | 5 | |
-  | 7, 8, 9, 10 | |
-  | 20–24 | |
-  | 30–36 | |
-  | 40, 41 | |
-  | 50–53 | |
-- **LOD cache.** 0x47d700(node, name, state, lod) and 0x47dc70(node, lod) keep a record per node in the
-  hash table 0x57f558. It has 0x7ed buckets, keyed by `(node·0x6cd + 0xaab) % 0x7ed`, i.e. by the node's
-  address; only the chains' order depends on it. A record holds:
-  - the current and the previous geometry with their LOD indices and names;
-  - per state, a list of 0x74 bytes: 7 names of 16 bytes, then the next state at +0x70.
+  | +4 | n (0 for a splitting plane or a face turned away) |
+  | +8 | node |
+  | +0xc | texture name (15 characters) |
+  | +0x1c | colour |
+  | +0x20 | mode |
+  | +0x24 | centre, camera space |
+  | +0x30 | plane, camera space |
+  | +0x40, +0x44 | front, back |
+  | +0x48 | the vertices, 24 bytes each: x, y, z, u, v, q |
 
-  0x47dc70 returns the current geometry when the LOD is unchanged. It swaps current and previous when the
-  LOD is the previous one. Otherwise it loads the name (Geom_Get), but only when the name differs; it
-  releases the old previous and calls Tex_Refresh(node).
+  - **0x434a40** (a node's faces in a frame): flag 0x40 nodes use the heading frame at the frame's
+    position. The vertices go to camera space (Frame_Points) and are lit (0x43aa90). Each face with 3 or
+    more corners gets its centre and plane in camera space; a plane whose d (bits, as an integer) is
+    positive faces away and keeps no vertices. The mode is `0x4d6078[flag1 + flag0·8]` (a flag0 of 0 is
+    set to 4 in the mesh itself), | 0x80 with flag2, & the node's +0x14, | 0x550a04.
+  - **0x4351f0**: a face as a splitting plane only (n = 0).
+  - **The tree** 0x550a50: a record goes down by its centre's side of each plane, back when
+    plane·centre + d is below 0. 0x434a40 sums the terms (y + z) + x, the others (x + z) + y.
+  - **0x434f10** (a node with children): Light_Node 0x43a7c0, Lod_Select, its own faces as splitting
+    planes, then each child (0x434a40) and their descendants (0x434e70), then the walk.
+  - **0x4352e0**: the merge's members (not class 0x34) as in 0x434f10, each lit; then the record's node
+    itself, not lit again (it keeps the last member's lights, or the previous object's); the walk; then the
+    class 0x34 members by 0x48cef0.
+  - **0x4356f0** (an entity): 0x434f10's steps, the merge's members, the walk, the class 0x34 members.
+  - **The walk**: down to the back when the plane's d bits (unsigned) are below 0x80000001, else the
+    front; each face with vertices is drawn on the way back up, then the other side. A textured mode
+    (bit 4) looks the texture up (Tex_Get 0x47c320, owner the node). Without a name or a texture the
+    mode loses 0x14 and the colour argument becomes the failed lookup's 0. The mode gets 0x10.
 
-## The set-up before a mission
-
-WinMain runs a list of set-up functions before each mission (after Shell_Load). Those the objects need,
-in its order, are Objects_Init:
-
-1. Entity_Init 0x423b90.
-2. World_ListInit 0x48e110.
-3. Lod_Init 0x47d6c0.
-4. Collide_Init 0x469bd0. Its entity callback (0x469c10) comes after those of 0x41fbc0 (radar),
-   0x4088a0 (AI) and 0x428d80 (artillery), which only act on vehicles.
-5. Chunks_Init 0x45ada0. The chunk manager it makes is always entity 0.
-
-The effects' set-up 0x453ed0 comes before Chunks_Init and loads three `.xdf` files, each of which
-registers a class.
-
-WDEF loads the scrounge (0x494a30) right after it reads the scrounge's name. The scrounge is a class 5
-node with a zero rotation and half extents of 50, put on the world list before its `.sdf` is read.
-
-## The collision set-up (0x469c10)
-
-Every entity added goes through 0x469c10.
-
-- **0x46b480** picks a collision type by class: 0x2000 for 2, 7, 8 and 10; 0x3000 for 3, 0xb and 0xc;
-  0x5000 for 4. Classes 1 and 9 (vehicles) go to 0x46b950. It sets the entity's +0x14 to 3.
-- **0x46b830** walks the tree in world frames. A node without a type of its own (flags & 0xf000) takes
-  that one. A node not drawn, of class 0x37, or without a mesh gets 0x1000.
-  - For 0x3000 it builds a face mesh in the world (0x478e70, the node's +0x80): the vertices, then each
-    face of 3 corners or more with its plane. The normal is rounded and then negated; d is negated and
-    then rounded.
-  - A mesh that cannot be built sets 0x1000, but the type is then written over it: such a node keeps
-    0x3000 without a mesh.
 - **Static entities** (not 1, 7 or 9) go on the list 0x577180, with a box on the ground plane at +0x50:
   the centre in the world ± the radius.
 - **Classes 11–13** (0x477200) collect into their +0x18 the faces whose normal y is above 0.4 (the
   bits compared as an integer). With class 0xc, only those of class 0xd nodes count.
 
 ## Quirks kept
+
+- 0x4352e0 draws its node with the lights of the last node lit.
+- 0x48d450's limit (0x5f3184) is 4 × the merges' allocation past it; the port stops at the table's 20.
+- A face whose texture lookup fails is drawn untextured with colour 0, not its own.
 
 - Node_Bounds and Node_Radius also walk the node's siblings.
 - Lod_Select on a node without a record returns false. So a structure whose mesh came from SOBJ

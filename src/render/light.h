@@ -4,6 +4,8 @@
    lighting (0x43a7c0 on) is not ported yet. */
 #pragma once
 #include <stdint.h>
+#include "math3d.h"
+#include "render/view.h"
 
 extern int g_light_env;            /* 0x550f70: 0-7 */
 extern int g_light_count;          /* 0x550f74: dynamic lights */
@@ -31,9 +33,31 @@ typedef struct {
     float range;         /* +0x10 */
     float dir[3];        /* +0x14: a spot's direction, negated */
     float pos[3];        /* +0x20 */
-    uint32_t rest[16];   /* +0x2c */
+    float ybias;         /* +0x2c: -25 when the light was raised off the ground */
+    float wdir[3];       /* +0x30: the direction through the node's rotation (each frame) */
+    float cdir[3];       /* +0x3c: in camera space */
+    float cpos[3];       /* +0x48: the position in camera space */
+    float wpos[3];       /* +0x54: in the world */
+    float wpos2[3];      /* +0x60: in the world, 25 higher when it was within 25 of the ground */
 } Light;
 extern Light g_lights[0x200];
+extern Light *g_lights_seen[24];   /* 0x550f94: the lights in view this frame */
+extern int g_lights_seen_count;    /* 0x550f78 */
+extern Light *g_node_lights[5];    /* 0x550f80: the node's (at most 4) */
+extern int g_node_light_count;     /* 0x550f7c */
+
+/* Light_Frame 0x43a4d0 (not under the sun): the lights whose sphere (3 x the range) is in view, their
+   positions and directions for the frame */
+void Light_Frame(const View *view);
+/* Light_Node 0x43a7c0: the node's lights, by their strength at its position (at most 4; not under the
+   sun, none) */
+void Light_Node(const void *node);
+/* Light_Vertices 0x43aa90: q for each of n vertices (camera space, xyz) with its normal (the node's
+   space): the sun through world (the node's world frame), each light's through cam (the node's camera
+   frame); the depth term under the sun only */
+void Light_Vertices(float *q, const float (*v)[3], const float (*normals)[3], const float *world,
+                    const float *cam, int n);
+
 /* Light_Add 0x43a1f0: a node's light (one a node), only where the environment is not the sun's; the
    range at least 20, the angle within [10 degrees, pi/2]; a spot without dir points down the node's z
    axis (frame, the node's rotation) */

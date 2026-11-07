@@ -108,20 +108,72 @@ static uint8_t *class10_new(void)
     return d;
 }
 
+/* an identity frame (0x4db298) and two or three words (35, 36: 0x426350 / 0x426380, 41: 0x433340) */
+static uint8_t *frame_new(uint32_t a)
+{
+    uint8_t *d = class_alloc(0x50);
+    if (d) {
+        memcpy(d, exe_data(0x4db298, 0x40), 0x40);
+        put32(d + 0x40, a);
+    }
+    return d;
+}
+static uint8_t *class35_new(void) { return frame_new(0x14); }
+static uint8_t *class36_new(void) { return frame_new(0x15); }
+static uint8_t *class41_new(void) { return frame_new(0); }
+static uint8_t *class31_new(void) { return class_alloc(8); }      /* 0x4342d0 */
+static uint8_t *class32_new(void) { return class_alloc(0x10); }   /* 0x4337f0 (32, 33) */
+static uint8_t *class40_new(void) { return class_alloc(0xb8); }   /* 0x433150, not cleared */
+static uint8_t *class52_new(void) { return class_alloc(0x18); }   /* 0x4547f0, cleared */
+static uint8_t *class20_new(void)                                 /* 0x434510 */
+{
+    uint8_t *d = class_alloc(8);
+    if (d) put32(d, 400), put32(d + 4, 400);
+    return d;
+}
+static uint8_t *class21_new(void)   /* 0x42f330 */
+{
+    static const uint32_t w[10] = {300, 300, 1, 0x3ccccccd, 0, 0x48927c00, 0x3f800000, 0x44834000, 0x45dac000, 0};
+    uint8_t *d = class_alloc(0x2c);
+    if (d) memcpy(d, w, sizeof w);
+    return d;
+}
+static uint8_t *class22_new(void)   /* 0x4303b0 */
+{
+    static const uint32_t w[5] = {0, 150, 150, 0x3f800000, 0x3f800000};
+    uint8_t *d = class_alloc(0x18);
+    if (d) memcpy(d, w, sizeof w);
+    return d;
+}
+static uint8_t *class23_new(void)   /* 0x430530 */
+{
+    static const uint32_t w[8] = {200, 200, 0, 0x3f800000, 0x3f800000, 0x3f800000, 0x3f800000, 0x3f800000};
+    uint8_t *d = class_alloc(0x20);
+    if (d) memcpy(d, w, sizeof w);
+    return d;
+}
+static uint8_t *class24_new(void)   /* 0x42d850 */
+{
+    static const uint32_t w[5] = {0, 0, 10, 10, 0};
+    uint8_t *d = class_alloc(0x18);
+    if (d) memcpy(d, w, sizeof w);
+    return d;
+}
+
 typedef uint8_t *(*ClassNew)(void);
 /* the table 0x4d3c20 in its order: the class and its constructor (handler 0) where ported. Entry 0
-   (class 0) is never found. The constructors still missing: 1 0x429170, 9 0x431390, 8 0x4288c0, 7
-   0x432ad0, 21 0x42f330, 22 0x4303b0, 30 0x42faf0, 23 0x430530, 20 0x434510, 35 0x426350, 36 0x426380,
-   34 0x41ff50, 52 0x4547f0, 31 0x4342d0, 32 and 33 0x4337f0, 53 0x45bc10, 24 0x42d850, 41 0x433340,
-   40 0x433150 (50, 51 and 5 have none). */
+   (class 0) is never found. The constructors still missing: the vehicles' (1 0x429170, 9 0x431390, 8
+   0x4288c0, 7 0x432ad0), 30 0x42faf0, 34 0x41ff50 and 53 0x45bc10 (50, 51 and 5 have none). Where the
+   original leaves the data uncleared, the port's is zero. */
 static const struct {
     int32_t cls;
     ClassNew make;
 } classes[] = {
     {0, NULL},  {2, structure_new}, {4, structure_new}, {1, NULL},  {9, NULL},  {8, NULL},  {7, NULL},
-    {10, class10_new}, {21, NULL}, {22, NULL}, {30, NULL}, {23, NULL}, {20, NULL}, {35, NULL},
-    {36, NULL}, {34, NULL}, {52, NULL}, {31, NULL}, {32, NULL}, {33, NULL}, {53, NULL}, {50, NULL},
-    {51, NULL}, {5, NULL},  {24, NULL}, {41, NULL}, {40, NULL},
+    {10, class10_new}, {21, class21_new}, {22, class22_new}, {30, NULL}, {23, class23_new}, {20, class20_new},
+    {35, class35_new}, {36, class36_new}, {34, NULL}, {52, class52_new}, {31, class31_new}, {32, class32_new},
+    {33, class32_new}, {53, NULL}, {50, NULL}, {51, NULL}, {5, NULL}, {24, class24_new}, {41, class41_new},
+    {40, class40_new},
 };
 #define NCLASSES (int)(sizeof classes / sizeof classes[0])
 

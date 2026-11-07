@@ -23,7 +23,7 @@ const uint8_t *Res_Get(const char *name, size_t *size);
 void Res_Release(const char *name);
 /* Res_Exists 0x4928c0: in a pak, or a file of the index */
 bool Res_Exists(const char *name);
-/* Res_Size 0x492600: the size, 0 for none (the original's file-index size: -1 when unknown) */
+/* Res_Size 0x492600: the size, 0 for none */
 int32_t Res_Size(const char *name);
 /* the pak holding a member, or NULL (for tools and tests) */
 const char *Res_PakOf(const char *name);

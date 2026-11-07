@@ -357,3 +357,42 @@ void Queue_Flush(const View *view, int end_merges)
     g_q_zmin = 1e6f;
     g_q_zmax = -1e6f;
 }
+
+void Queue_Poly(const View *view, void *verts, int n, PolyArg arg, int mode) { poly(view, verts, n, arg, mode); }
+
+void Queue_AddMerge(void *node, void *target)
+{
+    /* the original's limit 0x5f3184 is the allocation's end plus 4 times its size (a pointer sum scaled
+       twice): the port's is the table's end */
+    if (merge_end >= merges + MERGES) return;
+    void *root = target;
+    while (*(void **)((uint8_t *)root + 0x68)) root = *(void **)((uint8_t *)root + 0x68);   /* Node.prev */
+    QMerge *m = NULL;
+    for (QMerge *e = merges; e < merge_end; e++)
+        if (e->node == root) {
+            m = e;
+            break;
+        }
+    if (!m) {
+        m = merge_end++;
+        m->node = root;
+        m->arg = NULL;
+        m->bucket = 1000000;
+        m->n = 1;
+        m->m[0].node = node;
+        m->m[0].b = 0;
+        m->m[0].bucket = 1000000;
+    } else if (m->n != 8) {
+        m->m[m->n].node = node;
+        m->m[m->n].b = 0;
+        m->m[m->n].bucket = 1000000;
+        m->n++;
+    }
+}
+
+QMerge *Queue_FindMerge(void *node)
+{
+    for (QMerge *e = merges; e < merge_end; e++)
+        if (e->node == node) return e;
+    return NULL;
+}

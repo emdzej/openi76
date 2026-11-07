@@ -107,6 +107,25 @@ void Node_Free(Node *n)
     }
 }
 
+void Node_FrameIn(Frame *out, const Node *n, const Node *upto)
+{
+    if (n == upto) {
+        identity(out);
+        return;
+    }
+    Frame f = n->frame;
+    while (n->prev && n->prev != upto) {
+        const Node *p = n->prev;
+        if (p->child == n) {
+            Frame t;
+            Frame_Mul(&t, &f, &p->frame);
+            f = t;
+        }
+        n = p;
+    }
+    *out = f;
+}
+
 Node *Node_Find(Node *n, const char *name)
 {
     for (; n; n = n->next) {

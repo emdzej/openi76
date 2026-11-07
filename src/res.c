@@ -281,11 +281,12 @@ int32_t Res_Size(const char *name)
     if (!name || !*name) return 0;
     const Member *m = find(name);
     if (m) return m->size;
-    if (!zix_find(name)) return -1;
+    /* not found, or not opened (0x48c960): 0 */
+    if (!zix_find(name)) return 0;
     char path[96];
     zix_path(name, path, sizeof path);
     int64_t n = vfs_size(path);
-    return n < 0 ? -1 : (int32_t)n;
+    return n < 0 ? 0 : (int32_t)n;
 }
 
 const char *Res_PakOf(const char *name)

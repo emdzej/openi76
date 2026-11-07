@@ -281,3 +281,20 @@
 00477510	Coll_GroundFaces	collide	high	the meshes' faces with normal y above 0.4; ported
 004240e0	Entity_WorldSphere	entity	high	the entity's centre in the world and its radius
 00484820	Mission_Exit	world	high	no user vehicle: fatal
+00424b90	Objects_Draw	render	high	queues the entities in view (types 3/0xb shadows, 5/7 group children, 6); ported, diffed
+00434a40	Mesh_Faces	render	high	a node's faces in a frame into the face BSP, lit; ported, diffed
+004351f0	Mesh_PlaneRec	render	high	a face as a splitting plane only; ported, diffed
+00434e70	Mesh_Children	render	high	a sibling list's faces, recursively; ported, diffed
+00434f10	Mesh_DrawContainer	render	high	a node with children: its faces split, its children drawn; ported, diffed
+004352e0	Mesh_DrawLeaf	render	high	a childless node and its merge's members; ported, diffed
+004356f0	Mesh_DrawEntity	render	high	an entity's tree and its merge's members; ported, diffed
+00435b90	Mesh_Insert	render	high	the face BSP insertion ((x + z) + y); ported, diffed
+0048cef0	Mesh_DrawFlat	render	high	type 7 / class 0x34: the mesh in the heading frame, q 0.9; ported
+0048cd20	Queue_DrawType5	render	high	type 5's draw function; ported
+0048ccd0	Queue_DrawType6	render	high	type 6's draw function; ported, diffed
+0048cd60	Queue_DrawShadow	render	med	types 3 and 0xb: the shadow 0x4a3c20
+0043a4d0	Light_Frame	light	high	the dynamic lights in view; their terrain heights leave RC down; ported, diffed
+0043a7c0	Light_Node	light	high	a node's four strongest lights; ported, diffed
+0043aa90	Light_Vertices	light	high	the q of a mesh's vertices; ported, diffed
+004525c0	Point_ToWorld	math	high	a float point through a frame, in doubles; ported
+0042e6d0	Node_FrameIn	scene	high	a node's frame up to an ancestor; ported

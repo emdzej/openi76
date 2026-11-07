@@ -228,7 +228,7 @@ const Texture *Tex_Pixels(const char *name)
         return p->tex;
     }
     snprintf(vqm, sizeof vqm, "%s.vqm", base);
-    if (Res_Size(vqm) <= 0) {   /* no .vqm: the .map's bytes are the texture */
+    if (Res_Size(vqm) == 0) {   /* no .vqm: the .map's bytes are the texture */
         const uint8_t *d = Res_Get(name, NULL);
         if (!d) fprintf(stderr, "Error texture %s not found\n", name);
         return (const Texture *)d;

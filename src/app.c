@@ -17,6 +17,7 @@
 #include "vfs_zfs.h"
 #include "world.h"
 #include "render/draw.h"
+#include "render/obj_draw.h"
 #include "render/palette.h"
 #include "render/queue.h"
 #include "render/road_draw.h"
@@ -53,6 +54,7 @@ static bool viewer_init(const char *mission)
         plat_log(m);
         return false;
     }
+    Objects_DrawInit();
     Objects_Init();
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
@@ -106,8 +108,12 @@ static void viewer_frame(void)
 {
     /* with DET_SHADOWS the original clears the shadow mask's surface (0x58d890) here; no shadows are
        drawn yet */
+    Render_SetHeading(&view);
     Terrain_Draw(&view);
     Roads_Draw(&view);
+    /* 0x46bdc0 and 0x46d3d0 are not ported yet */
+    Objects_Draw(&view);
+    /* nor 0x46ebb0, 0x46c9b0, 0x42edc0, 0x46e360 and the hook */
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
     plat_present(pixels, 640, 480, 640, g_shown_pal);

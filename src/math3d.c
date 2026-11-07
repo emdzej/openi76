@@ -88,6 +88,17 @@ Frame *Frame_Mul(Frame *out, const Frame *a, const Frame *b)
     return out;
 }
 
+void Point_ToWorld(double out[3], const float p[3], const Frame *f)
+{
+    const float *m = f->m;
+    double x = ADD(ADD(ADD(MUL(m[6], p[2]), MUL(m[3], p[1])), MUL(m[0], p[0])), f->pos[0]);
+    double y = ADD(ADD(ADD(MUL(m[1], p[0]), MUL(m[4], p[1])), MUL(m[7], p[2])), f->pos[1]);
+    double z = ADD(ADD(ADD(MUL(m[2], p[0]), MUL(m[8], p[2])), MUL(m[5], p[1])), f->pos[2]);
+    out[0] = x;
+    out[1] = y;
+    out[2] = z;
+}
+
 void Frame_Points(float (*out)[3], const float (*in)[3], int n, const Frame *f)
 {
     const float *m = f->m;

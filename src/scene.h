@@ -47,6 +47,9 @@ void Node_Ref(Node *n);
 Node *Node_Parent(Node *n);
 /* Node_Free 0x41f4b0: unlinks the node and drops a reference (the parent's count); at none it is freed */
 void Node_Free(Node *n);
+/* Node_FrameIn 0x42e6d0: the node's frame in the space of its ancestor upto (NULL: the world), up the
+   previous-sibling links, multiplying at each parent */
+void Node_FrameIn(Frame *out, const Node *n, const Node *upto);
 /* Node_Find 0x484880: depth first from n, through its siblings, the node named name (8 bytes) */
 Node *Node_Find(Node *n, const char *name);
 /* Node_Bounds 0x42eb90: the box of the node's meshes and its siblings' (and their children's), in the
