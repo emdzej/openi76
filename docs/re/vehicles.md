@@ -401,11 +401,12 @@ t10 and t05.
 ## Damage on the inner parts (0x42bf90)
 
 `Damage_Parts` 0x42bf90 (`src/damage.c`) takes what is left of a packet after `Damage_Side`. Its
-arguments are the side, a kill flag and the speed.
+arguments are the side, a kill flag and the vehicle's health (the vehicle's damage passes
+`Vehicle_Health`, the wear 100).
 
 1. **Deflected.** With a working special of kind 9 the packet is turned away a tenth of the time
    (`rand() % 100 < 10`): its mask is cleared and the result is 0.
-2. **The part.** A packet aimed at the tyres (+6 bit 0) below 33 m/s (by the float's bits) goes to part 6,
+2. **The part.** A packet aimed at the tyres (+6 bit 0) on a vehicle whose health is below 33 % (by the float's bits) goes to part 6,
    and its +0x10 becomes `(rand() & 0x32) + 0x4b`. Otherwise the part is drawn from the side's list
    (+0x1a0 + 4·side the count, +0x1bc + 0x44·side the parts' numbers, -1 none, which ends with 0) until
    it is one that exists and is not 6.
@@ -515,3 +516,87 @@ The smoke trails (0x46e0c0-0x46e2e0, the list 0x5772ec, enabled by 0x4dd080) are
 Checked: `diff_objects.py --call wear` (eight amounts in turn per vehicle: the health, the sum, the flags,
 the chassis and armour, and all parts' state after each) is identical on t01, s04, t15, s01, a01, t10 and
 t05, and upside down on t01. The physics and the frame, now with the wear, stay identical on t01, s04 and t15.
+
+## A vehicle's damage (0x429eb0)
+
+`Vehicle_Damage` 0x429eb0 (`src/damage.c`) is class 1's damage handler (the class table's word 10, through
+`Class_Damage` 0x425df0). Its arguments are the node, a packet and the point hit, in the node's frame.
+`Vehicle_Kill` 0x42b790 calls it with neither, after setting bit 0x20: then only the smoke and the death
+run.
+
+1. With a packet it returns 0 at once when the node's flag 0x20 is set, or when the vehicle is already
+   dead (+0x454 bit 0x20).
+2. With a point, sparks ("CHUNK4", 0x4d57c4, 0x45c780) fly at the point in the world (`Frame_Points`).
+   Not ported yet.
+3. **The side.** The point is normalised (`Fast_InvSqrt`), and so is its (x, z):
+
+   | Test, by the bits | Side | List |
+   |---|---|---|
+   | y above 0x3f4ccccd (0.8) | 4 | 6 |
+   | u = x' above 0x3f34fdf4 (0.707) | 2 | |
+   | u below -0.707 (unsigned above 0xbf34fdf4) | 1 | |
+   | w = z' above 0.707 | 0 | |
+   | otherwise | 3 | |
+
+   The list is split again on the same values. The first test is on w unrounded: above 0.707 (0x4a59f4)
+   gives 0, below -0.707 gives 5. Otherwise w positive gives 3 (u positive) or 1, else 4 (u positive) or 2.
+4. The side's health before the hit is `Side_Whole` 0x42d010 (inlined): the lesser of the chassis's
+   +0x178 / +0x158 and the armour's +0x18c / +0x168, each cur × 0.01 without a maximum or for side 4. The
+   chassis's is taken only when the armour's is greater.
+5. A packet for the tyres (+6 bit 0) on a vehicle whose health is above 33 (0x4a5a00) becomes mask 1 with
+   5 for the chassis.
+6. `Damage_Side` on the side, with the user flag.
+7. **The headlamps.** On the front (side 0), the light goes off (`Light_SetOn` 0) when the front is now
+   below 0.5 and was above 0.5 (by its bits).
+8. While the side returns something, `Damage_Parts(d, list, packet, 1, Vehicle_Health)`, the health
+   rounded to a float.
+9. **The look**, unless the vehicle was dead before. The side's health now gives the level: 0 above 0.75,
+   1 above 0.5, 2 above 0.25, else 3. Then `Damage_Look(d, side, level)`. The body part (+0x408 by the
+   table 0x4d5428) gets frame 0, 1, 1 or 2 (by the level) of its textures: the table 0x4d5458's count for
+   the side (6, 1, 1, 5, 1) of the names at 0x4d5470 (13 bytes each, 10 a side), `Tex_SetFrame` with dimension 0.
+
+Then, with or without a packet:
+
+- The health × 0.01, unrounded, below 1 gives `Vehicle_Smoke`.
+- Alive (no bit 0x20), it returns 0. Otherwise it is the death, and it returns 1.
+
+**The death.** Network play first sends "%s has been killed" or "%s was killed by %s" (0x461900, 0x464b60);
+not ported. Then:
+
+- With +0x454 bit 0x4000 (killed through its tyres, `Damage_Parts`):
+  - the timer +0x450 becomes 10 and the flags get 0x80008000;
+  - unported steps: 0x46fdb0 (a list at 0x4dd904), the AI's own death for others than the user (0x488950),
+    the guns (0x455370), the engine's sound (0x476440);
+  - `AI_Rethink` 0x408bf0, the sound 2 (0x4683c0) and `Node_SetFlags(n, 0x200)`;
+  - for the user's vehicle: only the menu keys (0x480680), the death camera (0x407010 with 0xfefe), the HUD
+    (0x428890) and 0x4def9c = 8.
+- Otherwise the wreck, `Vehicle_Wreck` 0x42c580 (not ported yet).
+- A kill by the user scores (0x4072e0: 0x4ed940 the kills, 0x4ed93c the points). This only happens in the
+  melee mode, while 0x4a8760 is set (0x407030); never in a mission.
+
+## An impact's damage (0x45d7c0)
+
+`Impact_Damage` 0x45d7c0 takes the node, the source (NULL for the ground), the velocity, the normal and the
+point. The physics calls it for a hard corner on the ground and for a landing.
+
+1. While 0x4dc464 is set the user takes none. Nothing sets it.
+2. **The packet** (0x1c bytes, zeroed):
+   - A projectile (class 0x33, 0x45ced0) or a 0x34 (0x4543a0) gives its own packet. A projectile of kind
+     0x12 (0x45ce90) adds the tyres' bit (+6 bit 0). Not ported yet: the port leaves the packet empty.
+   - Anything else gives mask 8.
+3. **The armour's amount**, with mask 8:
+   `ftol(m × (v · -n)² × k)`, where the sum is `x + (y + z)`. m is the source's mass (+0 of `Body_State`)
+   with k = 6.67e-5 when the source moves (0x42e640: classes 1, 7, 9). Otherwise m is the node's own, with
+   k = 1e-4.
+4. For the user's vehicle, above 20: the cockpit's knock (0x433240 with the amount × 0.02, 0x452cd0 the
+   screen's shake). Not ported yet.
+5. The packet's +0 is the source when it is a vehicle. The kind is 4 (ground), 1 (vehicle), 2
+   (structure), 0x10 or 0x18 (projectile) or 0x10 (0x34). For the user, the HUD shows the damage's
+   direction (0x468a70), `atan2(n.z, n.x)` in degrees.
+6. `Node_Ref`, `Class_Damage(n, packet, point)`, `Node_Live`, then `Node_Unref` when it lives. With a source
+   and a live node, 0x40fc80 credits the source (not ported). It returns 1 while the node lives.
+
+Checked: `diff_objects.py --call hit` (twelve packets at points round each vehicle, through `Class_Damage`,
+both deaths reached) and `--call impact` (twelve ground impacts) are identical on t01, s04, t15, s01, a01,
+t10 and t05, and upside down on s04. The physics, the frame, the state, the parts and the wear stay
+identical on t01, s04 and t15.

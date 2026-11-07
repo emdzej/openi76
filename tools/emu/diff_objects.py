@@ -409,8 +409,42 @@ def call_wear(exe, n, fpcw):
         CALL_OUT.append(b.hex())
 
 
+PTS = ((0, 0, 3), (0, 0, -3), (-2, 0, 0.5), (2, 0.3, -0.5), (0, 2, 0), (1.5, 0, 1.6), (-1.4, 0.2, -1.5),
+       (0.3, -1, 2), (-2, -0.5, -2), (0, -2, 0), (1, 0.5, -3), (-0.2, 0.1, 2.5))
+
+
+def hits(exe, n, fpcw, impact):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    masks = (8, 1, 3, 0xB, 9, 2, 0xF, 8, 1, 0xB, 3, 8)
+    for j in range(12):
+        at = exe.put(struct.pack("<3f", *PTS[j]))
+        if not impact:
+            pk = exe.put(struct.pack("<IHH4I", 0, masks[j], int(j % 4 == 1), 40 * j + 9, 25 * j + 3, 700, 60 * j + 11) + bytes(4))
+            r = exe.call(0x425DF0, n, pk, at, fpcw=fpcw)
+            b = exe.read(pk, 0x1C)
+        else:
+            v = exe.put(struct.pack("<3f", (j % 3) * 4 - 3, -j * 2.5, (j % 5) * 3 - 6))
+            nv = exe.put(struct.pack("<3f", 0.1 * (j % 3), 0.95, -0.2))
+            r = exe.call(0x45D7C0, n, 0, v, nv, at, fpcw=fpcw)
+            b = bytes(0x1C)
+        b += struct.pack("<i", r) + exe.read(d + 0x450, 8) + exe.read(d + 0x138, 0x68)
+        for i in range(20):
+            p = struct.unpack("<I", exe.read(d + 0x3A8 + 4 * i, 4))[0]
+            q = struct.unpack("<I", exe.read(p + 0x70, 4))[0] if p else 0
+            b += exe.read(q, 0x18) if q else bytes(0x18)
+        CALL_OUT.append(b.hex())
+
+
+def call_hit(exe, n, fpcw):
+    hits(exe, n, fpcw, False)
+
+
+def call_impact(exe, n, fpcw):
+    hits(exe, n, fpcw, True)
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -528,10 +562,12 @@ def original():
         from unicorn import x86_const
         exe.call(0x425920, limit=500_000_000, fpcw=exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
     if CALL:
-        exe.stub(0x429EB0, lambda *a: 0, 3)   # the death
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
-        exe.stub(0x45D7C0, lambda *a: 0, 3)   # an impact's damage
+        # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
+        for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x40FC80, 5), (0x46FDB0, 1),
+                     (0x488950, 1), (0x455370, 1), (0x476440, 2), (0x407010, 2), (0x428890, 0)):
+            exe.stub(f, lambda *a: 0, k)
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
         exe.stub(0x42C580, lambda *a: 0, 2)   # the wreck
         exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)

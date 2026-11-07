@@ -593,3 +593,12 @@
 0046e220	Smoke_Stop	effects	med	removes an object's smoke trail
 0046e270	Smoke_Density	effects	med	an object's smoke trail's density
 0046e2b0	Smoke_Kind	effects	med	an object's smoke trail's kind
+00429eb0	Vehicle_Damage	damage	high	class 1's damage handler: the side by the point, the parts, the look, the smoke, the death
+0042d010	Side_Whole	damage	high	a side's lesser of the chassis's and the armour's health
+0045d7c0	Impact_Damage	damage	high	an impact's packet (mass x (v.-n)^2 x k, or a projectile's) through Class_Damage
+00408bf0	AI_Rethink	ai	high	every team's vehicles' AI block +0xa714 = 1
+004072e0	Melee_Kill	score	med	a kill by the user: 0x4ed940 += 1, 0x4ed93c += points (melee only, 0x4a8760)
+00423fc0	User_Entity	entity	high	returns 0x4d3b64
+00433240	Cockpit_Knock	camera	med	the user's knock on the eye node by an impact
+00452cd0	Screen_Shake	camera	med	in the cockpit: the shake's parameters 0x4db32c-0x4db338
+00468a70	Hud_DamageArrow	hud	low	a free damage-direction record (or NULL)

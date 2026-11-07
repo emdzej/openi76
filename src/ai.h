@@ -8,6 +8,8 @@
 extern int g_team_count[AI_TEAMS];            /* 0x505460 */
 extern Entity *g_teams[AI_TEAMS][0x40];       /* 0x4edc30 */
 
+/* AI_Rethink 0x408bf0: every team's vehicles told to choose again (their AI block's +0xa714 = 1) */
+void AI_Rethink(void);
 /* AI_Init 0x4088a0: the teams emptied and the callback registered (its other set-up is not ported) */
 void AI_Init(void);
 /* 0x505494: set when something goes for the user's vehicle this frame (0x409bc0), cleared each frame

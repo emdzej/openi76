@@ -59,9 +59,14 @@ static void ai_add(Entity *e)
     put32(ai + 0xa82c + 0x110, -1);
     put32(ai + 0xa82c + 0x11c, 1);
     put32(d + 0x45c, Terrain_Class(n->frame.pos[0], n->frame.pos[2]));
+    AI_Rethink();   /* 0x408bf0, inlined here */
+    put32(ai + 8, 1);
+}
+
+void AI_Rethink(void)
+{
     for (int t = 0; t < AI_TEAMS; t++)
         for (int i = 0; i < g_team_count[t] && i < 0x40; i++) put32(ai_of(g_teams[t][i]->node) + 0xa714, 1);
-    put32(ai + 8, 1);
 }
 
 int g_user_pressed;

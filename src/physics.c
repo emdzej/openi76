@@ -116,16 +116,13 @@ void Vehicle_PhysInit(Node *n)
     /* 0x4761b0: the engine's sound (0x476240); no audio yet */
 }
 
-/* 0x429eb0: a vehicle's death (the wreck, the explosions, the score and the messages); not ported yet */
-static void vehicle_die(Node *n) { (void)n; }
-
 void Vehicle_Kill(Node *n)
 {
     if (!n || n->cls != 1) return;
     uint8_t *d = n->data;
     if (rd32(d + 0x454) & 0x8020) return;
     put32(d + 0x454, rd32(d + 0x454) | 0x20);
-    vehicle_die(n);
+    Vehicle_Damage(n, NULL, NULL);   /* 0x429eb0 */
 }
 
 /* 0x4683c0: a sound at the node (4: the vehicle righted); no audio yet */
@@ -884,11 +881,14 @@ int Corners_Hit(Node *n, uint8_t *c, float dt)
     return 0;
 }
 
-/* 0x45d7c0: the damage of an impact (the node, 0, the velocity reversed, the normal, the corner): not
-   ported yet */
+/* Impact_Damage 0x45d7c0 by the ground: the velocity, the normal and the point as the original's bytes */
 static void impact_damage(Node *n, int a, const uint8_t *v, const float nv[3], const uint8_t *at)
 {
-    (void)n, (void)a, (void)v, (void)nv, (void)at;
+    (void)a;
+    float vv[3], aa[3];
+    memcpy(vv, v, 12);
+    memcpy(aa, at, 12);
+    Impact_Damage(n, NULL, vv, nv, aa);
 }
 /* 0x468580: a sound by name at a node: no sound yet */
 static void sound_named(const char *wav, Node *n, int a) { (void)wav, (void)n, (void)a; }

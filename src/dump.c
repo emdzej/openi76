@@ -733,6 +733,42 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 20:     /* twelve packets hitting at points round the vehicle: the packet, the result, the flags,
+                        the timer, the chassis and armour, every part's first 0x18 bytes */
+        case 21: {   /* twelve impacts of the ground: the same */
+            static const float pts[12][3] = {{0, 0, 3}, {0, 0, -3}, {-2, 0, 0.5f}, {2, 0.3f, -0.5f}, {0, 2, 0},
+                                             {1.5f, 0, 1.6f}, {-1.4f, 0.2f, -1.5f}, {0.3f, -1, 2}, {-2, -0.5f, -2},
+                                             {0, -2, 0}, {1, 0.5f, -3}, {-0.2f, 0.1f, 2.5f}};
+            static const uint16_t masks[12] = {8, 1, 3, 0xb, 9, 2, 0xf, 8, 1, 0xb, 3, 8};
+            for (int j = 0; j < 12; j++) {
+                uint8_t pk[0x1c] = {0};
+                int32_t r;
+                if (which == 20) {
+                    uint32_t a[4] = {40u * j + 9, 25u * j + 3, 700, 60u * j + 11};
+                    uint16_t hi = j % 4 == 1;
+                    memcpy(pk + 4, &masks[j], 2);
+                    memcpy(pk + 6, &hi, 2);
+                    memcpy(pk + 8, a, 16);
+                    r = Class_Damage(n, pk, pts[j]);
+                } else {
+                    float v[3] = {(float)(j % 3) * 4 - 3, -(float)j * 2.5f, (float)(j % 5) * 3 - 6};
+                    float nv[3] = {0.1f * (float)(j % 3), 0.95f, -0.2f};
+                    r = Impact_Damage(n, NULL, v, nv, pts[j]);
+                }
+                uint8_t b[0x1c + 4 + 8 + 0x68 + 20 * 0x18];
+                memset(b, 0, sizeof b);
+                memcpy(b, pk, 0x1c);
+                memcpy(b + 0x1c, &r, 4);
+                memcpy(b + 0x20, n->data + 0x450, 8);
+                memcpy(b + 0x28, n->data + 0x138, 0x68);
+                for (int i = 0; i < 20; i++) {
+                    Node *pn = *Data_Ptr(n->data, 0x3a8 + 4 * i);
+                    if (pn && pn->data) memcpy(b + 0x90 + i * 0x18, pn->data, 0x18);
+                }
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

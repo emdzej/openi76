@@ -10,6 +10,9 @@
 #include "render/fpu.h"
 #include "render/light.h"
 #include "lod.h"
+#include "input.h"
+#include "math3d.h"
+#include "tex.h"
 #include <string.h>
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -438,9 +441,8 @@ static int damage_gun(Node *n, uint8_t *p)
     return r;
 }
 
-int Class_Damage(Node *n, uint8_t *p, int a)
+int Class_Damage(Node *n, uint8_t *p, const float *at)
 {
-    (void)a;
     int cls = n->cls;
     if (Class_IsStructure(cls) && cls != 4) cls = 2;
     switch (cls) {
@@ -451,7 +453,8 @@ int Class_Damage(Node *n, uint8_t *p, int a)
     case 0x14: return damage_14(n, p);
     case 0x18: return damage_18(n, p);
     case 0x32: return damage_gun(n, p);
-    /* not ported yet: 2 0x430900 (structures), 4 0x434950, 1 0x429eb0 (a vehicle's death), 9 0x431c60,
+    case 1: return Vehicle_Damage(n, p, at);
+    /* not ported yet: 2 0x430900 (structures), 4 0x434950, 9 0x431c60,
        8 0x4289f0, 7 0x432ed0, 0xa 0x4346b0 */
     default: return 0;
     }
@@ -538,7 +541,7 @@ void Damage_Look(uint8_t *d, uint32_t part, uint32_t level)
     }
 }
 
-int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed)
+int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float health)
 {
     if (has_special(d, 9) && crt_rand() % 100 < 10) {   /* a working kind 9 turns a tenth away */
         memset(p + 4, 0, 2);
@@ -546,8 +549,8 @@ int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed)
     }
     int part;
     int32_t sb;
-    memcpy(&sb, &speed, 4);
-    if ((p[6] & 1) && sb < 0x42040000) {   /* aimed at the tyres, slower than 33 */
+    memcpy(&sb, &health, 4);
+    if ((p[6] & 1) && sb < 0x42040000) {   /* aimed at the tyres, the vehicle below 33 % */
         part = 6;
         put32(p + 0x10, (crt_rand() & 0x32) + 0x4b);
     } else {
@@ -561,7 +564,7 @@ int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed)
     }
     Node *n = slot(d, 0x3a8 + (uint32_t)part * 4);
     if (part_points(n, 0)) {
-        int r = Class_Damage(n, p, 0);
+        int r = Class_Damage(n, p, NULL);
         n = slot(d, 0x3a8 + (uint32_t)part * 4);
         if (n->cls == 0x1e) {
             int32_t h, m;
@@ -745,4 +748,143 @@ void Terrain_Wear(Node *n, float amount)
     while (left) left = Damage_Parts(d, r, p, 0, 100.0f);
     double h = fpu_mul(Vehicle_Health(n), exe_f32(0x4a59fc));
     if (h < 1.0 || h != h) Vehicle_Smoke(d, fpu_f32(h));
+}
+
+float Side_Whole(const uint8_t *d, uint32_t side)
+{
+    float a = side != 4 ? whole(d, 0x178 + 4 * side, 0x158 + 4 * side) : fpu_f32(fpu_mul((double)rd32(d + 0x188), exe_f32(0x4a59fc)));
+    float b = side != 4 ? whole(d, 0x18c + 4 * side, 0x168 + 4 * side) : fpu_f32(fpu_mul((double)rd32(d + 0x19c), exe_f32(0x4a59fc)));
+    return b > a ? a : b;
+}
+
+/* not ported yet: the sparks (0x45c780, "CHUNK4" at the point), the death's other steps (0x46fdb0, the
+   AI's death 0x488950, the guns' 0x455370, the engine's sound 0x476440, the death camera 0x407010 with
+   0xfefe, the HUD 0x428890) */
+static void sparks(const float at[3]) { (void)at; }
+static void death_steps(Node *n, int user) { (void)n, (void)user; }
+
+int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
+{
+    uint8_t *d = n->data;
+    if (p && (n->flags & 0x20)) return 0;
+    int was_dead = (rd32(d + 0x454) & 0x20) != 0;
+    if (p && was_dead) return 0;
+    if (at) {
+        float w[3];
+        Frame_Points(&w, (const float (*)[3])at, 1, &n->frame);   /* 0x452740 */
+        sparks(w);
+    }
+    if (p) {
+        /* the side and the list by the point's direction */
+        double s = Fast_InvSqrt(fpu_add(fpu_mul(at[0], at[0]), fpu_add(fpu_mul(at[1], at[1]), fpu_mul(at[2], at[2]))));
+        float nx = fpu_f32(fpu_mul(at[0], s)), ny = fpu_f32(fpu_mul(at[1], s)), nz = fpu_f32(fpu_mul(s, at[2]));
+        uint32_t side, list;
+        double s2 = 0;
+        float u = 0, w = 0;
+        double wq = 0;
+        if (fb(ny) <= 0x3f4ccccd) {
+            s2 = Fast_InvSqrt(fpu_add(fpu_mul(nz, nz), fpu_mul(nx, nx)));
+            u = fpu_f32(fpu_mul(nx, s2));
+            wq = fpu_mul(s2, nz);
+            w = fpu_f32(wq);
+        }
+        if (fb(ny) > 0x3f4ccccd) side = 4;
+        else if (fb(u) > 0x3f34fdf4) side = 2;
+        else if ((uint32_t)fb(u) > 0xbf34fdf4u) side = 1;
+        else side = fb(w) > 0x3f34fdf4 ? 0 : 3;
+        /* the list's split is made again, the same; its first test on the unrounded value */
+        if (fb(ny) > 0x3f4ccccd) list = 6;
+        else if (wq > exe_f32(0x4a59f4)) list = 0;
+        else if ((uint32_t)fb(w) > 0xbf34fdf4u) list = 5;
+        else if (fb(w) > 0) list = fb(u) > 0 ? 3 : 1;
+        else list = fb(u) > 0 ? 4 : 2;
+        float m = Side_Whole(d, side);   /* inlined in the original */
+        if ((p[6] & 1) && Vehicle_Health(n) > exe_f32(0x4a5a00)) {   /* 33 */
+            uint16_t one = 1;
+            memcpy(p + 4, &one, 2);
+            put32(p + 8, 5);
+        }
+        int32_t left = Damage_Side(d, side, p, (n->flags & 0x10) != 0);
+        if (side == 0) {
+            float f = Side_Whole(d, 0);
+            if ((f < exe_f32(0x4a5a04) || f != f) && fb(m) > 0x3f000000) Light_SetOn(n, 0);   /* 0.5 */
+        }
+        while (left) left = Damage_Parts(d, (int)list, p, 1, fpu_f32(Vehicle_Health(n)));
+        if (!was_dead && side < 5) {
+            float v = Side_Whole(d, side);
+            int level = v > exe_f32(0x4a5a10) ? 0 : fb(v) > 0x3f000000 ? 1 : fb(v) > 0x3e800000 ? 2 : 3;
+            Damage_Look(d, side, (uint32_t)level);
+            /* the body part's textures: the frame 0, 1, 1, 2 by the level */
+            Node *part = slot(d, 0x408 + exe_u32(0x4d5428 + 4 * side) * 4);
+            static const int frame[4] = {0, 1, 1, 2};
+            int count = (int32_t)exe_u32(0x4d5458 + 4 * side);
+            for (int i = 0; i < count; i++)
+                Tex_SetFrame((uintptr_t)part, exe_str(0x4d5470 + (side * 10 + (uint32_t)i) * 13), 0, frame[level], true);
+        }
+    }
+    double h = fpu_mul(Vehicle_Health(n), exe_f32(0x4a59fc));
+    if (h < 1.0 || h != h) Vehicle_Smoke(d, fpu_f32(h));
+    if (!(rd32(d + 0x454) & 0x20)) return 0;
+    /* the death; network play's messages (0x461900, "%s has been killed") are not ported */
+    if (rd32(d + 0x454) & 0x4000) {
+        putf(d + 0x450, 10.0f);
+        put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x80008000u));
+        death_steps(n, (n->flags & 0x10) != 0);
+        AI_Rethink();   /* 0x408bf0 */
+        sound(2, n);   /* 0x4683c0 */
+        Node_SetFlags(n, 0x200);
+        if (g_user_entity && g_user_entity->node == n) {
+            g_input_menu = 0;   /* 0x480680 */
+            int32_t eight = 8;
+            memcpy(INPUT_AT(0x4def9c), &eight, 4);
+        }
+    } else
+        wreck(n, 1);   /* 0x42c580 */
+    /* a kill by the user scores in the melee (0x4072e0) while 0x4a8760 is set (0x407030); never in a
+       mission */
+    return 1;
+}
+
+/* not ported yet: the user's knock in the cockpit (0x433240 on the eye node, 0x452cd0 the screen's shake)
+   and the HUD's damage arrows (0x468a70) */
+static void knock(Node *n, const float nv[3], float k) { (void)n, (void)nv, (void)k; }
+
+int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at)
+{
+    /* 0x45dbb0 (0x4dc464) is never set: the user is never spared */
+    uint8_t p[0x1c];
+    memset(p, 0, sizeof p);
+    int kind = 0;
+    if (src && (src->cls == 0x33 || src->cls == 0x34)) {
+        /* a projectile's (0x45ced0, 0x45ce90 kind 0x12 adds +6 bit 0) or a 0x34's (0x4543a0) packet: the
+           weapons are not ported yet, so none */
+    } else {
+        uint16_t eight = 8;
+        memcpy(p + 4, &eight, 2);
+    }
+    if (p[4] & 8) {
+        float b[3] = {-nv[0], -nv[1], -nv[2]};
+        uint8_t body[0x3c];
+        int moving = src && (src->cls == 1 || src->cls == 7 || src->cls == 9);   /* 0x42e640 */
+        Body_State(body, moving ? src : n);
+        double dot = fpu_add(fpu_mul(v[0], b[0]), fpu_add(fpu_mul(v[1], b[1]), fpu_mul(v[2], b[2])));
+        double e = fpu_mul(fpu_mul(dot, dot), rdf(body));
+        uint32_t amount = (uint32_t)ftol(fpu_mul(e, exe_f32(moving ? 0x4a62c0 : 0x4a62c4)));
+        put32(p + 0x14, (int32_t)amount);
+        if ((n->flags & 0x10) && amount > 0x14)
+            knock(n, nv, fpu_f32(fpu_mul((double)amount, exe_f32(0x4a62c8))));   /* 0.02 */
+    }
+    put32(p, 0);
+    if (!src) kind = 4;
+    else if (src->cls == 1 || src->cls == 8 || src->cls == 9) kind = 1;   /* the source in +0, not kept here */
+    else if (Class_IsStructure(src->cls)) kind = 2;
+    else if (src->cls == 0x33) kind = (p[4] & 8) ? 0x18 : 0x10;
+    else if (src->cls == 0x34) kind = 0x10;
+    (void)kind;
+    Node_Ref(n);
+    Class_Damage(n, p, at);
+    Node *live = Node_Live(n);
+    if (live) Node_Unref(live);
+    /* with a source, the kill's credit and messages (0x40fc80 with the kind) are not ported yet */
+    return live != NULL;
 }
