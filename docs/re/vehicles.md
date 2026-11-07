@@ -215,3 +215,43 @@ the per-frame physics calls it too.
 - **The torque:** (peak − width × (rpm − 3500)²) × factor.
 
 The comparisons on floats' bits as signed integers are the original's, kept.
+
+## The physics step (being ported)
+
+The class 1 per-frame handler 0x429c70 runs fixed sub-steps from the vehicle's timer (+0x444: 0x451250
+counts them by the frame's step, at most 20; 0x4512d0 hands them out). Each sub-step runs 0x42b830 (the
+damage and the death) and then **0x472360**, the physics. A vehicle far from the camera (0x4042c0, 25
+units) takes the cheaper 0x473440 once a frame instead. 0x472360 calls, in order: 0x472890 (the
+suspension and the collisions), Vehicle_Upright 0x46fe20, Vehicle_Steer 0x475cb0, then **Vehicle_Drive
+0x473600**, the wheels' contact (Wheel_Contact 0x42ffb0), the terrain class and Engine_Step.
+
+Ported and diffed with `diff_objects.py --call` (a function on every vehicle after the start pass, its
+results compared), or with `diff_phys.py` (direct calls on random inputs):
+
+| Function | What |
+|---|---|
+| Vehicle_Upright 0x46fe20 | at rest on its back: the user's (or Taurus's) is turned back over, any other dies (0x42b790) |
+| Vehicle_Steer 0x475cb0 | the front wheels turned by the steering (+0xe0) × −π/4 |
+| Wheel_Contact 0x42ffb0 | the ground under the wheel plus an 8 × 8 bump table (0x4a5ba8) by the terrain's roughness; the spring's target through the wheel's filter; the travel within [+0x3c, +0x38] |
+| Vehicle_Brake 0x475c10 | +0x454 bit 2 while braking; the skid marks and dust (0x4301f0, rand) not yet |
+| Vehicle_Air 0x474400 | falling (gravity 9.8), the nose easing down to −π/20, landing (sliding if sideways) |
+| Vehicle_Force 0x474bf0 | the drive (the engine's torque on the rear wheels' grip) or the brakes (on all four) |
+| Vehicle_Grip 0x4759b0 | the steering's yaw rate, limited by the wheels' loads (+0xc) and the terrain's grip; a slide past twice the limit |
+| Vehicle_Drag 0x475100 | the air's drag (+0x120), the rolling resistance, the slope; sliding, the friction sideways (0x4754a0) or at each wheel (0x475570) with its yaw torque |
+| Vehicle_Drive 0x473600 | the step on the wheels: integrate (0x471860, 0x4719f0), turn about the rear axle (+0x11c), project the velocity on the ground (+0x460, the normal) |
+
+The terrain classes' records (0x5e3020, 8 × 0x14 bytes, from WRLD) give the grip (+0), the rolling
+resistance (+4) and the roughness (+8).
+
+The vehicle data's fields the step uses:
+
+| Offset | Field |
+|---|---|
+| +0xa4, +0xa8 | the mass and its inverse |
+| +0xac, +0xb0 | the speed and its inverse |
+| +0xbc, +0xc8, +0xd4 | the velocity, the angular velocity, the acceleration |
+| +0xe0, +0xe4, +0xe8 | the steering, the throttle (−1 brakes), the drive's direction |
+| +0x104 | the mode (0 park, 2 neutral, 4 and 5 limit the gears) |
+| +0x110, +0x114, +0x118, +0x11c | 1 / (2 × wheelbase), the track, the wheelbase, the rear axle's z |
+| +0x454 | the flags: 1 the engine, 2 sliding, 4 in the air, 0x20 dying, 0x200 landed, 0x1000, 0x2000 losing grip, 0x10000 the user's or Taurus's |
+| +0x460 | the ground's normal |
