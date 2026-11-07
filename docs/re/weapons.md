@@ -432,3 +432,54 @@ It runs once a frame after the AI, before the textures' animations:
 
 Checked: `diff_objects --start` (the display's start runs on both sides, its drawing stubbed), and in game
 on s01: after the intro (Escape), Space fires the machine gun, 2000 rounds down to 1950.
+
+## The tracers (0x46c0e0-0x46ce90)
+
+WinMain makes 100 tracer records (0x46c0e0) after the classes' start. Each record is 0x60 bytes,
+allocated one by one, each put in front, then closed into a ring. 0x4dc9d0 is the ring's cursor.
+
+A record holds:
+- the link;
+- the shot it follows (+4);
+- moved this frame (+8);
+- the history's oldest and newest entries (+0xc, +0x10);
+- the kind (+0x14);
+- two history entries of three float points each (+0x18), in world space.
+
+The history is a ring of two (0x577190: 1, 0).
+
+**The kinds (0x4dc9d8, 0x18 bytes each: a name, the texture, the mode).**
+
+| Kind | Look | Shots | Size (0x4dc9a8) |
+|---|---|---|---|
+| 0 | mmgun.map, mode 0x54 (0xe3 if the texture is missing) | the rest | 2 |
+| 1 | mcannon.map | type 6 (cannon) | 4 |
+| 2 | a line in Color_Match(0.8, 0.8, 0), 0x5771a0; its texture is never loaded | types 1 and 0x12 (guns, handguns) | 1 |
+
+**The update (0x46c220).** The launch and each gun's flight step call it.
+1. The search goes round the ring from the cursor and keeps the last record that follows the shot.
+2. With none found, 0x46c410 takes the cursor's record (whatever it followed) and moves the cursor on.
+   Kinds above 2 get nothing. The history is the one entry.
+3. Otherwise the newest entry moves on, pushing the oldest along when they meet, and is filled.
+4. An entry is the shot's place (kind 2, its first point only), or the three points 0x4dc938 scaled by
+   the size and put through the shot's frame. Those three are a small triangle: (0, -0.02, 0),
+   (±0.01732, 0.01, 0).
+   - Quirk: the branch uses the record's kind, the size the caller's.
+
+**The drawing (0x46c9b0, from Render_World after 0x46ebb0).** For each record:
+1. A record not moved since the last drawing is dropped (shot and history cleared).
+2. A record with two entries has its six points put in camera space.
+3. The segment's middle is the newer entry's last point (kind 2: its place) plus the older's first, by
+   0.5. It must not be wholly outside the frustum (View_TestSphere, radius 10).
+4. Kind 2 queues a line, type 8 and mode 0, from 0.35 of the way from the older place to the newer one.
+5. Kinds 0 and 1 queue three textured quads, type 8 in the kind's mode, between the entries' point pairs
+   (0x4dc960: 2-1, 1-0, 0-2). The u, v, q are at 0x4dc978. Then they queue the newer entry's triangle in
+   the line's colour.
+6. Each record is queued at its nearest vertex's depth, and its moved flag is cleared.
+
+0x46c5e0 is the same drawing for the other views (0x471390, 0x4210b0), without the triangle and without
+dropping or clearing anything.
+
+Checked in game: on s01 the machine gun's rounds (kind 2) are live and drawn. From the pilot's camera they
+lie along the view axis, so they show as one streak down the road. The harness stubs 0x46c220 on the
+original's side; the port's dumps make no tracers.

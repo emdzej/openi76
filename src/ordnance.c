@@ -13,6 +13,7 @@
 #include "math3d.h"
 #include "physics.h"
 #include "terrain.h"
+#include "tracers.h"
 #include "tex.h"
 #include "render/fpu.h"
 #include "render/light.h"
@@ -217,10 +218,9 @@ static void place(Node *s, const Launch *l)
 
 /* ---- the launch (0x458f40) ---- */
 
-/* not ported yet, as the effects: 0x46ef60 the trail (smoke by kind), 0x46c220 the tracer, 0x46d090 the
+/* not ported yet, as the effects: 0x46ef60 the trail (smoke by kind), 0x46d090 the
    types 9-11's (flares, oil, caltrops: dropped per shot), 0x47eb50 / 0x47eac0 the texture animations */
 static void trail(Node *s, int k) { (void)s, (void)k; }
-static void tracer(Node *s, int k) { (void)s, (void)k; }
 static void dropped(Node *muzzle, int k, int32_t w, const Ordnance *o) { (void)muzzle, (void)k, (void)w, (void)o; }
 static void tex_anim(Node *s, const char *name, int a, int b) { (void)s, (void)name, (void)a, (void)b; }
 
@@ -340,8 +340,8 @@ Node *Shot_Launch(Launch *l, float late)
     memcpy(r + 0x2c, spin, 12);
     if (o->w16) Light_Add(s, &s->flags, s->frame.m, 0, 25.0f, 0, NULL, NULL);   /* 0x43a1f0 */
     switch (l->type) {
-    case 1: case 0x12: tracer(s, 2); break;
-    case 6: tracer(s, 1); break;
+    case 1: case 0x12: Tracer_Update(s, 2); break;
+    case 6: Tracer_Update(s, 1); break;
     case 2: case 3: case 4: case 5: case 7: case 8: {
         static const int kind[9] = {0, 0, 0, 1, 3, 5, 0, 4, 2};
         trail(s, kind[l->type]);
@@ -512,7 +512,7 @@ static int fly_gun(Node *s, float t)
         at[2] = F32(ADD(F32(MUL(nn[2], 2.0f)), st.p[2]));
         hit_effect(s, at, st.who, cls);
     }
-    tracer(s, st.type == 6 ? 1 : (st.type == 1 || st.type == 0x12) ? 2 : 0);   /* 0x46c220 */
+    Tracer_Update(s, st.type == 6 ? 1 : (st.type == 1 || st.type == 0x12) ? 2 : 0);   /* 0x46c220 */
     return !hit;
 }
 

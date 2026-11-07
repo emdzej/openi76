@@ -903,3 +903,9 @@
 004579b0	Weapons_AllBroken	weapons	high	every weapon of the five slots at zero health
 00456830	Weapon_Health	weapons	high	an instance's points over its definition's
 00421480	Radar_Unlock	radar	med	the radar's lock let go
+0046c0e0	Tracers_Init	effects	high	the tracers' textures (mmgun.map, mcannon.map), n records in a ring, the line colour
+0046c1e0	Tracers_Free	effects	high	frees the ring
+0046c220	Tracer_Update	effects	high	a shot's tracer moved on its history, or a new one from the ring
+0046c410	Tracer_New	effects	high	the cursor's record for a shot, its history one entry
+0046c5e0	Tracers_DrawOther	effects	high	the tracers queued for the other views
+0046c9b0	Tracers_Draw	effects	high	the tracers queued (lines, textured quads and caps); unmoved ones dropped

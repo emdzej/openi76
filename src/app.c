@@ -24,6 +24,7 @@
 #include "roads.h"
 #include "settings.h"
 #include "terrain.h"
+#include "tracers.h"
 #include "vfs.h"
 #include "vfs_zfs.h"
 #include "world.h"
@@ -134,7 +135,9 @@ static void viewer_frame(void)
     Roads_Draw(&view);
     /* 0x46bdc0 and 0x46d3d0 are not ported yet */
     Objects_Draw(&view);
-    /* nor 0x46ebb0, 0x46c9b0, 0x42edc0, 0x46e360 and the hook */
+    /* nor 0x46ebb0 */
+    Tracers_Draw(&view);   /* 0x46c9b0 */
+    /* nor 0x42edc0, 0x46e360 and the hook */
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
     plat_present(pixels, 640, 480, 640, g_shown_pal);
@@ -158,6 +161,7 @@ static bool play_init(void)
     Rel_Clear();   /* 0x421fc0 as the mission starts */
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
+    Tracers_Init(100);   /* 0x46c0e0, with WinMain's inits after the classes' start */
     Clock_Init();
     if (!Input_Init()) {
         plat_log("OpenI76: the input's tables are missing");
