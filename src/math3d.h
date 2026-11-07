@@ -47,3 +47,8 @@ int Frame_Project(Frame *out, const float plane[4], const float l[3]);
 void Quat_ToFrame(Frame *out, const float q[4]);
 /* Frame_AxisAngle 0x451e40: a rotation by angle (radians) about the axis (x, y, z), through a quaternion */
 Frame *Frame_AxisAngle(Frame *out, float angle, float x, float y, float z);
+/* Frame_ToQuat 0x451ce0: a rotation's unit quaternion (x, y, z, w) */
+void Frame_ToQuat(float q[4], const Frame *f);
+/* Quat_Slerp 0x451eb0: from a toward b by t along the great circle (linear within 1e-4 of the same, a
+   quarter turn about a's perpendicular when opposite), renormalised to 0.9999 when it came out short */
+void Quat_Slerp(float out[4], const float a[4], const float b[4], float t);

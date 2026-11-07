@@ -243,3 +243,72 @@ void Frame_UpFwd(Frame *out, const float up[3], const float fwd[3])
     memcpy(f.m + 6, z, sizeof z);
     *out = f;
 }
+
+void Frame_ToQuat(float q[4], const Frame *f)
+{
+    const float *m = f->m;
+    const float one = 1.0f, half = 0.5f;   /* 0x4a60b8, 0x4a60cc */
+    float t = F32(ADD(ADD(m[4], m[8]), m[0]));
+    if (t > 0) {   /* 0x4a60c8 */
+        double r = fpu_sqrt(ADD(t, one));
+        double s = DIV(half, r);
+        q[3] = F32(MUL(r, half));
+        q[0] = F32(MUL(SUB(m[7], m[5]), s));
+        q[1] = F32(MUL(SUB(m[2], m[6]), s));
+        q[2] = F32(MUL(SUB(m[3], m[1]), s));
+        return;
+    }
+    /* the largest diagonal term's axis, then the next two round (the table 0x4db288: 1, 2, 0) */
+    int i = m[4] > m[0];
+    if (below(m[4 * i], m[8])) i = 2;
+    int j = (i + 1) % 3, k = (j + 1) % 3;
+    double r = fpu_sqrt(ADD(SUB(SUB(m[4 * i], m[4 * k]), m[4 * j]), one));
+    double s = DIV(half, r);
+    q[i] = F32(MUL(r, half));
+    q[3] = F32(MUL(SUB(m[3 * k + j], m[3 * j + k]), s));
+    q[j] = F32(MUL(ADD(m[3 * i + j], m[3 * j + i]), s));
+    q[k] = F32(MUL(ADD(m[3 * i + k], m[3 * k + i]), s));
+}
+
+void Quat_Slerp(float out[4], const float a[4], const float b[4], float t)
+{
+    const float one = 1.0f, eps = exe_f32(0x4a60d0);   /* 1e-4 */
+    double d = ADD(ADD(ADD(MUL(b[2], a[2]), MUL(a[1], b[1])), MUL(b[3], a[3])), MUL(b[0], a[0]));
+    float c = F32(d);
+    float q[4];
+    if (ADD(d, one) > eps) {
+        float sa, sb;
+        if (SUB(one, c) > eps) {
+            float sn = F32(fpu_sqrt(SUB(one, MUL(c, c))));
+            float om = F32(atan2(sn, c));   /* fpatan */
+            float inv = F32(DIV(one, F32(sin(om))));   /* 0x452a70 */
+            float s0 = F32(sin(F32(MUL(SUB(one, t), om)))), s1 = F32(sin(F32(MUL(om, t))));
+            sa = F32(MUL(s0, inv));
+            sb = F32(MUL(s1, inv));
+        } else {
+            sb = t;
+            sa = F32(SUB(one, t));
+        }
+        q[3] = F32(ADD(MUL(b[3], sb), MUL(a[3], sa)));
+        q[0] = F32(ADD(MUL(b[0], sb), MUL(a[0], sa)));
+        q[1] = F32(ADD(MUL(a[1], sa), MUL(b[1], sb)));
+        q[2] = F32(ADD(MUL(a[2], sa), MUL(b[2], sb)));
+    } else {
+        /* opposite: toward (-a1, a0, a3, a2), the last two unswapped in sign (quirk) */
+        const float h = exe_f32(0x4a60d4);   /* pi / 2 */
+        float r[4] = {F32(-a[1]), a[0], a[3], a[2]};
+        float s0 = F32(sin(F32(MUL(SUB(one, t), h)))), s1 = F32(sin(F32(MUL(t, h))));
+        q[3] = F32(ADD(MUL(a[3], s0), MUL(s1, r[3])));
+        q[0] = F32(ADD(MUL(s1, r[0]), MUL(a[0], s0)));
+        q[1] = F32(ADD(MUL(a[1], s0), MUL(s1, r[1])));
+        q[2] = F32(ADD(MUL(a[2], s0), MUL(s1, r[2])));
+    }
+    /* renormalised (by 0.9999 / |q|) only when it came out short */
+    double n = ADD(ADD(ADD(MUL(q[1], q[1]), MUL(q[2], q[2])), MUL(q[3], q[3])), MUL(q[0], q[0]));
+    float nf = F32(n);
+    if (SUB(one, n) > eps) {
+        double k = DIV(0.9999, fpu_sqrt(nf));   /* 0x4a60d8 */
+        for (int x = 0; x < 4; x++) q[x] = F32(MUL(q[x], k));
+    }
+    memcpy(out, q, sizeof q);
+}

@@ -513,7 +513,7 @@
 00480790	Cheat_Push	input	high	a Ctrl+Shift character into the ring 0x5e2fd0; ported
 004807c0	Cheat_Typed	input	high	the ring ends with a string; ported
 00480800	Cheat_Check	input	high	wiggleburger freelance getdown thirdnostril; ported (their effects not)
-004809b0	Game_Command	input	med	a typed key's command: views, pause, menus (a switch)
+004809b0	Game_Command	input	med	a typed key's command: views, pause, menus (a switch); the views and self-destruct ported
 00480db0	Kb_Count	input	high	keyboard driver: 1
 00480dc0	Kb_Describe	input	high	keyboard driver: 121 channels; ported
 00480e50	Kb_Poll	input	high	keyboard driver: the set out, releases applied, Alt quirk; ported
@@ -1010,3 +1010,11 @@
 0040b740	Fsm_SetSiren	fsm	high	aps2.wav on or off (audio not ported)
 004763e0	Siren_Sound	audio	med	aps2.wav played or stopped on a vehicle
 0041f280	Objectives_FailExcept	mission	high	failAllObj's objective less one; ported
+00404380	Camera_CockpitStart	camera	high	mode 0xd (F1): the pilot's view, the HUD toggled in it; ported
+00405450	Camera_ChaseStart	camera	high	mode 0xf (F3): the chase view; ported
+004055e0	Camera_Chase	camera	high	behind the entity's heading, eased; ported, diffed
+00403ae0	Camera_Heading	camera	high	the entity's heading quaternion (yaw alone); ported
+00451ce0	Frame_ToQuat	math	high	a rotation's quaternion; ported
+00451eb0	Quat_Slerp	math	high	slerp, renormalised when short; ported
+00407010	Camera_SetMode	camera	high	a mode's start from the table 0x4a86e8, then the HUD's and zoom 1; ported
+00423fd0	User_Dead	entity	high	the user's vehicle's +0x454 & 0x20

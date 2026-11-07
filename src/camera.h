@@ -1,7 +1,7 @@
 /* The main view and its camera modes (0x403290-0x406d40; docs/re/camera.md). The view is 0x4a8488; each
    mode has a start (the table 0x4a86e8, by mode) that installs its per-frame function (0x4a8478), which
-   the game loop calls before the frame is drawn. Only the pilot's view (mode 0x19, the start's) is
-   ported so far. */
+   the game loop calls before the frame is drawn. Ported so far: the pilot's view (modes 0xd and 0x19)
+   and the chase view (0xf). */
 #pragma once
 #include "entity.h"
 #include "render/view.h"
@@ -10,7 +10,7 @@ extern View g_view;                 /* 0x4a8488 */
 extern void (*g_camera_fn)(void);   /* 0x4a8478: the mode's per-frame function, NULL for none */
 extern Entity *g_camera_entity;     /* 0x4a8660: the entity the camera is on */
 extern int32_t g_cockpit;           /* 0x4a847c: 1 in the cockpit (Render_World draws the mirror) */
-extern int32_t g_camera_mode;       /* 0x4a8480: 0 the pilot, 2 ..., 4 ..., 5 ... */
+extern int32_t g_camera_mode;       /* 0x4a8480: the sub-mode, 0 the pilot, 1 the chase, 2 ..., 4 ..., 5 ... */
 
 /* View_Init 0x403360: the view on the surface (fov pi/2, aspect 1, the world's range with the detail's
    range else 150, zoom 1); with reset the pilot's angles at 0 and the start's mode (0x19) on the user */
@@ -21,3 +21,15 @@ void Camera_PilotStart(Entity *e);
    glance (the actions pilot_yaw_delta, pilot_pitch, pilot_roll in degrees, eased at 4 per second, the yaw
    the short way round) and swayed by the body (Cockpit_Sway) */
 void Camera_Pilot(void);
+/* Camera_SetMode 0x407010: the mode's start on the entity (none while the sub-mode is 5), then, unless the
+   sub-mode is now 2, the HUD's (0x428890, not ported yet) and zoom 1 */
+void Camera_SetMode(Entity *e, int32_t mode);
+/* Camera_CockpitStart 0x404380 (mode 0xd, F1): the pilot's view, the HUD toggled when already in it */
+void Camera_CockpitStart(Entity *e);
+/* Camera_ChaseStart 0x405450 (mode 0xf, F3): behind and above the entity, from where the camera was */
+void Camera_ChaseStart(Entity *e);
+/* Camera_Chase 0x4055e0: the camera track_distance (1-10, eased at 2 per second) times the entity's radius
+   (at most 150) behind its centre raised 2, pitched down 15 degrees and turned round; it follows the
+   entity's heading (its yaw alone) eased along the short way at 2 per second, and stays half a metre over
+   the ground */
+void Camera_Chase(void);

@@ -22,6 +22,8 @@
 #include "render/light.h"
 #include "render/fpu.h"
 #include "fsm.h"
+#include "camera.h"
+#include "input.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1064,6 +1066,39 @@ int Dump_CallVehicles(int which, int upside)
                     e[0x20] = c->b;
                     call_line(e, sizeof e);
                 }
+            }
+            break;
+        }
+        case 39: {   /* the chase camera (0x405450, 0x4055e0) on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
+                        range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
+                        about y before the third; after each the view's camera and eye */
+            Entity *e = Entity_OfNode(n);
+            if (!e) break;
+            static Surface surf;
+            surf.pitch = surf.w = 640;
+            surf.h = 480;
+            surf.x0 = surf.y0 = 0;
+            surf.x1 = 639;
+            surf.y1 = 479;
+            g_fpu_round = FPU_DOWN;
+            View_Create(&g_view, &surf, 1.5707964f, 1.0f, 150.0f, 1.0f);
+            g_camera_mode = 0;
+            g_clock_step = 0.06f;
+            int32_t td = 3;
+            memcpy(INPUT_AT(0x4def8c), &td, 4);
+            Camera_SetMode(e, 0xf);
+            for (int k = 0; k < 5; k++) {
+                if (k == 2)
+                    for (int j = 0; j < 9; j += 2)
+                        if (j != 4) n->frame.m[j] = -n->frame.m[j];
+                g_fpu_round = FPU_DOWN;
+                Camera_Chase();
+                uint8_t b[0x40 + 24];
+                memcpy(b, &g_view.cam, 0x24);
+                memset(b + 0x24, 0, 4);
+                memcpy(b + 0x28, g_view.cam.pos, 24);
+                memcpy(b + 0x40, g_view.eye, 24);
+                call_line(b, sizeof b);
             }
             break;
         }

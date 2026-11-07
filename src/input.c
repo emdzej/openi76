@@ -3,6 +3,7 @@
 #include "input.h"
 #include "radar.h"
 #include "ai.h"
+#include "camera.h"
 #include "clock.h"
 #include "crt.h"
 #include "entity.h"
@@ -10,6 +11,7 @@
 #include "physics.h"
 #include "platform.h"
 #include "vfs.h"
+#include "weapons.h"
 #include "render/fpu.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -950,8 +952,37 @@ static void cheats(uint16_t key)
     if (cheat_typed("thirdnostril")) return;
 }
 
-/* 0x4809b0: a typed key's command (the views, the pause, the menus); not ported yet */
-static void game_command(int c) { (void)c; }
+/* 0x581ebc: the last view was preset 1 (the cockpit); 0x581ec0: the last other preset (read by 0x480940,
+   not ported yet) */
+int32_t g_view_cockpit, g_view_preset;
+
+/* 0x423fd0: the user's vehicle is dead */
+static int user_dead(void)
+{
+    Entity *u = g_user_entity;
+    return u && (rd32(u->node->data + 0x454) & 0x20);
+}
+
+/* 0x4809b0: a typed key's command. Ported: the preset views and the self-destruct; the rest (the pause, the
+   menus, the rear view, the video mode, network play's) is not yet */
+static void game_command(int c)
+{
+    Entity *u = g_user_entity;
+    if (g_net_game && !u) return;   /* only the chat and its invitation (0x2d, 0x2e) */
+    /* the first table's: 0xa, 0x20, 0x24, 0x2c and 0x2d end here, as does 0 */
+    if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2c || c == 0x2d) return;
+    if (user_dead()) return;   /* and while network play's chat line takes the keys (0x462690) */
+    if (c == 0xd) {
+        g_view_cockpit = 1;
+        Camera_SetMode(u, c);
+    } else if (c >= 0xe && c <= 0x18) {
+        g_view_preset = c;
+        g_view_cockpit = 0;
+        Camera_SetMode(u, c);
+    } else if (c == 0x23)
+        *INPUT_AT(0x4deff9) = 1;   /* self_destruct */
+    /* the last command, 0x4e8ab4, is not kept */
+}
 
 void Input_Poll(void)
 {

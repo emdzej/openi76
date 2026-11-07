@@ -112,7 +112,7 @@ mirrors it. Without either the rate is 0.
    calls 0x452a90, `freelance` 0x4034d0 and `getdown` 0x408d30; `thirdnostril` does nothing. Their effects
    are not ported.
 3. A UI window that takes the keys (0x450ab0) gets the key first; not ported.
-4. The typed key's command (`gamekey.map`) goes to 0x4809b0 (not ported).
+4. The typed key's command (`gamekey.map`) goes to `Game_Command` 0x4809b0. See "The commands" below.
 5. The cockpit (0x481c10, not ported), then `User_Controls` 0x481d00.
 
 ## gamekey.map
@@ -125,6 +125,33 @@ a command byte), into the byte array 0x4e6fe8 indexed by the code.
 - Before the file: Esc is `MAIN_MENU` (0x20), and nine chat and invitation keys are set.
 - A code already bound to another command is an error (to the no-op reporter).
 - Codes up to 0x1000 are written. 0x1000 is the first byte of the next table, a quirk kept in the copy.
+
+## The commands
+
+`Game_Command` 0x4809b0 is two switches.
+
+**Network play without a vehicle.** Only the chat and its invitation (0x2d, 0x2e) work.
+
+**The first switch.** It handles commands up to 0x2d and ends there:
+
+- 0xa (0x4a3f00, on the surface);
+- 0x20 `MAIN_MENU`;
+- 0x24 (network play);
+- 0x2c, the pause (0x44fc00);
+- 0x2d.
+
+**The second switch.** It runs only while the user's vehicle lives (0x423fd0: data +0x454 & 0x20) and no
+chat line takes the keys (0x462690, network play):
+
+- **0xd `PRESET_VIEW_1`.** 0x581ebc = 1, then `Camera_SetMode` 0x407010 on the user with the command as the
+  mode.
+- **0xe-0x18, the other presets.** 0x581ec0 = the command, 0x581ebc = 0, and the same call.
+- **0x23 `SELF_DESTRUCT`.** It sets the kill key 0x4deff9.
+- **Not ported:** 0xb `TOGGLE_REARVIEW` (0x4712e0, the cockpit's), 0x25-0x2b (network play) and 0x55
+  `TOGGLE_VIDEOMODE`.
+
+The handled commands are kept in 0x4e8ab4; the port doesn't keep it. The port's view modes are those of
+docs/re/camera.md.
 
 ## User_Controls 0x481d00
 
