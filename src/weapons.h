@@ -157,17 +157,23 @@ int Window_Busy(Node *vehicle, int which);
 void Turrets_Aim(void);
 extern int32_t g_weapons_linked;   /* 0x4db478 */
 /* Weapons_Frame 0x455d90: the turrets (Turrets_Aim), the user's triggers, group and link from the
-   actions, then every instance's timers (Weapons_Tick); the dashboard's part is not ported */
+   actions, then every instance's timers (Weapons_Tick) and the dashboard (Weapons_DisplayFrame) */
 void Weapons_Frame(void);
 extern Node *g_dash;          /* 0x4db470 */
-extern int32_t g_dash_low;    /* 0x4dc2b4 */
 /* Radar_Unlock 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
 void Radar_Unlock(Node *v);
 /* Node_FindTexture 0x42e370 (each node looked at set to level 4) */
 Node *Node_FindTexture(Node *n, const char *name);
 /* Weapons_DisplayStart 0x4561f0: the user's dashboard's node (by the screen mode's names), the group's first
-   weapon once a mission (or when first), the separator and the counters' digits; its drawing is not ported */
+   weapon once a mission (or when first), the separator, and its texture drawn: each slot's bracket and a
+   random housing, then for a weapon its health diode, its name plate and its counter */
 void Weapons_DisplayStart(int first);
+/* the end of Weapons_Frame 0x455d90: the user's slots' health diodes (0x456c10), then their counters
+   (0x456cf0), each drawn when it changes (a counter's digits roll a step a frame) */
+void Weapons_DisplayFrame(HardPoints *hp);
+/* the block 0x4dc258-0x4dc2bb: the counters' digits (six words a run), the names' choice by the screen
+   mode (word 23, 0x4dc2b4) and the first choice's flag (word 24) */
+const int32_t *Weapons_DisplayWords(void);
 /* Nodes_AxesAlike 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
 int Nodes_AxesAlike(Node *a, Node *b);
 /* Muzzle_Pick 0x45d420: the nearest moving entity but vehicle's within 650 m ahead of muzzle, in its cone */

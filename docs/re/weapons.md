@@ -601,7 +601,8 @@ It runs once a frame after the AI, before the textures' animations:
      - Quirk: from a current slot past 4, 0x458030 reads past the slots; the port stops at 6.
 3. Network play's triggers and messages (0x4624a0, 0x462580) are skipped; not ported.
 4. The instances' tick (0x458340, "Firing: the triggers' timing").
-5. The dashboard's slots are redrawn; not ported.
+5. The dashboard's slots are redrawn: each weapon's diode (0x456c10), then each one's counter (0x456cf0),
+   the count read again for each slot (see below).
 
 **The display's start (0x4561f0).** The user's start (and the cockpit's changes) runs it:
 - The dashboard is the vehicle's node whose level-4 first face has the texture zbk_.map (zbk_320.map
@@ -612,11 +613,57 @@ It runs once a frame after the AI, before the textures' animations:
   and the only one lit.
 - The hard points' +0x24, the separator, follows the last front gun or turret (instance kinds 1 and 4).
 - Each slot's light is whether it is in the group. Its four digits are its rounds.
-- Each slot also draws one rand() for its housing's picture. The port keeps that call, though the
-  drawing is not ported yet.
+- The dashboard texture is drawn on (`Tex_PutRegion` 0x481420, into the node's own copy of the texture,
+  whose surface is kept at 0x570a70). For each slot, in order:
+  1. its bracket picture into `3bracket_<k+1>`, then a housing (`3housing1`-`5`, one rand() a slot, taken
+     even for an empty slot) over it;
+  2. for a weapon, its health diode with force;
+  3. its name plate into `3dymo_<k+1>` (0x4569b0, below);
+  4. its counter with force.
+- The region and picture names are 16 bytes apart a slot. At the high resolutions (screen mode below 6)
+  each one is used without its first character, as everywhere in the cockpit.
 
-Checked: `diff_objects --start` (the display's start runs on both sides, its drawing stubbed), and in game
-on s01: after the intro (Escape), Space fires the machine gun, 2000 rounds down to 1950.
+**The diode (0x456c10).** The weapon's health (its points over its definition's whole, times
+0x4a61fc, truncated) falls in one of five ranges (0x4db490, 0x18 bytes a range: the picture's name, then
+the range's two ends). When that range is not the slot's last one (+0x3c), or with force, its picture
+goes into `3diode_<k+1>` and the slot's state is updated.
+
+**The name plate (0x4569b0).** The definition's kind (2-6) and index (below 8) pick a 16-byte name,
+(kind · 7 + index) · 0x10 into one of four tables:
+- the turrets' (instance kind 4): 0x4db9d8, or lit 0x4dbc78;
+- the others': 0x4db498, or lit 0x4db738.
+
+A name whose first character is not a letter or a digit is no plate. The start passes the slot's light,
+but both of its branches read the same two words, so only the light changes the table. The plates are
+drawn by the start only: changing the group does not redraw them.
+
+**The counter (0x456cf0).** There are four digits, the ones, tens, hundreds and thousands of the rounds.
+A digit that is not at its value steps down by one (9 after 0) and is drawn, so a counter rolls one
+step a frame towards the new number. With force each is drawn as it stands. A digit is drawn by 0x481800,
+the vertical twin of the compass's strip (`Tex_PutRoll`):
+- the source is a column of digits, from the picture region `3num_top` towards `3bottom`;
+- the window is `3num_top`'s size, at digit · 0.1 (0x4a6200) of the way down, rounded (0.5, then
+  truncated); at the first's own row it is the last's instead;
+- it is copied unkeyed into `3num_ones_<k+1>` (or `tens`, `hunds`, `thous`).
+
+**The words' quirks (kept).**
+- The slots' lights (+0x28) and diodes' states (+0x3c) are five words each, but are indexed up to the
+  seventh slot. The sixth and seventh slots' lights are the first two diodes' states, and their diodes'
+  states are the count (+0x50) and the word after it.
+- The digits are four runs of six words, 0x4dc258-0x4dc2b3. Each run's sixth word is otherwise unused.
+  Then come 0x4dc2b4 (the names' choice by the screen mode) and 0x4dc2b8 (the first choice's flag). A
+  sixth slot's thousands digit lands on 0x4dc2b4, and a seventh's on 0x4dc2b8.
+- The block's first values are the exe's (digits 10, flag -1), and it is not reset between missions but
+  for those two words.
+
+Checked:
+- `diff_objects --start`: the display's start runs on both sides, drawing included.
+- `--call wdash` (case 56) runs six frames of the display's part of 0x455d90. Before each, every weapon's
+  rounds drop by 7k + 3 and its health is set to (4 - k) quarters. Before the fourth, the group's slot is
+  set to the last weapon's and 0x4561f0(0) runs again. After the start and each frame it compares the
+  dashboard texture's CRC-32, the words +0x28-+0x57 and the digits' block. It is identical on t01, s01,
+  a01, t06 and s07.
+- In game on s01: after the intro (Escape), Space fires the machine gun, 2000 rounds down to 1950.
 
 ## The tracers (0x46c0e0-0x46ce90)
 

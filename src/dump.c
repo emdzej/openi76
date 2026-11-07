@@ -1288,6 +1288,44 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 56: {   /* the weapons' display on the user's vehicle (after the start's 0x4561f0): six frames of its
+                        part of 0x455d90 (the diodes 0x456c10, then the counters 0x456cf0); before each, every
+                        weapon's ammunition less 7 k + 3 (not below 0) and its health (4 - k) quarters of its
+                        whole (not below 0); before the fourth, the group's slot the last weapon's and 0x4561f0(0)
+                        again. After the start and each frame: the dashboard texture's CRC-32, the words +0x28 to
+                        +0x57 and the counters' digits */
+            HardPoints *hp = NULL;
+            for (int i = 0; i < g_hardpoint_count; i++)
+                if (g_hardpoints[i].vehicle == n) hp = &g_hardpoints[i];
+            if (!hp || !g_user_entity || g_user_entity->node != n || !g_dash) break;
+            for (int k = -1; k < 6; k++) {
+                if (k >= 0) {
+                    for (int j = 0; j < hp->count && j < 7; j++) {
+                        int i = hp->slot[j].inst;
+                        if (i == -1) continue;
+                        int32_t a = (int32_t)g_weapons[i].v18 - (7 * k + 3);
+                        g_weapons[i].v18 = (uint32_t)(a < 0 ? 0 : a);
+                        int32_t h = (int32_t)g_weapon_defs[g_weapons[i].def].v[1] * (4 - k) / 4;
+                        g_weapons[i].v0c = h < 0 ? 0 : h;
+                    }
+                    if (k == 3) {
+                        for (int j = 0; j < hp->count && j < 7; j++)
+                            if (hp->slot[j].inst != -1) hp->w1[0] = j;
+                        g_fpu_round = FPU_DOWN;
+                        Weapons_DisplayStart(0);
+                    }
+                    g_fpu_round = FPU_DOWN;
+                    Weapons_DisplayFrame(hp);
+                }
+                const Texture *t = Tex_Get((uintptr_t)g_dash, exe_str(0x4db430 + (uint32_t)Weapons_DisplayWords()[23] * 0xd));
+                uint32_t b[1 + 12 + 25];
+                b[0] = t ? crc32(t->pixels, (size_t)(t->w * t->h)) : 0;
+                memcpy(b + 1, hp->wa, 12 * 4);
+                memcpy(b + 13, Weapons_DisplayWords(), 25 * 4);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 38: {   /* the turrets (0x455560) after the radar's frame (as in 37), three frames, every vehicle given
                         a current weapon (the hard points' +4, -1 at the load) so that the turrets turn */
             for (int i = 0; i < g_hardpoint_count; i++)

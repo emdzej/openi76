@@ -896,7 +896,7 @@
 00457df0	Weapons_Unlink	weapons	med	the group unlinked, with the dashboard
 00455560	Turrets_Aim	weapons	high	the turrets turned towards the radar's contact, the fixed guns pitched; ported
 00428e80	Artillery_Fire	weapons	high	each gun one frame in eight asks the firing decision about the user
-004561f0	Weapons_DisplayStart	weapons	high	the dashboard's node (zbk_.map), the group's first slot, the separator, the slots' lights and digits
+004561f0	Weapons_DisplayStart	weapons	high	the dashboard's node (zbk_.map), the group's first slot, the separator, brackets, housings, diodes, plates, counters; ported, diffed
 0042e370	Node_FindTexture	objects	high	the first node whose level-4 first face has the texture; sets each visited node to level 4
 0040a9a0	Fsm_IsArrived	fsm	high	the vehicle's AI +0x9c is 1; clears it
 0040f0d0	Fsm_Teleport	fsm	high	teleport/teleportOffset: the path's first point on the ground, the angle, the speed along the heading
@@ -1093,3 +1093,7 @@
 0047c890	Tex_Restore	tex	high	an owner's private texture copy given back (or refreshed from the shared); ported
 0046e950	Smoke_DrawPuffs	effects	med	the puffs list 0x5772f8 queued as sprites (0x46e650), with 0x4dd080
 0046e650	Smoke_DrawPuff	effects	med	one puff: a type 9 sprite record, 0x8c
+00456c10	Dash_Diode	weapons	high	a slot's health diode by five ranges (0x4db490); ported, diffed
+004569b0	Dash_Plate	weapons	high	a weapon's name plate from four tables by kind, index, turret, lit; ported
+00456cf0	Dash_Counter	weapons	high	a slot's four rolling digits of rounds; ported, diffed
+00481800	Tex_PutRoll	cockpit	high	the vertical strip: a digit's window of a column into a region; ported, diffed

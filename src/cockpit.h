@@ -19,6 +19,10 @@ Surface Tex_PutRegion(uintptr_t owner, const char *tex, const char *region, cons
    place f of the way along to the last's (the compass); an empty surface when nothing is drawn */
 Surface Tex_PutStrip(uintptr_t owner, const char *tex, const char *region, const char *first, const char *last,
                      float f);
+/* Tex_PutRoll 0x481800: Tex_PutStrip's vertical twin, a window of a column of digits from a place f of the
+   way down from the first region to the last (the weapons' counters) */
+Surface Tex_PutRoll(uintptr_t owner, const char *tex, const char *region, const char *first, const char *last,
+                    float f);
 
 /* Cockpit_Init 0x426070 (WinMain's, before a mission's play): the HUD's pictures (the target box's corners
    ztarg201-904), the health bar, the instruments' last states and surfaces cleared */

@@ -23,6 +23,10 @@
 #include "platform.h"
 #include "scene.h"
 #include "render/fpu.h"
+#include "render/sprite.h"
+#include "cockpit.h"
+#include <ctype.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -34,9 +38,16 @@
 HardPoints g_hardpoints[50];
 int g_hardpoint_count;
 Node *g_dash;              /* 0x4db470: the user's dashboard's node */
-int32_t g_dash_low;        /* 0x4dc2b4: its names' choice by the screen mode (1 below mode 6) */
-static int32_t g_dash_done;   /* 0x4dc2b8: the first weapon chosen once a mission */
-int32_t g_dash_digits[4][6];  /* 0x4dc258, 0x4dc270, 0x4dc288, 0x4dc2a0: each slot's counter's digits */
+/* 0x4dc258-0x4dc2bb, one block as in the original: four runs of six words, each slot's counter's digits
+   (the ones, the tens, the hundreds, the thousands; a run's sixth word unused), then 0x4dc2b4, the
+   dashboard's names' choice by the screen mode (1 below mode 6), and 0x4dc2b8, the first weapon chosen once
+   a mission. Its first values are the exe's (the digits 10, never drawn) and it is not cleared between
+   missions. A sixth slot's thousands land on 0x4dc2b4 and a seventh's on 0x4dc2b8 (quirk, kept) */
+static int32_t dash_words[25];
+static int dash_words_loaded;
+#define DIGIT(d, k) dash_words[(d) * 6 + (k)]
+#define g_dash_low dash_words[23]
+#define g_dash_done dash_words[24]
 static HardPoints *s_current;   /* 0x570a68 */
 WeaponDef g_weapon_defs[36];
 int g_weapon_def_count;
@@ -87,6 +98,10 @@ void Weapons_Init(void)
     g_dash = NULL;
     g_weapons_free = 0;
     g_weapons_linked = 0;
+    if (!dash_words_loaded) {
+        memcpy(dash_words, exe_data(0x4dc258, sizeof dash_words), sizeof dash_words);
+        dash_words_loaded = 1;
+    }
     g_dash_done = 0;
     g_dash_low = -1;
 }
@@ -1070,12 +1085,77 @@ Node *Node_FindTexture(Node *n, const char *name)
     return r;
 }
 
-/* not ported yet, as the dashboard's drawing: its surface (0x4392b0, 0x4391c0), the brackets' and housings'
-   pictures, the diodes (0x456c10), the names (0x4569b0, 0x481420) and the counters (0x456cf0) */
-static void dash_draw(const HardPoints *hp, int k, int inst, int housing) { (void)hp, (void)k, (void)inst, (void)housing; }
+/* The dashboard's words from +0x28: the slots' lights (+0x28, five), their diodes' states (+0x3c, five), the
+   count (+0x50) and +0x54, one run of words. The original indexes the first two by slot, up to seven: the
+   sixth and seventh slots' lights are the first diodes' states, and their diodes' states the count and the
+   word after it (quirk, kept) */
+_Static_assert(offsetof(HardPoints, wf) == offsetof(HardPoints, wa) + 20 &&
+               offsetof(HardPoints, count) == offsetof(HardPoints, wa) + 40 &&
+               offsetof(HardPoints, w15) == offsetof(HardPoints, wa) + 44, "the dashboard's words");
+static int32_t *light_of(HardPoints *hp, int k) { return (int32_t *)((uint8_t *)hp + offsetof(HardPoints, wa)) + k; }
+static int32_t *diode_of(HardPoints *hp, int k) { return light_of(hp, 5 + k); }
+
+Surface g_dash_surf;   /* 0x570a70: the dashboard texture's surface, as last drawn on */
+
+static const char *dash_tex(void) { return exe_str(0x4db430 + (uint32_t)g_dash_low * 0xd); }   /* zbk_320.map, zbk_.map */
+/* a slot's region (16 bytes a slot; the high resolutions' names without their first character) */
+static const char *dash_name(uint32_t base, int k, int o) { return exe_str(base + (uint32_t)(k * 0x10 + o) + (uint32_t)g_dash_low); }
+
+/* 0x456c10: slot k's health diode, by its instance's health (its points over the definition's whole, times
+   0x4a61fc, truncated) in one of five ranges (0x4db490, 0x18 apart); drawn when its state changes, or with
+   force */
+static void dash_diode(HardPoints *hp, int k, int i, int force)
+{
+    int32_t h = (int32_t)MUL(fpu_div((double)(uint32_t)g_weapons[i].v0c,
+                                     (double)(uint32_t)g_weapon_defs[g_weapons[i].def].v[1]), exe_f32(0x4a61fc));
+    for (int e = 0; e < 5; e++) {
+        int32_t lo = (int32_t)exe_u32(0x4db490 + 0x18u * (uint32_t)e), hi = (int32_t)exe_u32(0x4db494 + 0x18u * (uint32_t)e);
+        if (lo <= h && h <= hi && (*diode_of(hp, k) != e || force)) {
+            Tex_PutRegion((uintptr_t)g_dash, dash_tex(), dash_name(0x4dc078, k, 0),   /* 3diode_1.. */
+                          dash_name(0x4db480, 0, 0x18 * e), &g_dash_surf);
+            *diode_of(hp, k) = e;
+        }
+    }
+}
+
+/* 0x4569b0: the weapon's name plate by its definition's kind (2-6) and index (below 8), from one of four
+   tables of 16 bytes a name: the turrets' (0x4db9d8, lit 0x4dbc78) or the others' (0x4db498, lit 0x4db738);
+   none unless its first character is a letter or a digit */
+static const char *dash_plate(int32_t kind, int32_t index, int turret, int lit)
+{
+    if (kind <= 1 || kind >= 7 || index >= 8) return NULL;
+    uint32_t base = turret ? (lit ? 0x4dbc78 : 0x4db9d8) : (lit ? 0x4db738 : 0x4db498);
+    const char *p = exe_str(base + (uint32_t)((kind * 7 + index) * 0x10) + (uint32_t)g_dash_low);
+    return isalnum((unsigned char)*p) && (signed char)*p >= 0 ? p : NULL;
+}
+
+/* 0x456cf0: slot k's counter, four rolling digits (the ones, tens, hundreds, thousands of the ammunition):
+   a digit not at its value steps down by one a frame (9 after 0), or with force is drawn as it is. Each
+   is the column of digits (num_top to bottom) at digit / 10 (0x4a6200) of the way, into its region */
+static void dash_counter(HardPoints *hp, int k, int i, int force)
+{
+    (void)hp;
+    int32_t a = (int32_t)g_weapons[i].v18, t[4];
+    t[0] = a % 10;
+    t[1] = a / 10 % 10;
+    t[2] = a / 100 % 10;
+    t[3] = a / 1000 % 10;
+    static const uint32_t region[4] = {0x4dc118, 0x4dc168, 0x4dc1b8, 0x4dc208};   /* 3num_ones_1 .. 3num_thous_1 */
+    for (int d = 0; d < 4; d++) {
+        if (DIGIT(d, k) == t[d] && !force) continue;
+        if (!force) DIGIT(d, k)--;
+        if (DIGIT(d, k) == -1) DIGIT(d, k) = 9;
+        float f = F32(MUL((double)DIGIT(d, k), exe_f32(0x4a6200)));
+        g_dash_surf = Tex_PutRoll((uintptr_t)g_dash, dash_tex(), dash_name(region[d], k, 0), exe_str(0x4db450 + (uint32_t)g_dash_low),
+                                  exe_str(0x4db460 + (uint32_t)g_dash_low), f);
+    }
+}
+
+const int32_t *Weapons_DisplayWords(void) { return dash_words; }
 
 void Weapons_DisplayStart(int first)
 {
+    g_dash_surf = Surface_Make(0, 0, NULL);   /* 0x4392b0, 0x4391c0 */
     HardPoints *hp = g_user_entity ? hardpoints_of(g_user_entity->node) : NULL;
     if (!hp) return;
     int low = g_detail.b[DET_SCREEN] < 6;
@@ -1088,11 +1168,11 @@ void Weapons_DisplayStart(int first)
     if (!g_dash_done || first) {   /* the group's current slot: the first with a weapon */
         int found = 0;
         for (int k = 0; k < hp->count; k++) {
-            hp->wa[k] = 0;   /* its light (the original's +0x28 words, past five into +0x3c) */
+            *light_of(hp, k) = 0;
             if (hp->slot[k].inst != -1 && !found) {
                 found = 1;
                 hp->w1[0] = k;
-                hp->wa[k] = 1;
+                *light_of(hp, k) = 1;
             }
         }
         g_dash_done = 1;
@@ -1102,19 +1182,25 @@ void Weapons_DisplayStart(int first)
     for (k = 0; k < hp->count; k++) {
         int i = hp->slot[k].inst;
         int housing = (int)(int64_t)fpu_mul(fpu_mul((double)crt_rand(), 3.0518509447574615e-05f), 5.0f);   /* 0x4a61f4, 0x4a61b0 */
-        dash_draw(hp, k, -1, housing);
+        /* the slot's bracket (3bracket_N) and one of five housings (3housing1-5) */
+        Tex_PutRegion((uintptr_t)g_dash, dash_tex(), dash_name(0x4dbfd8, k, 0), dash_name(0x4dc028, housing, 0), &g_dash_surf);
         if (i == -1) continue;
         if (g_weapons[i].kind == 4 || g_weapons[i].kind == 1) hp->w9 = k + 1;
+        dash_diode(hp, k, i, 1);
         int lit = 0;
         for (int j = 0; j < 5; j++)
             if (hp->w1[j] == g_weapons[i].slot) {
                 lit = 1;
                 break;
             }
-        hp->wa[k] = lit;
+        *light_of(hp, k) = lit;
+        /* the name plate (3dymo_N); both of the original's branches take the same words */
+        const WeaponDef *d = &g_weapon_defs[g_weapons[i].def];
+        const char *plate = dash_plate(d->kind, d->index, g_weapons[i].kind == 4, lit);
+        if (plate && *plate) Tex_PutRegion((uintptr_t)g_dash, dash_tex(), dash_name(0x4dc0c8, k, 0), plate, &g_dash_surf);
         int32_t a = (int32_t)g_weapons[i].v18;
-        for (int d = 0; d < 4; d++, a /= 10) g_dash_digits[d][k] = a % 10;
-        dash_draw(hp, k, i, -1);
+        for (int e = 0; e < 4; e++, a /= 10) DIGIT(e, k) = a % 10;
+        dash_counter(hp, k, i, 1);
     }
     if (hp->w9 == -1) hp->w9 = k - 1;
 }
@@ -1141,11 +1227,16 @@ static double weapon_health(int i)
     return fpu_div((double)(uint32_t)g_weapons[i].v0c, (double)(uint32_t)g_weapon_defs[g_weapons[i].def].v[1]);
 }
 
-/* not ported yet, as the dashboard and its sounds (0x4db470): the weapons' names and diodes lit and
-   unlit (0x4569b0, 0x481420), the separator, "CAMMO.WAV" and "WMISS.WAV" (0x4765d0), the health diode
-   (0x456c10) and the ammunition's counter (0x456cf0) */
+/* not ported yet, as the audio: "CAMMO.WAV" and "WMISS.WAV" (0x4765d0) */
 static void dash_sound(const char *name) { (void)name; }
-static void dash_slots(HardPoints *hp) { (void)hp; }
+
+void Weapons_DisplayFrame(HardPoints *hp)
+{
+    for (int k = 0; k < hp->count; k++)
+        if (hp->slot[k].inst != -1) dash_diode(hp, k, hp->slot[k].inst, 0);
+    for (int k = 0; k < hp->count; k++)
+        if (hp->slot[k].inst != -1) dash_counter(hp, k, hp->slot[k].inst, 0);
+}
 
 /* 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
 void Radar_Unlock(Node *v)
@@ -1475,5 +1566,5 @@ void Weapons_Frame(void)
     }
     /* network play's triggers (0x4624a0) and messages (0x462580) are not ported */
     Weapons_Tick();
-    if (hp) dash_slots(hp);
+    if (hp) Weapons_DisplayFrame(hp);
 }

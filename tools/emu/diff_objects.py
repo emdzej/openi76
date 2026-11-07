@@ -1081,6 +1081,48 @@ def call_mirror(exe, n, fpcw):
             CALL_OUT.append(struct.pack("<IIII", c, w, h, u(0x4DD928)).hex())
 
 
+def call_wdash(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    i32 = lambda a: struct.unpack("<i", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    hp = next((0x566950 + i * 0x2C8 for i in range(u(0x570AA0)) if u(0x566950 + i * 0x2C8) == n), 0)
+    dash = u(0x4DB470)
+    if not hp or not u(0x4D3B64) or u(u(0x4D3B64)) != n or not dash:
+        return
+    for k in range(-1, 6):
+        if k >= 0:
+            cnt = i32(hp + 0x50)
+            for j in range(min(cnt, 7)):
+                i = i32(hp + 0xA8 + 0x58 * j)
+                if i == -1:
+                    continue
+                w = 0x55F9C0 + i * 0x50
+                exe.write(w + 0x18, struct.pack("<i", max(i32(w + 0x18) - (7 * k + 3), 0)))
+                whole = i32(0x56F730 + i32(w + 0x28) * 0x88 + 0x5C)
+                h = abs(whole * (4 - k)) // 4 * (1 if whole * (4 - k) >= 0 else -1)   # C's division
+                exe.write(w + 0xC, struct.pack("<i", max(h, 0)))
+            if k == 3:
+                for j in range(min(cnt, 7)):
+                    if i32(hp + 0xA8 + 0x58 * j) != -1:
+                        exe.write(hp + 4, struct.pack("<i", j))
+                exe.call(0x4561F0, 0, limit=500_000_000, fpcw=rd)
+            for j in range(i32(hp + 0x50)):   # 0x455d90's end, the count read again each time
+                i = i32(hp + 0xA8 + 0x58 * j)
+                if i != -1:
+                    exe.call(0x456C10, hp, j, i, 0, limit=50_000_000, fpcw=rd)
+            for j in range(i32(hp + 0x50)):
+                i = i32(hp + 0xA8 + 0x58 * j)
+                if i != -1:
+                    exe.call(0x456CF0, hp, j, i, 0, limit=50_000_000, fpcw=rd)
+        lo = exe.read(0x4DC2B4, 1)[0]
+        tx = exe.call(0x47C320, dash, 0x4DB430 + lo * 0xD, limit=50_000_000, fpcw=rd)
+        c = 0
+        if tx:
+            w, h = struct.unpack("<ii", exe.read(tx, 8))
+            c = zlib.crc32(exe.read(tx + 8, w * h))
+        CALL_OUT.append((struct.pack("<I", c) + exe.read(hp + 0x28, 48) + exe.read(0x4DC258, 100)).hex())
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1155,16 +1197,14 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
 START_LATER = (
                # the user vehicle's set-up (camera, special weapons' panel) and the engine's sound
-               0x403360, 0x42DC00, 0x476240,
-               # the weapons' display's (0x4561f0) drawing: the surface, the diodes, the names, the counters
-               0x4392B0, 0x456C10, 0x4569B0, 0x456CF0)
+               0x403360, 0x42DC00, 0x476240)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}
 
 

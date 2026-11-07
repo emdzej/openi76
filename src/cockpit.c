@@ -72,6 +72,24 @@ Surface Tex_PutStrip(uintptr_t owner, const char *tex, const char *region, const
     return t;
 }
 
+Surface Tex_PutRoll(uintptr_t owner, const char *tex, const char *region, const char *first, const char *last,
+                    float f)
+{
+    EtblSource a = Etbl_Source(first), b = Etbl_Source(last);
+    const uint8_t *dst = Etbl_Region(tex, region);
+    Surface t = Tex_Writable(owner, tex);
+    const Texture *pic = Tex_Pixels(a.name);
+    if (!pic || !t.pixels || !dst) return Surface_Make(0, 0, NULL);   /* the picture's count is kept (quirk, kept) */
+    /* f of the way from the first's y to the last's, rounded; at the first's own y the last's */
+    int32_t y = a.y + (int32_t)ADD(MUL((double)(b.y - a.y), f), 0.5f);   /* 0x4a73f4, _ftol */
+    if (y == a.y) y = b.y;
+    Surface ps = Surface_Make(pic->w, pic->h, (uint8_t *)pic->pixels);
+    Surface_SetViewport(&ps, a.x, pic->h - y - a.h, a.w + a.x, pic->h - y);
+    Surface_Blit(&t, &ps, rd32(dst + 0x10), t.h - rd32(dst + 0x14) - a.h, 0);
+    Tex_PixelsRelease(a.name);
+    return t;
+}
+
 static float fhex(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
 
 static int32_t hires;
