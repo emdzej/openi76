@@ -391,3 +391,44 @@ the frame -1 toward 2, the time 0.1 s back.
 Checked: `diff_objects --start` on t01, s04 and t05, with the start run on both sides. It compares the
 hard points, the definitions, the instances, the ordnance and the trees. The empty xdf names are
 compared as empty. The shot, launch and fly calls also run 0x433b70 now.
+
+## The weapons' frame (0x455d90)
+
+It runs once a frame after the AI, before the textures' animations:
+
+1. The turrets turn towards the radar's target (0x455560; not ported yet).
+2. On the user's hard points:
+   - 0x4db474, the endless ammunition, is the shell's option bit 4 outside network play.
+   - The triggers (0x4577c0) are read unless the script holds the user (0x505494, an intro's goto).
+     - With a window not shut, only the handguns can fire: a side's window wound down with its gun out
+       fires slot 5 (passenger) or 6 (driver) on weapon_fire, while it has rounds.
+     - Otherwise each of the first five slots fires on weapon_fire when it is in the group (+4, the
+       first of five words), or on its own hardpointN_fire key. A broken weapon (0x456830: its points
+       over its definition's, zero) stays off and the dashboard plays WMISS.WAV.
+   - Unless all five slots are broken (0x4579b0), the group is updated:
+     - A broken current weapon forces weapon_cycle.
+     - weapon_cycle (0x457a30) moves the current slot to the next working one not in the group, round
+       the five, and empties the group. On the user's it plays CAMMO.WAV and lets the radar's lock go
+       (0x421480).
+     - weapon_link toggles 0x4db478. While it is set, 0x458030 builds the group once: the working
+       slots after the current one, round to it, whose definition's kind and instance's kind match the
+       current one's. While it is clear, 0x457df0 empties the group but its current slot.
+     - Quirk: from a current slot past 4, 0x458030 reads past the slots; the port stops at 6.
+3. Network play's triggers and messages (0x4624a0, 0x462580) are skipped; not ported.
+4. The instances' tick (0x458340, "Firing: the triggers' timing").
+5. The dashboard's slots are redrawn; not ported.
+
+**The display's start (0x4561f0).** The user's start (and the cockpit's changes) runs it:
+- The dashboard is the vehicle's node whose level-4 first face has the texture zbk_.map (zbk_320.map
+  below screen detail 6). The search (0x42e370) sets every node it looks at to level 4. The other
+  texture's node is hidden.
+- The dashboard is kept in the vehicle's +0x430.
+- On the first call (0x4dc2b8 clear, or asked), the group's current slot is the first with a weapon,
+  and the only one lit.
+- The hard points' +0x24, the separator, follows the last front gun or turret (instance kinds 1 and 4).
+- Each slot's light is whether it is in the group. Its four digits are its rounds.
+- Each slot also draws one rand() for its housing's picture. The port keeps that call, though the
+  drawing is not ported yet.
+
+Checked: `diff_objects --start` (the display's start runs on both sides, its drawing stubbed), and in game
+on s01: after the intro (Escape), Space fires the machine gun, 2000 rounds down to 1950.

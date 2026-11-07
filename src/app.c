@@ -2,6 +2,9 @@
    8-bit presentation path, or with --param mission=<name> the mission viewer below. The original's
    start-up (WinMain, the shell, the intro movie) replaces this in steps 4, 5 and 10 of
    docs/re/port-plan.md. */
+#include "texanim.h"
+#include "weapons.h"
+#include "ordnance.h"
 #include "app.h"
 #include "ai.h"
 #include "fsm.h"
@@ -177,8 +180,10 @@ static void play_frame(void)
         Class_Frame(0);
         Class_Frame(1);
         AI_Frame();
-        /* not ported yet: the weapons (0x428e80), the chunks (0x4597a0), the HUD's weapons (0x455d90), the
-           texture animations (0x47e9a0) */
+        /* not ported yet: the artillery's firing (0x428e80) */
+        Shots_Frame();     /* 0x4597a0 */
+        Weapons_Frame();   /* 0x455d90 */
+        TexAnim_Run();     /* 0x47e9a0 */
         if (g_camera_fn) g_camera_fn();
         static int frames, trace = -1;
         if (trace < 0) {
@@ -194,9 +199,17 @@ static void play_frame(void)
             int32_t gear, flags;
             memcpy(&gear, d + 0x104, 4);
             memcpy(&flags, d + 0x454, 4);
-            char m[200];
-            snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x",
-                     frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags);
+            int shots = 0, ammo = -1;
+            for (int k = 0; k < g_ordnance_count; k++) {
+                for (const Node *s = g_ordnance[k].node ? g_ordnance[k].node->child : NULL; s; s = s->next) shots++;
+                for (const Node *s = g_ordnance[k].list1; s; s = s->next) shots++;
+            }
+            for (int i = 0; i < g_hardpoint_count; i++)
+                if (g_hardpoints[i].vehicle == u && g_hardpoints[i].slot[0].inst != -1)
+                    ammo = (int)g_weapons[g_hardpoints[i].slot[0].inst].v18;
+            char m[260];
+            snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x shots %d ammo %d",
+                     frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags, shots, ammo);
             plat_log(m);
         }
         memcpy(g_view_pos, g_view.eye, sizeof g_view_pos);   /* 0x4a85e8 is the view's eye */

@@ -149,3 +149,15 @@ void Window_Anim(Node *n, const char *name, void *arg);
 int Window_Closed(Node *vehicle, int which);
 int Window_Open(Node *vehicle, int which);
 int Window_Busy(Node *vehicle, int which);
+
+extern int32_t g_weapons_linked;   /* 0x4db478 */
+/* Weapons_Frame 0x455d90: the turrets (not ported), the user's triggers, group and link from the
+   actions, then every instance's timers (Weapons_Tick); the dashboard's part is not ported */
+void Weapons_Frame(void);
+extern Node *g_dash;          /* 0x4db470 */
+extern int32_t g_dash_low;    /* 0x4dc2b4 */
+/* Node_FindTexture 0x42e370 (each node looked at set to level 4) */
+Node *Node_FindTexture(Node *n, const char *name);
+/* Weapons_DisplayStart 0x4561f0: the user's dashboard's node (by the screen mode's names), the group's first
+   weapon once a mission (or when first), the separator and the counters' digits; its drawing is not ported */
+void Weapons_DisplayStart(int first);

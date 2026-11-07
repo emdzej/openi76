@@ -98,7 +98,7 @@ refreshed first (`Node_Live`: a freed one becomes NULL).
 
 **Ported:** null, set and setId (`*a0 = *a1`), inc, dec, rand, startTimer, the end-timer half of
 successAll / failAll / failAllObj, true, false, isEqual, isGreater, isLesser, timeGreater, timeLesser,
-isEqualId.
+isEqualId, isArrived, isKeypress, teleport and teleportOffset.
 
 - `dec` adds one, as `inc` does (a quirk, kept).
 - `rand`: `*a0 = rand() % *a1`.
@@ -108,6 +108,12 @@ isEqualId.
 - `isGreater`: `*a1 < *a0`. `isLesser`: `*a0 < *a1`.
 - `successAll` (1), `failAll` (0) and `failAllObj` (0): the end's state and time (`*a0` seconds from now).
   Then 0x41f280 marks the objectives (`-1` all; failAllObj `*a1`), which is not ported yet.
+- `isArrived` (0x40a9a0): the vehicle's AI block +0x9c is 1 (the goto's path ended); the test clears it.
+- `isKeypress`: the menu's poll (0x480720, `Input_MenuPoll`), true on a key; the intros end on Escape
+  this way and then teleport the user.
+- `teleport` (0x40f0d0, `*a0` the vehicle, `*a1` the path's number, `*a2` the speed, `*a3` the angle):
+  the path's first point at the terrain's height, the angle wrapped to a turn, the vehicle placed there
+  with the speed along its heading. `teleportOffset` passes `*a4` and `*a5` too, offsets in hundredths.
 - Code 22, `playScene`, falls to the default: the original's fatal ("Uknown fsm prototype").
 
 **Not ported yet** (the port answers 0), by what they call:
@@ -117,7 +123,7 @@ isEqualId.
   leader, +0xa98c, +0xa980, +0xa984), race 0x1a, hide 0x21. behave (0x40a550) and do (0x40a640) too.
 - **The conditions on vehicles:**
   - test 0x40a970, isWithin 0x40a9e0, isShot 0x40aaa0, hpLesser 0x40af00, ammoLesser 0x40b550;
-  - isRammed 0x40af30, isDead 0x40af70, isLit 0x40afe0, isArrived 0x40a9a0;
+  - isRammed 0x40af30, isDead 0x40af70, isLit 0x40afe0;
   - isWithinNav 0x40b010, isWithinSqNav 0x40b060, isWithinEnemy 0x409810, isAttacked 0x40b0c0;
   - allBlgDead 0x40b2d0, allEnemyDead 0x409770, isAtFollow 0x40b4e0, canSee 0x413570 (ported: docs/re/ai.md "Line of sight");
   - isAirborne 0x40b7a0, isGroovesFault 0x40af90;
@@ -129,7 +135,7 @@ isEqualId.
   0x452d90, camPosObj and camTransObj 0x453060, camPosDir and camTransDir 0x453440, camF12 0x4537a0,
   camIsArrived 0x453050.
 - **The rest:**
-  - teleport and teleportOffset 0x40f0d0, destroy 0x40b110, playMovie 0x44e6e0, isKeypress 0x480720;
+  - destroy 0x40b110, playMovie 0x44e6e0;
   - triggerGate 0x40b600, toggleAvoid 0x40b310, setHeliHeight 0x40b340, setSkill 0x40b480;
   - control, controlAll, driveControl and controlDone (0x41aaa0, 0x41a900, 0x41ab50, 0x41abf0);
   - reveal 0x40b540, setAgg 0x40b640, setUserRadar 0x40b670, salvage 0x40b720, setSiren 0x40b740;

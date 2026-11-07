@@ -252,8 +252,12 @@ static uint32_t weapon_zones(int32_t side, int32_t type, double x)
 static void scale(uint8_t *p, float k) { put32(p, (int32_t)(int64_t)MUL((double)rd32(p), k)); }
 
 /* the user's set-up at the start: the cockpit (0x426410), the camera (0x403360), the weapons' display
-   (0x4561f0), 0x42dc00 and the dashboard (0x471060); not ported yet */
-static void user_start(Node *n) { (void)n; }
+   (0x4561f0), 0x42dc00 and the dashboard (0x471060); only the weapons' display is ported */
+static void user_start(Node *n)
+{
+    (void)n;
+    Weapons_DisplayStart(1);
+}
 
 static void start_vehicle(Node *n)
 {

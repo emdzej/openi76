@@ -8,6 +8,9 @@
 #include "platform.h"
 #include "res.h"
 #include "orders.h"
+#include "terrain.h"
+#include "physics.h"
+#include "input.h"
 #include "vfs.h"
 #include "render/fpu.h"
 #include <stdio.h>
@@ -338,6 +341,69 @@ static uint32_t A(uint32_t m, int k) { return (uint32_t)W(m + M_ARGS + 4 * (uint
 static int32_t I(uint32_t m, int k) { return W(A(m, k)); }
 static Node *E(uint32_t m, int k) { return Fsm_Entity(I(m, k)); }
 
+/* 0x40a9a0: the vehicle's path ran out since the last ask (its AI block's +0x9c, cleared) */
+static int32_t is_arrived(Node *n)
+{
+    if (!n || !n->data) return 0;   /* the original would crash */
+    uint8_t *ai = *Data_Ptr(n->data, 0x108);   /* 0x42d5e0, 0x42d380 */
+    if (!ai) return 0;
+    int32_t v;
+    memcpy(&v, ai + 0x9c, 4);
+    if (v != 1) return 0;
+    memset(ai + 0x9c, 0, 4);
+    return 1;
+}
+
+/* 0x40f0d0: the vehicle put at the path's first point (its height taken from the ground and written back),
+   turned by the angle (0-360 degrees, past 180 as negative) and moved by the offsets (hundredths, when
+   given), at the speed along its new heading; its throttle, steering and turning zeroed */
+static void teleport(Node *n, uint32_t path, uint32_t speed, uint32_t angle, uint32_t ox, uint32_t oz)
+{
+    if (!n) return;   /* the original would crash */
+    int32_t a = W(angle);
+    if (a < 0 || a > 0x168) {
+        char msg[96];
+        snprintf(msg, sizeof msg, exe_str(0x4a9280), (int)a);   /* the original's fatal error */
+        plat_log(msg);
+    }
+    float yaw = fpu_f32(fpu_mul((double)(a < 0xb4 ? a : a - 0x168), exe_f32(0x4a5258)));
+    float offx = 0, offz = 0;
+    if (ox) {
+        offx = fpu_f32(fpu_mul((double)W(ox), exe_f32(0x4a5260)));
+        offz = fpu_f32(fpu_mul((double)W(oz), exe_f32(0x4a5260)));
+    }
+    uint32_t pt = (uint32_t)W(path + 0x54);
+    float x, y, z;
+    int32_t w = W(pt);
+    memcpy(&x, &w, 4);
+    w = W(pt + 8);
+    memcpy(&z, &w, 4);
+    y = fpu_f32(Terrain_Height(x, z));
+    memcpy(&w, &y, 4);
+    Fsm_SetWord(pt + 4, w);
+    Frame_Euler(&n->frame, 0, yaw, 0, fpu_f32(fpu_add(x, offx)), y, fpu_f32(fpu_add(z, offz)));
+    uint8_t *d = n->data;
+    memset(d + 0xe4, 0, 4);
+    memset(d + 0xe0, 0, 4);
+    float s = (float)W(speed), v[3];
+    v[0] = fpu_f32(fpu_mul(n->frame.m[6], s));
+    v[1] = fpu_f32(fpu_mul(n->frame.m[7], s));
+    v[2] = fpu_f32(fpu_mul(s, n->frame.m[8]));
+    memcpy(d + 0xbc, v, 12);
+    memcpy(d + 0xac, &s, 4);
+    int32_t sb;
+    memcpy(&sb, &s, 4);
+    float inv;
+    if (s > exe_f32(0x4a5264) && sb < 0x38d1b717) {   /* -1e-4 < s < 1e-4 as bits */
+        uint32_t big = 0x7f7fffff;
+        memcpy(&inv, &big, 4);
+    } else
+        inv = fpu_f32(fpu_div(exe_f32(0x4a5270), s));
+    memcpy(d + 0xb0, &inv, 4);
+    memset(d + 0xc8, 0, 12);
+    AI_TouchUser(n);   /* 0x409bc0 */
+}
+
 /* the game's side of the actions, not ported yet: each answers 0 (docs/re/fsm.md "The actions") */
 static int32_t later(uint32_t va) { (void)va; return 0; }
 
@@ -410,7 +476,7 @@ static void action(uint32_t m, int32_t index)
         SET(m + M_FLAG, code == 38 ? due < t : !(due <= t));
         break;
     }
-    case 40: E(m, 0); SET(m + M_FLAG, later(0x40a9a0)); break;   /* isArrived */
+    case 40: SET(m + M_FLAG, is_arrived(E(m, 0))); break;   /* isArrived */
     case 41: b = E(m, 1); a = E(m, 0); SET(m + M_FLAG, b == a); break;   /* isEqualId */
     case 42: E(m, 1); SET(m + M_FLAG, later(0x40b010)); break;   /* isWithinNav */
     case 43: E(m, 1); SET(m + M_FLAG, later(0x40b060)); break;   /* isWithinSqNav */
@@ -433,7 +499,7 @@ static void action(uint32_t m, int32_t index)
         AI_Order(a, b, 0x1e, g_fsm_slow);
         break;
     }
-    case 49: E(m, 0); later(0x40f0d0); break;  /* teleport */
+    case 49: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), 0, 0); break;   /* teleport */
     case 50: E(m, 0); later(0x40b110); break;  /* destroy */
     case 51: later(0x44e6e0); break;           /* playMovie */
     case 52: later(0x452d00); break;           /* pushCam (0x428880 first) */
@@ -446,7 +512,7 @@ static void action(uint32_t m, int32_t index)
     case 59: E(m, 1); E(m, 0); later(0x4537a0); break;   /* camF12 */
     case 60: later(0x453440); break;           /* camTransDir */
     case 61: SET(m + M_FLAG, later(0x453050)); break;    /* camIsArrived */
-    case 62: SET(m + M_FLAG, later(0x480720)); break;    /* isKeypress */
+    case 62: SET(m + M_FLAG, Input_MenuPoll()); break;    /* isKeypress (0x480720) */
     case 63: E(m, 0); later(0x40b600); break;  /* triggerGate */
     case 65: E(m, 0); later(0x40b310); break;  /* toggleAvoid */
     case 66: SET(m + M_FLAG, later(0x40b2d0)); break;    /* allBlgDead */
@@ -470,7 +536,7 @@ static void action(uint32_t m, int32_t index)
     case 84: E(m, 0); later(0x40b780); break;  /* setMaxAttackers */
     case 85: b = E(m, 1); a = E(m, 0); SET(m + M_FLAG, AI_CanSee(a, b)); break;   /* canSee */
     case 86: E(m, 0); SET(m + M_FLAG, later(0x40b7a0)); break;   /* isAirborne */
-    case 87: later(0x40f0d0); break;           /* teleportOffset (the node not refreshed) */
+    case 87: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), A(m, 4), A(m, 5)); break;   /* teleportOffset */
     case 88: E(m, 0); SET(m + M_FLAG, later(0x40af90)); break;   /* isGroovesFault */
     case 89: AI_Order(E(m, 0), NULL, 0x21, g_fsm_slow); break;   /* hide */
     case 90: if ((a = E(m, 0))) Engine_Start(a); break;          /* startCar */

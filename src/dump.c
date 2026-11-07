@@ -68,7 +68,7 @@ int g_dump_texanims;
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
                                     0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x400, 0x404, 0x408, 0x40c, 0x410,
-                                    0x414, 0x418, 0x41c, 0x440, 0x508};
+                                    0x414, 0x418, 0x41c, 0x430, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
 {
@@ -1399,6 +1399,10 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 for (int k = 0; k < 4; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + 0x9d40 + 8 * (k & 1) + 0xc * (k >> 1)));
                 static const uint16_t av[] = {0x9d18, 0x9d1c, 0x9d24, 0x9d28, 0x9d30, 0x9d34};   /* the avoiding */
                 for (size_t k = 0; k < sizeof av / sizeof av[0]; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + av[k]));
+                uint64_t pb[3];   /* the place (teleport's) and the speed's two words */
+                memcpy(pb, n->frame.pos, sizeof pb);
+                len += (size_t)snprintf(o + len, cap - len, " @ %016llx %016llx %016llx %08x %08x", (unsigned long long)pb[0], (unsigned long long)pb[1],
+                                        (unsigned long long)pb[2], *(uint32_t *)(d + 0xac), *(uint32_t *)(d + 0xb0));
                 len += (size_t)snprintf(o + len, cap - len, "\n");
             }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {

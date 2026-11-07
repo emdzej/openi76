@@ -7,6 +7,9 @@
 #include "ordnance.h"
 #include <math.h>
 #include "crt.h"
+#include "settings.h"
+#include "input.h"
+#include "ai.h"
 #include <stdlib.h>
 #include "texanim.h"
 #include "tex.h"
@@ -29,6 +32,10 @@
 
 HardPoints g_hardpoints[50];
 int g_hardpoint_count;
+Node *g_dash;              /* 0x4db470: the user's dashboard's node */
+int32_t g_dash_low;        /* 0x4dc2b4: its names' choice by the screen mode (1 below mode 6) */
+static int32_t g_dash_done;   /* 0x4dc2b8: the first weapon chosen once a mission */
+int32_t g_dash_digits[4][6];  /* 0x4dc258, 0x4dc270, 0x4dc288, 0x4dc2a0: each slot's counter's digits */
 static HardPoints *s_current;   /* 0x570a68 */
 WeaponDef g_weapon_defs[36];
 int g_weapon_def_count;
@@ -74,8 +81,13 @@ void Weapons_Init(void)
        the next mission's entries are written whole */
     memset(g_ordnance, 0, sizeof g_ordnance);
     g_ordnance_count = 0;
-    /* the rest of 0x454b50 (the firing's state, 0x45e460's projectiles and the random seed) comes with the
-       firing */
+    /* the firing's state and the dashboard's (its surface 0x570a70 is the dashboard's, not ported; the
+       hardpointN_fire actions 0x4defde-0x4defe2 are read straight) */
+    g_dash = NULL;
+    g_weapons_free = 0;
+    g_weapons_linked = 0;
+    g_dash_done = 0;
+    g_dash_low = -1;
 }
 
 /* 0x457020: the slots by their (type, side) rank, then by id. The ranks are the function's own constants
@@ -1053,4 +1065,241 @@ void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
         if (g_weapon_launch) g_weapon_launch(&l, late);
         else Shot_Launch(&l, late);   /* 0x458f40 */
     }
+}
+
+/* ---- the weapons' frame (0x455d90) ---- */
+
+int32_t g_weapons_linked;   /* 0x4db478: weapon_link's toggle */
+static HardPoints *hardpoints_of(const Node *v);
+
+/* 0x42e370: the first node (itself, then its children, then the ones after it) whose level 4's first face
+   has the texture name (16 characters, any case); every node looked at is set to its level 4 (0x47dc70) */
+Node *Node_FindTexture(Node *n, const char *name)
+{
+    Node *r = NULL;
+    Lod_Select(n, 4);
+    if (n->geom && n->geom->faces && crt_strnicmp(n->geom->faces->texture, name, 16) == 0) r = n;
+    if (!r && n->child) r = Node_FindTexture(n->child, name);
+    if (!r && n->next) r = Node_FindTexture(n->next, name);
+    return r;
+}
+
+/* not ported yet, as the dashboard's drawing: its surface (0x4392b0, 0x4391c0), the brackets' and housings'
+   pictures, the diodes (0x456c10), the names (0x4569b0, 0x481420) and the counters (0x456cf0) */
+static void dash_draw(const HardPoints *hp, int k, int inst, int housing) { (void)hp, (void)k, (void)inst, (void)housing; }
+
+void Weapons_DisplayStart(int first)
+{
+    HardPoints *hp = g_user_entity ? hardpoints_of(g_user_entity->node) : NULL;
+    if (!hp) return;
+    int low = g_detail.b[DET_SCREEN] < 6;
+    g_dash_low = low;
+    Node_SetFlags(Node_FindTexture(hp->vehicle, exe_str(low ? 0x4db430 : 0x4db43d)), 1);   /* zbk_320.map, zbk_.map */
+    g_dash = Node_FindTexture(hp->vehicle, exe_str(0x4db430 + (uint32_t)low * 0xd));
+    Node_ClearFlags(g_dash, 1);
+    if (!g_dash || !hp->vehicle->data) return;
+    *Data_Ptr(hp->vehicle->data, 0x430) = g_dash;
+    if (!g_dash_done || first) {   /* the group's current slot: the first with a weapon */
+        int found = 0;
+        for (int k = 0; k < hp->count; k++) {
+            hp->wa[k] = 0;   /* its light (the original's +0x28 words, past five into +0x3c) */
+            if (hp->slot[k].inst != -1 && !found) {
+                found = 1;
+                hp->w1[0] = k;
+                hp->wa[k] = 1;
+            }
+        }
+        g_dash_done = 1;
+    }
+    hp->w9 = 0;   /* the separator: after the last front weapon or turret */
+    int k;
+    for (k = 0; k < hp->count; k++) {
+        int i = hp->slot[k].inst;
+        int housing = (int)(int64_t)fpu_mul(fpu_mul((double)crt_rand(), 3.0518509447574615e-05f), 5.0f);   /* 0x4a61f4, 0x4a61b0 */
+        dash_draw(hp, k, -1, housing);
+        if (i == -1) continue;
+        if (g_weapons[i].kind == 4 || g_weapons[i].kind == 1) hp->w9 = k + 1;
+        int lit = 0;
+        for (int j = 0; j < 5; j++)
+            if (hp->w1[j] == g_weapons[i].slot) {
+                lit = 1;
+                break;
+            }
+        hp->wa[k] = lit;
+        int32_t a = (int32_t)g_weapons[i].v18;
+        for (int d = 0; d < 4; d++, a /= 10) g_dash_digits[d][k] = a % 10;
+        dash_draw(hp, k, i, -1);
+    }
+    if (hp->w9 == -1) hp->w9 = k - 1;
+}
+
+/* 0x456ff0: the vehicle's hard points' entry */
+static HardPoints *hardpoints_of(const Node *v)
+{
+    for (int i = 0; i < g_hardpoint_count; i++)
+        if (g_hardpoints[i].vehicle == v) return &g_hardpoints[i];
+    return NULL;
+}
+
+static HardPoints *user_hardpoints(void) { return g_user_entity ? hardpoints_of(g_user_entity->node) : NULL; }   /* 0x423fc0 */
+
+/* 0x456830: instance i's health, its points over its definition's whole */
+static double weapon_health(int i)
+{
+    return fpu_div((double)(uint32_t)g_weapons[i].v0c, (double)(uint32_t)g_weapon_defs[g_weapons[i].def].v[1]);
+}
+
+/* not ported yet, as the dashboard and its sounds (0x4db470): the weapons' names and diodes lit and
+   unlit (0x4569b0, 0x481420), the separator, "CAMMO.WAV" and "WMISS.WAV" (0x4765d0), the health diode
+   (0x456c10) and the ammunition's counter (0x456cf0) */
+static void dash_sound(const char *name) { (void)name; }
+static void dash_slots(HardPoints *hp) { (void)hp; }
+
+/* 0x421480: the radar's lock let go (its data +0xc bit 2, its frame, +0x50) */
+static void radar_unlock(Node *v)
+{
+    Node *r = v && v->data ? *(Node **)Data_Ptr(v->data, 0x434) : NULL;
+    if (!r || !r->data) return;
+    put32(r->data + 0xc, rd32(r->data + 0xc) & ~2);
+    memcpy(r->data + 0x10, exe_data(0x4db298, 0x40), 0x40);
+    put32(r->data + 0x50, 0);
+}
+
+/* 0x4577c0: the user's triggers. With a window not shut, only the handguns: each side's wound-down
+   window with its gun in fires its slot (5 the passenger's, 6 the driver's) on weapon_fire while it has
+   ammunition. Else each of the first five slots fires on weapon_fire when it is in the group (+4, five
+   words), or on its own hardpoint key; a broken weapon clicks instead */
+static void user_triggers(HardPoints *hp)
+{
+    Node *v = hp->vehicle;
+    uint8_t fire = *INPUT_AT(0x4defdb);   /* weapon_fire */
+    if (!Window_Closed(v, 1) || !Window_Closed(v, 2)) {
+        static const int side[2] = {2, 1}, slot[2] = {5, 6};
+        for (int k = 0; k < 2; k++) {
+            int i = hp->slot[slot[k]].inst;
+            if (Window_Open(v, side[k]) && !Window_Busy(v, side[k]) && i != -1)
+                g_weapons[i].v44 = (int32_t)g_weapons[i].v18 < 1 ? 0 : fire;
+        }
+        return;
+    }
+    for (int k = 0; k < 5; k++) {
+        int i = hp->slot[k].inst;
+        if (i == -1) continue;
+        int go = 0, j;
+        for (j = 0; j < 5; j++)
+            if (hp->w1[j] == g_weapons[i].slot) break;
+        if (j < 5 && fire) go = 1;
+        else go = *INPUT_AT(0x4defde + (uint32_t)k) != 0;   /* hardpoint1_fire .. 5 */
+        if (!go) {
+            g_weapons[i].v44 = 0;
+        } else if (!(weapon_health(i) > 0.0)) {
+            g_weapons[i].v44 = 0;
+            dash_sound(exe_str(0x4dc3dc));
+        } else
+            g_weapons[i].v44 = 1;
+    }
+}
+
+/* 0x4579b0: every weapon of the five slots broken */
+static int all_broken(const HardPoints *hp)
+{
+    for (int k = 0; k < 5; k++) {
+        int i = hp->slot[k].inst;
+        if (i != -1 && weapon_health(i) > 0.0) return 0;
+    }
+    return 1;
+}
+
+/* 0x457a30: weapon_cycle: the group's current slot to the next working one not in the group (round the
+   five), the group emptied */
+static void weapons_cycle(HardPoints *hp)
+{
+    int cur = hp->w1[0], k = cur, found, in;
+    if (cur == -1) return;
+    do {
+        in = 0;
+        k++;
+        found = -1;
+        if (k == 5) {
+            k = -1;
+        } else if (cur == k) {
+            found = hp->slot[k].inst;
+        } else {
+            for (int j = 0; j < 5; j++)
+                if (hp->w1[j] == k) in = 1;
+            int i = hp->slot[k].inst;
+            if (!in && i != -1 && weapon_health(i) > 0.0) found = i;
+        }
+    } while (found == -1 && (cur != k || in));
+    if (cur == k) return;
+    for (int j = 0; j < 7; j++) hp->w1[j] = -1;
+    hp->w1[0] = k;
+    if (hp == user_hardpoints()) {
+        dash_sound(exe_str(0x4dc378));
+        radar_unlock(hp->vehicle);
+    }
+}
+
+/* 0x458030: linked: the group (+8 on) made, once, of the working slots after the current one (round
+   to it, slot 5 included) with its definition's kind and its instance's kind */
+static void weapons_link(HardPoints *hp)
+{
+    int cur = hp->w1[0];
+    if (cur == -1 || hp->slot[cur].inst == -1) return;
+    if (hp->w1[1] != -1) return;
+    const WeaponInst *c = &g_weapons[hp->slot[cur].inst];
+    int at = 1, k = cur;
+    do {
+        int n = k + 1;
+        if (n > 6) break;   /* a current slot past 4: the original reads on past the slots */
+        int i = hp->slot[n].inst;
+        if (i != -1 && n != cur) {
+            const WeaponInst *w = &g_weapons[i];
+            if (g_weapon_defs[c->def].kind == g_weapon_defs[w->def].kind && c->kind == w->kind && weapon_health(i) > 0.0) {
+                hp->w1[at++] = n;   /* the original writes on past the group's six words with more */
+                if (hp == user_hardpoints()) dash_sound(exe_str(0x4dc378));
+            }
+        }
+        if (n == 5) n = -1;
+        k = n;
+    } while (cur != k);
+    hp->w1[0] = cur;
+}
+
+/* 0x457df0: unlinked: the group but its current slot emptied */
+static void weapons_unlink(HardPoints *hp)
+{
+    int cur = hp->w1[0];
+    if (cur == -1 || hp->slot[cur].inst == -1) return;
+    if (hp->w1[1] == -1) return;
+    for (int j = 1; j < 7; j++)
+        if (hp->w1[j] != -1) {
+            if (hp == user_hardpoints()) dash_sound(exe_str(0x4dc378));
+            hp->w1[j] = -1;
+        }
+}
+
+/* not ported yet: 0x455560, the turrets turned towards the radar's target */
+static void turrets_aim(void) {}
+
+void Weapons_Frame(void)
+{
+    turrets_aim();
+    HardPoints *hp = user_hardpoints();
+    if (hp) {
+        g_weapons_free = (g_game_options & 4) && !g_net_game;   /* the shell's endless ammunition */
+        if (!g_user_pressed) user_triggers(hp);   /* 0x409b70 */
+        if (!all_broken(hp)) {
+            int cur = hp->w1[0];
+            if (cur != -1 && hp->slot[cur].inst != -1 && weapon_health(hp->slot[cur].inst) == 0.0)
+                *INPUT_AT(0x4defdc) = 1;   /* the current one broken: as if weapon_cycle */
+            if (*INPUT_AT(0x4defdc)) weapons_cycle(hp);
+            if (*INPUT_AT(0x4defdd)) g_weapons_linked = g_weapons_linked == 0;   /* weapon_link */
+            if (g_weapons_linked == 1) weapons_link(hp);
+            else weapons_unlink(hp);
+        }
+    }
+    /* network play's triggers (0x4624a0) and messages (0x462580) are not ported */
+    Weapons_Tick();
+    if (hp) dash_slots(hp);
 }

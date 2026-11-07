@@ -896,3 +896,10 @@
 00457df0	Weapons_Unlink	weapons	med	the group unlinked, with the dashboard
 00455560	Turrets_Aim	weapons	med	the turrets turned towards their target
 00428e80	Artillery_Fire	weapons	med	the artillery's firing decision (0x413b10) and trigger
+004561f0	Weapons_DisplayStart	weapons	high	the dashboard's node (zbk_.map), the group's first slot, the separator, the slots' lights and digits
+0042e370	Node_FindTexture	objects	high	the first node whose level-4 first face has the texture; sets each visited node to level 4
+0040a9a0	Fsm_IsArrived	fsm	high	the vehicle's AI +0x9c is 1; clears it
+0040f0d0	Fsm_Teleport	fsm	high	teleport/teleportOffset: the path's first point on the ground, the angle, the speed along the heading
+004579b0	Weapons_AllBroken	weapons	high	every weapon of the five slots at zero health
+00456830	Weapon_Health	weapons	high	an instance's points over its definition's
+00421480	Radar_Unlock	radar	med	the radar's lock let go
