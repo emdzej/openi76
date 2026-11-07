@@ -63,3 +63,7 @@ void Camera_Mounted(void);
    lost the state is popped and its own frame run */
 void Camera_TargetStart(Entity *e);
 void Camera_Target(void);
+/* Camera_TowardStart 0x406950 (mode 0x18, F4) and Camera_Toward 0x406a60: the target view's twin, from over
+   the vehicle looking toward the target */
+void Camera_TowardStart(Entity *e);
+void Camera_Toward(void);

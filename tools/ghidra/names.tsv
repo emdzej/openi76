@@ -1046,3 +1046,5 @@
 00406450	Camera_TargetStart	camera	high	mode 0x17 (F5): the radar target's view, pushed; ported, diffed
 00406560	Camera_Target	camera	high	the target view's frame, popped 3 s after the target is lost; ported, diffed
 004066b0	Camera_TargetLook	camera	high	over the target looking back at the vehicle; ported, diffed
+00406950	Camera_TowardStart	camera	high	mode 0x18 (F4): over the vehicle toward the radar target; ported, diffed
+00406a60	Camera_Toward	camera	high	its frame; ported, diffed

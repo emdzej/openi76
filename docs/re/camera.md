@@ -24,7 +24,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0x15 | 0x406070 | 0x4055e0 | 1 | `Camera_ChaseRightStart` |
 | 0x16 | 0x406200 | 0x406340 | 3 | `Camera_OverviewStart`, `Camera_Overview` |
 | 0x17 | 0x406450 | 0x406560 | 4 | `Camera_TargetStart`, `Camera_Target` |
-| 0x18 | 0x406950 | 0x406a60 | 4 | |
+| 0x18 | 0x406950 | 0x406a60 | 4 | `Camera_TowardStart`, `Camera_Toward` |
 | 0x19 | 0x404890 | 0x404520 | 0 | `Camera_PilotStart`, `Camera_Pilot` |
 | 0xfefe | 0x406bb0 | 0x403540 | 6 | `Camera_TrackStart`, `Camera_Track` |
 
@@ -200,7 +200,7 @@ Each frame, `Camera_Mounted` 0x405c70:
 
 Checked: `--call mount12` and `mount13` (cases 44, 45), identical on t01, t05 and s01.
 
-## The target view (0x17)
+## The target views (0x17, 0x18)
 
 `Camera_TargetStart` 0x406450 (F5) does nothing without a radar target (`Radar_Current` 0x421ba0). From
 any sub-mode but 4 it first pushes the camera's state; with the stack full (top under 1) it does nothing.
@@ -216,6 +216,9 @@ Each frame keeps the vehicle's place (0x4ed8a0).
 
 These words are outside the state block, so the stack does not keep them.
 
+0x406950 (F4) and its frame 0x406a60 are the same, with the look's two places swapped. The camera is
+then over the vehicle, looking past it toward the target.
+
 **The look** (0x4066b0, target t and vehicle s) is camF12's construction with its own constants:
 
 - the point 3 over t;
@@ -229,7 +232,7 @@ These words are outside the state block, so the stack does not keep them.
 The starts of the modes in sub-mode 4 (0x17, 0x18) push, and the other starts pop from sub-mode 4. So a
 preset chosen from the target view returns through the stack.
 
-Checked: `--call target` (case 46) runs the radar's frame twice, takes the next contact (0x421540) and
+Checked: `--call target` (case 46; `toward`, case 47, likewise) runs the radar's frame twice, takes the next contact (0x421540) and
 runs five frames. On s07 and a01 a target starts the view, and both are identical. On t01, t05, s01 and
 s04 no vehicle has an enemy contact at the load, so only the lost-target path (the pop) is checked
 there; it is identical too.

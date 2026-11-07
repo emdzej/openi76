@@ -486,7 +486,7 @@ static void target_look(const double t[3], const double s[3])
     View_SetCamera(&g_view, &f);
 }
 
-void Camera_TargetStart(Entity *e)
+static void target_start(Entity *e, void (*fn)(void))
 {
     if (!Radar_Current(e->node)) return;
     /* the camera's state kept (when not already in a sub-mode 4 view), to come back to */
@@ -495,10 +495,14 @@ void Camera_TargetStart(Entity *e)
     g_camera_entity = e;
     g_cockpit = 0;
     g_camera_mode = 4;
-    g_camera_fn = Camera_Target;
+    g_camera_fn = fn;
 }
 
-void Camera_Target(void)
+void Camera_TargetStart(Entity *e) { target_start(e, Camera_Target); }
+void Camera_TowardStart(Entity *e) { target_start(e, Camera_Toward); }
+
+/* toward: 0x406a60's look, from over the vehicle toward the target; else 0x406560's */
+static void target_frame(int toward)
 {
     if (!g_camera_entity) g_camera_entity = g_user_entity;
     Node *n = g_camera_entity->node;
@@ -517,8 +521,12 @@ void Camera_Target(void)
             return;
         }
     }
-    target_look(target_at, self_at);
+    if (toward) target_look(self_at, target_at);
+    else target_look(target_at, self_at);
 }
+
+void Camera_Target(void) { target_frame(0); }
+void Camera_Toward(void) { target_frame(1); }
 
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
@@ -530,6 +538,7 @@ static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0x15, Camera_ChaseRightStart},
     {0x16, Camera_OverviewStart},
     {0x17, Camera_TargetStart},
+    {0x18, Camera_TowardStart},
     {0x19, Camera_PilotStart},
     {0xfefe, Camera_TrackStart},
 };
