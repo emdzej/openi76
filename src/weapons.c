@@ -4,6 +4,7 @@
 #include "clock.h"
 #include "combat.h"
 #include "collide.h"
+#include "ordnance.h"
 #include <math.h>
 #include "crt.h"
 #include "effects.h"
@@ -333,7 +334,7 @@ static void ordnance_add(const OrdRec *o)
     n->child = NULL;
     n->flags = 0x101;
     r->node = n;
-    r->w4 = r->w5 = 0;
+    r->list1 = r->pool = NULL;
     r->entity = Entity_Add(n, NULL, NULL);
     r->w7 = 0x32;
     r->w8 = r->w9 = r->w10 = 0;
@@ -837,5 +838,8 @@ void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
     if (d->kind == 3 && d->index == 3) mortar_elevation(vehicle, w->muzzle, l.target, d->v[5]);
     l.w28 = d->v[9];
     Class_Velocity(vehicle, l.v, &l.speed);
-    if (n > 0 && g_weapon_launch) g_weapon_launch(&l, late);
+    if (n > 0) {
+        if (g_weapon_launch) g_weapon_launch(&l, late);
+        else Shot_Launch(&l, late);   /* 0x458f40 */
+    }
 }

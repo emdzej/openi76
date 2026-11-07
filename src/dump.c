@@ -12,6 +12,7 @@
 #include "effects.h"
 #include "entity.h"
 #include "weapons.h"
+#include "ordnance.h"
 #include "texanim.h"
 #include "exe.h"
 #include "lod.h"
@@ -277,7 +278,7 @@ size_t Objects_Dump(char *buf, size_t cap)
         out(&o, "OR %x ", (uint32_t)r->type);
         name8(&o, r->tree ? r->tree->name : "--------");
         out(&o, " e%d", r->entity ? (int)(r->entity - g_entities) : -1);
-        out(&o, " %x %x %x %x %x %x %x %x %x %x %x %x %x %x ", (uint32_t)r->w4, (uint32_t)r->w5, (uint32_t)r->w7,
+        out(&o, " %x %x %x %x %x %x %x %x %x %x %x %x %x %x ", (uint32_t)(r->list1 != NULL), (uint32_t)(r->pool != NULL), (uint32_t)r->w7,
             (uint32_t)r->w8, (uint32_t)r->w9, (uint32_t)r->w10, (uint32_t)r->w11, (uint32_t)r->w12, (uint32_t)r->w13,
             (uint32_t)r->w14, (uint32_t)r->has_mesh, (uint32_t)r->w16, (uint32_t)r->has_tex, (uint32_t)r->w24);
         hex(&o, (const uint8_t *)r->tex, 16);
@@ -362,6 +363,30 @@ static void log_launch(Launch *l, float late)
     memcpy(&v[10], l->v, 12);
     memcpy(&v[13], &late, 4);
     call_line(v, sizeof v);
+}
+
+static int log_fly(Node *s, float dt)
+{
+    uint8_t b[0x24 + 24 + 0x48 + 4 + 12 + 4];
+    uint8_t *o = b;
+    memcpy(o, s->frame.m, 0x24), o += 0x24;
+    memcpy(o, s->frame.pos, 24), o += 24;
+    uint8_t r[0x48];
+    memcpy(r, s->data, 0x48);
+    int32_t veh = *(Node **)Data_Ptr(s->data, 0xc) == g_launch_n, tg = *(Node **)Data_Ptr(s->data, 0x10) != NULL;
+    memcpy(r + 0xc, &veh, 4);
+    memcpy(r + 0x10, &tg, 4);
+    memcpy(o, r, 0x48), o += 0x48;
+    memcpy(o, &dt, 4), o += 4;
+    int32_t ty;
+    memcpy(&ty, s->data, 4);
+    const Ordnance *k = &g_ordnance[Ordnance_Index(ty)];
+    int32_t c[3] = {k->w8, k->w9, k->w10};
+    memcpy(o, c, 12), o += 12;
+    uint32_t seed = crt_seed();
+    memcpy(o, &seed, 4), o += 4;
+    call_line(b, (size_t)(o - b));
+    return 1;
 }
 
 static void log_fire(WeaponInst *w, const WeaponDef *d, int n, float late)
@@ -963,6 +988,22 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 33: {   /* the launch (0x458f40, the first flight 0x459b50 logged): each of n's weapons fired once 0.01 s
+                        late; at the flight, the shot's frame, its record (the vehicle as whether it is n, the
+                        target as whether there is one), the time, the kind's three counts and the rand seed */
+            g_shot_fly = log_fly;
+            for (int i = 0; i < g_weapon_count; i++) {
+                WeaponInst *w = &g_weapons[i];
+                if (!w->hp || w->hp->vehicle != n) continue;
+                g_fpu_round = FPU_DOWN;
+                g_launch_n = n;
+                Weapon_Fire(w, &g_weapon_defs[w->def], 1, 0.01f);
+                uint32_t seed = crt_seed();
+                call_line(&seed, 4);
+            }
+            g_shot_fly = NULL;
             break;
         }
         case 32: {   /* a shot (0x458710, its launch 0x458f40 logged): each of n's weapons fired with 1 then 2 shots

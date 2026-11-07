@@ -838,3 +838,16 @@
 0x421d30	Radar_KindTarget
 0x421be0	Radar_Lock
 0x421c30	Radar_Locked
+0x458f40	Shot_Launch
+0x459e40	Shot_Place
+0x459970	Shots_Add
+0x459a80	Shots_Take
+0x45ac50	Vec_Normalise
+0x45acc0	Frame_Spread
+0x45d710	Shot_Target
+0x45d350	Shot_AimAt
+0x45c8e0	UserShot_Set
+0x45c8f0	UserShot_Clear
+0x42e620	Node_IsUser
+0x451880	Frame_Pitch
+0x45c920	Ordnance_Find

@@ -496,7 +496,7 @@ static int shots_ahead(Node *n, float *slow, float *factor, float *t)
         const Ordnance *o = &g_ordnance[k];
         int ty = o->type;
         if (ty != 12 && ty != 14 && ty != 15 && ty != 16 && ty != 17 && ty != 19) continue;
-        if ((o->node && o->node->child) || o->w4) {
+        if ((o->node && o->node->child) || o->list1) {
             static int told;
             if (!told++) plat_log("OpenI76: dodging shots (0x4163d0) is not ported yet");
         }

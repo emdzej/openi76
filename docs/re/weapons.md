@@ -201,3 +201,67 @@ The nearest such entity is the target.
 
 Checked: `diff_objects --call shot` (each of a vehicle's weapons with 1 and 2 shots: the record and the
 ammunition) on t01, t05 and s04.
+
+## The launch (0x458f40)
+
+**The kind's lists.** A kind's shots are nodes of the tree's class, radius 0.25, each with a 0x48-byte
+record in its data. They sit in one of three lists (0x459970 adds, 0x459a80 takes out):
+
+| List | Where | Count | Added at |
+|---|---|---|---|
+| 0 | the kind's node's children | +0x24 | the front |
+| 1 | the kind's +0x10 | +0x28 | the front |
+| 2, the pool | the kind's +0x14 | +0x20 | the end |
+
+The pool is made at the kind's first launch: +0x1c (50) shots. Each gets the tree's mesh (Lod_Copy
+0x47d850) when the kind has one, and its texture (0x47bb20) for kinds with one.
+
+**The launch.**
+1. Types 9-11 are dropped one by one (0x46d090, not ported yet), and type 0xd does nothing.
+2. Otherwise the record's +0x10 takes the kind's speed (+0x34).
+3. Past the kind's limit (+0x24 above +0x2c, 160), the oldest shot of list 0 moves to list 1.
+4. The new shot comes off the pool's front onto list 0. Kinds without a mesh use list 1, and so do types
+   1 and 6, which also clear the kind's mesh flag.
+5. The shot is placed (0x459e40, below), then moved back by the vehicle's velocity x late.
+
+**The record.**
+
+| Offset | What |
+|---|---|
+| +0 | the type |
+| +4, +8 | the life (def +0x60; 5 s when 0) |
+| +0xc | the vehicle (referenced) |
+| +0x10 | the target (referenced) |
+| +0x14 | the velocity in its own frame: (0, 0, def +0x6c), or 5 for types 0xe, 0xf, 0x10, 0x13 |
+| +0x20 | the target's point (0x45d710) |
+| +0x2c | the spin: degrees `rand x (-20) - 195`, `rand x 180 - 90`, `rand x 90 - 45` (rand / 32767), in radians |
+| +0x38 | the speed |
+| +0x3c | the shots |
+| +0x44 | def +0x58 |
+
+**After the record.**
+- The kinds with +0x40 set get a dynamic light (range 25).
+- Types 1 and 0x12 get a tracer of kind 2, and type 6 one of kind 1 (0x46c220).
+- Types 2, 3, 4, 5, 7 and 8 get a trail of kind 0, 1, 3, 5, 4 and 2 (0x46ef60). A user's shot of
+  these types becomes 0x573484.
+- Types 0xc and 0x11 get their texture's animation.
+- Then, if late is not 0, the shot flies for late, as each frame does (0x459d40): the life loses it, and
+  a spent shot goes back to the pool with its references dropped and its light removed.
+
+**The placement (0x459e40).** It starts at the muzzle's world frame, with a spread of ±def +0x7c
+degrees (`rand x 2s - s`, twice) and `f = rand x 0.6`:
+- **Types 1, 4-7, 0xe-0x10, 0x12, 0x13.** Only when both spreads are positive (as integer bits): yaw by
+  the first and pitch by the second less the spread (each only when positive), then f m along the axis.
+  Otherwise the shot stays at the muzzle (quirk).
+- **Types 2, 8.** Yaw and pitch the same way (0x45acc0), then `rand x 0.75 - 0.375` m along.
+- **Type 3.** f m along, then `rand x 0.2 - 0.1` m. With a target it is turned to face the target's
+  point (0x45d350).
+- **Types 0xc, 0x11.** A third spread c. Then `def +0x6c x dt x 0.2` m along, a yaw by c, and
+  `(speed x dt + 1.5) x rand` m. Then the shot is dropped onto the ground (Ground_Height, 1e-4 up) and
+  stood on its normal along its axis (0x452170).
+
+Every step along the axis normalises the z axis (0x45ac50), rounds the place to floats and adds.
+
+Checked: `diff_objects --call launch` (each weapon fired once 0.01 s late, the first flight stubbed:
+the shot's frame and record, the kind's counts and the rand seed) on t01, t05, s04 and s07. That covers
+types 1, 2, 3, 6, 0xc, 0xf, 0x10 and 0x11.

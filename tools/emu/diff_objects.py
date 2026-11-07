@@ -765,8 +765,42 @@ def call_shot(exe, n, fpcw):
             CALL_OUT.append(exe.read(w + 0x18, 4).hex())
 
 
+LAUNCH = {}
+
+
+def call_launch(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+
+    def fly(s, dt):
+        r = bytearray(exe.read(u(s + 0x70), 0x48))
+        r[0xC:0x10] = struct.pack("<i", int(struct.unpack_from("<I", r, 0xC)[0] == LAUNCH["n"]))
+        r[0x10:0x14] = struct.pack("<i", int(struct.unpack_from("<I", r, 0x10)[0] != 0))
+        ty = struct.unpack_from("<i", r, 0)[0]
+        k = next(i for i in range(struct.unpack("<i", exe.read(0x4DC3F4, 4))[0]) if u(0x5E1A40 + i * 200) == ty)
+        b = 0x5E1A40 + k * 200
+        CALL_OUT.append((exe.read(s + 0x18, 0x24) + exe.read(s + 0x40, 24) + bytes(r) + struct.pack("<I", dt)
+                         + exe.read(b + 0x20, 12) + exe.read(0x4EBC90, 4)).hex())
+        return 1
+
+    if not LAUNCH:
+        for a, k in ((0x454940, 1), (0x433B70, 2), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+                     (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6)):
+            exe.stub(a, lambda *x: 0, k)
+        exe.stub(0x459B50, fly, 2)
+    LAUNCH["n"] = n
+    cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
+    for i in range(cnt):
+        w = 0x55F9C0 + i * 0x50
+        hp = u(w + 0x10)
+        if not hp or u(hp) != n:
+            continue
+        d = 0x56F730 + u(w + 0x28) * 0x88
+        exe.call(0x458710, w, d, 1, 0x3C23D70A, limit=2_000_000_000, fpcw=(fpcw & ~0xC00) | 0x400)
+        CALL_OUT.append(exe.read(0x4EBC90, 4).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -1014,7 +1048,8 @@ def original():
         w = lambda j: m.u32(r + 4 * j)  # noqa: E731
         e = w(2)
         s = f"OR {w(0):x} {nm(w(1))} e{(e - 0x547E60) // 0x78 if e else -1} "
-        s += " ".join(f"{w(j):x}" for j in (4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24)) + " "
+        s += f"{int(w(4) != 0):x} {int(w(5) != 0):x} "   # the shot lists: whether set (the port's are pointers)
+        s += " ".join(f"{w(j):x}" for j in (7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24)) + " "
         s += m.raw(r + 0x48, 16).hex() + " " + m.raw(r + 0x58, 8).hex()
         s += "".join(" " + m.raw(r + 0x68 + 24 * k, 24).hex() for k in range(4))
         out.append(s)
@@ -1078,7 +1113,7 @@ if __name__ == "__main__":
                 print(f"line {i}:\n  orig {x}\n  port {y}")
     if os.environ.get("CALL_SHOW"):
         for x in CALL_OUT:
-            print("call", len(x) // 2, x[:8], x[8:16], x[16:24], x[24:32], x[0x6c * 2 + 8:0x6c * 2 + 32])
+            print("call", len(x) // 2, x[:8], x[8:16], x[16:24], x[24:32], x[0x6c * 2 + 8:0x6c * 2 + 32], "t" + x[120:128])
     if CALL_OUT != PORT_OUT:
         bad += 1
         print(f"--call {CALL}'s results:\n  orig {CALL_OUT}\n  port {PORT_OUT}")

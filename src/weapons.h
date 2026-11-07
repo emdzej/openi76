@@ -62,7 +62,8 @@ typedef struct {           /* 200 bytes, 20 of them */
     Node *tree;            /* +4: OGEO's (class 0x33) */
     Entity *entity;        /* +8: the kind's, on node */
     Node *node;            /* +0xc: an empty class 0x33 node, flags 0x101 */
-    int32_t w4, w5;
+    struct Node *list1;    /* +0x10: the shots of list 1 (moved off the kind's node past the limit) */
+    struct Node *pool;     /* +0x14: the free shots */
     int32_t heap;          /* +0x18: a heap's handle in the original; 0 here */
     int32_t w7;            /* 0x32 */
     int32_t w8, w9, w10;
