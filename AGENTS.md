@@ -33,7 +33,8 @@ the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with 
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
-pilot's camera (docs/re/camera.md); `--param tick=<ms>` gives headless runs a fixed step and `--param
+pilot's camera (docs/re/camera.md) and the damage, the death and the wreck (docs/re/vehicles.md; their
+effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. Not ported yet: the other camera modes and the cockpit, the
 mission's script (ADEF's FSM), damage, tyres, firing, the AI's driving, the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
