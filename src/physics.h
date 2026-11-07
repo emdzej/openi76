@@ -60,3 +60,12 @@ void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3
    the flags (+0x454), the velocity, the signed speed, the acceleration, the turn (its y the yaw rate),
    the frame. In the air (Vehicle_Air) its results instead, and 1 */
 int Vehicle_Drive(Node *n, uint32_t *flags, float vel[3], float *speed, float acc[3], float w[3], Frame *f, float dt);
+/* Point_Velocity 0x471bb0: the velocity of the point at (local to n), up n's parents: each body's velocity
+   plus its turn's at the point, through its frame */
+void Point_Velocity(float out[3], const float at[3], Node *n);
+/* Corners_Hit 0x47a8d0: the body's four corners (+4) moved by their velocities over dt in sub-steps,
+   against the terrain: at the first that goes into the ground, 1 and the contact c (0x6c bytes: 1, 0, a
+   default body, +0x44 the sub-step's time, +0x48 the corner, +0x54 its velocity reversed, +0x60 the
+   ground's normal at the point found on the surface). A corner already in the ground is backed out along
+   its velocity; one that stays in is left. 0 without a contact */
+int Corners_Hit(Node *n, uint8_t *c, float dt);

@@ -39,6 +39,12 @@ void Entity_OnAdd(EntityFn fn);
    node's meshes. A node with flag 0x10 is the user's. NULL when full (the original's fatal at 256). */
 Entity *Entity_Add(Node *n, void *a, const int32_t *b);
 
+/* Body_Init 0x471680: a body's state (0x30 bytes): mass and inertia 1e30 (0x7149f2ca) with no inverse,
+   +0x10 1.0, still */
+void Body_Init(uint8_t *p);
+/* Body_State 0x425c80: a node's body (0x3c bytes; the class table's word 8): a vehicle's (and 8's, 9's) at
+   its data's +0xa4, else a default one (Body_Init); +0x18 the velocity, +0x24 the angular velocity */
+void Body_State(uint8_t out[0x3c], const Node *n);
 /* Body_Set 0x4716f0: at p the mass m and the inertia i, with 1 / m (+4) and m / i (+0x14; 1e10 when i is
    not above 1e-4) */
 void Body_Set(uint8_t *p, float m, float i);

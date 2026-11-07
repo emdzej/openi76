@@ -454,6 +454,33 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 9: {   /* the corners against the ground, moving forward at 12 m/s turning (0, 0.4, 0.2): as it
+                       is, lowered 1.5 falling at 5 m/s, raised 0.3 falling at 20 (dt 0.2, speed 25), lowered
+                       10, and lowered 0.5 at a speed of -30 */
+            static const float cases[5][4] = {{0, 0, 12.4f, 0.05f}, {-1.5f, -5, 12.4f, 0.05f}, {0.3f, -20, 25, 0.2f},
+                                              {-10, -1, 12.4f, 0.05f}, {-0.5f, -3, -30, 0.05f}};
+            static const float w[3] = {0, 0.4f, 0.2f};
+            uint8_t save[0x50c];
+            double y = n->frame.pos[1];
+            memcpy(save, n->data, sizeof save);
+            for (int j = 0; j < 5; j++) {
+                memcpy(n->data, save, sizeof save);
+                float v[3];
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f;
+                v[1] += cases[j][1];
+                memcpy(n->data + 0xbc, v, 12);
+                memcpy(n->data + 0xc8, w, 12);
+                memcpy(n->data + 0xac, &cases[j][2], 4);
+                n->frame.pos[1] = y + cases[j][0];
+                uint8_t b[4 + 0x6c];
+                memset(b, 0, sizeof b);
+                int32_t r = Corners_Hit(n, b + 4, cases[j][3]);
+                memcpy(b, &r, 4);
+                call_line(b, sizeof b);
+            }
+            n->frame.pos[1] = y;
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

@@ -774,3 +774,110 @@ int Vehicle_Drive(Node *n, uint32_t *flags, float vel[3], float *speed, float ac
     *f_out = m;
     return 0;
 }
+
+void Point_Velocity(float out[3], const float at[3], Node *n)
+{
+    float v[3] = {0, 0, 0}, p[3] = {at[0], at[1], at[2]};
+    for (; n; n = Node_Parent(n)) {
+        uint8_t b[0x3c];
+        Body_State(b, n);
+        float u[3], w[3], t[3];
+        memcpy(u, b + 0x18, 12);
+        memcpy(w, b + 0x24, 12);
+        t[0] = F32(ADD(SUB(MUL(p[1], w[2]), MUL(p[2], w[1])), v[0]));
+        t[1] = F32(ADD(SUB(MUL(p[2], w[0]), MUL(p[0], w[2])), v[1]));
+        t[2] = F32(ADD(SUB(MUL(p[0], w[1]), MUL(p[1], w[0])), v[2]));
+        const float *m = n->frame.m;
+        v[0] = F32(ADD(ADD(ADD(MUL(m[3], t[1]), MUL(m[6], t[2])), MUL(m[0], t[0])), u[0]));
+        v[1] = F32(ADD(ADD(ADD(MUL(m[4], t[1]), MUL(m[1], t[0])), MUL(m[7], t[2])), u[1]));
+        v[2] = F32(ADD(ADD(ADD(MUL(m[8], t[2]), MUL(m[5], t[1])), MUL(m[2], t[0])), u[2]));
+        Frame_Points(&p, (const float (*)[3])&p, 1, &n->frame);
+    }
+    memcpy(out, v, sizeof v);
+}
+
+static uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
+
+/* the contact of corner i at the sub-step it: the corner (local), the way back (its velocity reversed) and
+   the ground's normal at p */
+static int corner_contact(uint8_t *c, const uint8_t *d, int i, int it, float step, const float v[3], const float p[3])
+{
+    put32(c, 1);
+    put32(c + 4, 0);
+    Body_Init(c + 8);
+    putf(c + 0x44, F32(MUL((double)it, step)));
+    memcpy(c + 0x48, d + 4 + 12 * i, 12);
+    for (int k = 0; k < 3; k++) putf(c + 0x54 + 4 * k, -v[k]);
+    float nv[3];
+    Terrain_Normal(nv, p[0], p[2]);
+    memcpy(c + 0x60, nv, 12);
+    return 1;
+}
+
+int Corners_Hit(Node *n, uint8_t *c, float dt)
+{
+    uint8_t *d = n->data;
+    float local[4][3], at[4][3], prev[4][3], v[4][3];
+    int32_t done[4] = {0, 0, 0, 0};
+    memcpy(local, d + 4, sizeof local);
+    Frame_Points(at, (const float (*)[3])local, 4, &n->frame);
+    for (int i = 0; i < 4; i++) {
+        memcpy(prev[i], at[i], 12);
+        Point_Velocity(v[i], local[i], n);
+    }
+    /* the sub-steps: the speed's metres this step plus one (at most 7), each dt / that (0x4a6864: 1 / n),
+       and one more than that many; a reverse speed under -1 m a step has none */
+    int32_t k = (int32_t)(int64_t)MUL(rdf(d + 0xac), dt) + 1;
+    if (k > 7) k = 7;
+    if (k + 1 <= 0) return 0;
+    float step = F32(MUL(exe_f32(0x4a6864 + 4 * (uint32_t)k), dt));   /* k 0: -1e-4 */
+    for (int it = 0; it <= k; it++)
+        for (int i = 0; i < 4; i++) {
+            if (done[i]) continue;
+            double h = SUB(Terrain_Height(at[i][0], at[i][2]), at[i][1]);
+            float hf = F32(h);
+            if (below(h, 0.0)) {   /* 0x4a6884: above the ground, on along the velocity */
+                memcpy(prev[i], at[i], 12);
+                for (int j = 0; j < 3; j++) at[i][j] = F32(ADD(MUL(v[i][j], step), at[i][j]));
+                continue;
+            }
+            float in[3], out[3];   /* in the ground, and out of it */
+            memcpy(in, at[i], 12);
+            if (it == 0) {
+                /* in the ground from the start: back along the velocity until out of it (50 steps at most) */
+                float q[3], e = hf;
+                memcpy(q, at[i], 12);
+                for (int s = 0; fbits(e) <= 0x80000000u && !below(hf, e);) {
+                    s++;
+                    double z = SUB(q[2], MUL(v[i][2], step));
+                    q[0] = F32(SUB(q[0], MUL(v[i][0], step)));
+                    q[1] = F32(SUB(q[1], MUL(v[i][1], step)));
+                    q[2] = F32(z);
+                    e = F32(SUB(Terrain_Height(q[0], z), q[1]));
+                    if (s >= 50) break;
+                }
+                if ((int32_t)fbits(e) > 0) {   /* still in: this corner no more */
+                    done[i] = 1;
+                    continue;
+                }
+                if (fbits(e) <= 0xbc23d70au) return corner_contact(c, d, i, it, step, v[i], q);   /* within 0.01 */
+                memcpy(out, q, 12);
+            } else {
+                memcpy(out, prev[i], 12);
+            }
+            /* halved between the two until within 0.01 above the ground (50 times at most) */
+            float mid[3];
+            for (int s = 0; s < 50; s++) {
+                double z = ADD(MUL(in[2], 0.5f), MUL(out[2], 0.5f));   /* 0x4a6890 */
+                mid[0] = F32(ADD(MUL(in[0], 0.5f), MUL(out[0], 0.5f)));
+                mid[1] = F32(ADD(MUL(in[1], 0.5f), MUL(out[1], 0.5f)));
+                mid[2] = F32(z);
+                double g = SUB(Terrain_Height(mid[0], z), mid[1]);
+                float gf = F32(g);
+                if (below(g, 0.0) && fbits(gf) < 0xbc23d70au) break;
+                memcpy((int32_t)fbits(gf) > 0 ? in : out, mid, 12);
+            }
+            return corner_contact(c, d, i, it, step, v[i], mid);
+        }
+    return 0;
+}

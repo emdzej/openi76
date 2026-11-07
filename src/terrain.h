@@ -32,6 +32,9 @@ void Terrain_Free(void);
 /* Terrain_Height 0x491f00: the height at (x, z), bilinear between the four cells around it. It leaves the
    FPU rounding down (render/fpu.h). */
 double Terrain_Height(double x, double z);
+/* Terrain_Normal 0x491bf0: the ground's normal at (x, z), from one of the cell's two triangles (with the
+   original's mistakes: the wrong fractions choose it, and the second's slopes have the wrong sign) */
+void Terrain_Normal(float out[3], double x, double z);
 /* Terrain_Class 0x48e380: the cell's top 3 bits */
 int Terrain_Class(double x, double z);
 /* Terrain_Flag 0x48e280: the cell's bit 12 */

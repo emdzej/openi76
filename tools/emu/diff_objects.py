@@ -184,8 +184,30 @@ def call_drive(exe, n, fpcw):
         CALL_OUT.append(exe.read(o, 0x70).hex())
 
 
+def call_corners(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    m = struct.unpack("<9f", exe.read(n + 0x18, 36))
+    y = struct.unpack("<d", exe.read(n + 0x48, 8))[0]
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    save = exe.read(d, 0x50C)
+    for dy, vy, sp, dt in ((0, 0, 12.4, 0.05), (-1.5, -5, 12.4, 0.05), (0.3, -20, 25, 0.2), (-10, -1, 12.4, 0.05),
+                           (-0.5, -3, -30, 0.05)):
+        exe.write(d, save)
+        v = [f32(m[6 + k] * 12.0) for k in range(3)]
+        v[1] = f32(v[1] + vy)
+        exe.write(d + 0xBC, struct.pack("<fff", *v))
+        exe.write(d + 0xC8, struct.pack("<fff", 0, 0.4, 0.2))
+        exe.write(d + 0xAC, struct.pack("<f", sp))
+        exe.write(n + 0x48, struct.pack("<d", y + f32(dy)))
+        o = exe.put(bytes(4 + 0x6C))
+        r = exe.call(0x47A8D0, n, o + 4, struct.unpack("<I", struct.pack("<f", dt))[0], fpcw=fpcw)
+        exe.write(o, struct.pack("<i", r))
+        CALL_OUT.append(exe.read(o, 4 + 0x6C).hex())
+    exe.write(n + 0x48, struct.pack("<d", y))
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

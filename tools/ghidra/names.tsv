@@ -462,3 +462,10 @@
 00451740	Vec_Split	math	high	a vectors parts along and across n; ported, diffed
 0045f830	Mat_Rows	math	high	a vector by a matrixs rows; ported, diffed
 0048e340	Terrain_Roll	terrain	high	the terrain class record +4, rolling resistance
+00471680	Body_Init	physics	high	a default body state, 0x30 bytes; ported
+00425c80	Body_State	physics	high	a nodes body by its class table word 8; ported
+0042a780	Vehicle_Body	physics	high	class 1 body state: data +0xa4
+00491bf0	Terrain_Normal	terrain	high	the grounds normal from a cell triangle (wrong fractions, a sign flip); ported, diffed
+00491d40	Cell_Height	terrain	high	a cells 12-bit height
+00471bb0	Point_Velocity	physics	high	a points velocity up the parents; ported, diffed
+0047a8d0	Corners_Hit	physics	high	the body corners swept against the terrain; ported, diffed

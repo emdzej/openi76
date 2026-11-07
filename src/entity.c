@@ -185,8 +185,8 @@ static uint8_t *class24_new(void)   /* 0x42d850 */
     return d;
 }
 
-/* 0x471680: a body's state: mass and inertia 1e30 (0x7149f2ca) with no inverse, one 1.0 */
-static void body_init(uint8_t *p)
+/* Body_Init 0x471680 */
+void Body_Init(uint8_t *p)
 {
     memset(p, 0, 0x30);
     put32(p + 4, 0x7149f2ca);
@@ -202,7 +202,7 @@ static void motion_init(uint8_t *p)
     put32(p + 0x60, 0);
     put32(p + 0x64, 0);
     put32(p + 0x68, 0);
-    body_init(p + 8);
+    Body_Init(p + 8);
 }
 
 /* 0x4716f0: the mass m and the inertia i, with 1 / m (0x4a66a4) and m / i (1e10 when i is not above
@@ -273,7 +273,7 @@ static uint8_t *vehicle_data(void)
     static const uint32_t k[13] = {0xbf800000, 0x3f800000, 0xc0000000, 0x3f800000, 0x3f800000, 0xc0000000, 0x3f800000,
                                    0x3f800000, 0x40000000, 0xbf800000, 0x3f800000, 0x40000000, 0x3fc00000};
     memcpy(d + 4, k, sizeof k);
-    body_init(d + 0xa4);
+    Body_Init(d + 0xa4);
     put32(d + 0xe0, 0);
     put32(d + 0xe4, 0);
     put32(d + 0xe8, 0x3f800000);
@@ -458,6 +458,22 @@ static int class_index(int cls)
     for (int i = 0; i < NCLASSES; i++)
         if (classes[i].cls == cls) return i;
     return 0;
+}
+
+void Body_State(uint8_t out[0x3c], const Node *n)
+{
+    memset(out, 0, 0x3c);   /* the original's 0x30-0x3c are its stack's when the body is a default one */
+    switch (classes[class_index(n->cls)].cls) {
+    case 1: case 8: case 9:   /* 0x42a780, 0x428c90, 0x431d90 */
+        memcpy(out, n->data + 0xa4, 0x3c);
+        break;
+    case 10:   /* 0x4347f0: still, turning at the data's first three words */
+        Body_Init(out);
+        memcpy(out + 0x24, n->data, 12);
+        break;
+    default:   /* none, and 7's 0x433050; 51's 0x459810 (a body from its owner's) is not ported yet */
+        Body_Init(out);
+    }
 }
 
 void Class_Set(Node *n, int cls)

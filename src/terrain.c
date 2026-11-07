@@ -2,6 +2,7 @@
 #include "terrain.h"
 #include "chunks.h"
 #include "exe.h"
+#include "math3d.h"
 #include "res.h"
 #include "render/fpu.h"
 #include "settings.h"
@@ -148,6 +149,33 @@ double Terrain_Height(double x, double z)
     double a = fpu_add(fpu_mul(fpu_sub(h10, h00), fx), h00);
     double b = fpu_add(fpu_mul(fx, fpu_sub(h11, h01)), h01);
     return fpu_mul(fpu_add(fpu_mul(fpu_sub(b, a), fz), a), 0.1f);   /* 0x4eb54c */
+}
+
+/* 0x491d40: the height of the cell (i, j) */
+static double cell_height(int32_t i, int32_t j) { return cell_at(i + 0xc00, j + 0xc00) & 0xfff; }
+
+void Terrain_Normal(float out[3], double x, double z)
+{
+    int32_t i = (int32_t)(int64_t)fpu_mul(x, g_inv_cell), j = (int32_t)(int64_t)fpu_mul(g_inv_cell, z);   /* _ftol */
+    float dx, dz;
+    /* the triangle by the fractions: x and z less the cell's index, not the cell's fractions; and the second
+       triangle's slopes come out with the opposite sign (the original's); equal heights give -0 rounding down */
+    double fx = fpu_sub(x, i), fz = fpu_sub(z, j);
+    if (fx < fz || fx != fx || fz != fz) {
+        dx = fpu_f32(fpu_sub(cell_height(i, j + 1), cell_height(i + 1, j + 1)));
+        dz = fpu_f32(fpu_sub(cell_height(i, j), cell_height(i, j + 1)));
+    } else {
+        dx = fpu_f32(fpu_sub(cell_height(i + 1, j), cell_height(i, j)));
+        dz = fpu_f32(fpu_sub(cell_height(i + 1, j + 1), cell_height(i + 1, j)));
+    }
+    double s = fpu_mul(g_inv_cell, 0.1f);   /* 0x4a75ac: the heights' scale */
+    float sx = fpu_f32(fpu_mul(dx, s));
+    double uz = fpu_mul(s, dz);
+    float sz = fpu_f32(uz);
+    double r = Fast_InvSqrt(fpu_add(fpu_add(fpu_mul(uz, sz), fpu_mul(sx, sx)), 1.0f));
+    out[0] = fpu_f32(fpu_mul(sx, r));
+    out[1] = fpu_f32(r);
+    out[2] = fpu_f32(fpu_mul(r, sz));
 }
 
 /* the cell under (x, z): the nearest in the current mode (fadd 1.5 * 2^52) */
