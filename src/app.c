@@ -221,7 +221,8 @@ static void play_frame(void)
             char v[16];
             trace = plat_param("trace", v, sizeof v) ? atoi(v) : 0;
         }
-        if (trace > 0 && g_user_entity && ++frames % trace == 0) {   /* the port's: --param trace=<frames> */
+        ++frames;
+        if (trace > 0 && g_user_entity && frames % trace == 0) {   /* the port's: --param trace=<frames> */
             const Node *u = g_user_entity->node;
             const uint8_t *d = u->data;
             float f[6];
@@ -243,6 +244,23 @@ static void play_frame(void)
                      frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags, shots, ammo);
             plat_log(m);
         }
+        static int aitrace = -1;
+        if (aitrace < 0) {
+            char v[16];
+            aitrace = plat_param("aitrace", v, sizeof v) ? atoi(v) : 0;
+        }
+        if (aitrace > 0 && frames % aitrace == 0)   /* the port's: --param aitrace=<frames>, the other vehicles */
+            for (int i = 0; i < g_entity_count; i++) {
+                const Node *v = g_entities[i].node;
+                if (!v || v->cls != 1 || (g_user_entity && v == g_user_entity->node) || !v->data) continue;
+                float sp, th;
+                memcpy(&sp, v->data + 0xac, 4);
+                memcpy(&th, v->data + 0xe4, 4);
+                char m[160];
+                snprintf(m, sizeof m, "OpenI76: frame %d vehicle %d at %.1f %.1f %.1f speed %.2f throttle %.2f", frames, i,
+                         v->frame.pos[0], v->frame.pos[1], v->frame.pos[2], sp, th);
+                plat_log(m);
+            }
         /* 0x404170 (the objects' detail by distance) and the sounds are not ported yet */
         viewer_frame();
         Rel_Clear();   /* 0x421fc0 after the frame's drawing */
