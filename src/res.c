@@ -28,6 +28,16 @@ typedef struct Cached {   /* the file cache's entries (0x492700) */
     int users;
 } Cached;
 
+typedef struct {       /* the file index's 48-byte records (Zix_Load 0x48bbe0): the name and its root */
+    char name[16];
+    int root;
+} ZixName;
+
+static ZixName *zix;
+static int nzix;
+static char zix_root[8][64];   /* "" for i76.zfs (the archive's names are bare), else the directory */
+static int nroots;
+
 static Pak *paks;
 static int npaks;
 static Member *members;
@@ -63,9 +73,65 @@ static const char *token(const char *p, const char *end, char *out, size_t cap)
     return p;
 }
 
+static int cmp_zix(const void *a, const void *b) { return crt_stricmp(a, b); }   /* Zix_CompareName 0x48c1f0 */
+
+/* The index the game was installed with is i76.zix, a copy of the disc's I76MAX.ZIX (full install) or
+   I76MIN.ZIX; the port reads I76MAX.ZIX (docs/formats/zix.md). Root 0 is disc 2's line, which the port
+   skips; "DIR: i76.zfs" is the archive, any other DIR a directory of the install (here: of disc 1). */
+static void zix_load(void)
+{
+    size_t len;
+    char *text = (char *)vfs_read_all("I76MAX.ZIX", &len);
+    if (!text) return;
+    char *save = NULL, *line = strtok_r(text, "\r\n", &save);
+    int count = line ? atoi(line) : 0, dashes = 0;
+    zix = calloc(count > 0 ? (size_t)count : 1, sizeof *zix);
+    nroots = 1;   /* root 0: disc 2 */
+    while ((line = strtok_r(NULL, "\r\n", &save))) {
+        if (line[0] == '-') {
+            dashes++;
+            continue;
+        }
+        if (dashes == 1) {   /* the roots */
+            if (strncmp(line, "DIR: ", 5) == 0 && nroots < 8) {
+                const char *dir = line + 5;
+                snprintf(zix_root[nroots++], 64, "%s", crt_stricmp(dir, "i76.zfs") == 0 ? "" : dir);
+            }
+            continue;
+        }
+        if (dashes < 2 || nzix >= count) continue;
+        int root;
+        char name[64];
+        if (sscanf(line, "%d %63s", &root, name) != 2 || strlen(name) > 15) continue;
+        name16(zix[nzix].name, name);
+        zix[nzix].root = root;
+        nzix++;
+    }
+    free(text);
+    qsort(zix, (size_t)nzix, sizeof *zix, cmp_zix);   /* names are unique per root; the merge is not needed */
+}
+
+static const ZixName *zix_find(const char *name)   /* 0x48cc40 */
+{
+    if (!nzix) return NULL;
+    char key[16];
+    name16(key, name);
+    return bsearch(key, zix, (size_t)nzix, sizeof *zix, cmp_zix);
+}
+
+/* the path of an indexed name; a name outside the index is tried as it is */
+static void zix_path(const char *name, char *out, size_t cap)
+{
+    const ZixName *z = zix_find(name);
+    if (z && z->root > 0 && z->root < nroots && zix_root[z->root][0])
+        snprintf(out, cap, "%s/%s", zix_root[z->root], name);
+    else snprintf(out, cap, "%s", name);
+}
+
 bool Res_Init(void)
 {
     Res_Shutdown();
+    zix_load();
     /* the .pix of the index, in its order (sorted by name, ignoring case) */
     int n = vfs_zfs_count();
     char **pix = calloc(n > 0 ? (size_t)n : 1, sizeof *pix);
@@ -125,6 +191,9 @@ void Res_Shutdown(void)
     }
     free(paks);
     free(members);
+    free(zix);
+    zix = NULL;
+    nzix = 0;
     paks = NULL;
     members = NULL;
     npaks = nmembers = 0;
@@ -150,7 +219,9 @@ static const uint8_t *file_get(const char *name, size_t *size)   /* 0x492700 */
     Cached *c = cached(key);
     if (!c) {
         size_t n;
-        uint8_t *d = vfs_read_all(name, &n);
+        char path[96];
+        zix_path(name, path, sizeof path);
+        uint8_t *d = vfs_read_all(path, &n);
         if (!d || !n) {
             free(d);
             return NULL;
@@ -203,14 +274,17 @@ void Res_Release(const char *name)
     if (c && c->users) c->users--;
 }
 
-bool Res_Exists(const char *name) { return find(name) || vfs_exists(name); }
+bool Res_Exists(const char *name) { return find(name) || zix_find(name) != NULL; }
 
 int32_t Res_Size(const char *name)
 {
     if (!name || !*name) return 0;
     const Member *m = find(name);
     if (m) return m->size;
-    int64_t n = vfs_size(name);
+    if (!zix_find(name)) return -1;
+    char path[96];
+    zix_path(name, path, sizeof path);
+    int64_t n = vfs_size(path);
     return n < 0 ? -1 : (int32_t)n;
 }
 

@@ -51,6 +51,16 @@ The cache is tried first only when 0x5e2ff0 is set. The command line parser (0x4
 - **Res_Exists 0x4928c0** is true for a pak member, or a name in the file index.
 - **Res_Size 0x492600** is the member's size, or the index's.
 
+## The file index in the port
+
+The original reads `i76.zix`, the installer's copy of the disc's `I76MAX.ZIX` (or `I76MIN.ZIX`). The port
+reads `I76MAX.ZIX` from disc 1:
+
+- `DIR: i76.zfs` is the archive.
+- Any other `DIR:` is a directory, so `missions` holds the `.msn` and `.ter` files.
+- Root 0, disc 2's line, is skipped.
+- Res_Exists is the index's answer, as 0x48cc40's search of it is.
+
 ## The port's differences
 
 - **Dropped files stay cached.** The port keeps a dropped file until `Res_Shutdown`. The bytes read are

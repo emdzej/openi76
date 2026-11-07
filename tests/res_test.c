@@ -29,6 +29,10 @@ int main(void)
     Res_Release("t05.act");
     CHECK(Res_Get("NULL", NULL) == NULL && Res_Get("nullgeo", NULL) == NULL);
     CHECK(!Res_Exists("no-such-file.xyz"));
+    /* a mission: through the index's "missions" root */
+    const uint8_t *msn = Res_Get("t01.msn", &n);
+    CHECK(msn && n > 8 && memcmp(msn, "BWD2", 4) == 0 && Res_Exists("T01.TER"));
+    Res_Release("t01.msn");
 
     /* every member of one bundle against its pak, read directly */
     const char *pak = Res_PakOf("burnwood.vqm");   /* also in buildcmn.pak; the original's search finds this */
