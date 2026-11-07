@@ -8,6 +8,7 @@
 #include "damage.h"
 #include "weapons.h"
 #include "radar.h"
+#include "scriptcam.h"
 #include "objectives.h"
 #include <math.h>
 #include "clock.h"
@@ -950,16 +951,28 @@ static void action(uint32_t m, int32_t index)
     case 49: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), 0, 0); break;   /* teleport */
     case 50: destroy(E(m, 0)); break;  /* destroy */
     case 51: later(0x44e6e0); break;           /* playMovie */
-    case 52: later(0x452d00); break;           /* pushCam (0x428880 first) */
-    case 53: later(0x452d60); break;           /* popCam */
-    case 54: E(m, 4); E(m, 0); later(0x452f10); break;   /* camObjObj */
-    case 55: E(m, 0); later(0x452d90); break;  /* camObjDir */
-    case 56: E(m, 2); later(0x453060); break;  /* camPosObj */
-    case 57: later(0x453440); break;           /* camPosDir */
-    case 58: E(m, 3); later(0x453060); break;  /* camTransObj */
-    case 59: E(m, 1); E(m, 0); later(0x4537a0); break;   /* camF12 */
-    case 60: later(0x453440); break;           /* camTransDir */
-    case 61: SET(m + M_FLAG, later(0x453050)); break;    /* camIsArrived */
+    case 52:   /* pushCam; with the HUD's 0x550638 set (0x428880) first the preset view 0xc (0x480990,
+                  0x4809a0, Camera_SetMode): the HUD is not ported, so it is never set */
+        Cam_Push();
+        break;
+    case 53: Cam_Pop(); break;   /* popCam */
+    case 54: b = E(m, 4); a = E(m, 0); Cam_ObjObj(a, I(m, 1), I(m, 2), I(m, 3), b); break;   /* camObjObj */
+    case 55: a = E(m, 0); Cam_ObjDir(a, I(m, 1), I(m, 2), I(m, 3), I(m, 4), I(m, 5), I(m, 6)); break;   /* camObjDir */
+    case 56: b = E(m, 2); Cam_PathObj(g_fsm.paths + (uint32_t)I(m, 0) * 0x58, I(m, 1), NULL, b); break;   /* camPosObj */
+    case 57: Cam_PathDir(g_fsm.paths + (uint32_t)I(m, 0) * 0x58, I(m, 1), NULL, I(m, 2), I(m, 3), I(m, 4)); break;   /* camPosDir */
+    case 58: {   /* camTransObj */
+        b = E(m, 3);
+        int32_t sp = I(m, 2);
+        Cam_PathObj(g_fsm.paths + (uint32_t)I(m, 0) * 0x58, I(m, 1), &sp, b);
+        break;
+    }
+    case 59: b = E(m, 1); a = E(m, 0); Cam_F12(a, b, I(m, 2), I(m, 3)); break;   /* camF12 */
+    case 60: {   /* camTransDir */
+        int32_t sp = I(m, 2);
+        Cam_PathDir(g_fsm.paths + (uint32_t)I(m, 0) * 0x58, I(m, 1), &sp, I(m, 3), I(m, 4), I(m, 5));
+        break;
+    }
+    case 61: SET(m + M_FLAG, Cam_IsArrived()); break;   /* camIsArrived */
     case 62: SET(m + M_FLAG, Input_MenuPoll()); break;    /* isKeypress (0x480720) */
     case 63: trigger_gate(E(m, 0)); break;  /* triggerGate */
     case 65: toggle_avoid(E(m, 0)); break;  /* toggleAvoid */

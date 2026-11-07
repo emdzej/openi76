@@ -21,10 +21,8 @@ DT = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
 DT = struct.unpack("<f", struct.pack("<f", DT))[0]   # as the port's float
 
 # 0x40d0d0's callees that the port's actions answer with 0 for now (src/fsm.c "later")
-LATER = { 0x44E6E0: 2, 0x428880: 0, 0x452D00: 0,
-         0x452D60: 0, 0x452F10: 5, 0x452D90: 7, 0x453060: 4, 0x453440: 6, 0x4537A0: 4, 0x453050: 0,
-         0x40B720: 1,
-         0x40B740: 2,}   # 0x40B740: the siren's sound
+LATER = {0x44E6E0: 2, 0x428880: 0, 0x40B720: 1,
+         0x40B740: 2}   # 0x40B740: the siren's sound; 0x428880: the HUD's flag
 
 
 # the AI's orders (0x40cc10) run; the tactics' functions the port has not ported yet are stubbed, and so are
@@ -84,11 +82,22 @@ def original():
     for f in tactic_functions(exe):
         exe.stub(f, lambda *a: 0, 2)
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    sf = 0x58D860   # the script's cameras: a 640 x 480 view (as diff_objects.py --call camera's), the step DT
+    exe.write(sf, struct.pack("<ii", 640, 480))
+    exe.write(sf + 0x18, struct.pack("<iiii", 0, 0, 639, 479))
+    vo = exe.put(bytes(0x1D8))
+    v = exe.call(0x43C8A0, vo, sf, 0x3FC90FDA, 0x3F800000, 0x43160000, 0x3F800000, limit=50_000_000, fpcw=fpcw)
+    exe.write(0x4A8488, exe.read(v, 0x1D8))
+    exe.write(0x4DB138, struct.pack("<f", DT))
     out, t = [], 0.0
     for fr in range(FRAMES):
         t = struct.unpack("<f", struct.pack("<f", t + DT))[0]
         exe.write(0x55F73C, struct.pack("<f", t))
         exe.call(0x409020, 0, limit=2_000_000_000, fpcw=fpcw)   # AI_Frame: the boxes, the script, the turns
+        c = bytearray(exe.read(0x4A8488 + 0x40, 0x40))
+        c[0x24:0x28] = bytes(4)
+        out.append(f"cam {struct.unpack('<i', exe.read(0x4A8480, 4))[0]} {struct.unpack('<i', exe.read(0x4A847C, 4))[0]} "
+                   + (bytes(c) + exe.read(0x4A8488 + 0x160, 24)).hex())
         code, ncode, consts, nconsts = u(0x4A88FC), u(0x4A8900), u(0x4A88F4), u(0x4A88F8)
         state = struct.unpack("<i", exe.read(0x4A80F4, 4))[0]
         s = f"frame {fr} state {state} end {u(0x5054B0):08x} ents {u(0x4A88E8):x} obj" + "".join(f" {u(0x5AD1E0 + 4 * k) if k in (0, 1, 0x1E) else u(0x5AD1E0 + 4 * k) != 0 if k < 0x18 else u(0x5AD1E0 + 4 * k):x}" for k in range(0x1F)) + " consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))

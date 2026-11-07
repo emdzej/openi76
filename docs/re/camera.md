@@ -54,7 +54,9 @@ world's range when the detail's range is set (else 150), zoom 1. With 1 it also 
 - the mode, to 0x19 on the user's entity, through the table as `Camera_SetMode` would.
 
 Then, unless the mode is 2, it calls 0x428890 (the HUD's) and sets zoom 1. WinMain calls it once before
-the game loop; the user's start (0x4294e0) calls it too.
+the game loop. The user's vehicle's start (0x4294e0, at 0x429c06) calls it too, with 1. That start can
+come during play: in t06 it does, in the script's frame and after its pushCam. The reset then drops the
+script's camera back to the pilot's view on the main surface 0x58d860 (`g_screen` in the port).
 
 ## The pilot's view (mode 0x19)
 
@@ -154,3 +156,75 @@ degrees and the yaw (0x4a8684) to pi. Its per-frame function is `Camera_Chase` 0
 track_distance 3 and steps of 0.06, and starts the chase on each vehicle. It runs five frames, turning the
 vehicle half round about y before the third, and compares the view's camera and eye after each. It is
 identical on t01, t03, t05, t12, s01, s04 and s07.
+
+## The script's cameras (0x452d00-0x453a70)
+
+The mission's script drives the camera through the FSM's actions (docs/re/fsm.md), `src/scriptcam.c`.
+The arguments are the script's words. Offsets and heights are in hundredths, made floats as
+`(float)(w · 0.01)`. Angles are in hundredths of a degree: `w % 36000` (the remainder keeps the sign)
+times 0.00017453292 (0x4a611c).
+
+**The stack.** `Camera_Push` 0x403290 copies the whole state block (0x4a8478-0x4a86e0, 0x268 bytes: the
+per-frame function, the cockpit flag, the sub-mode, the view, the entity, the modes' parameters, the
+glance) to the stack 0x58c4e0. The top 0x4a86e0 counts down from 8; it is refused at 0. `Camera_Pop`
+0x4032d0 copies the entry back, refused at 8, and then reads the glance's targets from the input again.
+
+**The state** of the module:
+
+| Address | Field |
+|---|---|
+| 0x4db348 | arrived |
+| 0x4db34c | the path camera's path (an FSM path record) |
+| 0x4db350 | the last call (the function's address) |
+| 0x4db354 | the segment |
+| 0x4db358 | t along it (a double) |
+| 0x4db360 | 1/length of the segment (flat, x and z; `Fast_InvSqrt`) |
+| 0x4db368, 0x4db370 | the eased place x, z (doubles) |
+| 0x4db378, 0x4db380 | the place on the path x, z |
+| 0x4db388, 0x4db390 | the segment's dx, dz |
+
+**The calls.**
+
+- **pushCam 0x452d00.** It pushes and sets the last call. Then sub-mode 5 (`Camera_SetMode` refuses
+  it), the per-frame function a bare ret (0x452d50), arrived and the path 0, and the cockpit flag 0.
+- **popCam 0x452d60.** It pops and sets the last call, arrived and the path 0. A failed push or pop
+  goes to the release build's no-op messages ("Fsm error: Camera Stack Underfow", "... 0verfow").
+- **Every call but the path cameras** then sets the frame. Each one keeps it at least 0.5 over
+  `Terrain_Height`, hands it to `View_SetCamera` and clears arrived and the path.
+  - **camObjDir 0x452d90** (object, x, y, z, a, c, b). `Frame_Euler` of the angles (a, b, c) at
+    (x, y, z), times the object's frame.
+  - **camObjObj 0x452f10** (object, x, y, z, target). The point (x, y, z) through the object's frame,
+    looking at the target (`Frame_FromDir` toward the target's place minus the point, as floats).
+  - **camF12 0x4537a0** (a, b, back, up). The point is a's place raised by up. The direction is b's place
+    minus (a's place less 2 in y), normalised by `Fast_InvSqrt` (x by the double, y and z by its float).
+    The point moves back along it by back, and the frame is `Frame_FromDir`. When the float of 1/length
+    is over 0.03 (bits 0x3cf5c28f, nearer than 33.3), the frame is also tilted:
+    - its place becomes -back times the direction;
+    - it is multiplied by `Frame_AxisAngle` of -min((1/length - 0.03)·5, pi/6) about (n.z, 0, -n.x)
+      (normalised by `Fast_InvSqrt`), placed at a's place raised by up.
+- **The path cameras** (0x453060 for camPosObj and camTransObj, 0x453440 for camPosDir and
+  camTransDir).
+  - **The start.** A new path, or a last call other than the same function, starts the path:
+    `Path_At` 0x4533b0 at segment 0, t 0, and the eased place on the path's.
+  - **The step.** dt = clock step · speed · (1/length), the speed 0 for the Pos forms.
+  - **The segment's end.** When t passes 1, the next segment takes t's fraction (`fprem1`, plus 1 when
+    negative). If the path has no next segment (count ≤ segment + 2), the call clears the path and the
+    last call, sets arrived and returns without moving the camera. The next call then starts the path
+    again.
+  - **The place.** The eased (x, z) as floats, at the ground's height there plus the height argument.
+    - 0x453060 looks at the target (`Frame_FromDir`) and keeps the frame 0.5 over the ground.
+    - 0x453440 turns by the angles (`Frame_Euler`). Its height is at least the ground plus 0.5, the test
+      made on the unrounded sum.
+  - **After `View_SetCamera`.** Each eased coordinate moves 0.3 of the way to the path's (float
+    arithmetic; there when within 0.005; per call, so per frame). Then t and the place on the path
+    advance by dt.
+- **camIsArrived 0x453050** returns arrived and clears it.
+
+**Checked.** `diff_fsm.py` compares, after each frame, the sub-mode, the cockpit flag and the view's
+camera and eye. Both sides use a 640 x 480 view and the step 0.1. Identical on t01, t05, s01, s02, s04
+and s07 (s01's intro runs 96 frames, then pops back to the pilot's view), and over 300 frames on t01,
+t05 and s01.
+
+The view's radii matter elsewhere too. `View_Distance` 0x4042c0 (the physics' and the AI's near/far test)
+adds the view's +0x18 and +0x14 (0x4a84a0, 0x4a849c). It measures from the eye (+0x160, 0x4a85e8), which
+the script's cameras move during the frame.

@@ -18,6 +18,7 @@
 #define F32 fpu_f32
 
 View g_view;
+Surface *g_screen;
 void (*g_camera_fn)(void);
 Entity *g_camera_entity;
 int32_t g_cockpit = 1, g_camera_mode;
@@ -33,13 +34,66 @@ static float chase_pitch, chase_yaw, dist_to, dist;
 static float q_to[4], q_cur[4];
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
+
+/* the camera's state, 0x4a8478-0x4a86e0 in the original, kept whole on a stack of 8 (0x58c4e0, its top
+   0x4a86e0 counting down from 8) */
+typedef struct {
+    void (*fn)(void);
+    int32_t cockpit, mode;
+    View view;
+    Entity *entity;
+    float chase_pitch, chase_yaw, dist_to, dist, q_to[4], q_cur[4];
+    float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
+} CamState;
+static CamState stack[8];
+static int32_t top = 8;
 static uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 static int below(double a, double b) { return a < b || a != a || b != b; }
 
+static void cam_save(CamState *c)
+{
+    *c = (CamState){g_camera_fn, g_cockpit, g_camera_mode, g_view, g_camera_entity, chase_pitch, chase_yaw,
+                    dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll};
+    memcpy(c->q_to, q_to, sizeof q_to);
+    memcpy(c->q_cur, q_cur, sizeof q_cur);
+}
+
+int Camera_Push(void)
+{
+    if (top < 1) return 0;
+    cam_save(&stack[--top]);
+    return 1;
+}
+
+int Camera_Pop(void)
+{
+    if (top >= 8) return 0;
+    const CamState *c = &stack[top++];
+    g_camera_fn = c->fn;
+    g_cockpit = c->cockpit;
+    g_camera_mode = c->mode;
+    g_view = c->view;
+    g_camera_entity = c->entity;
+    chase_pitch = c->chase_pitch;
+    chase_yaw = c->chase_yaw;
+    dist_to = c->dist_to;
+    dist = c->dist;
+    memcpy(q_to, c->q_to, sizeof q_to);
+    memcpy(q_cur, c->q_cur, sizeof q_cur);
+    pitch = c->pitch;
+    yaw = c->yaw;
+    roll = c->roll;
+    /* the glance's targets from the input again */
+    const float deg = exe_f32(0x4a5020);
+    pitch_to = F32(MUL((double)rd32(INPUT_AT(0x4def78)), deg));
+    yaw_to = F32(MUL((double)rd32(INPUT_AT(0x4def70)), deg));
+    roll_to = F32(MUL((double)rd32(INPUT_AT(0x4def80)), deg));
+    return 1;
+}
+
 void Camera_PilotStart(Entity *e)
 {
-    /* from the chase view (mode 4) the original first keeps the camera's state on a stack of 8 (0x58c4e0,
-       0x4a86e0) with the glance angles: that mode is not ported yet */
+    if (g_camera_mode == 4) Camera_Pop();   /* the same pop, inline */
     View_SetZoom(&g_view, 1.0f);
     Frame inv;
     Frame_Invert(&inv, &g_view.cam);
@@ -125,7 +179,7 @@ void View_Init(int reset, Surface *surface)
     g_cockpit = 1;
     g_camera_entity = NULL;
     g_camera_mode = 0;
-    pitch_to = pitch = yaw_to = yaw = 0;
+    pitch_to = pitch = yaw_to = yaw = 0;   /* the roll's are not reset (quirk, kept) */
     /* 0x4a86d8 = 0: not ported yet */
     chase_pitch = 0.52359879f;   /* 0x3f060a92 */
     chase_yaw = 0;
@@ -175,7 +229,7 @@ static void view_again(void)
 void Camera_CockpitStart(Entity *e)
 {
     if (g_camera_mode == 0) g_detail.b[8] ^= 1;   /* 0x5e14d8, the HUD's (0x426c9c) */
-    /* from mode 4 the stack's pop: see Camera_PilotStart */
+    if (g_camera_mode == 4) Camera_Pop();
     View_SetZoom(&g_view, 1.0f);
     view_again();
     int32_t z = 0x10000;   /* zoom_factor */
@@ -190,7 +244,7 @@ void Camera_CockpitStart(Entity *e)
 
 void Camera_ChaseStart(Entity *e)
 {
-    /* from mode 4 the stack's pop: see Camera_PilotStart */
+    if (g_camera_mode == 4) Camera_Pop();
     view_again();
     g_cockpit = 0;
     g_camera_mode = 1;

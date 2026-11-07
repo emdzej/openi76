@@ -704,7 +704,7 @@ int Dump_CallVehicles(int which, int upside)
             Clock_Init();
             g_clock_dt = 0.06f;
             for (int j = 0; j < 12; j++) {
-                for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k] + (j >= 6 && j < 10 ? 1000 : 0);
+                for (int k = 0; k < 3; k++) g_view.eye[k] = n->frame.pos[k] + (j >= 6 && j < 10 ? 1000 : 0);
                 Vehicle_Frame(n);
                 uint8_t b[0x44 + 0x28 + 12 + sizeof(Frame)];
                 Frame f = n->frame;
@@ -918,9 +918,9 @@ int Dump_CallVehicles(int which, int upside)
                 for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
                 memcpy(n->data + 0xbc, v, 12);
                 memcpy(n->data + 0xac, &sp, 4);
-                g_view_pos[0] = cam ? 1e6 : n->frame.pos[0];
-                g_view_pos[1] = cam ? 0 : n->frame.pos[1];
-                g_view_pos[2] = cam ? 1e6 : n->frame.pos[2];
+                g_view.eye[0] = cam ? 1e6 : n->frame.pos[0];
+                g_view.eye[1] = cam ? 0 : n->frame.pos[1];
+                g_view.eye[2] = cam ? 1e6 : n->frame.pos[2];
                 for (int j = 0; j < 5; j++) {
                     Node *who = NULL;
                     float slow = -1, factor = -1, t = -1;
@@ -952,7 +952,7 @@ int Dump_CallVehicles(int which, int upside)
             for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
             memcpy(d + 0xbc, v, 12);
             memcpy(d + 0xac, &sp, 4);
-            for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k];
+            for (int k = 0; k < 3; k++) g_view.eye[k] = n->frame.pos[k];
             static const float steer[3] = {0, 0.3f, -0.3f}, look[2] = {-1, 1};
             for (int i = 0; i < 3; i++)
                 for (int j = 0; j < 2; j++)
@@ -1400,7 +1400,7 @@ int Dump_CallVehicles(int which, int upside)
                         direction, the mode and the AI block's +0x9d20-+0x9d3c, +0x9d58-+0x9d64 */
             uint8_t *ai = *Data_Ptr(n->data, 0x108), *d = n->data;
             int round0 = g_fpu_round;
-            for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k];
+            for (int k = 0; k < 3; k++) g_view.eye[k] = n->frame.pos[k];
             static const uint32_t fns[10] = {0x418b60, 0x418500, 0x418660, 0x418660, 0x418850, 0x418ad0,
                                              0x418ce0, 0x418d70, 0x418290, 0x418d80};
             for (int pass = 0; pass < 2; pass++) {
@@ -1463,9 +1463,28 @@ static uint32_t fbits32(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
 {
     size_t len = 0;
+    /* the script's cameras: a 640 x 480 view (as --call camera's), the step dt */
+    static Surface surf;
+    surf.pitch = surf.w = 640;
+    surf.h = 480;
+    surf.x1 = 639;
+    surf.y1 = 479;
+    View_Create(&g_view, &surf, 1.5707964f, 1.0f, 150.0f, 1.0f);
+    g_screen = &surf;   /* a user's start (Vehicle_Start) makes the view on it again */
+    g_clock_step = dt;
     for (int f = 0; f < frames; f++) {
         g_clock_total = (float)((double)g_clock_total + dt);   /* to nearest, as diff_fsm.py's */
         AI_Frame();   /* the boxes, the script, the turns */
+        {   /* the camera: its sub-mode, the cockpit flag, the view's camera and eye */
+            uint8_t b[0x40 + 24];
+            memcpy(b, &g_view.cam, 0x24);
+            memset(b + 0x24, 0, 4);
+            memcpy(b + 0x28, g_view.cam.pos, 24);
+            memcpy(b + 0x40, g_view.eye, 24);
+            len += (size_t)snprintf(o + len, cap - len, "cam %d %d ", (int)g_camera_mode, (int)g_cockpit);
+            for (size_t k = 0; k < sizeof b; k++) len += (size_t)snprintf(o + len, cap - len, "%02x", b[k]);
+            len += (size_t)snprintf(o + len, cap - len, "\n");
+        }
         len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x ents %x obj %x %x", f, (int)g_game_state, fbits32(g_fsm_end_time), (uint32_t)g_fsm.n_entities,
                                 (uint32_t)g_objectives.count, (uint32_t)g_objectives.failures);
         for (int k = 0; k < 6; k++) len += (size_t)snprintf(o + len, cap - len, " %x", g_objectives.text[k] != NULL);

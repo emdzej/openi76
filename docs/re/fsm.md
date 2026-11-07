@@ -211,11 +211,15 @@ ported. Then +0x28 = 2 and its light goes. A dead one is refused.
 port has no audio and runs that way, so `isCBEmpty` is always true. The script never reads the
 results.
 
+**The cameras** (pushCam, popCam, camObjObj, camObjDir, camPosObj, camTransObj, camPosDir, camTransDir,
+camF12, camIsArrived) are the script's cameras of docs/re/camera.md (`src/scriptcam.c`). pushCam first
+asks the HUD's flag 0x550638 (0x428880). When it is set, the preset view 0xc goes on the user before the
+push: 0x581ebc = 0, 0x581ec0 = 0xc and `Camera_SetMode`. The HUD is not ported, so the port never does.
+A mission's intro is such a sequence. It waits for `camIsArrived` or `isKeypress` (Esc), and while it
+polls `isKeypress` the typed keys go to the menus' poll, not to `Game_Command`.
+
 **Not ported yet** (the port answers 0):
 
-- **The cameras:** pushCam 0x452d00 (with 0x428880), popCam 0x452d60, camObjObj 0x452f10, camObjDir
-  0x452d90, camPosObj and camTransObj 0x453060, camPosDir and camTransDir 0x453440, camF12 0x4537a0,
-  camIsArrived 0x453050.
 - playMovie 0x44e6e0, and salvage 0x40b720 (the shell's salvage list, 0x488a40).
 
 After the action, ip moves to the next pair and the arguments' pointer goes back to 0x1000.

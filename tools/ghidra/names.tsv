@@ -1018,3 +1018,15 @@
 00451eb0	Quat_Slerp	math	high	slerp, renormalised when short; ported
 00407010	Camera_SetMode	camera	high	a mode's start from the table 0x4a86e8, then the HUD's and zoom 1; ported
 00423fd0	User_Dead	entity	high	the user's vehicle's +0x454 & 0x20
+00403290	Camera_Push	camera	high	the camera's state onto a stack of 8; ported
+004032d0	Camera_Pop	camera	high	the camera's state back, the glance from the input; ported
+00452d00	Cam_Push	camera	high	pushCam: sub-mode 5; ported
+00452d60	Cam_Pop	camera	high	popCam; ported
+00452d90	Cam_ObjDir	camera	high	camObjDir: an offset and angles in an object's frame; ported, diffed
+00452f10	Cam_ObjObj	camera	high	camObjObj: an offset in an object's frame looking at another; ported
+00453050	Cam_IsArrived	camera	high	camIsArrived: read and cleared; ported, diffed
+00453060	Cam_PathObj	camera	high	camPosObj, camTransObj: along a path looking at an object; ported, diffed
+004533b0	Path_At	camera	high	a path camera's segment and place; ported
+00453440	Cam_PathDir	camera	high	camPosDir, camTransDir: along a path, turned by angles; ported, diffed
+004537a0	Cam_F12	camera	high	camF12: over a, back along the line to b; ported
+00428880	Hud_Flag	hud	med	0x550638

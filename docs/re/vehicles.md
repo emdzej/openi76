@@ -247,7 +247,7 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Corners_Hit 0x47a8d0 | the body's four corners (+4) swept against the terrain (below) |
 | Vehicle_Collide 0x472890 | the contact (+0x38) answered (below); the damage 0x45d7c0 and the sound not yet |
 | Vehicle_Settle 0x470030 | the body on its wheels (below) |
-| Vehicle_FarStep 0x473440 | away from the camera (View_Distance 0x4042c0 with 25: the camera at 0x4a85e8, two pads of 0 in the data) one step a frame on a flat plane (+0x460 up, class 2, bit 0x20000): the force and the grip along the forward axis, integrated (0x471730), stopped when braked round or slower than 1 without throttle, the frame on the normal turned by the yaw (0x474750); Vehicle_Near 0x475b40 puts it back on the ground (settled with `keep`) when it comes near |
+| Vehicle_FarStep 0x473440 | away from the camera (View_Distance 0x4042c0 with 25: from the view's eye 0x4a85e8, farther than 25 plus the view's radius600, +0x18 at 0x4a84a0; its far_radius at 0x4a849c gives 1) one step a frame on a flat plane (+0x460 up, class 2, bit 0x20000): the force and the grip along the forward axis, integrated (0x471730), stopped when braked round or slower than 1 without throttle, the frame on the normal turned by the yaw (0x474750); Vehicle_Near 0x475b40 puts it back on the ground (settled with `keep`) when it comes near |
 | Vehicle_Physics 0x472360 | the sub-step: all of the above in order, the ground under the vehicle (+0x45c, +0x460, +0x46c = 9.8 n.y³, +0x474 the height while on the ground), the landing (a fall of 35 m kills, else the landing's sound 4 and damage), the wheels' speeds, the terrain's wear over 7.65 m/s (0x42a5d0, not yet), the engine |
 
 ### The body on its wheels (Vehicle_Settle 0x470030)

@@ -7,6 +7,7 @@
 #include "render/view.h"
 
 extern View g_view;                 /* 0x4a8488 */
+extern Surface *g_screen;           /* 0x58d860: the main surface the view is made on */
 extern void (*g_camera_fn)(void);   /* 0x4a8478: the mode's per-frame function, NULL for none */
 extern Entity *g_camera_entity;     /* 0x4a8660: the entity the camera is on */
 extern int32_t g_cockpit;           /* 0x4a847c: 1 in the cockpit (Render_World draws the mirror) */
@@ -33,3 +34,7 @@ void Camera_ChaseStart(Entity *e);
    entity's heading (its yaw alone) eased along the short way at 2 per second, and stays half a metre over
    the ground */
 void Camera_Chase(void);
+/* Camera_Push 0x403290: the camera's whole state onto the stack (0 when full); Camera_Pop 0x4032d0: back
+   from it (0 when empty), the glance's targets read from the input again */
+int Camera_Push(void);
+int Camera_Pop(void);

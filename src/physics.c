@@ -1,5 +1,6 @@
 /* A vehicle's simulation (physics.h). In the current rounding mode (render/fpu.h). */
 #include "physics.h"
+#include "camera.h"
 #include "ai.h"
 #include "classes.h"
 #include "clock.h"
@@ -1298,15 +1299,14 @@ void Vehicle_Physics(Node *n, float dt)
     Engine_Step(engine, rdf(d + 0xe4), speed, flags, reverse, rd32(d + 0x104));
 }
 
-double g_view_pos[3];   /* 0x4a85e8: the camera's place */
 
 int View_Distance(const Node *n, float r)
 {
-    double cx = g_view_pos[0], cy = g_view_pos[1], cz = g_view_pos[2];
+    double cx = g_view.eye[0], cy = g_view.eye[1], cz = g_view.eye[2];
     float dx = F32(SUB(n->frame.pos[0], cx)), dy = F32(SUB(n->frame.pos[1], cy));
     float dz = F32(SUB(F32(n->frame.pos[2]), cz));
     double dist = ADD(ADD(MUL(dy, dy), MUL(dz, dz)), MUL(dx, dx));
-    double far = ADD(r, exe_f32(0x4a84a0)), near = ADD(r, exe_f32(0x4a849c));   /* both 0 in the data */
+    double far = ADD(r, g_view.radius600), near = ADD(r, g_view.far_radius);   /* 0x4a84a0, 0x4a849c */
     if (below(MUL(far, far), dist)) return 2;
     if (below(MUL(near, near), dist)) return 1;
     return 0;
