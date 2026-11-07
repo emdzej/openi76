@@ -20,9 +20,9 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0x11 | 0x406d40 | | 8 | |
 | 0x12 | 0x405b10 | 0x405c70 | | |
 | 0x13 | 0x405d80 | 0x405c70 | | |
-| 0x14 | 0x405ee0 | 0x4055e0 | | |
-| 0x15 | 0x406070 | 0x4055e0 | | |
-| 0x16 | 0x406200 | 0x406340 | 3 | |
+| 0x14 | 0x405ee0 | 0x4055e0 | 1 | `Camera_ChaseLeftStart` |
+| 0x15 | 0x406070 | 0x4055e0 | 1 | `Camera_ChaseRightStart` |
+| 0x16 | 0x406200 | 0x406340 | 3 | `Camera_OverviewStart`, `Camera_Overview` |
 | 0x17 | 0x406450 | 0x406560 | 4 | |
 | 0x18 | 0x406950 | 0x406a60 | 4 | |
 | 0x19 | 0x404890 | 0x404520 | 0 | `Camera_PilotStart`, `Camera_Pilot` |
@@ -156,6 +156,29 @@ degrees and the yaw (0x4a8684) to pi. Its per-frame function is `Camera_Chase` 0
 track_distance 3 and steps of 0.06, and starts the chase on each vehicle. It runs five frames, turning the
 vehicle half round about y before the third, and compares the view's camera and eye after each. It is
 identical on t01, t03, t05, t12, s01, s04 and s07.
+
+## The side chases (0x14, 0x15) and the overview (0x16)
+
+**The side chases.** 0x405ee0 (F9) and 0x406070 are the chase's start with another yaw: 150 degrees
+(0x40278d36, 30 off behind) and 30 degrees (0x3f060a92, 30 off the front). Their frame is the chase's.
+
+**The overview.** `Camera_OverviewStart` 0x406200 (F10):
+
+- pops from sub-mode 4, as the others do;
+- sets the height 0x4a866c to 100;
+- remakes the view at the old camera;
+- sets the cockpit flag 0, the entity and the sub-mode 3, and installs `Camera_Overview` 0x406340.
+
+Each frame:
+
+1. **The height** is multiplied by `1 + overview_zoom_delta · 0.01` (0x4defbc).
+2. It is capped at 0.85 of the view's range (the test on the unrounded product).
+3. It is raised to 4 times the entity's radius when below.
+4. **The frame** looks straight down: the rows (1, 0, 0), (0, 0, 1), (0, -1, 0). It sits at the node's x
+   and z, at the ground's height there plus the height. The word at +0x24 is the stack's in the original.
+
+**Checked.** `--call overview` (case 41, overview_zoom_delta 20), `chase14` and `chase15` (42, 43) are
+identical on t01, t05 and s01.
 
 ## The track view (mode 0xfefe, the death's)
 

@@ -1077,8 +1077,11 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 39: case 40: {   /* the chase camera (0x405450, 0x4055e0; 40 the track view 0x406bb0, 0x403540, with track_pitch_delta
-                        3 and track_yaw_delta 8) on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
+        case 39: case 40: case 41: case 42: case 43: {
+                     /* a camera mode on n's entity: 39 the chase (0x405450, 0x4055e0), 40 the track view
+                        (0x406bb0, 0x403540), 41 the overview (0x406200, 0x406340), 42 and 43 the side chases
+                        (0x405ee0, 0x406070); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
+                        on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
                         range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
                         about y before the third; after each the view's camera and eye */
             Entity *e = Entity_OfNode(n);
@@ -1098,14 +1101,17 @@ int Dump_CallVehicles(int which, int upside)
             int32_t tp = 3, ty = 8;
             memcpy(INPUT_AT(0x4def94), &tp, 4);
             memcpy(INPUT_AT(0x4def9c), &ty, 4);
-            Camera_SetMode(e, which == 39 ? 0xf : 0xfefe);
+            int32_t oz = 20;
+            memcpy(INPUT_AT(0x4defbc), &oz, 4);
+            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15};
+            static void (*const frames[])(void) = {Camera_Chase, Camera_Track, Camera_Overview, Camera_Chase, Camera_Chase};
+            Camera_SetMode(e, modes[which - 39]);
             for (int k = 0; k < 5; k++) {
                 if (k == 2)
                     for (int j = 0; j < 9; j += 2)
                         if (j != 4) n->frame.m[j] = -n->frame.m[j];
                 g_fpu_round = FPU_DOWN;
-                if (which == 39) Camera_Chase();
-                else Camera_Track();
+                frames[which - 39]();
                 uint8_t b[0x40 + 24];
                 memcpy(b, &g_view.cam, 0x24);
                 memset(b + 0x24, 0, 4);

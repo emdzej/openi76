@@ -897,6 +897,18 @@ def call_track(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x406BB0, 0x403540)
 
 
+def call_overview(exe, n, fpcw):
+    call_camera(exe, n, fpcw, 0x406200, 0x406340)
+
+
+def call_chase14(exe, n, fpcw):
+    call_camera(exe, n, fpcw, 0x405EE0, 0x4055E0)
+
+
+def call_chase15(exe, n, fpcw):
+    call_camera(exe, n, fpcw, 0x406070, 0x4055E0)
+
+
 def call_camera(exe, n, fpcw, start=0x405450, frame=0x4055E0):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
@@ -908,6 +920,7 @@ def call_camera(exe, n, fpcw, start=0x405450, frame=0x4055E0):
     exe.write(0x4DB138, struct.pack("<f", 0.06))
     exe.write(0x4DEF8C, struct.pack("<i", 3))
     exe.write(0x4DEF94, struct.pack("<ii", 3, 0) + struct.pack("<i", 8))
+    exe.write(0x4DEFBC, struct.pack("<i", 20))
     exe.call(start, e, limit=50_000_000, fpcw=rd)   # Camera_SetMode (stubbed here) without the HUD
     exe.call(0x43CA60, 0x4A8488, 0x3F800000, limit=50_000_000, fpcw=rd)
     for k in range(5):
@@ -952,7 +965,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

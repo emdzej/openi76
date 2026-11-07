@@ -43,3 +43,11 @@ int Camera_Pop(void);
    and track_yaw_delta, the distance by track_distance, each eased at 2 per second */
 void Camera_TrackStart(Entity *e);
 void Camera_Track(void);
+/* Camera_ChaseLeftStart 0x405ee0 (mode 0x14, F9) and Camera_ChaseRightStart 0x406070 (0x15): the chase
+   turned to a yaw of 150 degrees (30 off behind) and of 30 degrees (30 off the front) */
+void Camera_ChaseLeftStart(Entity *e);
+void Camera_ChaseRightStart(Entity *e);
+/* Camera_OverviewStart 0x406200 (mode 0x16, F10) and Camera_Overview 0x406340: straight down over the
+   entity, overview_zoom_delta scaling the height (100 at the start; within 4 radii and 0.85 of the range) */
+void Camera_OverviewStart(Entity *e);
+void Camera_Overview(void);

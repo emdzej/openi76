@@ -30,6 +30,7 @@ static float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
    them 0x4a8670 and 0x4a8674 (pi/6 and 0 at the reset), the distance's target 0x4a867c and the eased
    distance 0x4a868c (5.5 at the reset) */
 static float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist;
+static float over_h;   /* 0x4a866c: the overview's height over the ground (100 at its start) */
 /* the heading's quaternions: the target 0x4a869c and the eased 0x4a86ac */
 static float q_to[4], q_cur[4];
 
@@ -44,6 +45,7 @@ typedef struct {
     Entity *entity;
     float chase_pitch, chase_yaw, pitch_aim, yaw_aim, dist_to, dist, q_to[4], q_cur[4];
     float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
+    float over_h;
 } CamState;
 static CamState stack[8];
 static int32_t top = 8;
@@ -53,7 +55,7 @@ static int below(double a, double b) { return a < b || a != a || b != b; }
 static void cam_save(CamState *c)
 {
     *c = (CamState){g_camera_fn, g_cockpit, g_camera_mode, g_view, g_camera_entity, chase_pitch, chase_yaw,
-                    pitch_aim, yaw_aim, dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll};
+                    pitch_aim, yaw_aim, dist_to, dist, {0}, {0}, pitch_to, pitch, yaw_to, yaw, roll_to, roll, over_h};
     memcpy(c->q_to, q_to, sizeof q_to);
     memcpy(c->q_cur, q_cur, sizeof q_cur);
 }
@@ -82,6 +84,7 @@ int Camera_Pop(void)
     dist = c->dist;
     memcpy(q_to, c->q_to, sizeof q_to);
     memcpy(q_cur, c->q_cur, sizeof q_cur);
+    over_h = c->over_h;
     pitch = c->pitch;
     yaw = c->yaw;
     roll = c->roll;
@@ -244,7 +247,8 @@ void Camera_CockpitStart(Entity *e)
     g_camera_fn = Camera_Pilot;
 }
 
-void Camera_ChaseStart(Entity *e)
+/* the chase's starts differ in the yaw (behind, or turned toward a side) */
+static void chase_start(Entity *e, float yaw)
 {
     if (g_camera_mode == 4) Camera_Pop();
     view_again();
@@ -254,9 +258,13 @@ void Camera_ChaseStart(Entity *e)
     Frame_ToQuat(q_cur, &e->node->frame);
     memcpy(q_to, q_cur, sizeof q_to);
     chase_pitch = 0.2617994f;   /* 0x3e860a92, 15 degrees */
-    chase_yaw = 3.1415925f;     /* 0x40490fda */
+    chase_yaw = yaw;
     g_camera_fn = Camera_Chase;
 }
+
+void Camera_ChaseStart(Entity *e) { chase_start(e, 3.1415925f); }        /* 0x40490fda */
+void Camera_ChaseLeftStart(Entity *e) { chase_start(e, 2.6179938f); }    /* 0x40278d36, 150 degrees */
+void Camera_ChaseRightStart(Entity *e) { chase_start(e, 0.52359879f); }  /* 0x3f060a92, 30 degrees */
 
 /* the distance's target: track_distance within [1, 10] (the test against 10 on the float's bits) */
 static void distance_aim(void)
@@ -370,10 +378,44 @@ static void chase_place(Entity *e, float k, int raised)
     View_SetCamera(&g_view, &m);
 }
 
+void Camera_OverviewStart(Entity *e)
+{
+    if (g_camera_mode == 4) Camera_Pop();
+    over_h = 100.0f;   /* 0x42c80000 */
+    view_again();
+    g_cockpit = 0;
+    g_camera_entity = e;
+    g_camera_mode = 3;
+    g_camera_fn = Camera_Overview;
+}
+
+void Camera_Overview(void)
+{
+    if (!g_camera_entity) g_camera_entity = g_user_entity;
+    Entity *e = g_camera_entity;
+    /* the height scaled by 1 + overview_zoom_delta / 100, at most 0.85 of the view's range and at least
+       4 times the entity's radius */
+    double cap = MUL(g_view.range, 0.85f);   /* 0x4a50b8 */
+    over_h = F32(MUL(ADD(MUL((double)rd32(INPUT_AT(0x4defbc)), 0.01f), 1.0f), over_h));   /* 0x4a50b4 */
+    if (below(cap, over_h)) over_h = F32(cap);
+    double low = MUL(e->r, 4.0f);   /* 0x4a5024 */
+    if (low > over_h) over_h = F32(low);
+    /* straight down (z to -y, y to +z) over the entity's place */
+    Frame f = {{1, 0, 0, 0, 0, 1, 0, -1, 0}, 0, {0, 0, 0}};
+    const double *p = e->node->frame.pos;
+    f.pos[0] = p[0];
+    f.pos[2] = p[2];
+    f.pos[1] = ADD(Terrain_Height(p[0], p[2]), over_h);
+    View_SetCamera(&g_view, &f);
+}
+
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
     {0xf, Camera_ChaseStart},
+    {0x14, Camera_ChaseLeftStart},
+    {0x15, Camera_ChaseRightStart},
+    {0x16, Camera_OverviewStart},
     {0x19, Camera_PilotStart},
     {0xfefe, Camera_TrackStart},
 };

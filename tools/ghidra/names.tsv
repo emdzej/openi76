@@ -1036,3 +1036,7 @@
 00409a20	AI_UserHidden	ai	high	0x505458; ported
 00406bb0	Camera_TrackStart	camera	high	mode 0xfefe, the death's: the chase steered by track_pitch/yaw; ported
 00403540	Camera_Track	camera	high	the track view's frame; ported, diffed
+00405ee0	Camera_ChaseLeftStart	camera	high	mode 0x14: the chase at a yaw of 150 degrees; ported, diffed
+00406070	Camera_ChaseRightStart	camera	high	mode 0x15: the chase at a yaw of 30 degrees; ported, diffed
+00406200	Camera_OverviewStart	camera	high	mode 0x16 (F10): straight down; ported
+00406340	Camera_Overview	camera	high	the overview's frame; ported, diffed
