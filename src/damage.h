@@ -72,8 +72,8 @@ float Side_Whole(const uint8_t *d, uint32_t side);
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at);
 /* Impact_Damage 0x45d7c0: an impact on n by src (NULL: the ground) at the velocity v against the normal
    nv: a packet for the armour (+0x14) of ftol(mass x (v . -nv)^2 x k), the mass src's for a moving source
-   (k 6.67e-5) else n's (1e-4), through Class_Damage at the point at. 1 while n lives on. A projectile's
-   packet (classes 0x33, 0x34) is not ported yet */
+   (k 6.67e-5) else n's (1e-4), through Class_Damage at the point at. 1 while n lives on. A shot's (0x33)
+   or an explosion's (0x34) packet is its own */
 int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at);
 /* Vehicle_Wreck 0x42c580: a wreck's step. With start: its ten seconds (0x80008000), the lights out, the
    brake lamps hidden, every part at its worst look and the body at texture frame 3, and (not the user's)
@@ -82,3 +82,6 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
 void Vehicle_Wreck(Node *n, int start);
 /* Chunk_Spawn 0x45b0a0: the node's destruction chunks thrown as debris; 0 without a record */
 int Chunk_Spawn(Node *n);
+/* Splash 0x46a3e0: explosion src's damage (Impact_Damage, at rest, against the direction to it) on each
+   collision entity but except whose sphere reaches within radius of (x, z) seen from above */
+void Splash(float x, float z, float radius, int32_t force, Node *src, Node *except);

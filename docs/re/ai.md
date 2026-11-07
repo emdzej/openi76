@@ -315,7 +315,8 @@ back, and looks from the step's place p with its velocity v:
    vehicle's axis, bridges (12) only within 0.9 either way; then the close sweep (0x476610, 3 m): an
    entity of collision kind 1 by its COLP box (0x4766b0), 2 always, 3 by its node tree (0x4768c0: every
    node not of type 0x1000, its sphere then its box in its frame, the children too; spheres alone count
-   for types 0x4000 and 0x5000). A hit: *slow 1, *factor 1.25, *who, *t the time the two centres come
+   for types 0x4000 and 0x5000; with faces asked, a 0x3000 node's mesh is swept by its faces instead of its
+   box, 0x479070 in weapons.md "The hit"). A hit: *slow 1, *factor 1.25, *who, *t the time the two centres come
    closest.
 4. With probability (150 x (1 - steering gain +0xa820)) / 1000 (rand() % 1000 above 850 + that): the
    shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19. Shots are not ported yet; with

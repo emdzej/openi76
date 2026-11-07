@@ -18,8 +18,9 @@ static uint32_t coll_type;   /* 0x577178: the type for nodes without one */
 void Collide_Init(void)
 {
     g_coll_moving = g_coll_static = g_coll_ground = NULL;
-    /* 0x577174, 0x57716c, the removal callback 0x469cd0 and the heaps (0x478e30, 0x4771b0) */
+    /* 0x577174, 0x57716c and the heaps (0x478e30, 0x4771b0) */
     Entity_OnAdd(Collide_Add);
+    Entity_OnRemove(Collide_Remove);   /* 0x469cd0 */
 }
 
 /* 0x479020 */
@@ -360,4 +361,34 @@ void Ground_Height(float px, float py, float pz, float *out, float normal[3])
         *out = F32(Terrain_Height(px, pz));
         if (normal) Terrain_Normal(normal, px, pz);
     }
+}
+
+/* 0x469cd0, an entity's removal: off its collision list (the moving or the static by its class, 0x42e640)
+   with its meshes (0x46b540), then off the ground list (0x477240: classes 11-13) with its walkable faces
+   (0x4775c0). The original moves the lists' shared cursor on when it held the cell; the port's walks read
+   the next cell first. */
+void Collide_Remove(Entity *e)
+{
+    if (e->has_a) {
+        int cls = e->node->cls;
+        Cell **list = cls == 1 || cls == 7 || cls == 9 ? &g_coll_moving : &g_coll_static;
+        for (Cell *c = *list; c; c = c->next)
+            if (c->value == e) {
+                if (e->has_a == 3) meshes_free(e->node);
+                List_Remove(list, c);
+                break;
+            }
+    }
+    int cls = e->node->cls;
+    if (cls > 10 && cls < 0xe)
+        for (Cell *c = g_coll_ground; c; c = c->next)
+            if (c->value == e) {
+                for (GroundCell *g = e->a, *nx; g; g = nx) {
+                    nx = g->next;
+                    free(g);
+                }
+                e->a = NULL;
+                List_Remove(&g_coll_ground, c);
+                break;
+            }
 }

@@ -784,7 +784,7 @@ def call_launch(exe, n, fpcw):
 
     if not LAUNCH:
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
-                     (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6)):
+                     (0x46D090, 5)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x459B50, fly, 2)
     LAUNCH["n"] = n
@@ -806,11 +806,11 @@ def call_fly(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
-        # the launch's effects as in call_launch; the hit's effect, and the flights not ported yet
+        # the launch's effects as in call_launch; the hit's sound, and the flights not ported yet
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
-                     (0x46D090, 5), (0x47EB50, 6), (0x47EAC0, 6), (0x45C950, 4)):
+                     (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
-        for a in (0x45F8B0, 0x460480, 0x460F40, 0x461340, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
+        for a in (0x460480, 0x460F40, 0x461340, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
             exe.stub(a, lambda *x: 1, 2)
         FLY["on"] = 1
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -875,7 +875,7 @@ START_LATER = (0x41FFF0,
                0x426410, 0x403360, 0x42DC00, 0x471060, 0x476240,
                # the weapons' display's (0x4561f0) drawing: the surface, the diodes, the names, the counters
                0x4392B0, 0x456C10, 0x4569B0, 0x481420, 0x456CF0)
-TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C}
+TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}
 
 
 def class_data(m, cls, d):
@@ -994,8 +994,8 @@ def original():
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
         for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x40FC80, 5), (0x46FDB0, 1),
                      (0x488950, 1), (0x455370, 1), (0x476440, 2), (0x407010, 2), (0x428890, 0),
-                     # the wreck's (0x42c580): explosions, the sound's pitch, debris thrown, fires
-                     (0x4540D0, 7), (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):
+                     # the wreck's (0x42c580): the sound's pitch, debris thrown, fires
+                     (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):
             exe.stub(f, lambda *a: 0, k)
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
         exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
@@ -1130,7 +1130,7 @@ def original():
         for t in range(8)))
     if START:
         t, k = m.u32(0x4DE244), 0
-        while t and k < 2000:
+        while t and k < 100000:   # a guard against a cycle
             fn, arg = m.u32(t + 0x14), m.u32(t + 0x18)
             out.append(f"TA {m.raw(m.u32(t), 8).hex()} {m.raw(t + 4, 15).split(bytes(1))[0].hex()} {fn:x} "
                        + (m.raw(arg, TEXANIM_ARG[fn]).hex() if arg and fn in TEXANIM_ARG else "-"))
@@ -1173,6 +1173,9 @@ if __name__ == "__main__":
     ro, a = original()
     rp, b = port()
     print(f"diff_objects {M}: original returned {ro}, port {rp}; {len(a)} lines, {len(b)}")
+    if os.environ.get("DUMPTO"):
+        open(os.environ["DUMPTO"] + ".orig", "w").write("\n".join(a))
+        open(os.environ["DUMPTO"] + ".port", "w").write("\n".join(b))
     bad = 0
     for i in range(max(len(a), len(b))):
         x = a[i] if i < len(a) else "<none>"

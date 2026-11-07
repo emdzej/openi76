@@ -114,8 +114,8 @@
 00482f80	Vq_Decode
 00482fe0	Vq_Blocks
 00483110	Vq_Block
-0047eb50	Tex_AnimStart
-0047eac0	Tex_AnimStart2
+0047eb50	TexAnim_Once	tex	high	a texture animation run once (0.1 s a frame typically), then its end function and removed
+0047eac0	TexAnim_Loop	tex	high	a texture animation looped; its last argument 0 runs it backwards
 0047d2d0	Geo_Build
 0047dc70	Lod_Select	lod	high	the mesh of a level, loaded when the name changes; ported, diffed
 0043bcc0	Palette_Set
@@ -909,3 +909,21 @@
 0046c410	Tracer_New	effects	high	the cursor's record for a shot, its history one entry
 0046c5e0	Tracers_DrawOther	effects	high	the tracers queued for the other views
 0046c9b0	Tracers_Draw	effects	high	the tracers queued (lines, textured quads and caps); unmoved ones dropped
+004540d0	Explosion_Spawn	effects	high	an effect's explosion by name at a place, on a node: reused or copied, lit, timed, the splash
+00454510	Explosion_End	effects	high	a done explosion: light out, detached, back on its effect's list
+004543a0	Explosion_Packet	effects	high	an explosion's damage packet: its effect's damage on the armour
+00454380	Explosion_Owner	effects	high	an explosion's owner (data +0xc), for the credit
+0046a3e0	Splash	damage	high	an explosion's impact on each collision entity within its radius (x, z)
+0046b190	Circle_Overlap	collide	high	two circles in x, z overlap
+0047ec60	TexAnim_TimerFrame	tex	high	the timers' frame function: steps due, the once's end
+0047e9f0	TexAnim_Remove	tex	high	the node's animation of that name removed
+00479070	Mesh_SweepFaces	collide	high	a segment against a collision mesh's faces: the earliest
+00479160	Face_Sweep	collide	high	a segment through a face's plane from its front within the frame, the point inside
+00479290	Face_Holds	collide	high	a point in a face, projected by the normal's largest axis
+00479340	Face_HoldsXZ	collide	high	the convex crossing test in x, z
+00479600	Face_HoldsXY	collide	high	the convex crossing test in x, y
+004798c0	Face_HoldsYZ	collide	high	the convex crossing test in y, z
+00434950	Damage_Class4	damage	high	class 4's damage: a packet of mask 0xa knocks the root away (thrown, entity removed)
+00423eb0	Entity_Remove	objects	high	an entity's removal: callbacks, reference, entry cleared
+00469cd0	Collide_Remove	collide	high	the collision's removal callback: off the moving/static and ground lists
+0045f8b0	Shot_FlyRocket	weapons	high	type 2's flight: the guns' with half-step easing, turned along its path, a trail

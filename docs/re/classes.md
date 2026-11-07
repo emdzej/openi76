@@ -63,3 +63,17 @@ function, its argument, and the links.
 - TexAnim_Run 0x47e9a0, each frame, calls each animation of a live node and drops the rest (0x47ebe0).
 
 The functions themselves (the treads 0x42feb0, 0x434430, 0x4208f0, 0x433d10) are not ported yet.
+
+- TexAnim_Remove 0x47e9f0 drops the first animation with that node and name, and its reference.
+
+**The timers (0x47eac0, 0x47eb50, 0x47ec60).** Their argument is a 0x1c-byte record:
+- the next step's time, the step (0.1 s for every caller so far), the frames;
+- the frame, dimension 1's value (set once), the mode;
+- a function for the end.
+
+0x47eb50 runs the frames once (mode 2). Once the last frame is reached, the function is called with the
+node and the animation is removed. 0x47eac0 loops: its last argument 0 gives mode 1 (backwards, a
+quirk), anything else mode 0 (forwards).
+
+Each frame, 0x47ec60 steps the frame for every step whose time has passed, then sets dimension 0
+(Tex_SetFrame 0x47c200). 0x47ebe0 frees the record with the animation.

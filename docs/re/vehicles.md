@@ -634,8 +634,9 @@ entity's cached sphere (0x4286c0).
 | 6, 7 | An explosion "x1_cars1" near: three rands, `(r - 0x7fff) >> 1`, scaled by the entity's +0x10 and 6.1e-5 (y 1.5e-5). |
 | 8-15 | Nothing. |
 
-The effects themselves (explosions, the thrown debris, fires, smoke, sounds) are not ported yet. Every
-rand is taken, so the sequence stays the original's.
+Both explosions are ported (effects.md "Explosions"). Each is owned by the vehicle and sits on it, and the
+"x1_cars1" offsets are added to the vehicle's place. The other effects (the thrown debris, fires, smoke,
+sounds) are not ported yet. Every rand is taken, so the sequence stays the original's.
 
 Checked: `diff_objects.py --call wreck` (the start, then forty steps per vehicle: the timer, the flags,
 every part's flags, children and state) is identical on t01, s04, t15, s01, a01, t10 and t05, and upside

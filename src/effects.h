@@ -9,8 +9,9 @@
 typedef struct Effect {   /* 0x28 bytes */
     uint32_t key[2];      /* +0: the name, upper case */
     Node *tree;           /* +8 */
-    int32_t w[4];         /* +0xc: XDFC's words 6, 0, 7 and 8 */
-    int32_t f1c;          /* +0x1c: 0 */
+    int32_t w[4];         /* +0xc: XDFC's words 6, 0, 7 and 8: the life (a float), the frames, the
+                             splash's damage and radius (floats) */
+    struct Node *free;    /* +0x1c: the explosions done, for reuse (through +0x60 and +0x68) */
     struct Effect *next;  /* +0x20 */
 } Effect;
 
@@ -45,3 +46,9 @@ int Muzzles_Add(uint32_t n0, uint32_t n1, Node *node, int32_t p4, int32_t p5);
 /* Node_FirstTexture 0x482ea0: the first level from lod with a mesh (up to 5), its first face texture
    with an extension other than .map; NULL if none */
 const char *Node_FirstTexture(Node *n, int lod);
+/* Effect_Find: name's (8 bytes, any case) effect, or NULL */
+Effect *Effect_Find(const uint8_t name[8]);
+/* Explosion_Spawn 0x4540d0: effect name's explosion (a class 0x34 copy of its tree, reused when one is
+   done) at (x, y, z) under the explosions' root, lit, its textures run once; owner is kept for the credit
+   (data +0xc), on the node it sits on (+0x10, drawn with it). The splash with a damage. NULL without one */
+Node *Explosion_Spawn(const uint8_t name[8], Node *owner, float x, float y, float z, Node *on);

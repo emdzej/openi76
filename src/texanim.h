@@ -24,3 +24,10 @@ void TexAnim_Init(void);
 int TexAnim_Add(Node *n, const char *name, TexAnimFn fn, uint32_t fn_addr, void *arg);
 /* TexAnim_Run 0x47e9a0: each animation of a live node called, the others dropped */
 void TexAnim_Run(void);
+/* TexAnim_Remove 0x47e9f0: (node, name)'s first animation removed (its reference dropped); 0 if none */
+int TexAnim_Remove(Node *n, const char *name);
+/* TexAnim_Loop 0x47eac0: the texture's frames stepped round every step seconds (dimension 1 at d1); with
+   forward 0 they run backwards */
+void TexAnim_Loop(Node *n, const char *name, float step, int32_t d1, int32_t count, int forward);
+/* TexAnim_Once 0x47eb50: the frames stepped once, then end(n) and the animation removed */
+void TexAnim_Once(Node *n, const char *name, float step, int32_t d1, int32_t count, void (*end)(Node *));

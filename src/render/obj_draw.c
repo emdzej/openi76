@@ -296,7 +296,7 @@ static void merge_flats(QMerge *m, const View *view)
 {
     for (int j = 0; j < m->n; j++) {
         Node *mn = m->m[j].node;
-        if (mn->cls == 0x34) draw_flat(*(QRec **)(mn->data + 0x14), view);
+        if (mn->cls == 0x34) draw_flat(*(QRec **)Data_Ptr(mn->data, 0x14), view);
     }
 }
 
@@ -456,9 +456,9 @@ void Objects_Draw(const View *view)
                 o->r = c->radius;
                 o->merge = NULL;
                 q->type = (c->flags & 0x40) ? 7 : 5;
-                if (c->cls == 0x34 && c->data && *(void **)(c->data + 0x10)) {
-                    Queue_AddMerge(c, *(void **)(c->data + 0x10));
-                    *(QRec **)(c->data + 0x14) = q;
+                if (c->cls == 0x34 && c->data && *Data_Ptr(c->data, 0x10)) {   /* an explosion on a node */
+                    Queue_AddMerge(c, *Data_Ptr(c->data, 0x10));
+                    *Data_Ptr(c->data, 0x14) = q;
                     Queue_Skip();
                 } else {
                     Queue_Add(F32(SUB(o->z, o->r)));

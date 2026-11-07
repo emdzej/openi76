@@ -7,17 +7,20 @@
 #include "damage.h"
 #include "combat.h"
 #include "crt.h"
+#include "effects.h"
 #include "entity.h"
 #include "exe.h"
 #include "lod.h"
 #include "math3d.h"
 #include "physics.h"
 #include "terrain.h"
+#include "texanim.h"
 #include "tracers.h"
 #include "tex.h"
 #include "render/fpu.h"
 #include "render/light.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -219,10 +222,9 @@ static void place(Node *s, const Launch *l)
 /* ---- the launch (0x458f40) ---- */
 
 /* not ported yet, as the effects: 0x46ef60 the trail (smoke by kind), 0x46d090 the
-   types 9-11's (flares, oil, caltrops: dropped per shot), 0x47eb50 / 0x47eac0 the texture animations */
+   types 9-11's (flares, oil, caltrops: dropped per shot) */
 static void trail(Node *s, int k) { (void)s, (void)k; }
 static void dropped(Node *muzzle, int k, int32_t w, const Ordnance *o) { (void)muzzle, (void)k, (void)w, (void)o; }
-static void tex_anim(Node *s, const char *name, int a, int b) { (void)s, (void)name, (void)a, (void)b; }
 
 /* the kind's pool: w7 (50) shots made at the first launch, each with its record (0x48 bytes) */
 static void fill_pool(int k)
@@ -348,8 +350,8 @@ Node *Shot_Launch(Launch *l, float late)
         if (Node_IsUser(l->vehicle)) g_user_shot = s;   /* 0x42e620, 0x45c8e0 */
         break;
     }
-    case 0xc: if (o->tex[0]) tex_anim(s, o->tex, 0, 8); break;
-    case 0x11: if (o->tex[0]) tex_anim(s, o->tex, 1, 8); break;
+    case 0xc: if (o->tex[0]) TexAnim_Once(s, o->tex, 0.1f, 0, 8, NULL); break;   /* 0x47eb50 */
+    case 0x11: if (o->tex[0]) TexAnim_Loop(s, o->tex, 0.1f, 1, 8, 1); break;     /* 0x47eac0 */
     }
     /* the first flight, for the time late in the frame */
     if (fabs(late) != 0.0 && (which == 0 || which == 1)) fly_one(s, late, which);
@@ -455,8 +457,30 @@ int Shot_Sweep(Node *s, Node *owner, float p1[3], Node **who, int32_t *cls)
 
 /* ---- the guns' flight (0x4609d0: types 1, 6, 0x12) ---- */
 
-/* not ported yet, as the effects: 0x45c950 the hit's effect and sound by what was hit */
-static void hit_effect(Node *s, const float at[3], Node *who, int32_t cls) { (void)s, (void)at, (void)who, (void)cls; }
+/* not ported yet, as the sounds: 0x468640 a sound by name at a node */
+static void hit_sound(const char *name, Node *at) { (void)name, (void)at; }
+
+/* 0x45c950: the hit's explosion and sound by what was hit: the ground (-1) the kind's first, a vehicle
+   (1, 4, 8, 9) its second, a structure (2, 0xc) its third, a building part (3, 0xb) its fourth; then on
+   the node hit */
+static void hit_effect(Node *s, const float at[3], Node *who, int32_t cls)
+{
+    int32_t ty;
+    memcpy(&ty, s->data, 4);
+    int k = Ordnance_Index(ty);
+    if (k < 0) return;   /* the original reads before the table */
+    Node *owner = *(Node **)Data_Ptr(s->data, 0xc);
+    int f;
+    switch (cls) {
+    case -1: f = 0; who = NULL; break;
+    case 1: case 4: case 8: case 9: f = 1; break;
+    case 2: case 0xc: f = 2; break;
+    case 3: case 0xb: f = 3; break;
+    default: return;
+    }
+    Node *x = Explosion_Spawn(g_ordnance[k].fx[f].xdf, owner, at[0], at[1], at[2], who);   /* 0x4540d0 */
+    if (x) hit_sound(g_ordnance[k].fx[f].sound, x);
+}
 
 static int fly_gun(Node *s, float t)
 {
@@ -516,6 +540,65 @@ static int fly_gun(Node *s, float t)
     return !hit;
 }
 
+/* not ported yet, as the effects: 0x46f170 the trail's step (its smoke behind the shot) */
+static void trail_step(Node *s) { (void)s; }
+
+/* 0x45f8b0: type 2's flight (the rockets): as the guns' with its own easing (half the step towards the
+   speed), always turned along its path, the explosion where it hit, and its trail */
+static int fly_rocket(Node *s, float t)
+{
+    uint8_t *r = s->data;
+    float step = g_clock_step, trav;
+    ShotState st;
+    gather(&st, s);
+    double h = MUL(step, 0.5f);   /* 0x4a6350 */
+    float hf = F32(h);
+    if (h < 0.0 || h != h || fbits(hf) > 0x3f733333) st.v[2] = st.speed;   /* 0x4a6354 */
+    else {
+        double e = SUB(st.speed, st.v[2]);
+        float ef = F32(e);
+        if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6360 */
+        else st.v[2] = F32(ADD(MUL(MUL(step, ef), 0.5f), st.v[2]));
+    }
+    const float *m = s->frame.m;
+    float w[3];
+    w[0] = F32(ADD(ADD(MUL(m[3], st.v[1]), MUL(m[0], st.v[0])), MUL(m[6], st.v[2])));
+    w[1] = F32(ADD(ADD(MUL(m[1], st.v[0]), MUL(m[4], st.v[1])), MUL(m[7], st.v[2])));
+    w[2] = F32(ADD(ADD(MUL(m[5], st.v[1]), MUL(m[8], st.v[2])), MUL(m[2], st.v[0])));
+    Integrate_F(st.p, w, st.g, t);   /* 0x471730 */
+    float l[3];
+    l[0] = F32(ADD(ADD(MUL(m[1], w[1]), MUL(m[0], w[0])), MUL(m[2], w[2])));
+    l[1] = F32(ADD(ADD(MUL(m[5], w[2]), MUL(m[3], w[0])), MUL(m[4], w[1])));
+    l[2] = F32(ADD(ADD(MUL(m[8], w[2]), MUL(m[6], w[0])), MUL(m[7], w[1])));
+    int hit = 0;
+    int32_t cls = -1;
+    memcpy(&trav, r + 0x40, 4);
+    for (; st.n > 0; st.n--)   /* past 70 m the owner too */
+        if (Shot_Sweep(s, fbits(trav) <= 0x428c0000 ? st.owner : NULL, st.p, &st.who, &cls)) hit = 1;
+    if (!hit && Terrain_Line(s->frame.pos, st.p)) {   /* 0x45cfd0 */
+        hit = 1;
+        st.who = NULL;
+        cls = -1;
+    }
+    float d[3];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
+    double l2 = ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]));
+    trav = F32(ADD(fpu_sqrt(l2), trav));
+    memcpy(r + 0x40, &trav, 4);
+    if (!hit) {
+        Frame_FromDir(&s->frame, st.p, d);   /* 0x4522e0 */
+        memcpy(r + 0x14, l, 12);
+    } else {
+        if (!(fpu_sqrt(l2) <= 0.009999999776482582f)) Frame_FromDir(&s->frame, st.p, d);   /* 0x4a636c */
+        else
+            for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memset(r + 0x14, 0, 12);
+        hit_effect(s, st.p, st.who, cls);   /* 0x45c950, where it hit */
+    }
+    trail_step(s);   /* 0x46f170 */
+    return !hit;
+}
+
 /* 0x459b50: the flight by type; 0 when the shot is spent. Types not ported yet fly on unchanged */
 int Shot_Fly(Node *s, float t)
 {
@@ -526,7 +609,8 @@ int Shot_Fly(Node *s, float t)
     case 1:
     case 6:
     case 0x12: return fly_gun(s, t);
-    case 2: case 3: case 4: case 5: case 7: case 8:   /* the guided and the dropped: not ported yet */
+    case 2: case 3: case 4: case 5: case 7: case 8:   /* the guided and the dropped: but 2 not ported yet */
+        if (ty == 2) alive = fly_rocket(s, t);
         if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
             g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
         break;

@@ -309,7 +309,7 @@ size_t Objects_Dump(char *buf, size_t cap)
             name8(&o, t->node->name);
             out(&o, " ");
             for (int i = 0; i < 15 && t->name[i]; i++) out(&o, "%02x", (uint8_t)t->name[i]);
-            int size = t->fn_addr == 0x42feb0 ? 0x18 : t->fn_addr == 0x433d10 ? 0x1c : 0x10;
+            int size = t->fn_addr == 0x42feb0 || t->fn_addr == 0x47ec60 ? 0x18 : t->fn_addr == 0x433d10 ? 0x1c : 0x10;   /* 0x47ec60's: not its end */
             out(&o, " %x ", t->fn_addr);
             if (t->arg) hex(&o, t->arg, size);
             else out(&o, "-");

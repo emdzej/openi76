@@ -35,6 +35,11 @@ typedef void (*EntityFn)(Entity *);
 void Entity_Init(void);
 /* 0x423cf0: fn is called with every entity added */
 void Entity_OnAdd(EntityFn fn);
+/* Entity_OnRemove 0x423d10 */
+void Entity_OnRemove(EntityFn fn);
+/* Entity_Remove 0x423eb0: the removal callbacks, the node's reference dropped, the entry cleared (the last
+   one dropped from the count) */
+void Entity_Remove(Entity *e);
 /* Entity_Add 0x423d30: the first free entry (or a new one) for the node; its centre and radius from the
    node's meshes. A node with flag 0x10 is the user's. NULL when full (the original's fatal at 256). */
 Entity *Entity_Add(Node *n, void *a, const int32_t *b);

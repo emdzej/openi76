@@ -18,6 +18,7 @@
 #include "input.h"
 #include "math3d.h"
 #include "tex.h"
+#include "effects.h"
 #include <string.h>
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -449,9 +450,14 @@ static int damage_gun(Node *n, uint8_t *p)
 
 static void sphere_drop(Entity *e);
 
-/* not ported yet, as the effects and the sounds: 0x4540d0 an explosion by name at a node and place,
-   0x4683c0 the sound by number 7, 0x468580 a sound by name, 0x45c780 a smoke (0x4d538c or 0x4d5394) */
-static void explosion(const char name[8], Node *n, const float at[3]) { (void)name, (void)n, (void)at; }
+/* 0x4540d0: an explosion by name at a place, n its owner, on no node */
+static void explosion(const char name[8], Node *n, const float at[3])
+{
+    Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], NULL);
+}
+
+/* not ported yet, as the sounds and the effects: 0x4683c0 the sound by number 7, 0x468580 a sound by
+   name, 0x45c780 a smoke (0x4d538c or 0x4d5394) */
 static void sound_named(const char *name, Node *n) { (void)name, (void)n; }
 static void smoke_puff(int second, const float at[3], const float v[3], float k) { (void)second, (void)at, (void)v, (void)k; }
 
@@ -668,6 +674,30 @@ static int damage_structure(Node *n, uint8_t *p)
     return 0;
 }
 
+/* not ported yet: 0x45b760 a part thrown off (as a "v_chnk" object with a velocity, spinning) */
+static void throw_off(Node *n, const float v[3], int spin, Entity *e) { (void)n, (void)v, (void)spin, (void)e; }
+
+/* 0x434950, class 4's damage (the signs, posts and the like): a packet of the second or fourth kind
+   knocks its root away, whatever the amount: its points to 0, thrown with a random velocity (x and z
+   within +-5 m/s, y up to 20) and its entity removed */
+static int damage_4(Node *n, uint8_t *p)
+{
+    Node *root = Node_Root(n);   /* 0x42e6b0 */
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    if (!(m & 0xa)) return 0;
+    put32(root->data, 0);
+    /* network play's message (0x461900, 0x465520 with the data's +8) is not ported */
+    Entity *e = Entity_OfNode(root);
+    float v[3];
+    v[0] = fpu_f32(fpu_mul(fpu_sub(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e38)), exe_f32(0x4a5e3c)));
+    v[1] = fpu_f32(fpu_mul(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e40)));
+    v[2] = fpu_f32(fpu_mul(fpu_sub(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e38)), exe_f32(0x4a5e3c)));
+    throw_off(root, v, 1, e);   /* 0x45b760 */
+    if (e) Entity_Remove(e);    /* 0x423eb0; the original's would crash without one */
+    return 1;
+}
+
 int Class_Damage(Node *n, uint8_t *p, const float *at)
 {
     int cls = n->cls;
@@ -682,7 +712,8 @@ int Class_Damage(Node *n, uint8_t *p, const float *at)
     case 0x32: return damage_gun(n, p);
     case 1: return Vehicle_Damage(n, p, at);
     case 2: return damage_structure(n, p);
-    /* not ported yet: 4 0x434950, 9 0x431c60,
+    case 4: return damage_4(n, p);
+    /* not ported yet: 9 0x431c60,
        8 0x4289f0, 7 0x432ed0, 0xa 0x4346b0 */
     default: return 0;
     }
@@ -1102,6 +1133,21 @@ static void shot_packet(uint8_t p[0x1c], const Node *s)
     }
 }
 
+/* 0x4543a0: an explosion's packet: its effect's damage (+0x14, a float) to the armour (mask 2) */
+static void explosion_packet(uint8_t p[0x1c], const Node *x)
+{
+    memset(p, 0, 0x1c);
+    if (!x->data) return;
+    const Effect *e = Effect_Find(x->data);
+    if (!e) return;   /* the original reads a null effect */
+    uint16_t mask = 2;
+    memcpy(p + 4, &mask, 2);
+    float dmg;
+    memcpy(&dmg, &e->w[2], 4);
+    int32_t a = ftol(dmg);   /* one bit: not divided */
+    memcpy(p + 0xc, &a, 4);
+}
+
 int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at)
 {
     /* 0x45dbb0 (0x4dc464) is never set: the user is never spared */
@@ -1114,7 +1160,7 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
         if (src->data) memcpy(&ty, src->data, 4);   /* 0x45ce90 */
         if (ty == 0x12) p[6] |= 1;
     } else if (src && src->cls == 0x34) {
-        /* a 0x34's packet (0x4543a0) is not ported yet: none */
+        explosion_packet(p, src);   /* 0x4543a0 */
     } else {
         uint16_t eight = 8;
         memcpy(p + 4, &eight, 2);
@@ -1146,8 +1192,7 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
     return live != NULL;
 }
 
-/* the wreck's effects, not ported yet: the explosions (0x4540d0 "x1_carx1" at the vehicle, "x1_cars1"
-   near it), the sound's pitch (0x476170), a wheel or a body piece thrown off (0x45b760; a piece as a
+/* the wreck's effects, not ported yet: the sound's pitch (0x476170), a wheel or a body piece thrown off (0x45b760; a piece as a
    "v_chnk" object taking the part's class 0x3f children), the fires on the children (0x45b3f0) and the
    smoke (0x45c780, 0x4d538c or 0x4d5394), the 0x46fdb0 list */
 static void wreck_fx(Node *n, int what, int a) { (void)n, (void)what, (void)a; }
@@ -1168,6 +1213,7 @@ static int wreck_part(uint8_t *d, int first, int count)
 void Vehicle_Wreck(Node *n, int start)
 {
     uint8_t *d = n->data;
+    float at[3] = {fpu_f32(n->frame.pos[0]), fpu_f32(n->frame.pos[1]), fpu_f32(n->frame.pos[2])};
     sphere_drop((Entity *)slot(d, 0));
     if (start) {
         putf(d + 0x450, 10.0f);
@@ -1179,7 +1225,9 @@ void Vehicle_Wreck(Node *n, int start)
         if (n->flags & 0x800) Light_Remove(n, &n->flags);   /* 0x43a400 */
         Node *brake = slot(d, 0x3a4);
         if (brake) brake->flags |= 1;
-        wreck_fx(n, 1, 0);       /* the explosion "x1_carx1" */
+        char name[8];
+        strncpy(name, exe_str(0x4d57e0), 8);   /* x1_carx1 */
+        Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], n);   /* 0x4540d0 */
         int r1 = crt_rand();
         float pitch = fpu_f32(fpu_add(fpu_mul(fpu_mul((double)r1, exe_f32(0x4a5a3c)), exe_f32(0x4a59ac)), exe_f32(0x4a59ac)));
         int r2 = crt_rand();
@@ -1255,11 +1303,53 @@ void Vehicle_Wreck(Node *n, int start)
     case 4: case 5:   /* smoke of one of two kinds */
         wreck_fx(n, 8, crt_rand() & 1);
         return;
-    case 6: case 7: {   /* an explosion near, at three random offsets */
-        for (int j = 0; j < 3; j++) (void)crt_rand();
-        wreck_fx(n, 9, 0);
+    case 6: case 7: {   /* an explosion near: within the radius's scale, a quarter of it upwards */
+        Entity *e = Entity_OfNode(n);
+        float r = e ? e->r : 0;   /* the original reads a null entity */
+        float p[3];
+        static const uint32_t k[3] = {0x4a5a48, 0x4a5a4c, 0x4a5a48};
+        for (int j = 0; j < 3; j++) {
+            int32_t o = (crt_rand() - 0x7fff) >> 1;
+            p[j] = fpu_f32(fpu_add(fpu_mul(fpu_mul((double)o, r), exe_f32(k[j])), at[j]));
+        }
+        char name[8];
+        strncpy(name, exe_str(0x4d57d4), 8);   /* x1_cars1 */
+        Explosion_Spawn((const uint8_t *)name, n, p[0], p[1], p[2], n);   /* 0x4540d0 */
         return;
     }
     default: return;
     }
+}
+
+/* 0x46a3e0 */
+void Splash(float x, float z, float radius, int32_t force, Node *src, Node *except)
+{
+    (void)force;   /* unused: the damage is the explosion's packet */
+    if (!src) return;
+    float ex[3] = {(float)src->frame.pos[0], (float)src->frame.pos[1], (float)src->frame.pos[2]};
+    for (int list = 0; list < 2; list++)   /* 0x46b1e0, 0x46b230: the moving entities, then the static */
+        for (Cell *c = list ? g_coll_static : g_coll_moving, *next; c; c = next) {
+            next = c->next;   /* the original reads it after the damage, which may free the cell */
+            Entity *e = c->value;
+            if (e->node == except) continue;
+            float cc[3];
+            Frame_Points(&cc, (const float(*)[3])e->c, 1, &e->node->frame);   /* 0x4240e0 */
+            float cr = e->r;
+            /* 0x46b190: the spheres' overlap seen from above */
+            double ddx = fpu_sub(cc[0], x), ddz = fpu_sub(cc[2], z), rr = fpu_add(cr, radius);
+            if (fpu_add(fpu_mul(ddx, ddx), fpu_mul(ddz, ddz)) > fpu_mul(rr, rr)) continue;
+            float d[3], dir[3];
+            for (int i = 0; i < 3; i++) d[i] = fpu_f32(fpu_sub(cc[i], ex[i]));
+            double x2 = fpu_mul(d[0], d[0]), y2 = fpu_mul(d[1], d[1]), z2 = fpu_mul(d[2], d[2]);
+            float eps = exe_f32(0x4a64e0);
+            if (!(x2 >= eps) && !(y2 >= eps) && !(z2 >= eps)) {   /* at the centre: straight along z */
+                dir[0] = 0, dir[1] = 0, dir[2] = 1.0f;
+            } else {
+                double k = Fast_InvSqrt(fpu_add(fpu_add(z2, y2), fpu_f32(x2)));
+                for (int i = 0; i < 3; i++) dir[i] = -fpu_f32(fpu_mul(d[i], k));
+            }
+            float v[3] = {0, 0, 0}, at[3];
+            for (int i = 0; i < 3; i++) at[i] = fpu_f32(fpu_mul(cr, -dir[i]));
+            Impact_Damage(e->node, src, v, dir, at);   /* 0x45d7c0 */
+        }
 }

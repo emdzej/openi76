@@ -20,6 +20,8 @@ int g_entity_count;
 Entity *g_user_entity;
 static EntityFn on_add[0x33];   /* 0x54f7b8 */
 static int on_add_count;        /* 0x4d3b54 */
+static EntityFn on_remove[0x38];   /* 0x54f6d8 */
+static int on_remove_count;        /* 0x4d3b58 */
 
 Cell *g_class_nodes, *g_class_cells;
 int g_class_count[2];
@@ -31,11 +33,29 @@ void Entity_Init(void)
     g_user_entity = NULL;
     memset(on_add, 0, sizeof on_add);
     on_add_count = 0;
-    /* the removal callbacks (0x54f6d8) and the ids (0x547a58) are not ported yet */
+    memset(on_remove, 0, sizeof on_remove);
+    on_remove_count = 0;
+    /* the ids (0x547a58) are not ported yet */
     Names_Add(NULL, NULL);   /* 0x492ac0: a new table */
 }
 
 void Entity_OnAdd(EntityFn fn) { on_add[on_add_count++] = fn; }
+void Entity_OnRemove(EntityFn fn) { on_remove[on_remove_count++] = fn; }   /* 0x423d10 */
+
+/* 0x423eb0. Of the removal callbacks only the collision's (0x469cd0) is ported; not yet the user's
+   (0x406d20), the AI's (0x408660), the radar's (0x41fef0), the artillery's (0x428d00), network play's
+   (0x463260) and the level of detail's (0x4949e0) */
+void Entity_Remove(Entity *e)
+{
+    int i = (int)(e - g_entities);
+    if (i < 0 || i >= MAX_ENTITIES) i = 0;
+    for (int k = 0; k < on_remove_count; k++) on_remove[k](e);
+    if (e->node && (e->node->flags & 0x10)) g_user_entity = NULL;   /* 0x42e620: the user's (0x4d3b64) */
+    Node_Unref(e->node);   /* tagged 0x4d3b9c */
+    /* a COLP record (has_a 1) is the original's to free (0x44e3e0); the port's belongs to its vehicle */
+    memset(e, 0, sizeof *e);
+    if (g_entity_count - i == 1) g_entity_count--;
+}
 
 Entity *Entity_Add(Node *n, void *a, const int32_t *b)
 {

@@ -341,6 +341,95 @@ static int colp_sweep(const float p[3], const float v[3], Entity *e, float *t, f
     return 1;
 }
 
+/* 0x479340, 0x479600, 0x4798c0 (axes u, w: x and z, x and y, y and z): the point (pu, pw) within the
+   convex face seen along its third axis. The corners must lie on every side of it; then along the point's
+   row, an edge on each side of it (crossing at it, or along the row and spanning it) is inside, two on one
+   side outside. An edge whose current corner is on the row is passed over. */
+static int face_holds(const CollFace *f, const float (*vs)[3], float pu, float pw, int u, int w)
+{
+    int n = f->n, sides = 0;
+    for (int i = n; i && sides != 0xf; i--) {
+        const float *q = vs[f->refs[i - 1]];
+        sides |= pu < q[u] ? 2 : 1;
+        sides |= pw < q[w] ? 8 : 4;
+    }
+    if (sides != 0xf) return 0;
+    int left = 0, right = 0;
+    const float *c = vs[f->refs[0]];
+    for (int i = n - 1; i >= 0; c = vs[f->refs[i]], i--) {
+        const float *b = vs[f->refs[i]];
+        if (below(b[w], pw) && below(c[w], pw)) continue;
+        if (b[w] > pw && c[w] > pw) continue;
+        if (!(b[w] != pw)) {   /* equal or unordered */
+            if (!(c[w] != pw)) {   /* along the row */
+                if (below(b[u], pu) && below(c[u], pu)) return 0;
+                if (below_eq(b[u], pu) || below_eq(c[u], pu)) return 1;
+                return 0;
+            }
+            continue;
+        }
+        int side;   /* 1 left, 2 right */
+        if (below(b[u], pu) && below(c[u], pu)) side = 1;
+        else if (b[u] > pu && c[u] > pu) side = 2;
+        else {
+            double x = ADD(SUB(MUL(DIV(SUB(c[u], b[u]), SUB(c[w], b[w])), SUB(pw, b[w])), pu), b[u]);
+            if (below(x, 0.0f)) side = 1;
+            else if (bits(F32(x)) <= 0) return 1;   /* through the point */
+            else side = 2;
+        }
+        if (side == 1) {
+            if (left) return 0;
+            if (right) return 1;
+            left = 1;
+        } else {
+            if (right) return 0;
+            if (left) return 1;
+            right = 1;
+        }
+    }
+    return 0;
+}
+
+/* 0x479160: the segment p + v through the face's plane from its front within the frame (the plane facing
+   it, at least 1e-4), the point within the face (0x479290: seen along its normal's largest axis) */
+static int face_sweep(const float p[3], const float v[3], const CollFace *f, const float (*vs)[3], float *t,
+                      float nrm[3])
+{
+    const float *pl = f->plane;
+    double den = ADD(ADD(MUL(pl[1], v[1]), MUL(pl[2], v[2])), MUL(pl[0], v[0]));
+    if (den > exe_f32(0x4a6864)) return 0;
+    float denf = F32(den);
+    double num = ADD(ADD(ADD(MUL(pl[1], p[1]), MUL(pl[2], p[2])), MUL(pl[0], p[0])), f->d);
+    if (below_eq(num, exe_f32(0x4a6860))) return 0;
+    float numf = F32(num), tt = F32(-DIV(numf, denf));
+    if (below(g_clock_dt, tt)) return 0;
+    float q[3];
+    for (int i = 0; i < 3; i++) q[i] = F32(ADD(MUL(v[i], tt), p[i]));
+    float a = fabsf(pl[0]), b = fabsf(pl[1]), c = fabsf(pl[2]);
+    int in;
+    if (b > a) in = b > c ? face_holds(f, vs, q[0], q[2], 0, 2) : face_holds(f, vs, q[0], q[1], 0, 1);
+    else in = a > c ? face_holds(f, vs, q[1], q[2], 1, 2) : face_holds(f, vs, q[0], q[1], 0, 1);
+    if (!in) return 0;
+    *t = tt;
+    memcpy(nrm, pl, 12);
+    return 1;
+}
+
+/* 0x479070: the mesh's earliest face met (not before the start) */
+static int faces_sweep(const float p[3], const float v[3], const CollMesh *m, float *t, float nrm[3])
+{
+    float best = 1e30f, bn[3] = {0}, tt, n[3];
+    for (const CollFace *f = m->faces; f; f = f->next)
+        if (face_sweep(p, v, f, (const float (*)[3])m->verts, &tt, n) && ubits(tt) < 0x80000001u && tt < best) {
+            best = tt;
+            memcpy(bn, n, sizeof bn);
+        }
+    if (bits(best) > 0x7149f2c9) return 0;
+    *t = best;
+    memcpy(nrm, bn, sizeof bn);
+    return 1;
+}
+
 /* 0x4768c0: the node and its siblings, each in its frame inside parent: unless of collision type 0x1000,
    its sphere (radius x 0.75 for 0x5000) grown by r swept first; a hit there counts for types 0x4000 and
    0x5000, and then (unless faces were asked of a 0x3000 mesh, 0x479070) its box grown by r swept in its
@@ -368,8 +457,10 @@ static int tree_sweep(const float p[3], const float v[3], Node *node, const Fram
                     if (!below_eq(best, tt)) best = tt, memcpy(bn, lv3, sizeof bn), bw = node;
                 }
                 if (type == 0x3000 && node->coll && faces) {
-                    static int told;
-                    if (!told++) plat_log("OpenI76: the faces' sweep (0x479070) is not ported yet");
+                    if (faces_sweep(p, v, node->coll, &tt, lv3)) {
+                        hit = 1;
+                        if (!below_eq(best, tt)) best = tt, memcpy(bn, lv3, sizeof bn), bw = node;
+                    }
                 } else {
                     Frame inv;
                     Frame_Invert(&inv, &f);

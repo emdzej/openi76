@@ -36,3 +36,5 @@ void Collide_Refit(Entity *e);
 /* Ground_Height 0x477290: the ground under (px, py, pz): the highest walkable face of the ground entities
    (classes 11-13) within 3 of py, else the highest below py, else the terrain; its normal if asked */
 void Ground_Height(float px, float py, float pz, float *out, float normal[3]);
+/* Collide_Remove 0x469cd0: the entity's removal callback: off the collision and ground lists */
+void Collide_Remove(Entity *e);

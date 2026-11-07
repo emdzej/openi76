@@ -234,7 +234,7 @@ The classes' start pass (0x425920) and the texture animations are in [classes.md
 
 ## A structure's destruction (0x430900)
 
-A structure (classes 2, 3, 0xb and 0xc; class 4 has its own handler, 0x434950, not ported yet) is
+A structure (classes 2, 3, 0xb and 0xc; class 4 has its own handler, below) is
 destroyed when a damage kind's amount is more than the points it has left (the data's first word; see
 weapons.md "A structure's damage"). Then:
 
@@ -295,3 +295,41 @@ seeds from the clock (crt.h).
 Checked: `diff_objects --call raze` on t01, t05, s04, s07, t12, s01 and m01, with the effects and sounds
 stubbed. For each vehicle, the nearest intact structure takes 100000 of the first kind. It compares the
 result, the rand seed, the data, the entity's sphere, every piece of debris and the whole tree.
+
+## Class 4's damage (0x434950)
+
+Class 4 objects (signs, posts, and the like) have no points to wear down. Any packet with the second or
+fourth kind (mask 0xa) knocks the object's root away:
+1. The root's points go to 0.
+2. Three rands give a velocity: x and z are `(r / 32767 - 0.5) × 10`, y is `r / 32767 × 20`.
+3. The root is thrown with it, spinning (0x45b760, not ported yet).
+4. Its entity is removed (0x423eb0).
+
+Network play's message (0x465520) is skipped. The handler returns 1.
+
+## An entity's removal (0x423eb0)
+
+The removal callbacks run first; they are registered with 0x423d10, up to 0x38 of them at 0x54f6d8. Then:
+- the user's entity (0x4d3b64) is cleared when the node is the user's;
+- the node loses the entity's reference;
+- a COLP record (+0x14 = 1) is freed;
+- the entry is cleared, and the count drops when it was the last.
+
+**The collision's callback (0x469cd0).** An entity with a collision kind leaves its list: the moving one
+for classes 1, 7 and 9, else the static one. Its meshes go with it (0x46b540). When the lists' shared
+cursor (0x57716c) is on its cell, the cursor moves on first. Roads and bridges (classes 11-13) also leave
+the ground list (0x477240), their walkable faces freed (0x4775c0).
+
+The other callbacks are not ported yet:
+
+| Callback | Registered by | What it does |
+|---|---|---|
+| 0x406d20 | WinMain | a camera's target refetched |
+| 0x408660 | the AI | its targets cleared |
+| 0x41fef0 | 0x41fbc0 | the radar's list |
+| 0x428d00 | | the artillery's list |
+| 0x463260 | | network play's list |
+| 0x4949e0 | 0x494a10 | the root's mesh released |
+
+Checked: `diff_objects --call wreck` on s04. There an explosion's splash knocks a class 4 sign (swsem_1)
+away, and later splashes no longer find it.

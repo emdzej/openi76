@@ -7,6 +7,11 @@
 #include "lod.h"
 #include "objects.h"
 #include "tex.h"
+#include "clock.h"
+#include "damage.h"
+#include "texanim.h"
+#include "render/fpu.h"
+#include "render/light.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -191,4 +196,99 @@ void Muzzles_Init(void)
         g_muzzles = m->next;
         free(m);
     }
+}
+
+Effect *Effect_Find(const uint8_t name[8])
+{
+    uint32_t n0, n1, k[2];
+    memcpy(&n0, name, 4);
+    memcpy(&n1, name + 4, 4);
+    key_of(k, n0, n1);
+    for (Effect *e = g_effects[bucket(k)]; e; e = e->next)
+        if (e->key[1] == k[1] && e->key[0] == k[0]) return e;
+    return NULL;
+}
+
+static Node *g_explosions;   /* 0x4db3e8: the explosions' root, an entity of its own */
+
+/* 0x454510: a done explosion (its textures' last frame) off the root, its light out, and onto its
+   effect's list for reuse */
+static void explosion_end(Node *n)
+{
+    if (!n) return;
+    Light_Remove(n, &n->flags);   /* 0x43a400 */
+    Node_Detach(n);
+    uint8_t *d = n->data;
+    if (!d) return;
+    Effect *e = Effect_Find(d);
+    if (!e) return;
+    Node **on = (Node **)Data_Ptr(d, 0x10);
+    if (*on) {
+        Node_Unref(*on);
+        *on = NULL;
+    }
+    if (e->free) e->free->prev = n;
+    n->prev = NULL;
+    n->next = e->free;
+    e->free = n;
+}
+
+Node *Explosion_Spawn(const uint8_t name[8], Node *owner, float x, float y, float z, Node *on)
+{
+    uint32_t n0, n1;
+    memcpy(&n0, name, 4);
+    memcpy(&n1, name + 4, 4);
+    if (!n0 && !n1) return NULL;
+    Effect *e = Effect_Find(name);
+    if (!e) return NULL;
+    Node *n = e->free;
+    if (!n) {
+        n = Node_Create(NULL);   /* 0x41f320, tagged "explsn" (0x4db410) */
+        memcpy(n->name, e->key, 8);
+        n->flags = 0x40;
+        n->geom = NULL;
+        Lod_Copy(e->tree, n);
+        Class_Set(n, 0x34);
+        memcpy(n->data, e->key, 8);
+        for (int lod = 0; lod < 2; lod++) {
+            const char *t = Node_FirstTexture(n, lod);
+            if (t && *t) Tex_Bind((uintptr_t)n, t, t);
+        }
+    } else {
+        e->free = n->next;
+        n->next = NULL;
+        n->prev = NULL;
+        if (e->free) e->free->prev = NULL;
+    }
+    uint8_t *d = n->data;
+    memcpy(&n->frame, exe_data(0x4db298, 0x40), 0x40);   /* the identity */
+    n->frame.pos[0] = x;
+    n->frame.pos[1] = y;
+    n->frame.pos[2] = z;
+    float life, until;
+    memcpy(&life, &e->w[0], 4);
+    until = fpu_f32(fpu_add(g_clock_time, life));
+    memcpy(d + 8, &until, 4);
+    *Data_Ptr(d, 0xc) = owner;
+    *Data_Ptr(d, 0x10) = on;
+    Node_Ref(on);   /* 0x41f440, tagged "explsn" */
+    if (!g_explosions) {
+        g_explosions = Node_Create(NULL);
+        g_explosions->data = NULL;
+        g_explosions->flags = 0x100;
+        Entity_Add(g_explosions, NULL, NULL);
+    }
+    Node_Attach(n, g_explosions);
+    Light_Add(n, &n->flags, n->frame.m, 0, 20.0f, 0, NULL, NULL);   /* 0x43a1f0 */
+    for (int lod = 0; lod < 2; lod++) {
+        const char *t = Node_FirstTexture(n, lod);
+        if (t && *t) TexAnim_Once(n, t, 0.1f, 0, e->w[1], explosion_end);
+    }
+    float dmg, radius;
+    memcpy(&dmg, &e->w[2], 4);
+    memcpy(&radius, &e->w[3], 4);
+    if ((uint32_t)e->w[2] & 0x7fffffff) Splash(x, z, radius, (int32_t)(int64_t)dmg, n, NULL);   /* 0x46a3e0 */
+    Node **o = (Node **)Data_Ptr(d, 0x10);
+    if (*o) *o = Node_Live(*o);   /* tagged "explsn" */
+    return n;
 }

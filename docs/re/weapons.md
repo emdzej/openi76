@@ -483,3 +483,51 @@ dropping or clearing anything.
 Checked in game: on s01 the machine gun's rounds (kind 2) are live and drawn. From the pilot's camera they
 lie along the view axis, so they show as one streak down the road. The harness stubs 0x46c220 on the
 original's side; the port's dumps make no tracers.
+
+## The hit (0x45c950)
+
+When a gun's shot hits (0x4609d0), it explodes 2 m back along its path. The ordnance's four effects
+(+0x68, 0x18 bytes each: an xdf name and a sound) are picked by what was hit:
+
+| What was hit | Class | Effect |
+|---|---|---|
+| the ground | -1 | first; not on a node |
+| a vehicle | 1, 4, 8, 9 | second |
+| a structure | 2, 0xc | third |
+| a building's part | 3, 0xb | fourth |
+| anything else | | none |
+
+The explosion (0x4540d0) gets the shot's owner and sits on the node hit. Its sound (0x468640) is not
+ported yet. An ordnance not in the table makes the original read before it; the port does nothing.
+
+**The faces' sweep (0x479070).** A shot asks the tree sweep (0x4768c0) for faces. A node of collision
+type 0x3000 with a mesh is then swept against the mesh's faces instead of its box. This is how bullets
+hit roads, bridges and overpasses.
+1. **The plane (0x479160).** The face must face the segment (n·v at most -1e-4). The start must be in
+   front (n·p + d above 0). The time, -(n·p + d) / (n·v), must fall within the frame.
+2. **The point (0x479290).** It is projected onto the two axes that drop the normal's largest
+   component (x-z, x-y, y-z: 0x479340, 0x479600, 0x4798c0).
+3. **The convex test.** The corners must lie on every side of the point. Then, along the point's row,
+   finding an edge on each side means inside; two edges on one side means outside.
+   - An edge through the point, or along the row and spanning it, is inside.
+   - An edge whose current corner lies on the row is skipped.
+4. **The result.** The earliest face hit, not before the start, gives the time and the face's plane as
+   the normal.
+
+Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12 and s01, with the explosions, their
+timers, the splash and the faces on both sides (only the hit's sound stubbed).
+
+## The rockets' flight (0x45f8b0, type 2)
+
+It is the guns' flight (0x4609d0) with these changes:
+- **The easing.** The speed is eased by half the step: `v += step × (speed - v) × 0.5`. It snaps to the
+  speed when half the step is negative or above 0.95, or the gap is under 0.005.
+- **The arithmetic.** The rotations into and out of the frame sum their terms in their own orders.
+- **The frame.** In flight the shot is always turned along its path (Frame_FromDir 0x4522e0).
+- **A hit** turns it the same way unless the step was under 0.01 m. The explosion goes off at the hit
+  point, not 2 m back.
+- **The trail.** After the flight the trail's step (0x46f170) runs; it is not ported yet. There is no
+  tracer.
+
+The flights of types 3-5, 7, 8 (guided and dropped), 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not
+ported yet.
