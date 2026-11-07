@@ -769,6 +769,26 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 22: {   /* the wreck: its start, then forty steps; the flags, the timer, every part's flags, first
+                        0x18 bytes and count of children */
+            for (int j = 0; j < 41; j++) {
+                Vehicle_Wreck(n, j == 0);
+                uint8_t b[8 + 20 * 0x20];
+                memset(b, 0, sizeof b);
+                memcpy(b, n->data + 0x450, 8);
+                for (int i = 0; i < 20; i++) {
+                    Node *pn = *Data_Ptr(n->data, 0x3a8 + 4 * i);
+                    if (!pn) continue;
+                    uint32_t k = 0;
+                    for (Node *ch = pn->child; ch; ch = ch->next) k++;
+                    memcpy(b + 8 + i * 0x20, &pn->flags, 4);
+                    memcpy(b + 8 + i * 0x20 + 4, &k, 4);
+                    if (pn->data) memcpy(b + 8 + i * 0x20 + 8, pn->data, 0x18);
+                }
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

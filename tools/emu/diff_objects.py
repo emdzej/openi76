@@ -443,8 +443,27 @@ def call_impact(exe, n, fpcw):
     hits(exe, n, fpcw, True)
 
 
+def call_wreck(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    for j in range(41):
+        exe.call(0x42C580, n, int(j == 0), fpcw=fpcw)
+        b = exe.read(d + 0x450, 8)
+        for i in range(20):
+            p = struct.unpack("<I", exe.read(d + 0x3A8 + 4 * i, 4))[0]
+            if not p:
+                b += bytes(0x20)
+                continue
+            k, c = 0, struct.unpack("<I", exe.read(p + 0x64, 4))[0]
+            while c:
+                k += 1
+                c = struct.unpack("<I", exe.read(c + 0x60, 4))[0]
+            q = struct.unpack("<I", exe.read(p + 0x70, 4))[0]
+            b += exe.read(p + 0x10, 4) + struct.pack("<I", k) + (exe.read(q, 0x18) if q else bytes(0x18))
+        CALL_OUT.append(b.hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -566,10 +585,11 @@ def original():
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
         for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x40FC80, 5), (0x46FDB0, 1),
-                     (0x488950, 1), (0x455370, 1), (0x476440, 2), (0x407010, 2), (0x428890, 0)):
+                     (0x488950, 1), (0x455370, 1), (0x476440, 2), (0x407010, 2), (0x428890, 0),
+                     # the wreck's (0x42c580): explosions, the sound's pitch, debris thrown, fires
+                     (0x4540D0, 7), (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):
             exe.stub(f, lambda *a: 0, k)
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
-        exe.stub(0x42C580, lambda *a: 0, 2)   # the wreck
         exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
         for f, k in ((0x476580, 1), (0x462D60, 1), (0x46E220, 1), (0x4763B0, 1), (0x476480, 1), (0x469CD0, 1),
                      (0x47DE00, 1), (0x42D800, 1)):

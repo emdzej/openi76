@@ -556,7 +556,6 @@
 00476510	Engine_StartTime	damage	high	the user's engine start sample's length (esnp1-3.wav); ported
 004764b0	Engine_StartSample	damage	high	the start sample's entry by the engine's state and kind; ported
 00476580	Engine_IdleSound	sound	med	the idle sample after the start
-0042c580	Vehicle_Wreck	damage	med	the wreck's parts and fire (2541 bytes)
 00467260	Sound_Play	sound	med	a sample by name; nonzero when it plays
 004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00407370	Net_Host	net	med	returns 0x4a8760
@@ -602,3 +601,5 @@
 00433240	Cockpit_Knock	camera	med	the user's knock on the eye node by an impact
 00452cd0	Screen_Shake	camera	med	in the cockpit: the shake's parameters 0x4db32c-0x4db338
 00468a70	Hud_DamageArrow	hud	low	a free damage-direction record (or NULL)
+0042c580	Vehicle_Wreck	damage	high	the wreck: its start (lights out, worst look, parts' blows) and each step's random effect
+004286c0	Entity_DropSphere	entity	high	the entity's cached sphere: +0x68 = -1, +0x70 = 0

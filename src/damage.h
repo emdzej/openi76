@@ -1,7 +1,7 @@
 /* A vehicle's state from step to step (0x42b830-0x42d800, docs/re/vehicles.md "The state"): the engine
    started and stopped, the lights, and the wreck's timer; the damage on sides and parts, the health,
-   rough ground's wear, a vehicle's damage and death (0x429eb0) and an impact's (0x45d7c0). The wreck
-   (0x42c580) and the effects (sparks, smoke, the cockpit's knock) are not ported yet. */
+   rough ground's wear, a vehicle's damage and death (0x429eb0) and an impact's (0x45d7c0). The effects
+   (explosions, debris, sparks, smoke, the cockpit's knock) are not ported yet. */
 #pragma once
 #include "scene.h"
 
@@ -75,3 +75,8 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at);
    (k 6.67e-5) else n's (1e-4), through Class_Damage at the point at. 1 while n lives on. A projectile's
    packet (classes 0x33, 0x34) is not ported yet */
 int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const float *at);
+/* Vehicle_Wreck 0x42c580: a wreck's step. With start: its ten seconds (0x80008000), the lights out, the
+   brake lamps hidden, every part at its worst look and the body at texture frame 3, and (not the user's)
+   every part a blow of (129..256) / 256 of its points. Then one step in sixteen each: a wheel (0-4) or a
+   body piece (10-15) thrown off and hidden, fires, smoke or an explosion near */
+void Vehicle_Wreck(Node *n, int start);

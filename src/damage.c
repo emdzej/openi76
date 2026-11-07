@@ -116,18 +116,17 @@ float Engine_StartTime(Node *n)
     return exe_f32(entry + 0x10);
 }
 
-/* not ported yet: 0x42c580 the wreck (its parts and fire), 0x4683c0 a vehicle's sound by number, 0x476580
+/* not ported yet: 0x4683c0 a vehicle's sound by number, 0x476580
    the engine's idle sound, 0x462d60 network play's, 0x46e220 a node's fire put out, 0x4763b0 and 0x476480
    its sounds stopped, 0x469cd0 the entity's collisions dropped, 0x47de00 its textures released, 0x42d800
    each part's */
-static void wreck(Node *n, int a) { (void)n, (void)a; }
 static void sound(int id, Node *n) { (void)id, (void)n; }
 
 void Vehicle_State(Node *n, float dt)
 {
     uint8_t *d = n->data;
     uint32_t f = (uint32_t)rd32(d + 0x454);
-    if ((f & 0x8000) && !(f & 0x4000)) wreck(n, 0);
+    if ((f & 0x8000) && !(f & 0x4000)) Vehicle_Wreck(n, 0);
     if (f & 0x20) {
         if (rd32(d + 0x454) & 1) {
             sound(2, n);
@@ -490,6 +489,15 @@ double Vehicle_Whole(uint8_t *d)
 }
 
 /* 0x482f20: the state on the node and every node under it (Lod_SetState); true if any changed */
+/* 0x4286c0: the entity's cached sphere (+0x68 -1, +0x70 0) */
+static void sphere_drop(Entity *e)
+{
+    if (e) {
+        e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
+        e->rest[(0x70 - 0x34) / 4] = 0;
+    }
+}
+
 static bool state_tree(Node *n, int state)
 {
     if (!n) return false;
@@ -531,14 +539,7 @@ void Damage_Look(uint8_t *d, uint32_t part, uint32_t level)
             tyre_blow(slot(d, 0x3a8 + t * 4));
         }
     }
-    if (tree && state_tree(tree, state)) {
-        /* 0x4286c0: the entity's cached sphere (+0x68 -1, +0x70 0) */
-        Entity *e = (Entity *)slot(d, 0);
-        if (e) {
-            e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
-            e->rest[(0x70 - 0x34) / 4] = 0;
-        }
-    }
+    if (tree && state_tree(tree, state)) sphere_drop((Entity *)slot(d, 0));
 }
 
 int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float health)
@@ -839,7 +840,7 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
         }
     } else
-        wreck(n, 1);   /* 0x42c580 */
+        Vehicle_Wreck(n, 1);
     /* a kill by the user scores in the melee (0x4072e0) while 0x4a8760 is set (0x407030); never in a
        mission */
     return 1;
@@ -887,4 +888,122 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
     if (live) Node_Unref(live);
     /* with a source, the kill's credit and messages (0x40fc80 with the kind) are not ported yet */
     return live != NULL;
+}
+
+/* the wreck's effects, not ported yet: the explosions (0x4540d0 "x1_carx1" at the vehicle, "x1_cars1"
+   near it), the sound's pitch (0x476170), a wheel or a body piece thrown off (0x45b760; a piece as a
+   "v_chnk" object taking the part's class 0x3f children), the fires on the children (0x45b3f0) and the
+   smoke (0x45c780, 0x4d538c or 0x4d5394), the 0x46fdb0 list */
+static void wreck_fx(Node *n, int what, int a) { (void)n, (void)what, (void)a; }
+
+/* the next part from a random start among count slots from first that is there and not hidden (bit 1);
+   -1 after a full turn */
+static int wreck_part(uint8_t *d, int first, int count)
+{
+    int start = crt_rand() % count, i = start;
+    for (;;) {
+        Node *p = slot(d, 0x3a8 + (uint32_t)(first + i) * 4);
+        if (p && !(p->flags & 1)) return first + i;
+        i = (i + 1) % count;
+        if (i == start) return -1;
+    }
+}
+
+void Vehicle_Wreck(Node *n, int start)
+{
+    uint8_t *d = n->data;
+    sphere_drop((Entity *)slot(d, 0));
+    if (start) {
+        putf(d + 0x450, 10.0f);
+        put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x80008000u));
+        wreck_fx(n, 0, 0);       /* 0x46fdb0 */
+        smoke_stop(d);           /* 0x46e220; the bit 0x100 stays */
+        put32(d + 0x454, rd32(d + 0x454) & ~0x40);
+        Vehicle_Lights(n, 0);
+        if (n->flags & 0x800) Light_Remove(n, &n->flags);   /* 0x43a400 */
+        Node *brake = slot(d, 0x3a4);
+        if (brake) brake->flags |= 1;
+        wreck_fx(n, 1, 0);       /* the explosion "x1_carx1" */
+        int r1 = crt_rand();
+        float pitch = fpu_f32(fpu_add(fpu_mul(fpu_mul((double)r1, exe_f32(0x4a5a3c)), exe_f32(0x4a59ac)), exe_f32(0x4a59ac)));
+        int r2 = crt_rand();
+        float k = fpu_f32(fpu_add(fpu_mul((double)r2, exe_f32(0x4a5a3c)), 1.0f));
+        (void)pitch, (void)k;
+        wreck_fx(n, 2, 0);       /* 0x476170 with both */
+        /* every part at its worst look; the body's textures at frame 3 */
+        for (uint32_t i = 0; i < 11; i++) {
+            Damage_Look(d, i, 4);
+            if (i < 5) {
+                Node *part = slot(d, 0x408 + exe_u32(0x4d5428 + 4 * i) * 4);
+                int count = (int32_t)exe_u32(0x4d5458 + 4 * i);
+                for (int j = 0; j < count; j++)
+                    Tex_SetFrame((uintptr_t)part, exe_str(0x4d5470 + (i * 10 + (uint32_t)j) * 13), 0, 3, true);
+            }
+        }
+        Node_SetFlags(n, 0x200);
+        sound(2, n);
+        sound(7, n);
+        if (g_user_entity && g_user_entity->node == n) {
+            g_input_menu = 0;   /* 0x480680; the death camera (0x407010 with 0xfefe) and the HUD (0x428890) */
+            int32_t eight = 8;
+            memcpy(INPUT_AT(0x4def9c), &eight, 4);
+        } else {
+            /* outside network play every part takes a blow of its points times (129 + rand & 127) / 256 */
+            for (uint32_t i = 0; i < 20; i++) {
+                Node *p = slot(d, 0x3a8 + i * 4);
+                if (!p) continue;
+                uint8_t pk[0x1c];
+                memset(pk, 0, sizeof pk);
+                pk[4] = 2;
+                int32_t pts = part_points(p, 0);
+                put32(pk + 0xc, (((crt_rand() & 0x7f) + 0x81) * pts) >> 8);
+                Class_Damage(p, pk, NULL);
+            }
+        }
+        if (!(n->flags & 0x10)) wreck_fx(n, 3, 0);   /* the AI's death, 0x488950 */
+        wreck_fx(n, 4, 0);       /* the guns, 0x455370 */
+        AI_Rethink();            /* 0x408bf0 */
+    }
+    /* one of sixteen each step */
+    switch (crt_rand() & 0xf) {
+    case 0: {   /* a wheel (0-4) thrown off */
+        int i = wreck_part(d, 0, 5);
+        if (i < 0) return;
+        wreck_fx(n, 5, i);
+        slot(d, 0x3a8 + (uint32_t)i * 4)->flags |= 1;
+        return;
+    }
+    case 1: {   /* a body piece (10-15) as a "v_chnk" node at the part's place, with its 0x3f children */
+        int i = wreck_part(d, 10, 6);
+        if (i < 0) return;
+        Node *part = slot(d, 0x3a8 + (uint32_t)i * 4);
+        Node *chunk = Node_Create(NULL);   /* 0x41f320, tagged "v_chnk" (0x4d57cc) */
+        Node_FrameIn(&chunk->frame, part, NULL);
+        chunk->flags = 0;
+        chunk->geom = NULL;
+        for (Node *c = part->child, *next; c; c = next) {
+            next = c->next;
+            if (c->cls == 0x3f) {
+                Node_Detach(c);
+                Node_Attach(c, chunk);
+            }
+        }
+        wreck_fx(chunk, 6, i);   /* thrown off along the part's direction x 15 */
+        part->flags |= 1;
+        return;
+    }
+    case 2: case 3:   /* fire on each child at one in two */
+        for (Node *c = n->child; c; c = c->next)
+            if (crt_rand() & 1) wreck_fx(n, 7, 0);
+        return;
+    case 4: case 5:   /* smoke of one of two kinds */
+        wreck_fx(n, 8, crt_rand() & 1);
+        return;
+    case 6: case 7: {   /* an explosion near, at three random offsets */
+        for (int j = 0; j < 3; j++) (void)crt_rand();
+        wreck_fx(n, 9, 0);
+        return;
+    }
+    default: return;
+    }
 }

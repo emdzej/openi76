@@ -570,7 +570,7 @@ not ported. Then:
   - `AI_Rethink` 0x408bf0, the sound 2 (0x4683c0) and `Node_SetFlags(n, 0x200)`;
   - for the user's vehicle: only the menu keys (0x480680), the death camera (0x407010 with 0xfefe), the HUD
     (0x428890) and 0x4def9c = 8.
-- Otherwise the wreck, `Vehicle_Wreck` 0x42c580 (not ported yet).
+- Otherwise the wreck starts: `Vehicle_Wreck(n, 1)` 0x42c580.
 - A kill by the user scores (0x4072e0: 0x4ed940 the kills, 0x4ed93c the points). This only happens in the
   melee mode, while 0x4a8760 is set (0x407030); never in a mission.
 
@@ -600,3 +600,43 @@ Checked: `diff_objects.py --call hit` (twelve packets at points round each vehic
 both deaths reached) and `--call impact` (twelve ground impacts) are identical on t01, s04, t15, s01, a01,
 t10 and t05, and upside down on s04. The physics, the frame, the state, the parts and the wear stay
 identical on t01, s04 and t15.
+
+## The wreck (0x42c580)
+
+`Vehicle_Wreck` 0x42c580 (`src/damage.c`) runs once at the death with start = 1. After that,
+`Vehicle_State` runs it every sub-step with 0, while +0x454 has 0x8000 without 0x4000. First it drops the
+entity's cached sphere (0x4286c0).
+
+**The start:**
+
+1. The timer +0x450 becomes 10 and the flags get 0x80008000. Then 0x46fdb0 runs (a list at 0x4dd904) and
+   the smoke stops (0x46e220). Bit 0x100 stays set.
+2. The lights go out: bit 0x40 is cleared, then `Vehicle_Lights(n, 0)`, and `Light_Remove` when the node
+   has a light (0x800). The brake lamps' node (+0x3a4) is hidden (flag 1).
+3. The explosion "x1_carx1" goes off at the vehicle (0x4540d0). Two rands give the sound's pitch (0x476170):
+   `r × 2⁻¹⁵ × 2 + 2` and `r × 2⁻¹⁵ + 1`.
+4. Parts 0-10 get `Damage_Look` at level 4. The five body sides get texture frame 3 (as in the damage).
+5. `Node_SetFlags(n, 0x200)`, then the sounds 2 and 7.
+6. **For the user's vehicle:** only the menu keys, the death camera (0x407010 with 0xfefe), the HUD
+   (0x428890) and 0x4def9c = 8.
+   **For the others, outside network play:** each of the 20 parts takes a packet of mask 2. Its +0xc is
+   `((rand & 0x7f) + 0x81) × points >> 8`, the points as in `Damage_Parts`, through `Class_Damage`.
+7. Unless it is the user's: the AI's death (0x488950). Then the guns (0x455370) and `AI_Rethink`.
+
+**Each step**, by `rand & 0xf`:
+
+| Case | Effect |
+|---|---|
+| 0 | A wheel thrown off. From `rand % 5`, the next of parts 0-4 that is there and not hidden is thrown (0x45b760), and then hidden. Part 5 is never one. |
+| 1 | A body piece. The same over parts 10-15 (`rand % 6`). A node tagged "v_chnk" (0x41f320, no parent) takes the part's world frame, flags 0 and no mesh. The part's class 0x3f children move into it. It is thrown along the part's direction × 15, and the part is hidden. |
+| 2, 3 | Fire (0x45b3f0) on each child of the vehicle, at one rand in two. |
+| 4, 5 | Smoke (0x45c780) at the vehicle, 15 up: 0x4d5394 on an odd rand, else 0x4d538c. |
+| 6, 7 | An explosion "x1_cars1" near: three rands, `(r - 0x7fff) >> 1`, scaled by the entity's +0x10 and 6.1e-5 (y 1.5e-5). |
+| 8-15 | Nothing. |
+
+The effects themselves (explosions, the thrown debris, fires, smoke, sounds) are not ported yet. Every
+rand is taken, so the sequence stays the original's.
+
+Checked: `diff_objects.py --call wreck` (the start, then forty steps per vehicle: the timer, the flags,
+every part's flags, children and state) is identical on t01, s04, t15, s01, a01, t10 and t05, and upside
+down on s04.
