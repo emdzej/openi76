@@ -65,6 +65,8 @@ void Light_Add(const void *node, uint32_t *node_flags, const float *frame, int t
                float angle, const float *dir, const float *pos);
 /* Light_Remove 0x43a400: the node's light, if it has one (the flag 0x800 cleared) */
 void Light_Remove(const void *node, uint32_t *node_flags);
+/* Light_SetOn 0x43a470: the node's light's flag 8 set when on, cleared when off */
+void Light_SetOn(const void *node, int on);
 /* Light_ShadowDir 0x43b050: the direction a shadow is cast from, for the point c in node's frame: the sun's,
    or at night towards the strongest light in view (not node's own) when it is brighter than 1.5 times the
    environment's strength */

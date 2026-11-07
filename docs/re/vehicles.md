@@ -322,3 +322,42 @@ The vehicle data's fields the step uses:
 | +0x110, +0x114, +0x118, +0x11c | 1 / (2 × wheelbase), the track, the wheelbase, the rear axle's z |
 | +0x454 | the flags: 1 the engine, 2 sliding, 4 in the air, 0x20 dying, 0x200 landed, 0x1000, 0x2000 losing grip, 0x10000 the user's or Taurus's |
 | +0x460 | the ground's normal |
+
+## The state (0x42b830)
+
+`Vehicle_State` 0x42b830 (`src/damage.c`) runs before each physics sub-step (and once a frame for a far
+vehicle), with the sub-step's time. It works from the flags +0x454 as they are on entry:
+
+- With 0x8000 (dying) but not 0x4000, the wreck begins (0x42c580, not ported).
+- Dead (0x20): a running engine stops (bit 1 cleared, sound 2), and the copy loses bits 1 and 8.
+- Otherwise:
+  - The lights' key (+0x100) goes to `Vehicle_Lights` 0x42d660 and is cleared.
+  - The engine's key (+0xec) stops a running engine (by the entry copy's bit 1). A stopped one, when
+    neither bit 1 nor 8 is set now, starts: +0x450 takes `Engine_StartTime` 0x476510 and bits 0x80000008
+    are set. The key is cleared.
+- With the copy's bit 0x80000000 the timer +0x450 runs down by the time. At or below 0 (by its bits):
+  - It becomes 0 and bit 0x80000000 clears.
+  - Bits 0x8c08 equal to 8: the engine runs (bit 1, sounds 0xf and 1, the idle 0x476580).
+  - Equal to 0x8000: the wreck's time is up. Network play leaves here without writing the flags. Otherwise
+    a vehicle not the user's has its fire put out and its lights off, and its entity's tree is hidden
+    (flag 1, `Node_SetFlags` 0x42e2d0).
+  - The copy loses 0x8c08 and is written back. A change made to +0x454 meanwhile is lost then: a lights
+    toggle during the start's countdown does not last.
+
+The start time is the length of the user's start sample. The sample is `esnp1.wav` when the engine's
++0 / +4 is above 0.66, `esnp2.wav` above 0.33 (by the float's bits), else `esnp3.wav`, in entries of
+0x14 bytes (a name and its length) at 0x4ddb40, 0x4ddbd0 and 0x4ddc60, by the engine's kind +0x28.
+Another vehicle, or a sample that does not play, starts at once. The port has no sound yet and takes it
+as played.
+
+`Vehicle_Lights` 0x42d660 flips bit 0x40 when asked:
+
+- The headlamps' node (+0x3a0, with its subtree) shows, and the beam (+0x440) is drawn, only while the
+  lights are on and both front lamps are at least half whole. A lamp's health is +0x178 / +0x158 and
+  +0x18c / +0x168 (cur / max, or cur · 0.01 without a maximum).
+- The brake lamps' node (+0x3a4) is drawn only while the throttle is below -0.2 (unsigned by its bits
+  against 0xbe4ccccd) and both rear lamps (+0x184 / +0x164, +0x198 / +0x174) are half whole.
+- With the toggle, the node's light source follows (`Light_SetOn` 0x43a470: flag 8).
+
+Checked: `diff_objects.py --call state` (ten sub-steps of the engine's key, the lights' key and the
+brake on every vehicle) is identical to the original on t01 and s04.

@@ -1,5 +1,6 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
+#include "damage.h"
 #include "clock.h"
 #include "crt.h"
 #include "effects.h"
@@ -333,8 +334,6 @@ static void start_class9(Node *n)
 
 static void no_start(Node *n) { (void)n; }
 
-/* 0x42b830: the damage's per-step part (the parts' state, fire, the death): not ported yet */
-static void damage_step(Node *n, float dt) { (void)n, (void)dt; }
 /* 0x475ee0: the tyres' sounds and a flat's damage ("tflat.wav", "fdmg1.wav"): not ported yet */
 static void tyre_step(Node *n, uint32_t flags, int32_t tclass) { (void)n, (void)flags, (void)tclass; }
 
@@ -347,7 +346,7 @@ void Vehicle_Frame(Node *n)
     float *t = (float *)(d + 0x444);
     if (View_Distance(n, 25.0f) == 2 || (n->flags & 0x20)) {
         float dt = g_clock_dt;   /* 0x450e50 */
-        damage_step(n, dt);
+        Vehicle_State(n, dt);
         if (!(n->flags & 0x20)) Vehicle_FarStep(n, dt);
         Timer_Init(t, 0.05f);   /* 0x3d4ccccd */
     } else {
@@ -356,7 +355,7 @@ void Vehicle_Frame(Node *n)
         for (;;) {
             float s = Timer_Next(t);
             if (!(s > 0)) break;
-            damage_step(n, s);
+            Vehicle_State(n, s);
             Vehicle_Physics(n, s);
             if (n->state) return;
         }

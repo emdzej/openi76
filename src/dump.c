@@ -3,6 +3,7 @@
 #include "clock.h"
 #include "classes.h"
 #include "collide.h"
+#include "damage.h"
 #include "crt.h"
 #include "ai.h"
 #include "effects.h"
@@ -646,6 +647,26 @@ int Dump_CallVehicles(int which, int upside)
                 Cockpit_Sway(&f, n);
                 f.pad = 0;
                 call_line(&f, sizeof f);
+            }
+            break;
+        }
+        case 16: {   /* the state over ten sub-steps of 0.05: the engine's key at 0 and 1 (stop, start), the
+                        lights' key at 3 and 6, the throttle at -0.5 from 7 */
+            for (int j = 0; j < 10; j++) {
+                int32_t one = 1;
+                float thr = j >= 7 ? -0.5f : 0.3f;
+                if (j <= 1) memcpy(n->data + 0xec, &one, 4);
+                if (j == 3 || j == 6) memcpy(n->data + 0x100, &one, 4);
+                memcpy(n->data + 0xe4, &thr, 4);
+                Vehicle_State(n, 0.05f);
+                uint32_t b[5];
+                memcpy(b, n->data + 0x450, 8);
+                const uint32_t parts[3] = {0x3a0, 0x3a4, 0x440};
+                for (int k = 0; k < 3; k++) {
+                    Node *p = *Data_Ptr(n->data, parts[k]);
+                    b[2 + k] = p ? p->flags : 0xffffffffu;
+                }
+                call_line(b, sizeof b);
             }
             break;
         }

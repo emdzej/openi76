@@ -99,6 +99,15 @@ void Light_Remove(const void *node, uint32_t *node_flags)
         }
 }
 
+void Light_SetOn(const void *node, int on)
+{
+    for (int i = 0; i < g_light_count; i++)
+        if (g_lights[i].node == node) {
+            g_lights[i].flags = (g_lights[i].flags & ~8u) | (on ? 8u : 0);
+            return;
+        }
+}
+
 #define ADD fpu_add
 #define SUB fpu_sub
 #define MUL fpu_mul

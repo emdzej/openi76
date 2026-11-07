@@ -334,8 +334,24 @@ def call_sway(exe, n, fpcw):
         CALL_OUT.append(bytes(f).hex())
 
 
+def call_state(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    for j in range(10):
+        if j <= 1:
+            exe.write(d + 0xEC, struct.pack("<i", 1))
+        if j in (3, 6):
+            exe.write(d + 0x100, struct.pack("<i", 1))
+        exe.write(d + 0xE4, struct.pack("<f", -0.5 if j >= 7 else 0.3))
+        exe.call(0x42B830, n, struct.unpack("<I", struct.pack("<f", 0.05))[0], fpcw=fpcw)
+        out = exe.read(d + 0x450, 8)
+        for o in (0x3A0, 0x3A4, 0x440):
+            p = struct.unpack("<I", exe.read(d + o, 4))[0]
+            out += exe.read(p + 0x10, 4) if p else b"\xff\xff\xff\xff"
+        CALL_OUT.append(out.hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -458,7 +474,12 @@ def original():
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         exe.stub(0x45D7C0, lambda *a: 0, 3)   # an impact's damage
         exe.stub(0x42A5D0, lambda *a: 0, 2)   # the terrain's wear
-        exe.stub(0x42B830, lambda *a: 0, 2)   # the damage's step
+        # the state's step (0x42b830) runs; its callees not ported yet are stubbed
+        exe.stub(0x42C580, lambda *a: 0, 2)   # the wreck
+        exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
+        for f, k in ((0x476580, 1), (0x462D60, 1), (0x46E220, 1), (0x4763B0, 1), (0x476480, 1), (0x469CD0, 1),
+                     (0x47DE00, 1), (0x42D800, 1)):
+            exe.stub(f, lambda *a: 0, k)
         exe.stub(0x475EE0, lambda *a: 0, 3)   # the tyres' sounds and flats
         exe.stub_import("GetTickCount", lambda *a: 0, 0)
 
