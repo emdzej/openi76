@@ -259,7 +259,7 @@ static uint8_t *wheel_data(uint8_t *d, uint32_t off) { return slot(d, off)->data
 
 /* 0x475d00: the terrain's grip under the vehicle (its class's first word, 0x48e330); 0 above 0.2 with
    +0x454 bit 0x400 */
-static float terrain_grip(const uint8_t *d)
+float Vehicle_TerrainGrip(const uint8_t *d)
 {
     float g = rdf(g_world.lights + 0x14 * (uint32_t)rd32(d + 0x45c));
     if (!below_eq(g, 0.2f) && (rd32(d + 0x454) & 0x400)) g = 0;   /* 0x4a67a4 */
@@ -288,7 +288,7 @@ void Vehicle_Grip(Node *n, float sp, float *yaw, int32_t *slide, float *grip)
     load = F32(ADD(rdf(wheel_data(d, 0x3a8) + 0xc), load));
     load = F32(ADD(rdf(wheel_data(d, 0x3b8) + 0xc), load));
     load = F32(ADD(rdf(wheel_data(d, 0x3ac) + 0xc), load));
-    double t = MUL(MUL(MUL(MUL(terrain_grip(d), rdf(d + 0x46c)), rdf(susp + 0x14)), load), 0.25f);   /* 0x4a6748 */
+    double t = MUL(MUL(MUL(MUL(Vehicle_TerrainGrip(d), rdf(d + 0x46c)), rdf(susp + 0x14)), load), 0.25f);   /* 0x4a6748 */
     float lim = F32(t), lim2;
     if (rd32(d + 0x454) & 0x10000) load = lim;
     else load = F32(MUL(load, exe_f32(0x4a67f8)));   /* 7.84 */
@@ -320,7 +320,7 @@ void Vehicle_Force(Node *n, float thr, int upside, const float f[3], uint32_t fl
     double vf = ADD(ADD(MUL(rdf(d + 0xc0), f[1]), MUL(rdf(d + 0xc4), f[2])), MUL(rdf(d + 0xbc), f[0]));
     float vff = F32(vf);
     int back = below(vf, 0);
-    float lim = F32(MUL(terrain_grip(d), k));
+    float lim = F32(MUL(Vehicle_TerrainGrip(d), k));
     int locked;
     if (upside) {
         thr = -1.0f;
@@ -571,7 +571,7 @@ void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3
     memcpy(g, exe_data(0x4a6690, 12), 12);   /* (0, -9.8, 0) */
     memcpy(nv, d + 0x460, 12);
     Vec_Split(g, nv, pn, tg);
-    k = F32(MUL(terrain_grip(d), k));
+    k = F32(MUL(Vehicle_TerrainGrip(d), k));
     float s = rdf(wheel_data(d, wh[0]) + 0xc);
     s = F32(ADD(rdf(wheel_data(d, wh[1]) + 0xc), s));
     s = F32(ADD(rdf(wheel_data(d, wh[2]) + 0xc), s));

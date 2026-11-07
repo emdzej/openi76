@@ -866,6 +866,7 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
     for (int f = 0; f < frames; f++) {
         g_clock_total = (float)((double)g_clock_total + dt);   /* to nearest, as diff_fsm.py's */
         Fsm_Frame();
+        AI_SearchTurns();
         len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x consts", f, (int)g_game_state, fbits32(g_fsm_end_time));
         for (int32_t i = 0; i < g_fsm.n_consts && len + 16 < cap; i++) len += (size_t)snprintf(o + len, cap - len, " %x", (uint32_t)Fsm_Word(g_fsm.consts + (uint32_t)i * 4));
         len += (size_t)snprintf(o + len, cap - len, "\n");
@@ -877,8 +878,15 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 memcpy(&top, ai + 0xa93c, 4);
                 len += (size_t)snprintf(o + len, cap - len, " ai %d.%d top %d w4 %x", t, i, top, *(uint32_t *)(ai + 4));
                 for (int k = 0; k <= top && k < 0x32; k++) len += (size_t)snprintf(o + len, cap - len, " %x", *(uint32_t *)(ai + 0xa874 + 4 * k));
-                len += (size_t)snprintf(o + len, cap - len, " | %08x %08x %x %x %08x\n", *(uint32_t *)(d + 0xe0), *(uint32_t *)(d + 0xe4),
+                len += (size_t)snprintf(o + len, cap - len, " | %08x %08x %x %x %08x", *(uint32_t *)(d + 0xe0), *(uint32_t *)(d + 0xe4),
                                         *(uint32_t *)(d + 0x104), *(uint32_t *)(d + 0x454), *(uint32_t *)(d + 0x450));
+                /* the path: +0x7c-+0x84, +0x90-+0xb0 (not the paths' addresses), the points' sum */
+                static const uint16_t w[] = {0x7c, 0x80, 0x84, 0x90, 0x94, 0x98, 0x9c, 0xa0, 0xa4, 0xa8, 0xac};
+                for (size_t k = 0; k < sizeof w / sizeof w[0]; k++) len += (size_t)snprintf(o + len, cap - len, " %x", *(uint32_t *)(ai + w[k]));
+                int32_t np = *(int32_t *)(ai + 0xac);
+                uint32_t h = 0x811c9dc5;
+                for (int32_t k = 0; k < np * 0x14 && k < 2000 * 0x14; k++) h = (h ^ ai[0xb0 + k]) * 0x01000193;
+                len += (size_t)snprintf(o + len, cap - len, " %08x\n", h);
             }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {
             uint32_t sp = (uint32_t)Fsm_Word(m + 0x10b0);

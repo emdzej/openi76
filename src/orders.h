@@ -20,3 +20,8 @@ void Engine_Start(Node *n);
 /* 0x409bc0: an order touching the user's vehicle (0x505498) sets 0x505494 (the user's controls held) */
 void AI_TouchUser(Node *n);
 extern Node *g_ai_user;   /* 0x505498 (0x409b20) */
+/* the path search's turns (0x41d4a0, the end of 0x409020): the vehicle whose search goes on (0x505440), a
+   vehicle waited this frame (0x4a88c8), a search ran this frame (0x4eec30) */
+extern Node *g_nav_owner;
+extern int g_nav_asked, g_nav_busy;
+extern int32_t g_ai_frames;   /* 0x505518: AI_Frame's count (0x40fad0) */

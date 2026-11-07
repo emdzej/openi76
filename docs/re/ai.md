@@ -165,3 +165,57 @@ on a bridge), +0xa8 the point being driven to set to 0 (0x411fb0):
    point 2.45 m in from the right edge going forward, the left going back (0x410b20).
 6. 0x411a20 moves a bridge's two points onto its deck (not ported yet; without the bridges' links no point
    is a bridge's).
+
+## Driving a path (goto 0x16, following 0x17)
+
+`src/orders.c` (the tactics) and `src/drive.c` (the controls). Checked with `diff_fsm.py`, the tactics'
+functions not ported yet stubbed on both sides.
+
+**goto** (enter 0x41d1c0): the script path at +0x8c becomes the one followed (0x40f6a0: +0x88, +0xa0 = 0,
++0xa4 its count, +0xa8 = 0); +0x84 = 2 (a search to start), +0x9c = 0, forward (+0xe8 = 1), mode 3, no
+hand brake. Its frame (0x41d4a0, also evade's and race's) sets +0x9d00 to -10 and searches (0x412db0),
+one vehicle a frame: the one whose search goes on (0x505440), or else the first to ask this frame
+(0x4a88c8 marks that one waited). +0x84 becomes the search's answer and 0x505440 the vehicle while it
+goes on; 0x4eec30 marks a search ran. Class 9 skips the search: one point, the script's. While searching
+it drives at a quarter of its cruising speed (+0xa994, 0x4a575c) with the wheels straight. AI_Frame's
+end (0x409020) clears 0x4a88c8 and, when no search ran, drops the owner's (0x40fdf0: the pool freed).
+
+Its pushes: the search done (0x41d5d0) pushes following (0x17); rolling back (0x4183a0) 0x10; the
+obstacle test (0x418ee0) 0x11; stuck (0x4189c0) 0x12. Its pop (0x41d5f0): the script path ran out
+(+0x9c) or another one was given (+0x8c differs from +0x88).
+
+**Following** (0x17, enter 0x41d620: no hand brake, forward, mode 3). Each frame (0x41d650):
+
+1. The point driven to moves on (0x40f4d0). From the first, once within 725 (squared). Past a middle
+   point while the cosine between its segment and the vehicle (0x40f2d0) is over -0.1. That helper
+   answers 1 whenever either direction is shorter than 0.01, so in effect the middle points are passed
+   at once. The last is reached within 10 m (+0x98, +0x94 set). Then, unless a search goes on, the
+   script's point is passed within 40 m (+0x94; +0xa0 on; at the end it wraps to 0 and sets +0x9c).
+2. The heading (0x40f6d0): to the point 11 m along the path from the point driven to (24 for class 9),
+   or straight at the first point when it is farther or the last. The leftover length is walked along
+   the segments. With its side argument set each point is first moved 5 m to the side of its segment.
+3. The steering (0x40a130). The difference from the vehicle's heading (0x422020: atan2 of its z axis,
+   times +0xe8) is folded into [-pi, pi] (0x4137c0) and times the AI block's gain (+0xa820). It becomes
+   a wheel angle by the speed: over (speed x dt x +0x110) while speed² x +0x110 is under the tyres' load
+   cap (with the +0x454 bit 0x10000 the grip's, else the four wheels' loads x 7.84), else (want x speed)
+   over (cap x dt). Within the limit the tyres hold (0x474fb0) and +-0.9999, times +0xe8. Below 0.01 s
+   steps, still, or with a cap under 0.001 the steering is 0.
+4. The speed (0x409cc0): the order's (+0x80), or the cruising speed when steering over 0.45. The
+   acceleration wanted ((want - speed) / dt, times the gain +0xa81c when positive), less the air drag
+   and the rolling resistance, over the engine's force (its torque x +0xa8 x +0x128, x 5 with +0x454 bit
+   0x800, x +0xb0 above 1 m/s) or over the brakes' (x 8). A brake is within what does not slide at full
+   brake (0x474eb0 x 0.9999); a throttle within 0.75 + gain / 4 and what does not slide.
+
+Its pops: the path's end or the script's point reached (0x41d6f0), or goto's.
+
+**Rolling back** (0x10): pushed while going forward (+0xe8 over 0) with the velocity along the z axis
+below -0.05 (0x4183a0); popped when not (0x418400, its terms summed in another order). Enter (0x418460):
+no hand brake, full lock against the steering's sign; frame (0x4184b0): braking (0x40a500), full lock
+with its sign.
+
+**Stuck** (0x4189c0): the throttle that holds at full (0x474eb0) is kept in a ring of four at +0x9d58,
+by AI_Frame's count (0x505518, 0x40fad0); all four at most 0.1 push 0x12 (not ported yet).
+
+**Class 9** (the helicopters) follow the same tactics with their own steering (0x409fe0: the sine of a
+0.15th of the shorter way round, by the throttle and speed) and speed control (in 0x409cc0: the speed
+error x 0.15 plus 0.00155 x speed², x 0.0495, within +-0.999).

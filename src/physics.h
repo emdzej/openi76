@@ -102,3 +102,6 @@ void Vehicle_Near(Node *n);
    acceleration (+0xd4) eased at 2 per second into three heights on its track (+0x114) and wheelbase
    (+0x118), the frame of their plane's normal */
 void Cockpit_Sway(Frame *out, const Node *n);
+/* Vehicle_TerrainGrip 0x475d00: the terrain's grip under the vehicle data d (its class's first word,
+   0x48e330); 0 above 0.2 with +0x454 bit 0x400 */
+float Vehicle_TerrainGrip(const uint8_t *d);

@@ -102,4 +102,16 @@ void AI_Frame(void)
     g_user_pressed_prev = g_user_pressed;   /* 0x409b50 */
     g_user_pressed = 0;
     Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
+    AI_SearchTurns();
+}
+
+void AI_SearchTurns(void)
+{
+    g_ai_frames++;   /* 0x40fad0 */
+    g_nav_asked = 0;
+    if (!g_nav_busy && g_nav_owner) {   /* its search was dropped: the pool freed */
+        Nav_Reset(*Data_Ptr(g_nav_owner->data, 0x108));
+        g_nav_owner = NULL;
+    }
+    g_nav_busy = 0;
 }

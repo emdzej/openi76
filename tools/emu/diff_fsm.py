@@ -34,7 +34,8 @@ LATER = {0x40A550: 2, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1E0: 1, 0x41F2
 
 # the AI's orders (0x40cc10) run; the tactics' functions the port has not ported yet are stubbed, and so are
 # the weapons' list (0x408c40), the aim (0x40f410) and the sounds
-TACTICS_PORTED = {0, 0x417A10, 0x40A580, 0x40A600, 0x40A620}
+TACTICS_PORTED = {0, 0x417A10, 0x40A580, 0x40A600, 0x40A620, 0x41D1C0, 0x41D4A0, 0x41D5D0, 0x41D5F0, 0x41D620,
+                  0x41D650, 0x41D6F0, 0x4183A0, 0x418400, 0x418460, 0x4184B0, 0x4189C0}
 AI_LATER = {0x408C40: 1, 0x40F410: 3, 0x4683C0: 3}
 
 
@@ -85,7 +86,14 @@ def original():
         exe.write(0x55F73C, struct.pack("<f", t))
         args = (u(0x4A8900), u(0x4A88FC), u(0x4A88CC), u(0x4A88D0), u(0x4A88D4), u(0x4A88D8), u(0x4A88DC),
                 u(0x4A88E0), u(0x4A88E4), 0x4A88E8, 0x4A88EC, 0x4A88F0, u(0x4A88F4), u(0x4A88F8), u(0x505444), 0)
-        exe.call(0x40EF00, *args, limit=200_000_000, fpcw=fpcw)
+        exe.call(0x40EF00, *args, limit=2_000_000_000, fpcw=fpcw)
+        # the end of 0x409020: AI_Frame's count (0x40fad0), the search's turns
+        exe.write(0x505518, struct.pack("<i", struct.unpack("<i", exe.read(0x505518, 4))[0] + 1))
+        exe.write(0x4A88C8, bytes(4))
+        if not u(0x4EEC30) and u(0x505440):
+            exe.call(0x40FDF0, u(u(u(0x505440) + 0x70) + 0x108), fpcw=fpcw)
+            exe.write(0x505440, bytes(4))
+        exe.write(0x4EEC30, bytes(4))
         code, ncode, consts, nconsts = u(0x4A88FC), u(0x4A8900), u(0x4A88F4), u(0x4A88F8)
         state = struct.unpack("<i", exe.read(0x4A80F4, 4))[0]
         s = f"frame {fr} state {state} end {u(0x5054B0):08x} consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))
@@ -98,6 +106,12 @@ def original():
                 top = struct.unpack("<i", exe.read(ai + 0xA93C, 4))[0]
                 s = f" ai {team}.{i} top {top} w4 {u(ai + 4):x}" + "".join(f" {u(ai + 0xA874 + 4 * k):x}" for k in range(0, min(top + 1, 0x32)))
                 s += f" | {u(d + 0xE0):08x} {u(d + 0xE4):08x} {u(d + 0x104):x} {u(d + 0x454):x} {u(d + 0x450):08x}"
+                s += "".join(f" {u(ai + w):x}" for w in (0x7C, 0x80, 0x84, 0x90, 0x94, 0x98, 0x9C, 0xA0, 0xA4, 0xA8, 0xAC))
+                np = struct.unpack("<i", exe.read(ai + 0xAC, 4))[0]
+                h = 0x811C9DC5
+                for b in exe.read(ai + 0xB0, max(0, min(np, 2000)) * 0x14) if np > 0 else b"":
+                    h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+                s += f" {h:08x}"
                 out.append(s)
         m = u(0x4A88EC)
         while m:

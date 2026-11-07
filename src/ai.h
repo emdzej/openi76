@@ -27,3 +27,6 @@ bool AI_UserInScene(Node *n);
 /* AI_Begin 0x408cf0 (WinMain, after the load): the user's node noted (0x409b20), the flags cleared; the
    bridges' 0x4109b0 is not ported yet */
 void AI_Begin(void);
+/* the end of 0x409020: the search's turns for the next frame; a search not called this frame is dropped
+   (0x40fdf0 on its vehicle's AI block) */
+void AI_SearchTurns(void);
