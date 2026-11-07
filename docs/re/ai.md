@@ -173,8 +173,8 @@ on a bridge), +0xa8 the point being driven to set to 0 (0x411fb0):
 
 ## Driving a path (goto 0x16, following 0x17)
 
-`src/orders.c` (the tactics) and `src/drive.c` (the controls). Checked with `diff_fsm.py`, the tactics'
-functions not ported yet stubbed on both sides.
+`src/orders.c` (the tactics) and `src/drive.c` (the controls). Checked with `diff_fsm.py`, which no longer
+stubs any tactic.
 
 **goto** (enter 0x41d1c0): the script path at +0x8c becomes the one followed (0x40f6a0: +0x88, +0xa0 = 0,
 +0xa4 its count, +0xa8 = 0); +0x84 = 2 (a search to start), +0x9c = 0, forward (+0xe8 = 1), mode 3, no
@@ -328,8 +328,8 @@ back, and looks from the step's place p with its velocity v:
    box, 0x479070 in weapons.md "The hit"). A hit: *slow 1, *factor 1.25, *who, *t the time the two centres come
    closest.
 4. With probability (150 x (1 - steering gain +0xa820)) / 1000 (rand() % 1000 above 850 + that): the
-   shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19. Shots are not ported yet; with
-   none the original finds none either.
+   shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19. The shots fly now, but this test
+   is not ported yet: it finds none (logged once when such shots are live).
 
 None: *slow 0, *factor 0.5, answer 0.
 
@@ -600,7 +600,7 @@ vehicle to 50, 150 and 400 m along its axis, 0, 5 and 2 m down) on t01, t05 and 
 (Weapons_Refresh's list, +0xa718 and on) are each put to the decision with the target, using the muzzle's
 world frame (0x4551d0). A yes pulls the trigger: instance +0x44 = 1 (0x455350). Following (0x1e) aims at
 +0xa990 while +0xa98c is set. The turrets (0x428e80) use the same decision with skill and aim 1. The
-triggers are read by the weapons' frame (0x455d90, 0x458340; not ported yet).
+triggers are read by the weapons' frame (0x455d90, 0x458340; ported, docs/re/weapons.md).
 
 **The decision (0x413b10)** goes by the facts' kind (+4) and type (+0). Its inputs are skill (+0xa828)
 and aim (+0xa824). Every roll is `rand() % n`.
