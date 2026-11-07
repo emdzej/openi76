@@ -71,3 +71,8 @@ void Camera_Toward(void);
    in the node's frame, turned by the pilot's glance */
 void Camera_HoodStart(Entity *e);
 void Camera_Hood(void);
+/* Camera_MissileStart 0x406d40 (mode 0x11, F11): with a shot of the user's being followed (0x573484), the
+   camera's state pushed (sub-mode 8); Camera_Missile 0x406e80: 20 degrees down and 5 back in the shot's
+   frame; 1 s after it is gone the state is popped and its frame run */
+void Camera_MissileStart(Entity *e);
+void Camera_Missile(void);

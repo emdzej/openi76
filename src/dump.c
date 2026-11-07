@@ -1077,11 +1077,12 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 39: case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49: {
+        case 39: case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49: case 50: {
                      /* a camera mode on n's entity: 39 the chase (0x405450, 0x4055e0), 40 the track view
                         (0x406bb0, 0x403540), 41 the overview (0x406200, 0x406340), 42 and 43 the side chases
                         (0x405ee0, 0x406070), 44 and 45 the mounted views (0x405b10, 0x405d80), 46 the target view (0x406450,
-                        0x406560; 47 its twin 0x406950, 0x406a60) after the radar's frame (48 the hood 0x405000, 0x405190, 49 the pilot's 0x404890, 0x404520; pilot_yaw_delta 40 and pilot_pitch -10) and its next contact chosen (0x421540); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
+                        0x406560; 47 its twin 0x406950, 0x406a60) after the radar's frame (48 the hood 0x405000, 0x405190, 49 the pilot's 0x404890, 0x404520, 50 the missile camera 0x406d40, 0x406e80 after n's
+                        weapons each fire once 0.01 s late, n flagged the user's, its followed shot flown 0.03 s each frame; pilot_yaw_delta 40 and pilot_pitch -10) and its next contact chosen (0x421540); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
                         on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
                         range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
                         about y before the third; after each the view's camera and eye */
@@ -1106,11 +1107,22 @@ int Dump_CallVehicles(int which, int upside)
             memcpy(INPUT_AT(0x4def70), &gy, 4);
             memcpy(INPUT_AT(0x4def78), &gp, 4);
             memcpy(INPUT_AT(0x4defbc), &oz, 4);
-            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15, 0x12, 0x13, 0x17, 0x18, 0x10, 0x19};
+            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15, 0x12, 0x13, 0x17, 0x18, 0x10, 0x19, 0x11};
             if (which == 46 || which == 47) {
                 Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
                 for (int f = 0; f < 2 && rn; f++) Radar_Frame(rn);   /* as --call radar: the contacts by the second */
                 Radar_Next(n);   /* 0x421540: the next contact */
+            }
+            uint32_t flags = n->flags;
+            if (which == 50) {   /* n taken for the user's (0x42e620) so that its trailed shot is followed */
+                n->flags |= 0x10;
+                g_user_shot = NULL;
+                for (int i = 0; i < g_weapon_count; i++) {
+                    WeaponInst *w = &g_weapons[i];
+                    if (!w->hp || w->hp->vehicle != n) continue;
+                    g_fpu_round = FPU_DOWN;
+                    Weapon_Fire(w, &g_weapon_defs[w->def], 1, 0.01f);
+                }
             }
             Camera_SetMode(e, modes[which - 39]);
             for (int k = 0; k < 5; k++) {
@@ -1118,6 +1130,10 @@ int Dump_CallVehicles(int which, int upside)
                     for (int j = 0; j < 9; j += 2)
                         if (j != 4) n->frame.m[j] = -n->frame.m[j];
                 g_fpu_round = FPU_DOWN;
+                if (which == 50 && g_user_shot) {
+                    Shot_Fly(g_user_shot, 0.03f);
+                    g_fpu_round = FPU_DOWN;
+                }
                 if (g_camera_fn) g_camera_fn();   /* as the game loop: the mode's, or after a pop the one before */
                 uint8_t b[0x40 + 24];
                 memcpy(b, &g_view.cam, 0x24);
@@ -1125,6 +1141,10 @@ int Dump_CallVehicles(int which, int upside)
                 memcpy(b + 0x28, g_view.cam.pos, 24);
                 memcpy(b + 0x40, g_view.eye, 24);
                 call_line(b, sizeof b);
+            }
+            if (which == 50) {
+                if (g_camera_mode == 8) Camera_Pop();   /* the stack as it was for the next vehicle */
+                n->flags = flags;
             }
             break;
         }

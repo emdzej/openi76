@@ -1048,5 +1048,7 @@
 004066b0	Camera_TargetLook	camera	high	over the target looking back at the vehicle; ported, diffed
 00406950	Camera_TowardStart	camera	high	mode 0x18 (F4): over the vehicle toward the radar target; ported, diffed
 00406a60	Camera_Toward	camera	high	its frame; ported, diffed
+00406d40	Camera_MissileStart	camera	high	mode 0x11 (F11): the user's trailed shot's view, pushed; ported, diffed
+00406e80	Camera_Missile	camera	high	its frame; ported, diffed
 00405000	Camera_HoodStart	camera	high	mode 0x10 (F6): on the bonnet; ported
 00405190	Camera_Hood	camera	high	the glance at (0, 0.7, 3.5) in the node's frame; ported, diffed

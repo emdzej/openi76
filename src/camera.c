@@ -5,6 +5,8 @@
 #include "input.h"
 #include "physics.h"
 #include "radar.h"
+#include "ordnance.h"
+#include "damage.h"
 #include "scene.h"
 #include "settings.h"
 #include "terrain.h"
@@ -457,9 +459,68 @@ void Camera_Mounted(void)
     View_SetCamera(&g_view, &f);
 }
 
+/* the missile camera's shot (0x4a8660 in the original, which holds the shot's node in this mode; the port
+   keeps it beside the entity) and its frame as last seen (0x4ed8e0) */
+static Node *cam_shot;
+static int Node_IsUser(const Node *n) { return n && (n->flags & 0x10); }   /* 0x42e620 */
+static Frame shot_frame;
+static float target_left;   /* 0x4ed89c: the time left after the shot or the target is lost */
+
+void Camera_MissileStart(Entity *e)
+{
+    (void)e;   /* the original's 0x4a8660 becomes the shot */
+    Node *shot = g_user_shot;   /* 0x45c910 */
+    if (!shot || g_camera_mode == 5) return;
+    Node *owner = shot->data ? *(Node **)Data_Ptr(shot->data, 0xc) : NULL;   /* 0x45ceb0 */
+    if (!Node_IsUser(owner) || g_camera_mode == 8) return;
+    if (!Camera_Push()) return;
+    g_cockpit = 0;
+    g_camera_mode = 8;
+    View_SetZoom(&g_view, 1.0f);
+    view_again();
+    cam_shot = shot;
+    g_camera_fn = Camera_Missile;
+}
+
+void Camera_Missile(void)
+{
+    /* the original first sets an unset 0x4a8660 to the user's entity (0x423fc0); the start always sets it */
+    const Frame *at = &shot_frame;
+    if (cam_shot && cam_shot == g_user_shot) {
+        shot_frame = cam_shot->frame;
+        target_left = 1.0f;   /* 0x3f800000 */
+        at = &cam_shot->frame;
+    } else {
+        /* the shot gone or another fired: 1 s more where it was, then back through the stack. The original
+           reads the old node's frame here, after it may have been freed; the port reads its last copy */
+        double l = SUB(target_left, g_clock_step);
+        target_left = F32(l);
+        if (!(l > 0.0)) {
+            /* the original calls the installed frame even when the stack is empty, itself again, without end */
+            if (Camera_Pop() && g_camera_fn) g_camera_fn();
+            return;
+        }
+    }
+    /* 20 degrees down, 5 behind and up the line (fcos and fsin of a double holding 20 degrees as a float) */
+    Frame m, cam;
+    memcpy(&m, exe_data(0x4db298, sizeof m), sizeof m);
+    const double a = (double)0.34906585f;   /* 0x4a50e0 */
+    double c = cos(a), sn = sin(a);
+    m.m[5] = F32(sn);
+    m.m[7] = F32(-sn);
+    m.m[4] = F32(c);
+    m.m[8] = F32(c);
+    m.pos[2] = MUL(-c, 5.0);           /* 0x4a50e8 */
+    m.pos[1] = MUL(-m.m[7], 5.0);
+    Frame_Mul(&cam, &m, at);
+    View_SetZoom(&g_view, 1.0f);
+    int32_t z = 0x10000;   /* zoom_factor */
+    memcpy(INPUT_AT(0x4defa4), &z, 4);
+    View_SetCamera(&g_view, &cam);
+}
+
 /* the target views' state, outside the camera's block: the time left after the target is lost (0x4ed89c),
    the vehicle's place (0x4ed8a0) and the target's last (0x4ed8b8) */
-static float target_left;
 static double self_at[3], target_at[3];
 
 /* 0x4066b0: the camera 3 over the target t, 7.5 back from it along the line to s (2 below t's place), its
@@ -569,6 +630,7 @@ static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
     {0xf, Camera_ChaseStart},
     {0x10, Camera_HoodStart},
+    {0x11, Camera_MissileStart},
     {0x12, Camera_MountFrontStart},
     {0x13, Camera_MountBackStart},
     {0x14, Camera_ChaseLeftStart},

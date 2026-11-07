@@ -930,6 +930,28 @@ def call_pilot(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x404890, 0x404520)
 
 
+def call_missile(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not FLY:
+        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+                     (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
+            exe.stub(a, lambda *x: 0, k)
+        FLY["on"] = 1
+    flags = u(n + 0x10)
+    exe.write(n + 0x10, struct.pack("<I", flags | 0x10))
+    exe.write(0x573484, bytes(4))
+    for i in range(struct.unpack("<i", exe.read(0x570A64, 4))[0]):
+        w = 0x55F9C0 + i * 0x50
+        hp = u(w + 0x10)
+        if hp and u(hp) == n:
+            exe.call(0x458710, w, 0x56F730 + u(w + 0x28) * 0x88, 1, 0x3C23D70A, limit=2_000_000_000, fpcw=rd)
+    call_camera(exe, n, fpcw, 0x406D40, 0x406E80, fly=True)
+    if u(0x4A8480) == 8:
+        exe.call(0x4032D0, limit=50_000_000, fpcw=rd)
+    exe.write(n + 0x10, struct.pack("<I", flags))
+
+
 def call_toward(exe, n, fpcw):
     call_target(exe, n, fpcw, 0x406950, 0x406A60)
 
@@ -938,7 +960,7 @@ def call_chase15(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x406070, 0x4055E0)
 
 
-def call_camera(exe, n, fpcw, start=0x405450, frame=0x4055E0):
+def call_camera(exe, n, fpcw, start=0x405450, frame=0x4055E0, fly=False):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
     e = next((0x547E60 + i * 0x78 for i in range(0x100) if u(0x547E60 + i * 0x78) == n), 0)
@@ -952,13 +974,15 @@ def call_camera(exe, n, fpcw, start=0x405450, frame=0x4055E0):
     exe.write(0x4DEFBC, struct.pack("<i", 20))
     exe.write(0x4DEF70, struct.pack("<i", 40))
     exe.write(0x4DEF78, struct.pack("<i", -10))
-    exe.call(start, e, limit=50_000_000, fpcw=rd)   # Camera_SetMode (stubbed here) without the HUD
+    exe.call(start, e, limit=50_000_000, fpcw=rd)
     exe.call(0x43CA60, 0x4A8488, 0x3F800000, limit=50_000_000, fpcw=rd)
     for k in range(5):
         if k == 2:
             for j in (0, 2, 6, 8):
                 a = n + 0x18 + 4 * j
                 exe.write(a, struct.pack("<I", u(a) ^ 0x80000000))
+        if fly and struct.unpack("<I", exe.read(0x573484, 4))[0]:
+            exe.call(0x459B50, struct.unpack("<I", exe.read(0x573484, 4))[0], 0x3CF5C28F, limit=2_000_000_000, fpcw=rd)
         fn = struct.unpack("<I", exe.read(0x4A8478, 4))[0]   # as the game loop: the installed frame
         if fn:
             exe.call(fn, limit=50_000_000, fpcw=rd)
@@ -998,7 +1022,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

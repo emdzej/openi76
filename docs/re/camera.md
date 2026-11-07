@@ -17,7 +17,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 | 0xe | 0x4059a0 | 0x403be0 | 7 | |
 | 0xf | 0x405450 | 0x4055e0 | 1 | `Camera_ChaseStart`, `Camera_Chase` |
 | 0x10 | 0x405000 | 0x405190 | 1 | `Camera_HoodStart`, `Camera_Hood` |
-| 0x11 | 0x406d40 | | 8 | |
+| 0x11 | 0x406d40 | 0x406e80 | 8 | `Camera_MissileStart`, `Camera_Missile` |
 | 0x12 | 0x405b10 | 0x405c70 | 1 | `Camera_MountFrontStart`, `Camera_Mounted` |
 | 0x13 | 0x405d80 | 0x405c70 | 1 | `Camera_MountBackStart`, `Camera_Mounted` |
 | 0x14 | 0x405ee0 | 0x4055e0 | 1 | `Camera_ChaseLeftStart` |
@@ -33,8 +33,7 @@ table. Otherwise it calls the start. Then, unless the new sub-mode is 2, it call
 sets zoom 1. The port leaves out the modes not ported yet.
 
 The starts from sub-mode 4 first pop the camera's whole state (0x4a8478-0x4a86e0, 0x268 bytes) from a stack
-of 8 (0x58c4e0, index 0x4a86e0). They then take the glance targets from the input again. Not ported: no
-sub-mode 4 mode is.
+of 8 (0x58c4e0, index 0x4a86e0). They then take the glance targets from the input again.
 
 A start installs the mode's per-frame function in 0x4a8478. The game loop calls that function after the
 classes' frames and before `Render_World` (inferred from WinMain's order). Other globals:
@@ -255,6 +254,32 @@ there; it is identical too.
 The check found a deviation of the port in the radar: `Radar_Next`'s and `Radar_Prev`'s enemy test read
 the contact's node flags before the targetable test 0x42d340. The original tests first, and its 0x42e570
 answers 0 for no node, so a contact without one is skipped.
+
+## The missile camera (mode 0x11)
+
+`Camera_MissileStart` 0x406d40 (F11) rides the user's latest trailed shot: the rocket or missile that
+`Shot_Launch` records in 0x573484 for the user's vehicle (launch types 2-5, 7 and 8; 0x45c8e0), cleared
+when it is spent. It does nothing without that shot, in sub-mode 5 or 8, or when the shot's owner
+(0x45ceb0, the shot's data +0xc) is not the user's (0x42e620: node flag 0x10). It then pushes the
+camera's state (nothing with the stack full), sets the cockpit flag 0 and the sub-mode 8, remakes the view
+at the old camera with zoom 1, keeps the shot in 0x4a8660 and installs `Camera_Missile` 0x406e80.
+
+Each frame, while the kept shot is still the followed one, its frame is copied (0x4ed8e0) and the time
+left (0x4ed89c, the target views' word) becomes 1. Otherwise the time left drops by the step and, above 0,
+the camera stays on the old node's frame. The original reads it from the node even after it was freed;
+the port reads the copy. At 0 the state is popped and the restored mode's frame runs at once (with nothing
+to pop the original calls itself again without end; the port returns).
+
+The camera is the shot's frame times a fixed one: the identity 0x4db298 tilted 20 degrees down about x
+(the cosine and sine of 0x4a50e0, 20 degrees rounded to a float and held as a double) and moved 5 back
+along the shot's line and up by 5 times the sine. The cosine in the back offset keeps the FPU's full
+precision; the sine in the up offset is the matrix's rounded float. The frame sets zoom 1 and 0x4defa4
+to 0x10000.
+
+Checked: `--call missile` (case 50) flags each vehicle as the user's in turn, fires each of its weapons
+once 0.01 s late, starts the view and runs five frames, flying the followed shot 0.03 s before each. On
+t01 one vehicle carries rockets and its view is identical; the user's own vehicle has none in any mission
+at the load. The five frames are too short for the lost-shot path, which is the target views' pop.
 
 ## The track view (mode 0xfefe, the death's)
 
