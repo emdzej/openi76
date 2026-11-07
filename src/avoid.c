@@ -4,8 +4,10 @@
 #include "collide.h"
 #include "combat.h"
 #include "crt.h"
+#include "drive.h"
 #include "entity.h"
 #include "exe.h"
+#include "orders.h"
 #include "physics.h"
 #include "platform.h"
 #include "terrain.h"
@@ -502,6 +504,10 @@ static int shots_ahead(Node *n, float *slow, float *factor, float *t)
     return 0;
 }
 
+static Frame g_probe;   /* the last step's frame: its words stay on the stack (AI_FindWay's leftovers) */
+
+float AI_ProbeWord(int k) { return g_probe.m[k]; }
+
 int AI_Avoid(Node *n, float steer, float throttle, Node **who, float *slow, float *factor, int cars_only,
              int all_round, float *t)
 {
@@ -513,6 +519,7 @@ int AI_Avoid(Node *n, float steer, float throttle, Node **who, float *slow, floa
     float vel[3], speed, acc[3], w[3];
     Frame f;
     Vehicle_Probe(n, &flags, vel, &speed, acc, w, &f);
+    g_probe = f;
     memcpy(d + 0xe0, &e0, 4);
     memcpy(d + 0xe4, &e4, 4);
     float seg[6] = {F32(f.pos[0]), F32(f.pos[1]), F32(f.pos[2])};
@@ -555,5 +562,154 @@ int AI_Avoid(Node *n, float steer, float throttle, Node **who, float *slow, floa
     }
     *slow = 0;
     *factor = 0.5f;
+    return 0;
+}
+
+/* ---- finding a way round (0x416ef0) and being blocked (0x415690) ---- */
+
+typedef struct {
+    Node *n;
+    uint8_t *d;
+    float *out;
+    int cars_only, all_round;
+    float slow, factor;
+} Way;
+
+static int way_try(Way *w, float s, float t)
+{
+    Node *who;
+    float tt;
+    return AI_Avoid(w->n, s, t, &who, &w->slow, &w->factor, w->cars_only, w->all_round, &tt);
+}
+
+static void way_set(Way *w, float s, float t, float f)
+{
+    memcpy(w->d + 0xe0, &s, 4);
+    memcpy(w->d + 0xe4, &t, 4);
+    *w->out = f;
+}
+
+/* the speed eased a tenth toward the cruising speed (from the faster side) */
+static void way_blend(Way *w)
+{
+    float c = AI_Cruise(w->n), ac = rdf(w->d + 0xac);
+    double v = below(c, ac) ? ADD(MUL(ac, 0.9f), MUL(c, 0.1f)) : ADD(MUL(ac, 0.1f), MUL(c, 0.9f));   /* 0x4a54c0, 0x4a54ac */
+    AI_Speed(w->n, F32(v));
+}
+
+void AI_FindWay(Node *n, uint8_t *ai, Node *who, float *factor, int cars_only, int all_round, float slow0,
+                float factor0)
+{
+    uint8_t *d = n->data;
+    Way w = {n, d, factor, cars_only, all_round, slow0, factor0};   /* the original leaves both unset */
+    float best = from(0x7f7fffff), s0 = rdf(d + 0xe0), bs = s0, bf = 0.5f;
+    float bt = 0;   /* the original's is left unset when neither throttle sweep runs */
+    float lim = AI_SteerLimit(n);
+    float v[3], sp;
+    Class_Velocity(n, v, &sp);
+    bool same;
+    if (who && is_vehicle(who)) {
+        const float *a = &who->frame.m[6], *b = &n->frame.m[6];
+        same = !below_eq(ADD(ADD(MUL(a[2], b[2]), MUL(a[0], b[0])), MUL(a[1], b[1])), 0.7);   /* 0x4a5538 */
+    } else
+        same = bits(sp) > 0x41700000;   /* 15 */
+    bool right = below(g_clock_game, rdf(ai + 0x9d34)) ? bits(s0) > 0 : ubits(s0) > 0x80000000u;
+    if (below(fabs((double)s0), 0.05)) {   /* 0x4a5540: going straight: either way, wider and wider */
+        AI_Speed(n, F32(ADD(MUL(AI_Cruise(n), 0.1f), MUL(rdf(d + 0xac), 0.9f))));
+        bt = rdf(d + 0xe4);
+        float s = 0.25f;
+        if (bits(lim) >= 0x3e800000)
+            for (;;) {
+                int r = way_try(&w, s, bt);
+                float val = F32(SUB(100.0f, w.factor));   /* 0x4a5548 */
+                if (!r) return way_set(&w, s, bt, bf);
+                if (!below(best, val)) best = val, bs = s, bf = w.factor;
+                float ms = -s;
+                r = way_try(&w, ms, bt);
+                val = F32(SUB(100.0f, w.factor));
+                if (!r) return way_set(&w, ms, bt, bf);
+                if (!below(best, val)) best = val, bs = ms, bf = w.factor;
+                double ns = ADD(s, 0.25f);   /* 0x4a5404 */
+                s = F32(ns);
+                if (!below_eq(ns, lim)) break;
+            }
+        *factor = bf;
+        memcpy(d + 0xe0, &bs, 4);
+        return;
+    }
+    float osp = 0, ov[3];
+    if (who && is_vehicle(who)) Class_Velocity(who, ov, &osp);
+    float full = right ? 1.0f : F32(Vehicle_Throttle(n, 1.0f));
+    if (bits(osp) <= 0x40000000 || same) {
+        way_blend(&w);
+        bt = rdf(d + 0xe4);
+    } else {
+        /* the throttles: from 0 up by 0.2 (to 1 turning right, to the most that holds turning left), then
+           from -0.2 down to the most braking that holds */
+        float t = 0;
+        if (right || ubits(full) <= 0x80000000u)
+            for (;;) {
+                if (!way_try(&w, s0, t)) return way_set(&w, s0, t, bf);
+                if (!below_eq(best, w.slow)) best = w.slow, bt = t, bf = w.factor;
+                double nt = ADD(t, 0.2f);   /* 0x4a53f4 */
+                t = F32(nt);
+                if (!below_eq(nt, full)) break;
+            }
+        float lo = F32(Vehicle_Throttle(n, -1.0f));
+        t = from(0xbe4ccccd);
+        if (ubits(lo) >= 0xbe4ccccdu)
+            for (;;) {
+                if (!way_try(&w, s0, t)) return way_set(&w, s0, t, bf);
+                if (!below_eq(best, w.slow)) best = w.slow, bt = t, bf = w.factor;
+                double nt = SUB(t, 0.2f);
+                t = F32(nt);
+                if (below(nt, lo)) break;
+            }
+    }
+    /* the steering by 0.25 to the side it was turning first, then the other; at the end full lock the
+       other way */
+    float nl = -lim;
+    for (int pass = 0; pass < 2; pass++) {
+        bool up = right ? pass == 0 : pass == 1;
+        double ns = up ? ADD(s0, 0.25f) : SUB(s0, 0.25f);
+        float s = F32(ns);
+        if (up ? !below_eq(ns, lim) : !below_eq(nl, s)) continue;
+        for (;;) {
+            if (!way_try(&w, s, bt)) return way_set(&w, s, bt, bf);
+            if (!below(best, w.slow)) best = w.slow, bf = w.factor;
+            ns = up ? ADD(s, 0.25f) : SUB(s, 0.25f);
+            s = F32(ns);
+            if (up ? !below_eq(ns, lim) : below(ns, nl)) break;
+        }
+    }
+    way_set(&w, right ? lim : nl, bt, bf);
+}
+
+int AI_TerrainAhead(Node *n, const float p[3], float *slow, float *t)
+{
+    uint8_t *d = n->data;
+    return terrain_ahead(&n->frame, p, rdf(d + 0xac), slow, rdf(d + 0xe8), 1, t);
+}
+
+int AI_Blocked(Node *n)
+{
+    uint8_t *d = n->data, *ai = ai_of(n);
+    const float *z = &n->frame.m[6];
+    double k = MUL(MUL(g_clock_inv, rdf(d + 0xe8)), 7.0f);   /* 0x4a5454 */
+    float seg[6] = {F32(n->frame.pos[0]), F32(n->frame.pos[1]), F32(n->frame.pos[2]), F32(MUL(z[0], k)),
+                    F32(MUL(z[1], k)), F32(MUL(k, z[2]))};
+    float slow;
+    if (terrain_ahead(&n->frame, seg, rdf(d + 0xac), &slow, rdf(d + 0xe8), 1, (float *)(ai + 0x9d28))) return 1;
+    float dt = g_clock_dt;
+    CollIter it;
+    for (Entity *e = coll_first(&it); e; e = coll_next(&it)) {
+        if (e->node == n) continue;
+        float r = F32(ADD(e->r, 3.0f)), oc[3], ov[3], osp, t, off[3];
+        Frame_Points(&oc, (const float(*)[3])e->c, 1, &e->node->frame);   /* 0x471b30 */
+        Class_Velocity(e->node, ov, &osp);
+        if (!sphere_sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
+        Node *who;
+        if (sweep(seg, seg + 3, e, &who, &t, off, 0, 0)) return 1;
+    }
     return 0;
 }

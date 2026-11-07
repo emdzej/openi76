@@ -1,6 +1,7 @@
 /* The AI's orders and tactics (orders.h). In the current rounding mode (render/fpu.h). */
 #include "orders.h"
 #include "ai.h"
+#include "avoid.h"
 #include "clock.h"
 #include "combat.h"
 #include "crt.h"
@@ -12,6 +13,7 @@
 #include "nav.h"
 #include "physics.h"
 #include "platform.h"
+#include "terrain.h"
 #include "render/fpu.h"
 #include <math.h>
 #include <stdio.h>
@@ -26,6 +28,9 @@ static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 #define F32 fpu_f32
 #define MUL fpu_mul
 #define ADD fpu_add
+#define SUB fpu_sub
+static bool below(double a, double b) { return !(a >= b); }   /* x87: unordered counts */
+static bool below_eq_d(double a, double b) { return !(a > b); }
 static uint8_t *ai_of(Node *n) { return *Data_Ptr(n->data, 0x108); }   /* 0x42d380 */
 
 /* ---- small vehicle steps ---- */
@@ -284,6 +289,361 @@ static int stuck(Node *n, Node *t)
 }
 
 /* a tactic's function by its address */
+/* ---- avoiding (0x11) ---- */
+
+/* 0x40a3c0 / 0x40a390: full lock (the tyres' limit x 0.9999, 0x4a51c8) left / right; 0x40a3f0: straight */
+static void lock(Node *n, int sign)
+{
+    double v = MUL(AI_SteerLimit(n), 0.9998999834060669f);
+    putf(n->data + 0xe0, F32(sign < 0 ? -v : v));   /* fchs before the store: rounded as negative */
+}
+
+/* 0x40a410: the throttle a gain's way (+0xa81c) toward the most that holds, at most 0.75 + gain / 4 */
+static void open_up(Node *n)
+{
+    AI_TouchUser(n);
+    uint8_t *ai = ai_of(n), *d = n->data;
+    float g = rdf(ai + 0xa81c), e4 = rdf(d + 0xe4);
+    double full = Vehicle_Throttle(n, 1.0f);
+    double cap = ADD(MUL(g, 0.25f), 0.75f);   /* 0x4a5190, 0x4a51cc */
+    float v = F32(ADD(MUL(SUB(full, e4), g), e4));
+    if (cap < v) v = F32(cap);
+    putf(d + 0xe4, v);
+}
+
+/* the time to look again: the game's time + (1 - steering gain) x 2 + extra (0x4a5564, 0x4a55e4) */
+static float again(uint8_t *ai, float extra)
+{
+    return F32(ADD(ADD(g_clock_game, MUL(SUB(1.0f, rdf(ai + 0xa820)), 2.0f)), extra));
+}
+
+/* past something not yet near (t under 1 s) or a car: lock away from the steering, and for a car going 10-35
+   m/s the cruising speed when it lies ahead (sector 7, 0 or 1), the throttle opened; over 35 the cruising
+   speed */
+static void swerve(Node *n, uint8_t *ai)
+{
+    uint8_t *d = n->data;
+    if (rd32(d + 0xe0) >= 0 && (uint32_t)rd32(d + 0xe0) <= 0x80000000u) lock(n, -1);
+    else lock(n, 1);
+    Node *who = *(Node **)Data_Ptr(ai, 0x9d2c);
+    if (who && who->cls == 1) {
+        if (rd32(d + 0xac) > 0x411fffff) {
+            if (rd32(d + 0xac) > 0x420c0000) {
+                AI_Speed(n, AI_Cruise(n));
+                putf(ai + 0x9d34, again(ai, 0.5f));
+                return;
+            }
+            float h = AI_Heading(n);
+            int sec = Angle_Sector(h, Pair_Angle(n, who));
+            if (sec >= 0 && (sec < 2 || sec == 7)) AI_Speed(n, AI_Cruise(n));
+        }
+        open_up(n);
+    }
+    putf(ai + 0x9d34, again(ai, 0.5f));   /* 0x4a558c */
+}
+
+/* the words of the last look ahead's step frame at the way finder's two unset locals: by the depth of the
+   push test that called it (0x418df0 m[2], m[5]; 0x418e70 m[3], m[6]; 0x418ee0 m[5], m[8]) */
+static int g_way_words[2] = {5, 8};
+
+/* avoid's enter 0x419070: forward, mode 3, no target; far from it (t of 1 s or more) a way round (0x416ef0)
+   and the time to look again plus its factor; else swerve. +0x9d18 set (the next frame skipped), +0x9d1c
+   the speed, +0x9d24 the time */
+static int avoid_enter(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *d = n->data, *ai = ai_of(n);
+    put32(d + 0xf0, 0);
+    Vehicle_SetMode(n, 3);
+    put32(d + 0xe8, 0x3f800000);
+    *Data_Ptr(ai, 0xa998) = NULL;
+    if (rd32(ai + 0x9d28) > 0x3f7fffff) {
+        AI_FindWay(n, ai, *(Node **)Data_Ptr(ai, 0x9d2c), (float *)(ai + 0x9d34), 0, 1, AI_ProbeWord(g_way_words[0]),
+                   AI_ProbeWord(g_way_words[1]));
+        putf(ai + 0x9d34, again(ai, rdf(ai + 0x9d34)));
+    } else
+        swerve(n, ai);
+    put32(ai + 0x9d18, 1);
+    put32(ai + 0x9d1c, rd32(d + 0xac));
+    putf(ai + 0x9d24, g_clock_game);
+    return 0;
+}
+
+/* avoid's frame 0x419210: every other frame, the look ahead with the controls: clear, straight on at the
+   order's speed; else as at the start */
+static int avoid_frame(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *d = n->data, *ai = ai_of(n);
+    if (rd32(ai + 0x9d18)) {
+        put32(ai + 0x9d18, 0);
+        return 0;
+    }
+    float slow, f;
+    if (!AI_Avoid(n, rdf(d + 0xe0), rdf(d + 0xe4), (Node **)Data_Ptr(ai, 0x9d2c), &slow, &f, 0, 1,
+                  (float *)(ai + 0x9d28))) {
+        put32(d + 0xe0, 0);   /* 0x40a3f0 */
+        AI_Speed(n, rdf(ai + 0x80));
+        return 0;
+    }
+    if (rd32(ai + 0x9d28) > 0x3f7fffff) {
+        AI_FindWay(n, ai, *(Node **)Data_Ptr(ai, 0x9d2c), &f, 0, 1, AI_ProbeWord(4), AI_ProbeWord(7));   /* its own look ahead's */
+        putf(ai + 0x9d34, again(ai, f));
+        put32(ai + 0x9d18, 0);
+        AI_Speed(n, AI_Cruise(n));
+        return 0;
+    }
+    swerve(n, ai);
+    put32(ai + 0x9d18, 1);
+    return 0;
+}
+
+/* avoid's leave 0x419410: avoiding for more than 3 s (0x4a55e8) marks the path's last point reached */
+static int avoid_leave(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *ai = ai_of(n);
+    if (ADD(rdf(ai + 0x9d24), 3.0f) < g_clock_game) put32(ai + 0x98, 1);
+    return 0;
+}
+
+/* 0x418290: the time to look again has passed */
+static int looked(Node *n, Node *t) { (void)t; return g_clock_game > rdf(ai_of(n) + 0x9d34); }
+
+/* the push tests to avoiding, while +0x9d14: 0x418df0 something ahead but the target (all round),
+   0x418e70 something ahead (all round), 0x418ee0 something ahead (only cars while it turned less than a
+   second ago, on a bridge or on rough ground (+0x45c 2, 3, 4, 7), or on 6 heading along the path within 1;
+   a car ahead sounds the horn one time in four, 0x476440) */
+static int ahead_not_target(Node *n, Node *t)
+{
+    uint8_t *ai = ai_of(n), *d = n->data;
+    if (!rd32(ai + 0x9d14)) return 0;
+    Node **who = (Node **)Data_Ptr(ai, 0x9d2c);
+    int r = AI_Avoid(n, rdf(d + 0xe0), rdf(d + 0xe4), who, (float *)(ai + 0x9d30), (float *)(ai + 0x9d34), 0, 1,
+                     (float *)(ai + 0x9d28));
+    g_way_words[0] = 2, g_way_words[1] = 5;
+    return *who != t ? r : 0;
+}
+
+static int ahead(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *ai = ai_of(n), *d = n->data;
+    if (!rd32(ai + 0x9d14)) return 0;
+    float slow;
+    g_way_words[0] = 3, g_way_words[1] = 6;
+    return AI_Avoid(n, rdf(d + 0xe0), rdf(d + 0xe4), (Node **)Data_Ptr(ai, 0x9d2c), &slow, (float *)(ai + 0x9d34), 0,
+                    1, (float *)(ai + 0x9d28));
+}
+
+static int ahead_driving(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *ai = ai_of(n), *d = n->data;
+    if (!rd32(ai + 0x9d14)) return 0;
+    int cars;
+    int32_t at = rd32(ai + 0xa8);
+    if (below(g_clock_game, ADD(rdf(ai + 0x9d00), 1.0f))) cars = 0;   /* 0x4a5564 */
+    else if (rd32(ai + 0xbc + at * 0x14)) cars = 1;
+    else
+        switch (rd32(d + 0x45c)) {
+        case 2: case 3: case 4: case 7:
+            cars = 1;
+            break;
+        case 6: {
+            cars = 0;
+            float h = AI_Heading(n);
+            if (at > 0) {
+                const uint8_t *p = ai + 0xb0 + at * 0x14;
+                float a = F32(atan2(SUB(rdf(p), rdf(p - 0x14)), SUB(rdf(p + 4), rdf(p - 0x10))));
+                cars = below(fabs(Angle_Diff(h, a)), 1.0f);
+            }
+            break;
+        }
+        default:
+            cars = 0;
+        }
+    float slow;
+    Node **who = (Node **)Data_Ptr(ai, 0x9d2c);
+    int r = AI_Avoid(n, rdf(d + 0xe0), rdf(d + 0xe4), who, &slow, (float *)(ai + 0x9d34), cars, 0,
+                     (float *)(ai + 0x9d28));
+    g_way_words[0] = 5, g_way_words[1] = 8;   /* the horn's calls (not ported) would write over them */
+    if (r && *who && ((*who)->cls == 1 || (*who)->cls == 8 || (*who)->cls == 9)) {
+        int k = crt_rand();
+        if ((k & 3) == 0) {
+            static int told;
+            if (!told++) plat_log("OpenI76: the horn (0x476440) is not ported yet");
+        }
+    }
+    return r;
+}
+
+/* 0x418a50, avoiding to stuck (0x12): not class 9; going forward yet backing at 0.05, or blocked (0x415690) */
+static int blocked(Node *n, Node *t)
+{
+    (void)t;
+    if (n->cls == 9) return 0;
+    uint8_t *d = n->data;
+    if (rd32(d + 0xe8) > 0) {
+        const float *v = (const float *)(d + 0xbc), *z = &n->frame.m[6];
+        float vv[3];
+        memcpy(vv, v, 12);
+        if (ADD(ADD(ADD(MUL(vv[1], z[1]), MUL(vv[2], z[2])), MUL(vv[0], z[0])), 0.05) < 0.0) return 1;   /* 0x4a55a0 */
+    }
+    return AI_Blocked(n) ? 1 : 0;
+}
+
+/* ---- stuck (0x12) and backing out (0x13) ---- */
+
+static int32_t fbits(float f) { int32_t v; memcpy(&v, &f, 4); return v; }
+
+/* the direction flipped (+0xe8 1 within 1e-4: back, mode 1; else forward, mode 3) */
+static void flip(Node *n)
+{
+    uint8_t *d = n->data;
+    float x = F32(SUB(rdf(d + 0xe8), 1.0f));
+    if (!(x <= -9.999999747378752e-05f) && fbits(x) < 0x38d1b717) {
+        put32(d + 0xe8, (int32_t)0xbf800000);
+        Vehicle_SetMode(n, 1);
+    } else {
+        put32(d + 0xe8, 0x3f800000);
+        Vehicle_SetMode(n, 3);
+    }
+}
+
+/* 0x40a4b0: the throttle at the most that holds x 0.9999 */
+static void full_throttle(Node *n)
+{
+    AI_TouchUser(n);
+    putf(n->data + 0xe4, F32(MUL(Vehicle_Throttle(n, 1.0f), 0.9998999834060669f)));   /* 0x4a51c8 */
+}
+
+/* 0x417910: steer 0.95 of the tyres' limit away from the steering (as driven), the cruising speed up to 5
+   m/s else the brakes, the direction flipped; look again in 2 s, the heading noted */
+static void back_out(Node *n, uint8_t *d, uint8_t *ai)
+{
+    float lim = AI_SteerLimit(n);
+    uint32_t dir = (uint32_t)rd32(d + 0xe8), e0 = (uint32_t)rd32(d + 0xe0);
+    bool neg = dir <= 0x80000000u ? e0 > 0x80000000u : e0 <= 0x80000000u;
+    putf(d + 0xe0, F32(MUL(lim, neg ? 0.949999988079071f : -0.949999988079071f)));   /* 0x4a5424, 0x4a5550 */
+    if (rd32(d + 0xac) < 0x40a00001) AI_Speed(n, AI_Cruise(n));
+    else AI_Stop(n);
+    flip(n);
+    putf(ai + 0x9d34, F32(ADD(g_clock_game, 2.0f)));   /* 0x4a54a4 */
+    putf(ai + 0x9d38, AI_Heading(n));   /* 0x4182c0 */
+}
+
+/* stuck's enter 0x418500: no hand brake; the steering (+0x9d20) and the ground's height (+0x9d3c) noted;
+   back out; look again in 4 s; the heading (+0x9d38) */
+static int stuck_enter(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *d = n->data, *ai = ai_of(n);
+    put32(d + 0xf0, 0);
+    put32(ai + 0x9d20, rd32(d + 0xe0));
+    putf(ai + 0x9d3c, F32(Terrain_Height(n->frame.pos[0], n->frame.pos[2])));
+    back_out(n, d, ai);
+    putf(ai + 0x9d34, F32(ADD(g_clock_game, 4.0f)));   /* 0x4a55b0 */
+    putf(ai + 0x9d38, AI_Heading(n));
+    return 0;
+}
+
+/* stuck's frame 0x418660: turned 1.5 from the noted heading: brake; going forward faster than 0.1: brake,
+   straight; backing slower than 8 m/s: full throttle, straight; else steer 0.95 of the limit against the
+   noted steering at the cruising speed */
+static int stuck_frame(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *d = n->data, *ai = ai_of(n);
+    const float *v = (const float *)(d + 0xbc), *z = &n->frame.m[6];
+    float vv[3];
+    memcpy(vv, v, 12);
+    float fwd = F32(ADD(ADD(MUL(vv[1], z[1]), MUL(vv[2], z[2])), MUL(vv[0], z[0])));
+    float h = AI_Heading(n);
+    if (!below(fabs(Angle_Diff(h, rdf(ai + 0x9d38))), 1.5f)) {   /* 0x4a55b4 */
+        AI_Stop(n);
+        return 0;
+    }
+    if (fbits(fwd) > 0x3dcccccd) {
+        AI_Stop(n);
+        put32(d + 0xe0, 0);
+        return 0;
+    }
+    if ((uint32_t)fbits(fwd) < 0xc1000000u) {
+        full_throttle(n);
+        put32(d + 0xe0, 0);
+        return 0;
+    }
+    float l = F32(fabs(AI_SteerLimit(n)));
+    putf(d + 0xe0, F32(MUL(l, rd32(ai + 0x9d20) > 0 ? -0.949999988079071f : 0.949999988079071f)));   /* 0x4a55bc, 0x4a55c0 */
+    AI_Speed(n, AI_Cruise(n));
+    return 0;
+}
+
+/* stuck's leave 0x418ad0: the stuck ring refilled (0x40faf0), brake, the direction flipped */
+static int stuck_leave(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *ai = ai_of(n);
+    for (int k = 0; k < 4; k++) put32(ai + 0x9d58 + 4 * k, 0x3f800000);
+    AI_Stop(n);
+    flip(n);
+    return 0;
+}
+
+/* stuck's pop 0x418850: the ground under it moved 3 m from the noted height, or turned 1.5 from the noted
+   heading while under 1 m/s */
+static int unstuck(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *ai = ai_of(n), *d = n->data;
+    float h = AI_Heading(n);
+    double diff = Angle_Diff(h, rdf(ai + 0x9d38));
+    double g = Terrain_Height(n->frame.pos[0], n->frame.pos[2]);
+    if (3.0 < fabs(SUB(rdf(ai + 0x9d3c), g))) return 1;   /* 0x4a55c8 */
+    return fbits(F32(fabs(diff))) > 0x3fbfffff && rd32(d + 0xac) < 0x3f800000;
+}
+
+/* 0x418b60, stuck to backing out (0x13): the terrain forward blocks (0x415080, forward) and the ground 5 m
+   ahead is less than 0.1 above here */
+static int wall_ahead(Node *n, Node *t)
+{
+    (void)t;
+    uint8_t *d = n->data;
+    float p[3] = {F32(n->frame.pos[0]), F32(n->frame.pos[1]), F32(n->frame.pos[2])}, slow, tt;
+    if (!AI_TerrainAhead(n, p, &slow, &tt)) return 0;
+    float h0 = F32(Terrain_Height(p[0], p[2]));
+    float sz = F32(MUL(n->frame.m[8], 5.0f)), sx = F32(MUL(n->frame.m[6], 5.0f));   /* 0x4a55dc */
+    float kx = sx, kz = sz, dd = 5.0f;
+    (void)d;
+    for (;;) {
+        float x = F32(ADD(p[0], kx));
+        double h = Terrain_Height(x, ADD(p[2], kz));   /* x as a float, z unrounded */
+        float hf = F32(h);
+        if (below(SUB(h, h0), 0.10000000149011612f)) return 1;   /* 0x4a5590 */
+        kz = F32(ADD(kz, sz));
+        kx = F32(ADD(kx, sx));
+        double nd = ADD(dd, 5.0f);
+        h0 = hf;
+        dd = F32(nd);
+        if (!below_eq_d(nd, 5.099999904632568f)) return 0;   /* 0x4a55e0 */
+    }
+}
+
+/* backing out's enter 0x418ce0: the direction flipped, straight, look again in 1.5 s; frame 0x418d70: full
+   throttle; leave 0x418d80: the direction flipped */
+static int backing_enter(Node *n, Node *t)
+{
+    (void)t;
+    flip(n);
+    put32(n->data + 0xe0, 0);
+    putf(ai_of(n) + 0x9d34, F32(ADD(g_clock_game, 1.5f)));
+    return 0;
+}
+
+static int backing_frame(Node *n, Node *t) { (void)t; full_throttle(n); return 0; }
+static int backing_leave(Node *n, Node *t) { (void)t; flip(n); return 0; }
+
 /* ---- attack (6) ---- */
 
 /* attack's enter 0x417b00: a time 20-34 s on (+0xa82c), the target (+0xa998), forward, mode 3, the order's
@@ -304,7 +664,7 @@ static int attack_enter(Node *n, Node *t)
 /* attack's frame 0x417c00: Combat in mode 1 (its answer is whatever Combat left in eax; the caller drops it) */
 static int attack_frame(Node *n, Node *t) { Combat(n, t, 1); return 0; }
 
-static int call(uint32_t va, Node *n, Node *t)
+int AI_TacticCall(uint32_t va, Node *n, Node *t)
 {
     switch (va) {
     case 0: return 0;
@@ -318,6 +678,22 @@ static int call(uint32_t va, Node *n, Node *t)
     case 0x4184b0: return back_frame(n, t);
     case 0x4189c0: return stuck(n, t);
     case 0x417b00: return attack_enter(n, t);
+    case 0x419070: return avoid_enter(n, t);
+    case 0x419210: return avoid_frame(n, t);
+    case 0x419410: return avoid_leave(n, t);
+    case 0x418290: return looked(n, t);
+    case 0x418df0: return ahead_not_target(n, t);
+    case 0x418e70: return ahead(n, t);
+    case 0x418ee0: return ahead_driving(n, t);
+    case 0x418a50: return blocked(n, t);
+    case 0x418500: return stuck_enter(n, t);
+    case 0x418660: return stuck_frame(n, t);
+    case 0x418ad0: return stuck_leave(n, t);
+    case 0x418850: return unstuck(n, t);
+    case 0x418b60: return wall_ahead(n, t);
+    case 0x418ce0: return backing_enter(n, t);
+    case 0x418d70: return backing_frame(n, t);
+    case 0x418d80: return backing_leave(n, t);
     case 0x417c00: return attack_frame(n, t);
     case 0x41d1c0: return goto_enter(n, t);
     case 0x41d4a0: return goto_frame(n, t);
@@ -386,7 +762,7 @@ void AI_Order(Node *n, Node *t, int order, int slow)
         tac = generic(order) ? 6 : order;   /* 0x40cc00 */
         put32(ai + 0xa93c, 0);
         put32(ai + 0xa874, tac);
-        call(TACTIC(tac, 8), n, t);
+        AI_TacticCall(TACTIC(tac, 8), n, t);
     } else {
         /* from the top down, the first tactic with a pop that holds is left */
         for (;;) {
@@ -397,34 +773,34 @@ void AI_Order(Node *n, Node *t, int order, int slow)
             int32_t pops = (int32_t)TACTIC(cur, 0x8c);
             if (pops < 1) break;
             int k = 0;
-            while (!call(TACTIC(cur, 0x90 + (uint32_t)k * 0x1d8), n, t))
+            while (!AI_TacticCall(TACTIC(cur, 0x90 + (uint32_t)k * 0x1d8), n, t))
                 if (++k >= pops) goto frame;
-            call(TACTIC(cur, 0x1300), n, t);
+            AI_TacticCall(TACTIC(cur, 0x1300), n, t);
             memcpy(&top, ai + 0xa93c, 4);
             if (top < 1) {
                 tac = generic(bottom) ? 6 : order;   /* 0x40cc00 with the tactic and the pop's number */
                 put32(ai + 0xa874 + (uint32_t)top * 4, tac);
-                call(TACTIC(tac, 8), n, t);
+                AI_TacticCall(TACTIC(tac, 8), n, t);
                 break;
             }
             put32(ai + 0xa93c, top - 1);
         }
     }
 frame:
-    call(TACTIC(tac, 4), n, t);
+    AI_TacticCall(TACTIC(tac, 4), n, t);
     for (;;) {
         int32_t pushes = (int32_t)TACTIC(tac, 0x38);
         if (pushes < 1) break;
         int k = 0;
-        while (!call(TACTIC(tac, 0x3c + (uint32_t)k * 8), n, t))
+        while (!AI_TacticCall(TACTIC(tac, 0x3c + (uint32_t)k * 8), n, t))
             if (++k >= pushes) goto done;
         tac = (int32_t)TACTIC(tac, 0x40 + (uint32_t)k * 8);
         memcpy(&top, ai + 0xa93c, 4);
         if (top < 0x31) {
             put32(ai + 0xa93c, top + 1);
             put32(ai + 0xa874 + (uint32_t)(top + 1) * 4, tac);
-            call(TACTIC(tac, 8), n, t);
-            call(TACTIC(tac, 4), n, t);
+            AI_TacticCall(TACTIC(tac, 8), n, t);
+            AI_TacticCall(TACTIC(tac, 4), n, t);
         } else
             plat_log(exe_str(0x4a9224));   /* "Ptable stack overflow", the original's fatal */
     }

@@ -511,8 +511,67 @@ def call_avoid(exe, n, fpcw):
             CALL_OUT.append((struct.pack("<i", r) + (exe.read(w, 8) if w else bytes(8)) + exe.read(out, 12)).hex())
 
 
+def call_way(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    d = u(n + 0x70)
+    ai = u(d + 0x108)
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    bits = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
+    px, py, pz = struct.unpack("<3d", exe.read(n + 0x40, 24))
+    fpx, fpz = f32(px), f32(pz)
+    for off, val in ((0x9D40, fpx - 300), (0x9D48, fpz - 300), (0x9D4C, fpx + 300), (0x9D54, fpz + 300)):
+        exe.write(ai + off, struct.pack("<f", f32(val)))
+    z = struct.unpack("<3f", exe.read(n + 0x30, 12))
+    exe.write(d + 0xBC, struct.pack("<3f", *(f32(c * 15.0) for c in z)))
+    exe.write(d + 0xAC, struct.pack("<f", 15.0))
+    exe.write(0x4A85E8, struct.pack("<3d", px, py, pz))
+    for st in (0.0, 0.3, -0.3):
+        for look in (-1.0, 1.0):
+            for k in range(2):
+                exe.write(d + 0xE0, struct.pack("<2f", st, 1.0))
+                exe.write(ai + 0x9D34, struct.pack("<f", look))
+                out = exe.put(struct.pack("<f", -1))
+                entry = x86.STACK + x86.STACK_SIZE - 0x100 - 0x20   # the unset slow and factor (see AI_FindWay)
+                exe.write(entry - 0x50, struct.pack("<f", 2.0))
+                exe.write(entry - 0x44, struct.pack("<f", 0.75))
+                exe.call(0x416EF0, n, d, ai, n if k else 0, out, 0, 1, limit=2_000_000_000, fpcw=fpcw)
+                CALL_OUT.append((exe.read(d + 0xE0, 8) + exe.read(out, 4)).hex())
+    mask = lambda b: b[:0x18] + bytes(4) + b[0x1C:]  # noqa: E731
+    for i, tt in enumerate((0.5, 2.0)):
+        exe.write(d + 0xE0, struct.pack("<2f", 0.3, 1.0))
+        exe.write(ai + 0x9D28, struct.pack("<f", tt))
+        exe.write(ai + 0x9D2C, struct.pack("<I", 0 if i else n))
+        for f in (0x418E70, 0x419070, 0x419210, 0x419210, 0x419210, 0x419410, 0x418290):
+            r = exe.call(f, n, 0, limit=2_000_000_000, fpcw=fpcw)
+            if f in (0x419070, 0x419210, 0x419410):
+                r = 0
+            CALL_OUT.append((struct.pack("<i", r) + exe.read(d + 0xE0, 8) + mask(exe.read(ai + 0x9D14, 0x24))).hex())
+    for f in (0x418DF0, 0x418E70, 0x418EE0, 0x418A50):
+        r = exe.call(f, n, 0, limit=2_000_000_000, fpcw=fpcw)
+        CALL_OUT.append((struct.pack("<i", r) + mask(exe.read(ai + 0x9D14, 0x24))).hex())
+    exe.write(ai + 0x9D2C, bytes(4))
+
+
+def call_stuck(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    d = u(n + 0x70)
+    ai = u(d + 0x108)
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    exe.write(0x4A85E8, exe.read(n + 0x40, 24))
+    z = struct.unpack("<3f", exe.read(n + 0x30, 12))
+    for sp in (15.0, -9.0):
+        exe.write(d + 0xBC, struct.pack("<3f", *(f32(c * sp) for c in z)))
+        exe.write(d + 0xAC, struct.pack("<f", abs(sp)))
+        exe.write(d + 0xE0, struct.pack("<2f", 0.3, 1.0))
+        for k, f in enumerate((0x418B60, 0x418500, 0x418660, 0x418660, 0x418850, 0x418AD0, 0x418CE0, 0x418D70, 0x418290, 0x418D80)):
+            r = exe.call(f, n, 0, limit=2_000_000_000, fpcw=fpcw)
+            if k not in (0, 4, 8):
+                r = 0
+            CALL_OUT.append((struct.pack("<i", r) + exe.read(d + 0xE0, 12) + exe.read(d + 0x104, 4) + exe.read(ai + 0x9D20, 0x20) + exe.read(ai + 0x9D58, 0x10)).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

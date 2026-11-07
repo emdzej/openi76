@@ -6,6 +6,8 @@
 
 /* AI_Order 0x40cc10: vehicle n given an order (0-0x21) on target t (may be NULL); slow is 0x5054ac */
 void AI_Order(Node *n, Node *t, int order, int slow);
+/* AI_TacticCall: a tactics table function by its address (0 for one not ported, logged once) */
+int AI_TacticCall(uint32_t va, Node *n, Node *t);
 /* AI_Stop 0x40a500: the throttle to the most braking without a slide (0x474eb0 at -1, x 0.9999) */
 void AI_Stop(Node *n);
 /* Vehicle_Throttle 0x474eb0: the throttle nearest want (from its half, six halvings) whose force does not

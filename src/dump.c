@@ -7,6 +7,7 @@
 #include "crt.h"
 #include "ai.h"
 #include "avoid.h"
+#include "orders.h"
 #include "effects.h"
 #include "entity.h"
 #include "weapons.h"
@@ -831,6 +832,7 @@ int Dump_CallVehicles(int which, int upside)
                         camera and 40 far, five sets of controls and flags: the answer, what (its name), slow,
                         factor, t */
             uint8_t *ai = *Data_Ptr(n->data, 0x108);
+            int round0 = g_fpu_round;   /* each call from the same rounding, as the emulator's calls */
             float px = (float)n->frame.pos[0], pz = (float)n->frame.pos[2];
             float box[4] = {px - 300.0f, pz - 300.0f, px + 300.0f, pz + 300.0f};
             memcpy(ai + 0x9d40, &box[0], 4);
@@ -850,6 +852,7 @@ int Dump_CallVehicles(int which, int upside)
                 for (int j = 0; j < 5; j++) {
                     Node *who = NULL;
                     float slow = -1, factor = -1, t = -1;
+                    g_fpu_round = round0;
                     int32_t r = AI_Avoid(n, ctl[j][0], ctl[j][1], &who, &slow, &factor, fl[j][0], fl[j][1], &t);
                     uint8_t w[4 + 8 + 12] = {0};
                     memcpy(w, &r, 4);
@@ -857,6 +860,99 @@ int Dump_CallVehicles(int which, int upside)
                     memcpy(w + 12, &slow, 4);
                     memcpy(w + 16, &factor, 4);
                     memcpy(w + 20, &t, 4);
+                    call_line(w, sizeof w);
+                }
+            }
+            break;
+        }
+        case 25: {   /* the way round (0x416ef0) and the avoiding tactic (0x11): the look-ahead box and 15 m/s as
+                        for 24, near the camera; the way for three steerings, two times to look again and who
+                        none or itself; then the enter, two frames and the leave at t 0.5 and 2; the push tests */
+            uint8_t *ai = *Data_Ptr(n->data, 0x108), *d = n->data;
+            int round0 = g_fpu_round;   /* each call from the same rounding, as the emulator's calls */
+            float px = (float)n->frame.pos[0], pz = (float)n->frame.pos[2];
+            float box[4] = {px - 300.0f, pz - 300.0f, px + 300.0f, pz + 300.0f};
+            memcpy(ai + 0x9d40, &box[0], 4);
+            memcpy(ai + 0x9d48, &box[1], 4);
+            memcpy(ai + 0x9d4c, &box[2], 4);
+            memcpy(ai + 0x9d54, &box[3], 4);
+            float v[3], sp = 15.0f, one = 1.0f;
+            for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
+            memcpy(d + 0xbc, v, 12);
+            memcpy(d + 0xac, &sp, 4);
+            for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k];
+            static const float steer[3] = {0, 0.3f, -0.3f}, look[2] = {-1, 1};
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 2; j++)
+                    for (int k = 0; k < 2; k++) {
+                        memcpy(d + 0xe0, &steer[i], 4);
+                        memcpy(d + 0xe4, &one, 4);
+                        memcpy(ai + 0x9d34, &look[j], 4);
+                        float f = -1;
+                        g_fpu_round = round0;
+                        AI_FindWay(n, ai, k ? n : NULL, &f, 0, 1, 2.0f, 0.75f);   /* as diff_objects.py puts them */
+                        uint8_t w[12];
+                        memcpy(w, d + 0xe0, 8);
+                        memcpy(w + 8, &f, 4);
+                        call_line(w, sizeof w);
+                    }
+            static const float tt[2] = {0.5f, 2.0f};
+            static const uint32_t fns[7] = {0x418e70, 0x419070, 0x419210, 0x419210, 0x419210, 0x419410, 0x418290};
+            for (int i = 0; i < 2; i++) {
+                memcpy(d + 0xe0, &steer[1], 4);
+                memcpy(d + 0xe4, &one, 4);
+                memcpy(ai + 0x9d28, &tt[i], 4);
+                *Data_Ptr(ai, 0x9d2c) = i ? NULL : n;
+                for (int k = 0; k < 7; k++) {   /* a push test first: its look ahead's words stay for the enter */
+                    g_fpu_round = round0;
+                    int32_t r = AI_TacticCall(fns[k], n, NULL);
+                    uint8_t w[4 + 8 + 0x24];
+                    memcpy(w, &r, 4);
+                    memcpy(w + 4, d + 0xe0, 8);
+                    memcpy(w + 12, ai + 0x9d14, 0x24);
+                    memset(w + 12 + 0x18, 0, 4);   /* +0x9d2c: a pointer */
+                    call_line(w, sizeof w);
+                }
+            }
+            static const uint32_t tests[4] = {0x418df0, 0x418e70, 0x418ee0, 0x418a50};
+            for (int k = 0; k < 4; k++) {
+                g_fpu_round = round0;
+                int32_t r = AI_TacticCall(tests[k], n, NULL);
+                uint8_t w[4 + 0x24];
+                memcpy(w, &r, 4);
+                memcpy(w + 4, ai + 0x9d14, 0x24);
+                memset(w + 4 + 0x18, 0, 4);
+                call_line(w, sizeof w);
+            }
+            *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 26: {   /* stuck (0x12) and backing out (0x13): steering 0.3 at 15 m/s, then backing 9 m/s; the
+                        enter, two frames, the pop and the leave of each, the push test; the controls, the
+                        direction, the mode and the AI block's +0x9d20-+0x9d3c, +0x9d58-+0x9d64 */
+            uint8_t *ai = *Data_Ptr(n->data, 0x108), *d = n->data;
+            int round0 = g_fpu_round;
+            for (int k = 0; k < 3; k++) g_view_pos[k] = n->frame.pos[k];
+            static const uint32_t fns[10] = {0x418b60, 0x418500, 0x418660, 0x418660, 0x418850, 0x418ad0,
+                                             0x418ce0, 0x418d70, 0x418290, 0x418d80};
+            for (int pass = 0; pass < 2; pass++) {
+                float sp = pass ? -9.0f : 15.0f, st = 0.3f, one = 1.0f, v[3];
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
+                memcpy(d + 0xbc, v, 12);
+                sp = pass ? 9.0f : 15.0f;
+                memcpy(d + 0xac, &sp, 4);
+                memcpy(d + 0xe0, &st, 4);
+                memcpy(d + 0xe4, &one, 4);
+                for (int k = 0; k < 10; k++) {
+                    g_fpu_round = round0;
+                    int32_t r = AI_TacticCall(fns[k], n, NULL);
+                    if (k != 0 && k != 4 && k != 8) r = 0;
+                    uint8_t w[4 + 12 + 4 + 0x20 + 0x10];
+                    memcpy(w, &r, 4);
+                    memcpy(w + 4, d + 0xe0, 12);
+                    memcpy(w + 16, d + 0x104, 4);
+                    memcpy(w + 20, ai + 0x9d20, 0x20);
+                    memcpy(w + 52, ai + 0x9d58, 0x10);
                     call_line(w, sizeof w);
                 }
             }
@@ -927,6 +1023,8 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 for (int k = 0xa6f4; k < 0xa818; k++) h = (h ^ ai[k]) * 0x01000193;
                 len += (size_t)snprintf(o + len, cap - len, " w %x %08x %08x", *(uint32_t *)(ai + 0xa6f4), h, *(uint32_t *)(ai + 0xa82c));
                 for (int k = 0; k < 4; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + 0x9d40 + 8 * (k & 1) + 0xc * (k >> 1)));
+                static const uint16_t av[] = {0x9d18, 0x9d1c, 0x9d24, 0x9d28, 0x9d30, 0x9d34};   /* the avoiding */
+                for (size_t k = 0; k < sizeof av / sizeof av[0]; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + av[k]));
                 len += (size_t)snprintf(o + len, cap - len, "\n");
             }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {

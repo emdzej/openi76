@@ -214,7 +214,7 @@ no hand brake, full lock against the steering's sign; frame (0x4184b0): braking 
 with its sign.
 
 **Stuck** (0x4189c0): the throttle that holds at full (0x474eb0) is kept in a ring of four at +0x9d58,
-by AI_Frame's count (0x505518, 0x40fad0); all four at most 0.1 push 0x12 (not ported yet).
+by AI_Frame's count (0x505518, 0x40fad0); all four at most 0.1 push 0x12.
 
 **Class 9** (the helicopters) follow the same tactics with their own steering (0x409fe0: the sine of a
 0.15th of the shorter way round, by the throttle and speed) and speed control (in 0x409cc0: the speed
@@ -322,4 +322,68 @@ back, and looks from the step's place p with its velocity v:
    none the original finds none either.
 
 None: *slow 0, *factor 0.5, answer 0.
+
+## Avoiding (0x11)
+
+`src/orders.c`, with the way round in `src/avoid.c`; `diff_objects.py --call way` checks the way round
+(three steerings, two look-again times, who none or itself), the enter, the frames, the leave and the
+push tests on every vehicle.
+
+**The pushes** (while +0x9d14, all but the helicopters): 0x418df0 something ahead all round that is not
+the target; 0x418e70 something ahead all round; 0x418ee0 (driving a path) something ahead, only cars
+within a second of the path's last turn (+0x9d00 + 1), on a bridge point or on rough ground (+0x45c 2, 3,
+4 or 7), or on ground 6 heading along the path's segment within 1 radian; a car ahead sounds the horn one
+time in four (0x476440, not ported: audio). The look ahead's answers land in the AI block: +0x9d28 the
+time, +0x9d2c what, +0x9d30 slow (0x418df0 only), +0x9d34 the factor.
+
+**Enter** (0x419070): no hand brake, mode 3, forward, no target. Something a second or more away
+(+0x9d28): a way round (0x416ef0), and +0x9d34 = the game time + (1 - steering gain) x 2 + the factor.
+Nearer: swerve: full lock (0x40a3c0 / 0x40a390: the tyres' limit x 0.9999) away from the steering's side;
+for a car ahead going 10-35 m/s the cruising speed when it lies in sector 7, 0 or 1, then the throttle
+opened (0x40a410: a gain's way toward the most that holds, at most 0.75 + gain / 4); over 35 m/s the
+cruising speed; +0x9d34 = time + (1 - gain) x 2 + 0.5. Then +0x9d18 = 1, +0x9d1c the speed, +0x9d24 the
+time.
+
+**Frame** (0x419210): every other frame (+0x9d18 toggles), the look ahead with the controls: clear,
+straight (+0xe0 = 0) at the order's speed (+0x80); else as at the start (a way round at the cruising
+speed, +0x9d18 0; or swerve, +0x9d18 1).
+
+**Pops**: 0x418290, the time +0x9d34 passed. **Leave** (0x419410): avoiding for more than 3 s marks the
+path's last point reached (+0x98). **Push to stuck** (0x418a50): not class 9; going forward yet backing
+faster than 0.05 along the z axis, or blocked (0x415690: the terrain forward 2-7.5 m, or any other entity
+met within the frame along 7 x the frame rate of the z axis).
+
+**The way round** (0x416ef0, the look ahead with all round): going straight (|steering| under 0.05) at
+0.1 cruising + 0.9 speed, steering 0.25, -0.25, 0.5, -0.5 ... up to the tyres' limit, scored by 100 -
+factor; else (unless who is a vehicle under 2 m/s or within 0.7 of its heading, or none at 15 m/s or more:
+then the speed eased a tenth toward cruising) the throttles from 0 up by 0.2 (to 1 when turning right, to
+the most that holds left) and from -0.2 down to the most braking that holds, then the steering in 0.25
+steps first toward the turn (while +0x9d34 lies ahead; else away), then the other side. The first clear
+one is taken; none: full lock the other way, with the best throttle and factor (the least slow).
+
+*Quirk (confirmed):* its slow and factor locals start unset, and the terrain's answers do not write them,
+so the original compares against what its stack slots held: words of the last look ahead's step frame,
+by the caller's stack depth (from the frame: m[4] and m[7]; after the push 0x418df0 m[2] and m[5],
+0x418e70 m[3] and m[6], 0x418ee0 m[5] and m[8]). The port passes those words (`AI_ProbeWord`). The horn's
+calls after 0x418ee0 would leave other words; with the horn not ported, the port keeps the probe's.
+
+## Stuck (0x12) and backing out (0x13)
+
+`src/orders.c`; `diff_objects.py --call stuck` checks them (going forward at 15 m/s, then backing at 9).
+
+**Stuck.** Enter (0x418500): no hand brake; +0x9d20 the steering and +0x9d3c the ground's height noted;
+backing out (0x417910: steer 0.95 of the tyres' limit against the steering as driven, the cruising speed
+up to 5 m/s else the brakes, the direction flipped, +0x9d34 in 2 s, the heading); then +0x9d34 = the time
++ 4 and +0x9d38 the heading. Frame (0x418660): turned 1.5 from the noted heading: brake; going forward
+faster than 0.1 m/s: brake, straight; backing slower than 8 m/s: full throttle (0x40a4b0, x 0.9999),
+straight; else 0.95 of the limit against the noted steering at the cruising speed. Pops: the ground under
+it 3 m from the noted height, or turned 1.5 while under 1 m/s (0x418850); the time (0x418290). Leave
+(0x418ad0): the stuck ring refilled with 1.0 (0x40faf0), brake, the direction flipped. Push to 0x13
+(0x418b60): the terrain forward blocks (0x415080 forward: 2-7.5 m) and the ground 5 m ahead is less than
+0.1 above here.
+
+**Backing out.** Enter (0x418ce0): the direction flipped, straight, +0x9d34 in 1.5 s. Frame (0x418d70):
+full throttle. Pop: the time. Leave (0x418d80): the direction flipped.
+
+The flip: +0xe8 - 1 within 1e-4 (going forward): backward, mode 1; else forward, mode 3.
 
