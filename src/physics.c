@@ -463,3 +463,144 @@ int Vehicle_Air(Node *n, float dt, uint32_t *flags, float vel[3], float *speed, 
     *f = t;
     return 1;
 }
+
+void Vec_Split(const float g[3], const float nv[3], float p[3], float t[3])
+{
+    double dot = ADD(ADD(MUL(nv[1], g[1]), MUL(nv[2], g[2])), MUL(nv[0], g[0]));
+    double len2 = ADD(ADD(MUL(nv[1], nv[1]), MUL(nv[2], nv[2])), MUL(nv[0], nv[0]));
+    double s = DIV(dot, len2);
+    float q[3] = {F32(MUL(s, nv[0])), F32(MUL(nv[1], s)), F32(MUL(s, nv[2]))};
+    for (int k = 0; k < 3; k++) t[k] = F32(SUB(g[k], q[k]));
+    memcpy(p, q, sizeof q);
+}
+
+void Mat_Rows(float out[3], const float v[3], const float *m)
+{
+    float o[3];
+    o[0] = F32(ADD(ADD(MUL(m[1], v[1]), MUL(m[2], v[2])), MUL(m[0], v[0])));
+    o[1] = F32(ADD(ADD(MUL(m[3], v[0]), MUL(m[5], v[2])), MUL(m[4], v[1])));
+    o[2] = F32(ADD(ADD(MUL(m[7], v[1]), MUL(m[8], v[2])), MUL(m[6], v[0])));
+    memcpy(out, o, sizeof o);
+}
+
+/* 0x4754a0: friction against sliding sideways, acc += right * -(v . right) / speed * lim */
+static void side_friction(Node *n, float lim, float acc[3])
+{
+    uint8_t *d = n->data;
+    const float *r = n->frame.m;
+    double m = -MUL(MUL(ADD(ADD(MUL(rdf(d + 0xc0), r[1]), MUL(rdf(d + 0xc4), r[2])), MUL(rdf(d + 0xbc), r[0])),
+                        rdf(d + 0xb0)), lim);
+    float y = F32(MUL(r[1], m)), z = F32(MUL(m, r[2]));
+    acc[0] = F32(ADD(MUL(r[0], m), acc[0]));
+    acc[1] = F32(ADD(acc[1], y));
+    acc[2] = F32(ADD(acc[2], z));
+}
+
+/* 0x475570: a wheel's friction where it touches: its contact point's velocity against the ground, all of
+   it when braking or sliding (br), else its sideways part; the force's part along the wheel's arm into
+   acc, its torque's yaw into turn */
+static void wheel_friction(Node *n, Node *w, float k, int br, float acc[3], float turn[3])
+{
+    uint8_t *d = n->data, *wd = w->data;
+    Frame W;
+    Node_FrameIn(&W, w, NULL);
+    const float *m = W.m;
+    float rx = F32(w->frame.pos[0]);
+    double pz = w->frame.pos[2];
+    float rz = F32(pz);
+    float u[3];
+    u[0] = F32(-MUL(pz, rdf(d + 0xcc)));
+    u[1] = F32(SUB(MUL(rdf(d + 0xc8), rz), MUL(rdf(d + 0xd0), rx)));
+    double uz = MUL(rdf(d + 0xcc), rx);
+    u[2] = F32(uz);
+    float c[3];
+    c[0] = F32(ADD(ADD(ADD(MUL(uz, m[6]), MUL(m[3], u[1])), MUL(m[0], u[0])), rdf(d + 0xbc)));
+    c[1] = F32(ADD(ADD(ADD(MUL(m[7], u[2]), MUL(m[4], u[1])), MUL(m[1], u[0])), rdf(d + 0xc0)));
+    c[2] = F32(ADD(ADD(ADD(MUL(m[5], u[1]), MUL(m[8], u[2])), MUL(m[2], u[0])), rdf(d + 0xc4)));
+    double cx2 = MUL(c[0], c[0]);
+    float cx2f = F32(cx2);
+    const float eps = exe_f32(0x4a6800);   /* 1e-8 */
+    if (below(cx2, eps) && below(MUL(c[1], c[1]), eps) && below(MUL(c[2], c[2]), eps)) return;
+    double len = fpu_sqrt(ADD(ADD(MUL(c[1], c[1]), MUL(c[2], c[2])), cx2f));
+    float f[3];
+    if (br) {
+        double q = DIV(-MUL(rdf(wd + 0xc), k), len);
+        f[0] = F32(MUL(c[0], q)), f[1] = F32(MUL(c[1], q)), f[2] = F32(MUL(q, c[2]));
+    } else {
+        double s = ADD(ADD(MUL(c[2], m[2]), MUL(c[1], m[1])), MUL(c[0], m[0]));
+        double q = -MUL(MUL(DIV(s, len), rdf(wd + 0xc)), k);
+        f[0] = F32(MUL(m[0], q)), f[1] = F32(MUL(m[1], q)), f[2] = F32(MUL(q, m[2]));
+    }
+    float arm[3] = {F32(ADD(MUL(m[6], rz), MUL(m[0], rx))), F32(ADD(MUL(m[7], rz), MUL(m[1], rx))),
+                    F32(ADD(MUL(m[8], rz), MUL(m[2], rx)))};
+    float p[3], t[3];
+    Vec_Split(f, arm, p, t);
+    for (int i = 0; i < 3; i++) acc[i] = F32(ADD(p[i], acc[i]));
+    float tq[3] = {F32(SUB(MUL(f[1], arm[2]), MUL(f[2], arm[1]))), F32(SUB(MUL(f[2], arm[0]), MUL(f[0], arm[2]))),
+                   F32(SUB(MUL(f[0], arm[1]), MUL(f[1], arm[0])))};
+    float r[3];
+    Mat_Rows(r, tq, m);
+    turn[1] = F32(ADD(turn[1], r[1]));
+    turn[2] = 0;
+    turn[0] = 0;
+}
+
+void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3], float slope[3], float turn[3])
+{
+    uint8_t *d = n->data;
+    memset(drag, 0, 12);
+    memset(turn, 0, 12);
+    float k = F32(MUL(rdf(d + 0x46c), 0.25f)), sp = rdf(d + 0xac);
+    int32_t spb;
+    memcpy(&spb, &sp, 4);
+    int tc = rd32(d + 0x45c);
+    static const uint32_t wh[4] = {0x3bc, 0x3a8, 0x3ac, 0x3b8};
+    if (spb >= 0x3f800000) {   /* the air's drag and the rolling resistance, against the velocity */
+        float air = F32(MUL(MUL(MUL(rdf(d + 0x120), sp), sp), exe_f32(0x4a67fc)));   /* -0.1 */
+        float roll = rdf(g_world.lights + 0x14 * (uint32_t)tc + 4);   /* 0x48e340 */
+        float s = rdf(wheel_data(d, wh[0]) + 0x14);
+        s = F32(ADD(rdf(wheel_data(d, wh[1]) + 0x14), s));
+        s = F32(ADD(rdf(wheel_data(d, wh[2]) + 0x14), s));
+        double sd = ADD(rdf(wheel_data(d, wh[3]) + 0x14), s);
+        double q = MUL(SUB(air, MUL(MUL(sd, roll), k)), rdf(d + 0xb0));
+        drag[0] = F32(MUL(rdf(d + 0xbc), q));
+        drag[1] = F32(MUL(rdf(d + 0xc0), q));
+        drag[2] = F32(MUL(q, rdf(d + 0xc4)));
+    }
+    /* gravity's parts across and along the ground */
+    float g[3], nv[3], pn[3], tg[3];
+    memcpy(g, exe_data(0x4a6690, 12), 12);   /* (0, -9.8, 0) */
+    memcpy(nv, d + 0x460, 12);
+    Vec_Split(g, nv, pn, tg);
+    k = F32(MUL(terrain_grip(d), k));
+    float s = rdf(wheel_data(d, wh[0]) + 0xc);
+    s = F32(ADD(rdf(wheel_data(d, wh[1]) + 0xc), s));
+    s = F32(ADD(rdf(wheel_data(d, wh[2]) + 0xc), s));
+    double sd = ADD(rdf(wheel_data(d, wh[3]) + 0xc), s);
+    float lim = F32(MUL(sd, k));
+    int sl;
+    if (below(MUL(lim, lim), ADD(ADD(MUL(tg[2], tg[2]), MUL(tg[1], tg[1])), MUL(tg[0], tg[0])))) {
+        *slide = 1;
+        sl = 1;
+    } else {
+        sl = sliding;
+    }
+    if (!upside && !(sl && spb >= 0x3f800000)) {   /* held: only the slope along the forward axis */
+        const float *f = n->frame.m + 6;
+        double dot = ADD(ADD(MUL(f[2], tg[2]), MUL(tg[1], f[1])), MUL(tg[0], f[0]));
+        slope[0] = F32(MUL(f[0], dot));
+        slope[1] = F32(MUL(f[1], dot));
+        slope[2] = F32(MUL(dot, f[2]));
+        return;
+    }
+    memcpy(slope, tg, 12);
+    int32_t tb;
+    memcpy(&tb, d + 0xe4, 4);
+    int br = upside || (uint32_t)tb > 0xbf000000u || rd32(d + 0xf0);
+    if (rd32(d + 0x454) & 0x1000) {
+        side_friction(n, lim, drag);
+        return;
+    }
+    static const uint32_t order[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
+    for (int i = 0; i < 4; i++) wheel_friction(n, slot(d, order[i]), k, br, drag, turn);
+}

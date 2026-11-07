@@ -456,3 +456,9 @@
 004719a0	Ballistic	physics	high	position and velocity under gravity on y; ported, diffed
 00471d40	Frame_Turn	math	high	a frame turned by w dt; ported, diffed
 004518e0	Frame_Euler	math	high	a frame from angles about y, x, z and an offset; ported, diffed
+00475100	Vehicle_Drag	physics	high	air drag, rolling resistance, the slope, and the friction when sliding; ported, diffed
+004754a0	Side_Friction	physics	high	friction against sliding sideways; ported, diffed
+00475570	Wheel_Friction	physics	high	a wheels contact friction, its force split along the arm, the yaw torque; ported, diffed
+00451740	Vec_Split	math	high	a vectors parts along and across n; ported, diffed
+0045f830	Mat_Rows	math	high	a vector by a matrixs rows; ported, diffed
+0048e340	Terrain_Roll	terrain	high	the terrain class record +4, rolling resistance

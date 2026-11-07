@@ -401,6 +401,25 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 7: {   /* the drag: moving 12 forward and 3 right, turning at 0.4, on a tilted normal; held,
+                       sliding, upside down, and sliding with the per-wheel friction (+0x454 bit 0x1000 off) */
+            float v[3], w[3] = {0, 0.4f, 0}, nv[3] = {0.2f, 0.97f, 0.1f}, sp = 12.4f;
+            for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f + n->frame.m[k] * 3.0f;
+            memcpy(n->data + 0xbc, v, 12);
+            memcpy(n->data + 0xc8, w, 12);
+            memcpy(n->data + 0x460, nv, 12);
+            memcpy(n->data + 0xac, &sp, 4);
+            const float isp = 1.0f / 12.4f;
+            memcpy(n->data + 0xb0, &isp, 4);
+            for (int j = 0; j < 4; j++) {
+                if (j == 3) n->data[0x455] &= ~0x10;
+                struct { int32_t slide; float drag[3], slope[3], turn[3]; } o;
+                memset(&o, 0, sizeof o);
+                Vehicle_Drag(n, j == 2, j == 1 || j == 3, &o.slide, o.drag, o.slope, o.turn);
+                call_line(&o, sizeof o);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

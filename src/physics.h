@@ -47,3 +47,11 @@ void Ballistic(float p[3], float v[3], float g, float dt);
 /* Vehicle_Air 0x474400: a vehicle in the air (+0x454 bit 4) or just off the ground falls; 1 with the
    step's results (flags, velocity, speed, turn, frame) when it is in the air or lands, 0 on the ground */
 int Vehicle_Air(Node *n, float dt, uint32_t *flags, float vel[3], float *speed, float w[3], Frame *f);
+/* Vec_Split 0x451740: g's part along n (p) and the rest (t) */
+void Vec_Split(const float g[3], const float n[3], float p[3], float t[3]);
+/* 0x45f830: v by the matrix's rows (into the frame's axes) */
+void Mat_Rows(float out[3], const float v[3], const float *m);
+/* Vehicle_Drag 0x475100: the air's drag and the rolling resistance (drag), the slope's pull (slope), and
+   when sliding or upside down the friction (into drag, the yaw torque into turn); *slide = 1 when the
+   slope is more than the grip */
+void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3], float slope[3], float turn[3]);
