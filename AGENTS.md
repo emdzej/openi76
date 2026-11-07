@@ -33,9 +33,9 @@ the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with 
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
-pilot's, the chase and the death's cameras (F1, F3) and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
+cameras: every mode of the presets F1-F11, the death's and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
-trace=<frames>` logs the user's vehicle. Not ported yet: the other camera modes and the cockpit, the
+trace=<frames>` logs the user's vehicle. Not ported yet: the cockpit (only its dashboard swap: docs/re/cockpit.md), the
 mission's script's movies and salvage (its machines, conditions, orders, objectives and the rest
 of its actions run: docs/re/fsm.md), the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the wrecks' effects are not ported), the radar's display (its contacts and targets work: docs/re/weapons.md), the HUD, the shell and audio. Read
