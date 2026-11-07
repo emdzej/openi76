@@ -27,3 +27,8 @@ Frame *Frame_Mul(Frame *out, const Frame *a, const Frame *b);
 void Frame_Points(float (*out)[3], const float (*in)[3], int n, const Frame *f);
 /* Plane_Transform 0x452890: a plane (n, d) into a frame's space: n M, d - (n M) . pos */
 void Plane_Transform(float out[4], const float p[4], const Frame *f);
+/* Quat_ToFrame 0x451bb0: the rotation of a unit quaternion q (x, y, z, w), position 0 (the original leaves
+   the unused word at +0x24 as it was on its stack; the port's is 0) */
+void Quat_ToFrame(Frame *out, const float q[4]);
+/* Frame_AxisAngle 0x451e40: a rotation by angle (radians) about the axis (x, y, z), through a quaternion */
+Frame *Frame_AxisAngle(Frame *out, float angle, float x, float y, float z);

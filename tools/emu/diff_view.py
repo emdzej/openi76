@@ -1,6 +1,6 @@
 """Differential test of the view (src/render/view.c) against the original's: View_Create 0x43c8a0 on random
 surfaces and parameters (some out of their ranges), View_SetZoom 0x43ca60, View_SetCamera 0x43cf00 with random
-rigid frames, View_ToCamera 0x43d2d0, View_TestSphere 0x43d180, Plane_From 0x452480 and Rect_Clip 0x43fb00.
+rigid frames, View_ToCamera 0x43d2d0, View_TestSphere 0x43d180, Plane_From 0x452480, Quat_ToFrame 0x451bb0, Frame_AxisAngle 0x451e40 and Rect_Clip 0x43fb00.
 The records (all but the unused +0x64 and the pointer), the surfaces' viewports and the results must be
 identical.
 
@@ -73,6 +73,8 @@ def main():
     lib.View_ToCamera.argtypes = [ctypes.POINTER(View), FV] + [ctypes.c_double] * 3
     lib.View_TestSphere.argtypes = [ctypes.POINTER(View), FV, ctypes.c_float]
     lib.Plane_From.argtypes = [ctypes.c_float * 4, FV, FV, FV]
+    lib.Quat_ToFrame.argtypes = [ctypes.POINTER(Frame), ctypes.c_float * 4]
+    lib.Frame_AxisAngle.argtypes = [ctypes.POINTER(Frame)] + [ctypes.c_float] * 4
     lib.Rect_Clip.argtypes = [ctypes.c_int * 4, ctypes.c_int * 4]
     lib.Frame_Mul.argtypes = [ctypes.POINTER(Frame)] * 3
     lib.Frame_Points.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(Frame)]
@@ -163,6 +165,17 @@ def main():
         pl2 = (ctypes.c_float * 4)()
         lib.Plane_Transform(pl2, pl, ctypes.byref(f))
         run.check("plane-transform", i, exe.read(plo, 16) == bytes(pl2))
+        q = (ctypes.c_float * 4)(*[rng.gauss(0, 1) for _ in range(4)])
+        qp, qo = exe.put(bytes(q)), exe.put(bytes(0x40))
+        exe.call(0x451BB0, qo, ecx=qp)
+        h = Frame()
+        lib.Quat_ToFrame(ctypes.byref(h), q)
+        run.check("quat", i, unpadded(exe.read(qo, 0x40)) == unpadded(bytes(h)))
+        aa = [rng.uniform(-7, 7)] + rng.choice(([0.0, 0.0, 1.0], [rng.uniform(-1, 1) for _ in range(3)]))
+        ao = exe.put(bytes(0x40))
+        exe.call(0x451E40, ao, *[fbits(x) for x in aa])
+        lib.Frame_AxisAngle(ctypes.byref(h), *aa)
+        run.check("axis-angle", i, unpadded(exe.read(ao, 0x40)) == unpadded(bytes(h)), f"{aa}")
         big = lambda: rng.choice((rng.randint(-100, 900), rng.randint(-2**31, 2**31 - 1)))  # noqa: E731
         r4, c4 = [big() for _ in range(4)], [rng.randint(-10, 100), rng.randint(-10, 100),
                                              rng.randint(100, 800), rng.randint(100, 600)]

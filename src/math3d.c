@@ -106,3 +106,27 @@ void Plane_Transform(float out[4], const float p[4], const Frame *f)
     out[2] = f32(n[2]);
     out[3] = f32(d);
 }
+
+void Quat_ToFrame(Frame *out, const float q[4])
+{
+    double x = q[0], y = q[1], z = q[2], w = q[3];
+    const float two = 2.0f, one = 1.0f;   /* 0x4a60bc, 0x4a60b8 */
+    double xx = x * x * two, yy = y * y * two, zz = z * z * two;
+    double xy = y * x * two, xz = z * x * two, wx = w * x * two;
+    float zy = f32(z * y * two), wy = f32(w * y * two), zw = f32(z * w * two);
+    double a = one - zz;
+    float m[9] = {f32(a - yy), f32(xy - zw), f32(wy + xz),
+                  f32(xy + zw), f32(a - xx), f32(zy - wx),
+                  f32(xz - wy), f32(wx + zy), f32((one - yy) - xx)};
+    memset(out, 0, sizeof *out);
+    memcpy(out->m, m, sizeof m);
+}
+
+Frame *Frame_AxisAngle(Frame *out, float angle, float x, float y, float z)
+{
+    float h = f32((double)angle * 0.5f);   /* 0x4a60cc */
+    float s = f32(sin(h)), c = f32(cos(h));   /* fsincos, 0x452a70 */
+    float q[4] = {f32((double)s * x), f32((double)s * y), f32((double)s * z), c};
+    Quat_ToFrame(out, q);
+    return out;
+}
