@@ -1077,12 +1077,12 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
-        case 39: case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49: case 50: {
+        case 39: case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47: case 48: case 49: case 50: case 51: {
                      /* a camera mode on n's entity: 39 the chase (0x405450, 0x4055e0), 40 the track view
                         (0x406bb0, 0x403540), 41 the overview (0x406200, 0x406340), 42 and 43 the side chases
                         (0x405ee0, 0x406070), 44 and 45 the mounted views (0x405b10, 0x405d80), 46 the target view (0x406450,
                         0x406560; 47 its twin 0x406950, 0x406a60) after the radar's frame (48 the hood 0x405000, 0x405190, 49 the pilot's 0x404890, 0x404520, 50 the missile camera 0x406d40, 0x406e80 after n's
-                        weapons each fire once 0.01 s late, n flagged the user's, its followed shot flown 0.03 s each frame; pilot_yaw_delta 40 and pilot_pitch -10) and its next contact chosen (0x421540); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
+                        weapons each fire once 0.01 s late, n flagged the user's, its followed shot flown 0.03 s each frame, 51 the orbit 0x4059a0, 0x403be0; pilot_yaw_delta 40 and pilot_pitch -10) and its next contact chosen (0x421540); track_pitch_delta 3, track_yaw_delta 8, overview_zoom_delta 20,
                         on n's entity: a 640 x 480 view (fov pi/2, aspect 1,
                         range 150, zoom 1), track_distance 3, steps of 0.06; five frames, n turned half round
                         about y before the third; after each the view's camera and eye */
@@ -1107,7 +1107,7 @@ int Dump_CallVehicles(int which, int upside)
             memcpy(INPUT_AT(0x4def70), &gy, 4);
             memcpy(INPUT_AT(0x4def78), &gp, 4);
             memcpy(INPUT_AT(0x4defbc), &oz, 4);
-            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15, 0x12, 0x13, 0x17, 0x18, 0x10, 0x19, 0x11};
+            static const int32_t modes[] = {0xf, 0xfefe, 0x16, 0x14, 0x15, 0x12, 0x13, 0x17, 0x18, 0x10, 0x19, 0x11, 0xe};
             if (which == 46 || which == 47) {
                 Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
                 for (int f = 0; f < 2 && rn; f++) Radar_Frame(rn);   /* as --call radar: the contacts by the second */

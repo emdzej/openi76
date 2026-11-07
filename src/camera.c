@@ -306,11 +306,13 @@ void Camera_Chase(void)
     chase_place(e, k, 1);
 }
 
-void Camera_Track(void)
+/* the track view's frame and the orbit's (check: the track's leaves without the entity's node; the orbit's,
+   0x403be0, does not test it) */
+static void track_frame(int check)
 {
     if (!g_camera_entity) g_camera_entity = g_user_entity;
     Entity *e = g_camera_entity;
-    if (!e->node) return;
+    if (check && !e->node) return;
     float step = g_clock_step;
     const float deg = exe_f32(0x4a5020);
     float k = F32(MUL(step, 2.0f));
@@ -335,17 +337,23 @@ void Camera_Track(void)
     chase_place(e, k, 0);   /* at the centre itself */
 }
 
-void Camera_TrackStart(Entity *e)
+void Camera_Track(void) { track_frame(1); }
+void Camera_Orbit(void) { track_frame(0); }
+
+static void track_start(Entity *e, int32_t mode, void (*fn)(void))
 {
     if (g_camera_mode == 4) Camera_Pop();
     view_again();
     g_camera_entity = e;
     g_cockpit = 0;
-    g_camera_mode = 6;
+    g_camera_mode = mode;
     heading(q_cur, e);
     memcpy(q_to, q_cur, sizeof q_to);
-    g_camera_fn = Camera_Track;
+    g_camera_fn = fn;
 }
+
+void Camera_TrackStart(Entity *e) { track_start(e, 6, Camera_Track); }
+void Camera_OrbitStart(Entity *e) { track_start(e, 7, Camera_Orbit); }
 
 /* the chase's frame (raised: its centre 2 up, the chase's): behind by the entity's radius times the distance, at most 150, turned by the pitch and the yaw */
 static void chase_place(Entity *e, float k, int raised)
@@ -628,6 +636,7 @@ void Camera_Hood(void)
 /* the modes' starts (0x4a86e8, by mode; those not ported yet are left out) */
 static const struct { int32_t mode; void (*start)(Entity *); } k_modes[] = {
     {0xd, Camera_CockpitStart},
+    {0xe, Camera_OrbitStart},
     {0xf, Camera_ChaseStart},
     {0x10, Camera_HoodStart},
     {0x11, Camera_MissileStart},

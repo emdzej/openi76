@@ -14,7 +14,7 @@ gamekey.map (F1 0xd, F2 0xe, F3 0xf, F4 0x18, F5 0x17, F6 0x10, F7 0x12, F8 0x13
 |---|---|---|---|---|
 | 0xc | 0x4049e0 | 0x404c60 | 2 | |
 | 0xd | 0x404380 | 0x404520 | 0 | `Camera_CockpitStart` |
-| 0xe | 0x4059a0 | 0x403be0 | 7 | |
+| 0xe | 0x4059a0 | 0x403be0 | 7 | `Camera_OrbitStart`, `Camera_Orbit` |
 | 0xf | 0x405450 | 0x4055e0 | 1 | `Camera_ChaseStart`, `Camera_Chase` |
 | 0x10 | 0x405000 | 0x405190 | 1 | `Camera_HoodStart`, `Camera_Hood` |
 | 0x11 | 0x406d40 | 0x406e80 | 8 | `Camera_MissileStart`, `Camera_Missile` |
@@ -305,6 +305,12 @@ on), with these differences:
 
 **Checked.** `--call track` (case 40) runs as `--call camera` does, with track_pitch_delta 3 and
 track_yaw_delta 8. Identical on t01, t05, t12, s01 and s04.
+
+**The orbit (mode 0xe, F2).** `Camera_OrbitStart` 0x4059a0 is the track view's start with the sub-mode 7,
+and installs `Camera_Orbit` 0x403be0. That frame is `Camera_Track` instruction for instruction except
+that it does not test the entity's node (two products have their operands swapped, the same under any
+rounding). So F2 gives the player the view the death gives the wreck, steered by the same keys.
+`--call orbit` (case 51) is identical on t01, s01 and t06.
 
 ## The script's cameras (0x452d00-0x453a70)
 

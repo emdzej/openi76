@@ -43,6 +43,10 @@ int Camera_Pop(void);
    and track_yaw_delta, the distance by track_distance, each eased at 2 per second */
 void Camera_TrackStart(Entity *e);
 void Camera_Track(void);
+/* Camera_OrbitStart 0x4059a0 (mode 0xe, F2) and Camera_Orbit 0x403be0: the same in sub-mode 7, its frame
+   without the track's test of the entity's node */
+void Camera_OrbitStart(Entity *e);
+void Camera_Orbit(void);
 /* Camera_ChaseLeftStart 0x405ee0 (mode 0x14, F9) and Camera_ChaseRightStart 0x406070 (0x15): the chase
    turned to a yaw of 150 degrees (30 off behind) and of 30 degrees (30 off the front) */
 void Camera_ChaseLeftStart(Entity *e);
