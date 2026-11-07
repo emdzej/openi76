@@ -69,3 +69,9 @@ void Point_Velocity(float out[3], const float at[3], Node *n);
    ground's normal at the point found on the surface). A corner already in the ground is backed out along
    its velocity; one that stays in is left. 0 without a contact */
 int Corners_Hit(Node *n, uint8_t *c, float dt);
+/* Vehicle_Collide 0x472890: the contact (+0x38: another body's, or the corners' with the ground,
+   Corners_Hit) answered: the velocity bounced (off the ground by up to 1, scaled by the angle; about the
+   pair's centre of mass), a turn from the push at the corner, within limits, the place moved for dt, and
+   a fall of more than 35 m kills. +0x454 bit 0x10 holds the ground contact until it ends: 0 then, 0 while
+   it holds, 1 when answered */
+int Vehicle_Collide(Node *n, float dt);

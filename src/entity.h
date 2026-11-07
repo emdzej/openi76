@@ -45,6 +45,9 @@ void Body_Init(uint8_t *p);
 /* Body_State 0x425c80: a node's body (0x3c bytes; the class table's word 8): a vehicle's (and 8's, 9's) at
    its data's +0xa4, else a default one (Body_Init); +0x18 the velocity, +0x24 the angular velocity */
 void Body_State(uint8_t out[0x3c], const Node *n);
+/* Motion_Init 0x469b80: a contact record (0x6c bytes): none (+0, the other node +4, +0x60-0x68 cleared)
+   with a default body at +8. The other node's pointer is the caller's slot to clear */
+void Motion_Init(uint8_t *p);
 /* Body_Set 0x4716f0: at p the mass m and the inertia i, with 1 / m (+4) and m / i (+0x14; 1e10 when i is
    not above 1e-4) */
 void Body_Set(uint8_t *p, float m, float i);

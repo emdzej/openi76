@@ -206,8 +206,45 @@ def call_corners(exe, n, fpcw):
     exe.write(n + 0x48, struct.pack("<d", y))
 
 
+def call_collide(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    m = struct.unpack("<9f", exe.read(n + 0x18, 36))
+    f0 = exe.read(n + 0x18, 0x40)
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    save = exe.read(d, 0x50C)
+    for dy, vy, sp, dt, mode in ((0, 0, 12.4, 0.05, 0), (-1.5, -5, 12.4, 0.05, 0), (0.3, -20, 25, 0.2, 0),
+                                 (-1.5, -5, 12.4, 0.05, 1), (-1.5, -5, 12.4, 0.05, 2), (0, 0, 12.4, 0.05, 3)):
+        exe.write(d, save)
+        exe.write(n + 0x18, f0)
+        v = [f32(m[6 + k] * 12.0) for k in range(3)]
+        v[1] = f32(v[1] + vy)
+        exe.write(d + 0xBC, struct.pack("<fff", *v))
+        exe.write(d + 0xC8, struct.pack("<fff", 0, 0.4, 0.2))
+        exe.write(d + 0xAC, struct.pack("<f", sp))
+        y = struct.unpack("<d", exe.read(n + 0x48, 8))[0] + f32(dy)
+        exe.write(n + 0x48, struct.pack("<d", y))
+        if mode == 1:
+            exe.write(d + 0x454, bytes([exe.read(d + 0x454, 1)[0] | 0x10]))
+        if mode == 2:
+            exe.write(d + 0x454, bytes([exe.read(d + 0x454, 1)[0] | 4]))
+            exe.write(d + 0x474, struct.pack("<f", f32(f32(y) + 100)))
+        if mode == 3:
+            c = d + 0x38
+            exe.write(c, struct.pack("<iIf", 1, n, 2000.0))
+            exe.write(c + 0x20, struct.pack("<fff", 1, 0, -3))
+            exe.write(c + 0x48, exe.read(d + 4, 12))
+            exe.write(c + 0x54, struct.pack("<fff", *(-x for x in v)))
+            exe.write(c + 0x60, struct.pack("<fff", 0.6, 0, 0.8))
+        r = exe.call(0x472890, n, struct.unpack("<I", struct.pack("<f", dt))[0], fpcw=fpcw)
+        f = bytearray(exe.read(n + 0x18, 0x40))
+        f[0x24:0x28] = bytes(4)
+        CALL_OUT.append((struct.pack("<i", r) + exe.read(d + 0x38, 0xA8) + exe.read(d + 0x454, 4) + bytes(f)).hex())
+    exe.write(d, save)
+    exe.write(n + 0x18, f0)
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -327,6 +364,17 @@ def original():
     if CALL:
         exe.stub(0x429EB0, lambda *a: 0, 3)   # the death
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
+        exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
+        exe.stub(0x45D7C0, lambda *a: 0, 3)   # an impact's damage
+
+        def skid(w, braking):   # 0x4301f0 as the port's stub: only the new mark's flag (+0x48)
+            wd = struct.unpack("<I", exe.read(w + 0x70, 4))[0]
+            if not braking or exe.read(wd + 0x40, 4) != bytes(4):
+                exe.write(wd + 0x48, bytes(4))
+            elif exe.read(wd + 0x48, 4) == bytes(4):
+                exe.write(wd + 0x48, struct.pack("<i", 1))
+            return 0
+        exe.stub(0x4301F0, skid, 2)
         c, k = struct.unpack("<I", exe.read(0x54F884, 4))[0], 0
         while c:
             nxt, _, n = struct.unpack("<III", exe.read(c, 12))
@@ -488,6 +536,9 @@ if __name__ == "__main__":
             bad += 1
             if bad <= 8:
                 print(f"line {i}:\n  orig {x}\n  port {y}")
+    if os.environ.get("CALL_SHOW"):
+        for x in CALL_OUT:
+            print("call", x[:8], x[8:16], x[0x6c * 2 + 8:0x6c * 2 + 32], x[(4 + 0xa8) * 2:(4 + 0xa8) * 2 + 8])
     if CALL_OUT != PORT_OUT:
         bad += 1
         print(f"--call {CALL}'s results:\n  orig {CALL_OUT}\n  port {PORT_OUT}")

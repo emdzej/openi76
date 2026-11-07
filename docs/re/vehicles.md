@@ -239,6 +239,44 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Vehicle_Grip 0x4759b0 | the steering's yaw rate, limited by the wheels' loads (+0xc) and the terrain's grip; a slide past twice the limit |
 | Vehicle_Drag 0x475100 | the air's drag (+0x120), the rolling resistance, the slope; sliding, the friction sideways (0x4754a0) or at each wheel (0x475570) with its yaw torque |
 | Vehicle_Drive 0x473600 | the step on the wheels: integrate (0x471860, 0x4719f0), turn about the rear axle (+0x11c), project the velocity on the ground (+0x460, the normal) |
+| Corners_Hit 0x47a8d0 | the body's four corners (+4) swept against the terrain (below) |
+| Vehicle_Collide 0x472890 | the contact (+0x38) answered (below); the damage 0x45d7c0 and the sound not yet |
+
+### The collisions (0x472890)
+
+The contact record at +0x38 (0x6c bytes, Motion_Init 0x469b80 clears it): +0 set, +4 the other node,
++8 the other's body (0x30 bytes; a default one for the ground), +0x44 the sub-step's time, +0x48 the
+corner (local), +0x54 its velocity reversed, +0x60 the normal. Something else fills it for a hit
+between objects; with none, **Corners_Hit** looks for the ground:
+
+- Each corner's world place (Frame_Points) and velocity (Point_Velocity 0x471bb0: each body up the
+  parents, the velocity plus ω × r, through the frame; Body_State 0x425c80 takes the class table's
+  word 8, a vehicle's body at +0xa4).
+- n = ftol(speed × dt) + 1, at most 7; the step is dt × (1/n) from the table 0x4a6864, and there are
+  n + 1 of them (one more than dt covers). A reverse speed past −1 m a step gives n ≤ 0: no steps, or for
+  n = 0 one step of −1e-4 dt (the table's first word).
+- A corner above the ground moves on. One in the ground at the first step is backed out along its
+  velocity (50 steps at most; still in, it is ignored from then on); one that goes in later, or comes
+  out more than 0.01 above, is halved between in and out until within 0.01 (50 times at most).
+- The contact's normal is **Terrain_Normal 0x491bf0**: one of the cell's two triangles, chosen by x − i
+  against z − j where i, j are the cell's indices (x and z in metres, not the fractions), and the second
+  triangle's slopes have the wrong sign. Both kept.
+
+Bit 0x10 of +0x454 holds a ground contact: while it is set a new one returns 0 (the record stays
+filled); it clears when the corners are clear. The response:
+
+- The bounce e = 1 − 0.75 (n · v / |v|)², within [0.25, 1] (the bits compared as integers).
+- Off the ground: v − 2 (n · v) n, times e. Faster than 4 m/s (squared, 16): the "vtcoll.wav" sound
+  and the impact's damage (0x45d7c0). Slower: 4 n, but only right side up (m[4] > 0) and not in the air
+  (or always against an object). Then a rise faster than 1 m/s keeps a fifth of it.
+- Against another body (class 1 or 9): the velocity about the pair's centre of mass, its normal part
+  reversed and half the rest kept, at least 4 n; the other is not pushed here.
+- The turn: the push (n, or against a body the corner's reversed velocity) through the frame's rows,
+  crossed with the corner on the x-z plane, times speed × 0.1 (or over the corner's x² + z²), times
+  +0xb4, added to ω; then ω's x held within ±π/2, y ±π, z ±π/4 by scaling the whole vector.
+- The speed and its inverse, the wheels' speeds (+0x20), the place moved for dt, Frame_Turn, and
+  more than 35 m under where it left the ground (+0x474) while in the air kills (Vehicle_Kill). Then the
+  record is cleared and the brakes set (Vehicle_Brake, braking).
 
 The terrain classes' records (0x5e3020, 8 × 0x14 bytes, from WRLD) give the grip (+0), the rolling
 resistance (+4) and the roughness (+8).

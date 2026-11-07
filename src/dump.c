@@ -481,6 +481,56 @@ int Dump_CallVehicles(int which, int upside)
             n->frame.pos[1] = y;
             break;
         }
+        case 10: {   /* the collision step from the corners' cases (as is, lowered 1.5 falling at 5, raised 0.3
+                        falling at 20), with the contact already held (+0x454 bit 0x10), lowered in the air
+                        100 m under where it left the ground, and against a body of 2000 kg (itself) */
+            static const float cases[6][5] = {{0, 0, 12.4f, 0.05f, 0}, {-1.5f, -5, 12.4f, 0.05f, 0}, {0.3f, -20, 25, 0.2f, 0},
+                                              {-1.5f, -5, 12.4f, 0.05f, 1}, {-1.5f, -5, 12.4f, 0.05f, 2}, {0, 0, 12.4f, 0.05f, 3}};
+            static const float w[3] = {0, 0.4f, 0.2f}, u[3] = {1, 0, -3}, nv[3] = {0.6f, 0, 0.8f}, m2 = 2000;
+            uint8_t save[0x50c];
+            Frame f0 = n->frame;
+            memcpy(save, n->data, sizeof save);
+            for (int j = 0; j < 6; j++) {
+                memcpy(n->data, save, sizeof save);
+                n->frame = f0;
+                float v[3];
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f;
+                v[1] += cases[j][1];
+                memcpy(n->data + 0xbc, v, 12);
+                memcpy(n->data + 0xc8, w, 12);
+                memcpy(n->data + 0xac, &cases[j][2], 4);
+                n->frame.pos[1] += cases[j][0];
+                int mode = (int)cases[j][4];
+                if (mode == 1) n->data[0x454] |= 0x10;
+                if (mode == 2) {
+                    float y = (float)n->frame.pos[1] + 100;
+                    n->data[0x454] |= 4;
+                    memcpy(n->data + 0x474, &y, 4);
+                }
+                if (mode == 3) {
+                    uint8_t *c = n->data + 0x38;
+                    memcpy(c, &(int32_t){1}, 4);
+                    *Data_Ptr(n->data, 0x3c) = n;
+                    memcpy(c + 8, &m2, 4);
+                    memcpy(c + 0x20, u, 12);
+                    memcpy(c + 0x48, n->data + 4, 12);
+                    for (int k = 0; k < 3; k++) memcpy(c + 0x54 + 4 * k, &(float){-v[k]}, 4);
+                    memcpy(c + 0x60, nv, 12);
+                }
+                uint8_t b[4 + 0xa8 + 4 + sizeof(Frame)];
+                int32_t r = Vehicle_Collide(n, cases[j][3]);
+                Frame f = n->frame;
+                f.pad = 0;
+                memcpy(b, &r, 4);
+                memcpy(b + 4, n->data + 0x38, 0xa8);
+                memcpy(b + 4 + 0xa8, n->data + 0x454, 4);
+                memcpy(b + 8 + 0xa8, &f, sizeof f);
+                call_line(b, sizeof b);
+            }
+            memcpy(n->data, save, sizeof save);
+            n->frame = f0;
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

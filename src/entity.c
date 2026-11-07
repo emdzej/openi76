@@ -194,8 +194,8 @@ void Body_Init(uint8_t *p)
     put32(p + 0x10, 0x3f800000);
 }
 
-/* 0x469b80 */
-static void motion_init(uint8_t *p)
+/* Motion_Init 0x469b80 */
+void Motion_Init(uint8_t *p)
 {
     put32(p, 0);
     put32(p + 4, 0);
@@ -269,7 +269,7 @@ static uint8_t *vehicle_data(void)
 {
     uint8_t *d = class_alloc(VEH_SIZE);
     if (!d) return NULL;
-    motion_init(d + 0x38);
+    Motion_Init(d + 0x38);
     static const uint32_t k[13] = {0xbf800000, 0x3f800000, 0xc0000000, 0x3f800000, 0x3f800000, 0xc0000000, 0x3f800000,
                                    0x3f800000, 0x40000000, 0xbf800000, 0x3f800000, 0x40000000, 0x3fc00000};
     memcpy(d + 4, k, sizeof k);
@@ -362,7 +362,7 @@ static uint8_t *class7_new(void)
 {
     uint8_t *d = class_alloc(0xa0);
     if (!d) return NULL;
-    motion_init(d);
+    Motion_Init(d);
     for (uint32_t o = 0x6c; o <= 0x8c; o += 4) put32(d + o, 0);
     put32(d + 0x94, 0x3f800000);
     put32(d + 0x90, 1);

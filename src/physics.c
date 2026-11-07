@@ -881,3 +881,144 @@ int Corners_Hit(Node *n, uint8_t *c, float dt)
         }
     return 0;
 }
+
+/* 0x45d7c0: the damage of an impact (the node, 0, the velocity reversed, the normal, the corner): not
+   ported yet */
+static void impact_damage(Node *n, int a, const uint8_t *v, const float nv[3], const uint8_t *at)
+{
+    (void)n, (void)a, (void)v, (void)nv, (void)at;
+}
+/* 0x468580: a sound by name at a node: no sound yet */
+static void sound_named(const char *wav, Node *n, int a) { (void)wav, (void)n, (void)a; }
+
+static float from_bits(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
+
+/* the turn of a push q at the corner (cx, cz on the ground's plane), q through the frame's rows */
+static void push_turn(float out[3], const float *m, const float q[3], float cx, float cz)
+{
+    double a0 = ADD(ADD(MUL(m[2], q[2]), MUL(m[1], q[1])), MUL(m[0], q[0]));
+    float a1 = F32(ADD(ADD(MUL(m[3], q[0]), MUL(m[4], q[1])), MUL(m[5], q[2])));
+    double a2 = ADD(ADD(MUL(m[6], q[0]), MUL(m[8], q[2])), MUL(m[7], q[1]));
+    out[0] = F32(MUL(a1, cz));
+    out[1] = F32(SUB(MUL(a2, cx), MUL(a0, cz)));
+    out[2] = F32(-MUL(a1, cx));
+}
+
+/* the angular velocity a held within limits on each axis in turn (x pi/2, y pi, z pi/4): over one, the
+   whole vector scaled so that axis is at it */
+static void turn_limit(float a[3], int k, uint32_t lim)
+{
+    uint32_t b = fbits(a[k]);
+    float l;
+    if ((int32_t)b > (int32_t)lim) l = from_bits(lim);
+    else if (b > (lim | 0x80000000u)) l = from_bits(lim | 0x80000000u);
+    else return;
+    float r[3], x = a[k];
+    for (int j = 0; j < 3; j++) r[j] = j == k && k == 0 ? l : F32(MUL(DIV(a[j], x), l));
+    memcpy(a, r, sizeof r);
+}
+
+int Vehicle_Collide(Node *n, float dt)
+{
+    uint8_t *d = n->data, *c = d + 0x38;
+    Node **other = (Node **)Data_Ptr(d, 0x3c);
+    if (rd32(c) == 0) {
+        if (!Corners_Hit(n, c, dt)) {
+            put32(d + 0x454, rd32(d + 0x454) & ~0x10);
+            return 0;
+        }
+        if (rd32(d + 0x454) & 0x10) return 0;   /* still on the same contact */
+        put32(d + 0x454, rd32(d + 0x454) | 0x10);
+    }
+    float v[3], nv[3], cl[3], vn[3], w[3] = {0, 0, 0};
+    memcpy(v, d + 0xbc, 12);
+    memcpy(nv, c + 0x60, 12);
+    memcpy(cl, c + 0x48, 12);
+    /* the bounce: 1 - 0.75 (n . v / |v|)^2, within [0.25, 1] (the bits compared as integers) */
+    float e = 1.0f;
+    if (rd32(d + 0xac) > 0x38d1b717) {   /* 1e-4 */
+        double k = MUL(ADD(ADD(MUL(nv[2], v[2]), MUL(nv[1], v[1])), MUL(nv[0], v[0])), rdf(d + 0xb0));
+        e = F32(ADD(MUL(MUL(k, k), -0.75f), 1.0f));   /* 0x4a6794, 0x4a6750 */
+    }
+    if ((int32_t)fbits(e) > 0x3f800000) e = 1.0f;
+    else if ((int32_t)fbits(e) < 0x3e800000) e = 0.25f;
+    Node *o = *other;
+    int mover = o && (o->cls == 1 || o->cls == 7 || o->cls == 9) && o->cls != 7;   /* 0x42e640 */
+    if (mover && (n->flags & 0x20)) {
+        memcpy(vn, v, sizeof vn);
+    } else {
+        if (mover) {
+            /* against another body: the velocity about the pair's centre of mass, its part along the normal
+               reversed, half the rest kept; at least 4 m/s off along the normal */
+            float m1 = rdf(d + 0xa4), m2 = rdf(c + 8), u[3], p[3], r[3], t[3];
+            memcpy(u, c + 0x20, 12);
+            double s[3];
+            for (int k = 0; k < 3; k++) s[k] = F32(ADD(MUL(u[k], m2), MUL(v[k], m1)));
+            double m = ADD(m2, m1);
+            for (int k = 0; k < 3; k++) p[k] = F32(DIV(s[k], m));
+            r[0] = F32(SUB(v[0], p[0]));
+            r[1] = F32(SUB(v[1], p[1]));
+            double rz = SUB(v[2], p[2]);
+            r[2] = F32(rz);
+            double j = -ADD(ADD(MUL(rz, nv[2]), MUL(r[1], nv[1])), MUL(r[0], nv[0]));
+            for (int k = 0; k < 3; k++) t[k] = F32(ADD(MUL(nv[k], j), MUL(r[k], 0.5f)));   /* 0x4a6758 */
+            if (below(ADD(ADD(MUL(t[1], t[1]), MUL(t[2], t[2])), MUL(t[0], t[0])), 16.0f))   /* 0x4a6798 */
+                for (int k = 0; k < 3; k++) t[k] = F32(MUL(nv[k], 4.0f));                     /* 0x4a679c */
+            for (int k = 0; k < 3; k++) vn[k] = F32(ADD(p[k], t[k]));
+            float q[3];
+            memcpy(q, c + 0x54, 12);
+            push_turn(w, n->frame.m, q, cl[0], cl[2]);
+            double inv = DIV(1.0f, ADD(MUL(cl[2], cl[2]), MUL(cl[0], cl[0])));
+            for (int k = 0; k < 3; k++) w[k] = F32(MUL(w[k], inv));
+        } else {
+            /* against the ground: the part along the normal reversed, all of it scaled by the bounce */
+            double j = MUL(ADD(ADD(MUL(nv[2], v[2]), MUL(nv[1], v[1])), MUL(nv[0], v[0])), -2.0f);   /* 0x4a67a0 */
+            for (int k = 0; k < 3; k++) vn[k] = F32(MUL(F32(ADD(MUL(nv[k], j), v[k])), e));
+            double q = ADD(ADD(MUL(vn[1], vn[1]), MUL(vn[2], vn[2])), MUL(vn[0], vn[0]));
+            if (!below_eq(q, 16.0f)) {   /* a hard one */
+                if (!o) {
+                    sound_named("vtcoll.wav", n, 0);   /* 0x4dd9c8 */
+                    impact_damage(n, 0, c + 0x54, nv, c + 0x48);
+                }
+            } else if (o || (!(rd32(d + 0x454) & 4) && (int32_t)fbits(n->frame.m[4]) > 0)) {
+                /* a soft one, on the wheels' side and not in the air: 4 m/s off along the normal */
+                for (int k = 0; k < 3; k++) vn[k] = F32(MUL(nv[k], 4.0f));
+            }
+            if ((int32_t)fbits(vn[1]) > 0x3f800000) vn[1] = F32(MUL(vn[1], 0.2f));   /* 0x4a67a4 */
+            push_turn(w, n->frame.m, nv, cl[0], cl[2]);
+            double g = MUL(rdf(d + 0xac), 0.1f);   /* 0x4a6754 */
+            for (int k = 0; k < 3; k++) w[k] = F32(MUL(w[k], g));
+        }
+    }
+    if (!(d[0x455] & 2)) {
+        float a[3], b = rdf(d + 0xb4);
+        for (int k = 0; k < 3; k++) a[k] = F32(ADD(MUL(w[k], b), rdf(d + 0xc8 + 4 * k)));
+        turn_limit(a, 0, 0x3fc90fdb);
+        turn_limit(a, 1, 0x40490fdb);
+        turn_limit(a, 2, 0x3f490fdb);
+        memcpy(d + 0xc8, a, 12);
+    }
+    memcpy(d + 0xbc, vn, 12);
+    float sp = F32(fpu_sqrt(ADD(ADD(MUL(vn[1], vn[1]), MUL(vn[2], vn[2])), MUL(vn[0], vn[0]))));
+    putf(d + 0xac, sp);
+    if ((int32_t)fbits(sp) > 0x38d1b717) putf(d + 0xb0, F32(DIV(1.0f, sp)));
+    else put32(d + 0xb0, 0x7149f2ca);
+    /* 0x42fea0: the wheels' speed (+0x20); the original doesn't check the four main ones */
+    static const uint32_t wheels[6] = {0x3ac, 0x3a8, 0x3bc, 0x3b8, 0x3b4, 0x3b0};
+    for (int i = 0; i < 6; i++) {
+        Node *wn = slot(d, wheels[i]);
+        if (wn) putf(wn->data + 0x20, sp);
+    }
+    float np[3];
+    for (int k = 0; k < 3; k++) np[k] = F32(ADD(MUL(dt, vn[k]), n->frame.pos[k]));
+    /* fallen more than 35 m (0x4a67c0) since leaving the ground (+0x474) */
+    if (!(n->flags & 0x20) && (rd32(d + 0x454) & 4) && !below_eq(SUB(rdf(d + 0x474), np[1]), 35.0f)) Vehicle_Kill(n);
+    for (int k = 0; k < 3; k++) n->frame.pos[k] = np[k];
+    Frame t;
+    Frame_Turn(&t, &n->frame, rdf(d + 0xc8), rdf(d + 0xcc), rdf(d + 0xd0), dt);
+    n->frame = t;
+    Motion_Init(c);
+    *other = NULL;
+    Vehicle_Brake(n, rd32(d + 0x454), 1);
+    return 1;
+}

@@ -468,3 +468,4 @@
 00491d40	Cell_Height	terrain	high	a cells 12-bit height
 00471bb0	Point_Velocity	physics	high	a points velocity up the parents; ported, diffed
 0047a8d0	Corners_Hit	physics	high	the body corners swept against the terrain; ported, diffed
+00472890	Vehicle_Collide	physics	high	the contact at +0x38 answered: bounce, push turn, move; ported, diffed
