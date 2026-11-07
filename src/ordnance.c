@@ -660,6 +660,74 @@ static int fly_rocket(Node *s, float t, int t47)   /* t47: 1 types 4 and 7, 2 ty
     return !hit;
 }
 
+/* 0x460480: type 3's flight (the homing missiles): eased by the step, straight (no gravity), only the last
+   sweep counting. In flight it keeps its target while their axes stay alike (0x46add0) and turns to face
+   it (0x45d350); else it takes the nearest ahead of it (0x45d420, its owner excluded), or with none turns
+   along its path. A hit turns it along its velocity */
+static int fly_homing(Node *s, float t)
+{
+    uint8_t *r = s->data;
+    float step = g_clock_step, trav;
+    ShotState st;
+    gather(&st, s);
+    if ((uint32_t)fbits(step) > 0x80000000u || fbits(step) > 0x3f733333) st.v[2] = st.speed;
+    else {
+        double e = SUB(st.speed, st.v[2]);
+        float ef = F32(e);
+        if (!(fabs(e) >= 0.005)) st.v[2] = st.speed;   /* 0x4a6360 */
+        else st.v[2] = F32(ADD(MUL(ef, step), st.v[2]));
+    }
+    const float *m = s->frame.m;
+    float w[3];
+    w[0] = F32(ADD(ADD(MUL(m[0], st.v[0]), MUL(m[3], st.v[1])), MUL(m[6], st.v[2])));
+    w[1] = F32(ADD(ADD(MUL(m[4], st.v[1]), MUL(m[1], st.v[0])), MUL(m[7], st.v[2])));
+    w[2] = F32(ADD(ADD(MUL(m[8], st.v[2]), MUL(m[5], st.v[1])), MUL(m[2], st.v[0])));
+    for (int i = 0; i < 3; i++) st.p[i] = F32(ADD(MUL(w[i], t), st.p0[i]));
+    float l[3];
+    l[0] = F32(ADD(ADD(MUL(m[0], w[0]), MUL(m[1], w[1])), MUL(m[2], w[2])));
+    l[1] = F32(ADD(ADD(MUL(m[3], w[0]), MUL(m[4], w[1])), MUL(m[5], w[2])));
+    l[2] = F32(ADD(ADD(MUL(m[8], w[2]), MUL(m[6], w[0])), MUL(m[7], w[1])));
+    int hit = 0;
+    int32_t cls = -1;
+    memcpy(&trav, r + 0x40, 4);
+    for (; st.n > 0; st.n--)   /* past 70 m the owner too; only the last counts */
+        hit = Shot_Sweep(s, fbits(trav) <= 0x428c0000 ? st.owner : NULL, st.p, &st.who, &cls);
+    if (!hit && Terrain_Line(s->frame.pos, st.p)) {   /* 0x45cfd0 */
+        hit = 1;
+        st.who = NULL;
+        cls = -1;
+    }
+    float d[3];
+    for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
+    trav = F32(ADD(fpu_sqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]))), trav));
+    memcpy(r + 0x40, &trav, 4);
+    if (!hit) {
+        for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memcpy(r + 0x14, l, 12);
+        Node **tg = (Node **)Data_Ptr(r, 0x10);
+        if (*tg && Nodes_AxesAlike(s, *tg)) {   /* 0x46add0 */
+            aim_at(s, *tg);   /* 0x45d350 */
+        } else {
+            if (*tg) Node_Unref(*tg);   /* tagged "ordnc" */
+            Node *n = Muzzle_Pick(s, st.owner);   /* 0x45d420 */
+            Node_Ref(n);
+            *tg = n ? Node_Live(n) : NULL;
+            if (*tg) aim_at(s, *tg);
+            else if (fpu_sqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]))) > 0.009999999776482582f)
+                Frame_FromDir(&s->frame, st.p, d);   /* 0x4a636c */
+        }
+    } else {
+        if (fpu_sqrt(ADD(ADD(MUL(w[1], w[1]), MUL(w[2], w[2])), MUL(w[0], w[0]))) > 0.009999999776482582f)
+            Frame_FromDir(&s->frame, st.p, w);
+        else
+            for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
+        memset(r + 0x14, 0, 12);
+        hit_effect(s, st.p, st.who, cls);   /* 0x45c950 */
+    }
+    trail_step(s);   /* 0x46f170 */
+    return !hit;
+}
+
 /* 0x459b50: the flight by type; 0 when the shot is spent. Types not ported yet fly on unchanged */
 int Shot_Fly(Node *s, float t)
 {
@@ -670,10 +738,11 @@ int Shot_Fly(Node *s, float t)
     case 1:
     case 6:
     case 0x12: return fly_gun(s, t);
-    case 2: case 3: case 4: case 5: case 7: case 8:   /* 3 and 8 not ported yet */
+    case 2: case 3: case 4: case 5: case 7: case 8:   /* 8 not ported yet */
         if (ty == 2) alive = fly_rocket(s, t, 0);
         else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */
         else if (ty == 5) alive = fly_rocket(s, t, 2);              /* 0x461340 */
+        else if (ty == 3) alive = fly_homing(s, t);                 /* 0x460480 */
         if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
             g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
         break;

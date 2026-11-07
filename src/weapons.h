@@ -161,3 +161,7 @@ Node *Node_FindTexture(Node *n, const char *name);
 /* Weapons_DisplayStart 0x4561f0: the user's dashboard's node (by the screen mode's names), the group's first
    weapon once a mission (or when first), the separator and the counters' digits; its drawing is not ported */
 void Weapons_DisplayStart(int first);
+/* Nodes_AxesAlike 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
+int Nodes_AxesAlike(Node *a, Node *b);
+/* Muzzle_Pick 0x45d420: the nearest moving entity but vehicle's within 650 m ahead of muzzle, in its cone */
+Node *Muzzle_Pick(Node *muzzle, Node *vehicle);

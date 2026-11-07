@@ -554,7 +554,17 @@ Each frame, before the shots fly, 0x45e620 walks the records:
   not the head. That drops the records before it. Since the entries number count + 1, the last one never
   goes off.
 
-The flights of types 3, 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet.
+**Type 3 (0x460480), the homing missiles.**
+- **The flight.** The speed is eased by the step, as the guns' is. The missile flies straight,
+  `p = w t + p0`, with no gravity. Of the sweeps only the last one's answer counts.
+- **In flight.** It keeps its target (data +0x10) while their z axes stay alike (0x46add0) and turns to
+  face it (0x45d350).
+- **A lost target.** The reference is dropped and the nearest moving entity ahead is taken (0x45d420,
+  with the missile as the muzzle and its owner excluded). With none, the missile turns along its path
+  when it moved over 0.01 m.
+- **A hit.** It turns along its world velocity instead (over 0.01), then explodes where it hit.
+
+The flights of types 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet.
 
 Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4, s01 type 5).
 The delayed hits' walk is not covered by the harness.

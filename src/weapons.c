@@ -979,7 +979,7 @@ static Node *radar_target(Node *vehicle, int kind)
 }
 
 /* 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
-static int axes_alike(Node *a, Node *b)
+int Nodes_AxesAlike(Node *a, Node *b)
 {
     Frame fa, fb;
     Node_FrameIn(&fa, a, NULL);
@@ -989,7 +989,7 @@ static int axes_alike(Node *a, Node *b)
 
 /* 0x45d420 / 0x46ae70: the nearest moving entity but the vehicle's within 650 m of the muzzle, its axis
    along the muzzle's (0x46add0), ahead of it and within the cone dot^2 > 0.883 d^2 */
-static Node *muzzle_pick(Node *muzzle, Node *vehicle)
+Node *Muzzle_Pick(Node *muzzle, Node *vehicle)
 {
     if (!muzzle) return NULL;
     Frame f;
@@ -1006,7 +1006,7 @@ static Node *muzzle_pick(Node *muzzle, Node *vehicle)
         Frame_Points(&q, (const float(*)[3])e->c, 1, &o->frame);   /* 0x471b30's centre, and 0x4240e0 */
         for (int i = 0; i < 3; i++) a[i] = F32(fpu_sub(p[i], q[i]));
         if (!(ADD(ADD(MUL(a[1], a[1]), MUL(a[2], a[2])), MUL(a[0], a[0])) <= 422500.0)) continue;
-        if (!axes_alike(muzzle, o)) continue;
+        if (!Nodes_AxesAlike(muzzle, o)) continue;
         for (int i = 0; i < 3; i++) d[i] = F32(fpu_sub(q[i], p[i]));
         double dot = ADD(ADD(MUL(dir[1], d[1]), MUL(dir[2], d[2])), MUL(dir[0], d[0]));
         float dotf = F32(dot);
@@ -1050,7 +1050,7 @@ void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
     case 6: l.target = radar_target(vehicle, w->kind); break;
     case 3:
         if (!(vehicle->flags & 0x20)) {
-            l.target = muzzle_pick(w->muzzle, vehicle);   /* 0x45d420, then locked by 0x421be0 */
+            l.target = Muzzle_Pick(w->muzzle, vehicle);   /* 0x45d420, then locked by 0x421be0 */
             radar_target(vehicle, w->kind);
         } else
             l.target = radar_target(vehicle, w->kind);   /* 0x421c30 */
