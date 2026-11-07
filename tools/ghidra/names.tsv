@@ -932,3 +932,6 @@
 0045e4e0	Delayed_Add	weapons	high	a type 5 hit's delayed hits: 9-13 entries round it on the ground within 1.8 s
 0045e620	Delayed_Run	weapons	high	the delayed hits due swept and hit; a record done freed (its next becomes the head)
 00460480	Shot_FlyHoming	weapons	high	type 3's flight: straight, retargets (0x46add0, 0x45d420) and turns to its target
+0045f100	Shot_FlyDropped	weapons	high	type 0xc: swept a metre up at its place each frame; spins a vehicle hit (0x42d3e0)
+0045f260	Shot_FlyDropped2	weapons	high	type 0x11: the same without the spin
+0042d3e0	Vehicle_SpinOut	vehicles	med	a class 1 vehicle: +0x450 = 2 s, +0x454 |= 0x80000400

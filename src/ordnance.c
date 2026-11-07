@@ -728,6 +728,41 @@ static int fly_homing(Node *s, float t)
     return !hit;
 }
 
+/* 0x45f100 (type 0xc) and 0x45f260 (type 0x11): the dropped, which stay where they lie: each of the
+   shot's n sweeps a metre upwards from its place, its owner spared for its first 2 s. Once one has met
+   something, every sweep after it hits again (quirk), at the place; 0xc also spins a vehicle it hits
+   (0x42d3e0). Always alive */
+static int fly_dropped(Node *s, int spin)
+{
+    uint8_t *r = s->data;
+    float p[3] = {F32(s->frame.pos[0]), F32(s->frame.pos[1]), F32(s->frame.pos[2])};
+    Node **ow = (Node **)Data_Ptr(r, 0xc);
+    Node *owner = *ow = *ow ? Node_Live(*ow) : NULL;   /* tagged "ordnc" */
+    int met = 0, n;
+    memcpy(&n, r + 0x3c, 4);
+    Node *who = NULL;
+    int32_t cls = -1;
+    float life, life0;
+    memcpy(&life, r + 4, 4);
+    memcpy(&life0, r + 8, 4);
+    float age = F32(SUB(life0, life));
+    for (; n > 0; n--) {
+        float q[3] = {p[0], F32(ADD(p[1], 1.0f)), p[2]};   /* 0x4a6324 */
+        if (Shot_Sweep(s, fbits(age) <= 0x40000000 ? owner : NULL, q, &who, &cls)) met = 1;
+        if (met) {
+            if (spin && who && who->cls == 1 && who->data) {   /* a vehicle (0x42e570); 0x42d3e0 takes class 1 only */
+                uint32_t two = 0x40000000, f;   /* 2 s */
+                memcpy(who->data + 0x450, &two, 4);
+                memcpy(&f, who->data + 0x454, 4);
+                f |= 0x80000400;
+                memcpy(who->data + 0x454, &f, 4);
+            }
+            hit_effect(s, p, who, cls);
+        }
+    }
+    return 1;
+}
+
 /* 0x459b50: the flight by type; 0 when the shot is spent. Types not ported yet fly on unchanged */
 int Shot_Fly(Node *s, float t)
 {
@@ -738,6 +773,8 @@ int Shot_Fly(Node *s, float t)
     case 1:
     case 6:
     case 0x12: return fly_gun(s, t);
+    case 0xc: return fly_dropped(s, 1);    /* 0x45f100 */
+    case 0x11: return fly_dropped(s, 0);   /* 0x45f260 */
     case 2: case 3: case 4: case 5: case 7: case 8:   /* 8 not ported yet */
         if (ty == 2) alive = fly_rocket(s, t, 0);
         else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */

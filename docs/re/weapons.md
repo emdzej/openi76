@@ -564,7 +564,14 @@ Each frame, before the shots fly, 0x45e620 walks the records:
   when it moved over 0.01 m.
 - **A hit.** It turns along its world velocity instead (over 0.01), then explodes where it hit.
 
-The flights of types 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet.
+**Types 0xc and 0x11 (0x45f100, 0x45f260), the dropped.** They stay where they lie and are always alive:
+- Each of the shot's n sweeps runs from its place to 1 m above it (0x4a6324).
+- The owner is spared while the shot's age (data +8 - +4) is at most 2 s.
+- Once a sweep has met something, every sweep after it hits again (a quirk), at the place.
+- Type 0xc also spins out a class 1 vehicle it hits (0x42d3e0): +0x450 = 2 s, +0x454 gets
+  0x80000400.
+
+The flights of type 8 and the beams (0xe-0x10, 0x13) are not ported yet.
 
 Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4, s01 type 5).
 The delayed hits' walk is not covered by the harness.
