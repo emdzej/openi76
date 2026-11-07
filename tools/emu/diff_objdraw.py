@@ -3,8 +3,8 @@ in both (as diff_objects.py loads it), then Objects_Draw 0x424b90 over random vi
 queue flushed (0x48d820) with the mesh drawers (types 5, 6 and 7: 0x434a40-0x435b90, 0x48cef0) and every
 polygon drawn compared (DrawPoly 0x43d730 stubbed): its colour or texture (as its size and its pixels'
 CRC), vertex count, mode and vertices. The heading frame (0x58c4a0, set by Render_World) is the port's
-Render_SetHeading's. The shadows (detail byte 6) are off: they are not ported yet. Detail byte 9 (the
-levels of detail by distance) is random.
+Render_SetHeading's. The detail bytes 6 (the shadows, types 3 and 0xb: 0x4a3c20) and 9 (the levels of
+detail by distance) are random; a shadow's u and v are not compared (the original leaves its stack's).
 
   .deps/emu-venv/bin/python tools/emu/diff_objdraw.py [mission.msn] [count] [seed] [--down]
 """
@@ -66,13 +66,12 @@ def main():
     lib.Render_SetHeading.argtypes = [ctypes.c_void_p]
     lib.Queue_Flush.argtypes = [ctypes.c_void_p, ctypes.c_int]
     lib.Objects_DrawInit()
+    lib.Shadow_Init()
     exe.stub(0x4919E0, lambda *a: 0, 0)   # the headlights (vehicles only)
     exe.write(0x4A847C, bytes(4))         # the camera follows no entity
     exe.write(0x58DCB0, struct.pack("<I", exe.put(bytes(0x40000))))
     exe.write(0x58DCB4, struct.pack("<I", exe.put(bytes(0x200000))))
     detail = (ctypes.c_uint8 * 14).in_dll(lib, "g_detail")
-    exe.write(0x5E14D6, b"\0")
-    detail[6] = 0
     assert exe.call(0x48D710) == 1
     assert lib.Queue_Init() == 1
 
@@ -81,12 +80,21 @@ def main():
 
     want, got = [], []
 
+    def shadow_uv(a, m, raw):
+        """a shadow's u and v are what was on the original's stack: not compared"""
+        if a != 0xFE or m not in (0, 0xC0):
+            return raw
+        b = bytearray(raw)
+        for i in range(len(b) // 24):
+            b[24 * i + 12:24 * i + 20] = bytes(8)
+        return bytes(b)
+
     def orig_poly(view, verts, n, arg, m):
         a = arg
         if m & 4 and arg:
             w, h = struct.unpack("<ii", exe.read(arg, 8))
             a = tex_key(w, h, exe.read(arg + 8, w * h))
-        want.append((a, n, m, exe.read(verts, 24 * n)))
+        want.append((a, n, m, shadow_uv(a, m, exe.read(verts, 24 * n))))
     exe.stub(0x43D730, orig_poly, 5)
     POLY = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_int)
 
@@ -95,7 +103,7 @@ def main():
         if m & 4 and arg:
             w, h = struct.unpack("<ii", ctypes.string_at(arg, 8))
             a = tex_key(w, h, ctypes.string_at(arg + 8, w * h))
-        got.append((a, n, m, ctypes.string_at(verts, 24 * n)))
+        got.append((a, n, m, shadow_uv(a, m, ctypes.string_at(verts, 24 * n))))
     poly = POLY(port_poly)
     lib.Queue_SetPoly(poly)
     heading = Frame.in_dll(lib, "g_heading")
@@ -108,7 +116,7 @@ def main():
         nd = mission.u32(exe, e)
         if nd:
             ents.append(struct.unpack("<3d", exe.read(nd + 0x18 + 0x28, 24)))
-    bad = polys = drawn = textured = 0
+    bad = polys = drawn = textured = shadows = 0
     for i in range(count):
         v = View()
         mode.value = 0
@@ -127,9 +135,11 @@ def main():
         lib.View_SetCamera(ctypes.byref(v), ctypes.byref(f))
         lib.Render_SetHeading(ctypes.byref(v))
         exe.write(0x58C4A0, bytes(heading))
-        d9 = rng.randrange(2)
+        d9, d6 = rng.randrange(2), rng.randrange(3)
         exe.write(0x5E14D9, bytes([d9]))
         detail[9] = d9
+        exe.write(0x5E14D6, bytes([d6]))
+        detail[6] = d6
         vp = exe.put(view_record(v, srec))
         want.clear()
         got.clear()
@@ -151,6 +161,7 @@ def main():
         polys += len(want)
         drawn += bool(want)
         textured += sum(isinstance(w[0], tuple) for w in want)
+        shadows += sum(w[0] == 0xFE and w[2] in (0, 0xC0) for w in want)
         if want != got:
             bad += 1
             if bad <= 4:
@@ -165,7 +176,7 @@ def main():
                         a, n, m, vs = lst[j]
                         print(f"  {nm} {a} n{n} m{m:x} " + " ".join(f"{x:.4g}" for x in struct.unpack(f"<{6 * n}f", vs)))
     print(f"diff_objdraw {name} ({'down' if down else 'nearest'}): {count - bad}/{count} identical "
-          f"({drawn} views drew, {polys} polygons, {textured} textured)")
+          f"({drawn} views drew, {polys} polygons, {textured} textured, {shadows} shadow faces)")
     del poly
     sys.exit(1 if bad else 0)
 

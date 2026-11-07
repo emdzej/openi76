@@ -1,5 +1,6 @@
 /* The 3D math module (0x452480-0x452a90). */
 #include "math3d.h"
+#include "exe.h"
 #include "render/fpu.h"
 #include <math.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 #define ADD fpu_add
 #define SUB fpu_sub
 #define MUL fpu_mul
+#define DIV fpu_div
 #define F32 fpu_f32
 
 static uint8_t invsqrt_tab[256];   /* 0x5e0e90 */
@@ -147,4 +149,29 @@ Frame *Frame_AxisAngle(Frame *out, float angle, float x, float y, float z)
     float q[4] = {F32(MUL(s, x)), F32(MUL(s, y)), F32(MUL(s, z)), c};
     Quat_ToFrame(out, q);
     return out;
+}
+
+int Frame_Project(Frame *out, const float plane[4], const float l[3])
+{
+    const float *n = plane;
+    double d = ADD(ADD(MUL(l[1], n[1]), MUL(l[2], n[2])), MUL(l[0], n[0]));
+    if (d < 0.1 || d != d) return 0;   /* 0x4a60b0, a double */
+    double s = -DIV(1.0, d);
+    Frame t, f;
+    memcpy(&t, exe_data(0x4db298, sizeof t), sizeof t);
+    t.m[0] = F32(MUL(n[0], s));
+    t.m[4] = F32(MUL(n[1], s));
+    t.m[8] = F32(MUL(n[2], s));
+    for (int r = 0; r < 3; r++) memcpy(&f.m[3 * r], l, 3 * sizeof *l);
+    f.pad = out->pad;
+    for (int k = 0; k < 3; k++) f.pos[k] = l[k];
+    Frame_Mul(out, &t, &f);
+    double k = MUL(plane[3], s);
+    out->pos[0] = MUL(out->pos[0], k);
+    out->pos[1] = MUL(out->pos[1], k);
+    out->m[0] = F32(ADD(out->m[0], 1.0));   /* 0x4a60b8 */
+    out->pos[2] = MUL(k, out->pos[2]);
+    out->m[4] = F32(ADD(out->m[4], 1.0));
+    out->m[8] = F32(ADD(out->m[8], 1.0));
+    return 1;
 }

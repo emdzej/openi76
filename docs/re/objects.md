@@ -94,8 +94,8 @@ It is read by 0x484300, in sequence, with the table 0x4eb798 and the node as the
 
 Ported in src/render/obj_draw.c and checked against the original by `tools/emu/diff_objdraw.py`: every
 polygon drawn (colour or texture, mode, vertices with their light) is identical in all 40 missions, in
-both rounding modes (confirmed). The shadows, the headlights and the group entities' records (types 5 and
-7) are not covered: the first two are not ported, and no mission has a group child at load.
+both rounding modes, shadows included (confirmed). The headlights and the group entities' records (types
+5 and 7) are not covered: the first is not ported, and no mission has a group child at load.
 
 - **Render_World 0x407550** first makes the heading frame 0x58c4a0: the camera's forward (−m2, −m8)
   normalised in the ground plane with Fast_InvSqrt (straight down, under 1e-5 squared, gives (0, −1)), as
@@ -128,7 +128,7 @@ both rounding modes (confirmed). The shadows, the headlights and the group entit
   - 0x48cef0 (type 7, and the merged class 0x34 nodes): the mesh in the heading frame at the node's
     position, q 0.9 (0x3f666666), the mode `0x4d6078[flag1 + flag0·8]` (with flag2: & ~0x60 | 0xa0),
     & the node's +0x14 & 0xff; drawn face by face.
-  - 0x48cd60 (types 3, 11): the shadow, 0x4a3c20. 0x48cd80 (type 10).
+  - 0x48cd60 (types 3, 11): the shadow, 0x4a3c20 (below). 0x48cd80 (type 10).
 - **The mesh drawers** share the view 0x5509f0, the level 0x550a08 (record +0x30), a mode or-ed into
   every face 0x550a04 (record +0x34: 0x100 when crossing the frustum), the camera-space vertex buffer
   0x58dcb0 (its q after the vertices) and a face-record cursor 0x5509e4 into the pool 0x58dcb4:
@@ -170,6 +170,9 @@ both rounding modes (confirmed). The shadows, the headlights and the group entit
   bits compared as an integer). With class 0xc, only those of class 0xd nodes count.
 
 ## Quirks kept
+
+- A shadow is cast only by the entity's child meshes, never the root's own.
+- The shadows' u and v are whatever was on the original's stack (the shadow filler does not read them).
 
 - 0x4352e0 draws its node with the lights of the last node lit.
 - 0x48d450's limit (0x5f3184) is 4 × the merges' allocation past it; the port stops at the table's 20.

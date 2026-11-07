@@ -31,6 +31,9 @@ void Point_ToWorld(double out[3], const float p[3], const Frame *f);
 void Frame_Points(float (*out)[3], const float (*in)[3], int n, const Frame *f);
 /* Plane_Transform 0x452890: a plane (n, d) into a frame's space: n M, d - (n M) . pos */
 void Plane_Transform(float out[4], const float p[4], const Frame *f);
+/* Frame_Project 0x451a30: the projection along l onto plane (x -> x - l (n.x + d) / (n.l)); 0 when l is
+   within 0.1 of parallel to it (n.l below 0.1) */
+int Frame_Project(Frame *out, const float plane[4], const float l[3]);
 /* Quat_ToFrame 0x451bb0: the rotation of a unit quaternion q (x, y, z, w), position 0 (the original leaves
    the unused word at +0x24 as it was on its stack; the port's is 0) */
 void Quat_ToFrame(Frame *out, const float q[4]);

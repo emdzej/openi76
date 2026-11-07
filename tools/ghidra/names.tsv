@@ -292,9 +292,18 @@
 0048cef0	Mesh_DrawFlat	render	high	type 7 / class 0x34: the mesh in the heading frame, q 0.9; ported
 0048cd20	Queue_DrawType5	render	high	type 5's draw function; ported
 0048ccd0	Queue_DrawType6	render	high	type 6's draw function; ported, diffed
-0048cd60	Queue_DrawShadow	render	med	types 3 and 0xb: the shadow 0x4a3c20
+0048cd60	Queue_DrawShadow	render	high	types 3 and 0xb: the shadow 0x4a3c20; ported, diffed
 0043a4d0	Light_Frame	light	high	the dynamic lights in view; their terrain heights leave RC down; ported, diffed
 0043a7c0	Light_Node	light	high	a node's four strongest lights; ported, diffed
 0043aa90	Light_Vertices	light	high	the q of a mesh's vertices; ported, diffed
 004525c0	Point_ToWorld	math	high	a float point through a frame, in doubles; ported
 0042e6d0	Node_FrameIn	scene	high	a node's frame up to an ancestor; ported
+0043b050	Light_ShadowDir	light	high	the shadows' light: the sun, or the strongest light in view at night; ported, diffed
+00451a30	Frame_Project	math	high	the projection along a direction onto a plane; ported, diffed
+004a35c0	Shadow_GroundHit	render	high	where a segment meets the ground, by halving; ported, diffed
+004a3870	Shadow_Frame	render	high	a mesh's shadow frame: onto the ground plane under its centre, then the camera; ported, diffed
+004a36f0	Shadow_Faces	render	high	a mesh's faces to the light, mode 0xc0; ported, diffed
+004a3a80	Shadow_FacesVehicle	render	high	the same for vehicles (mode 0 without the face's third flag); ported
+004a3da0	Shadow_Tree	render	high	a sibling list's shadows, recursively; ported, diffed
+004a3e50	Shadow_TreeVehicle	render	high	the same for vehicles; ported
+004a3c20	Shadow_Draw	render	high	an entity's shadow (types 3, 0xb); ported, diffed

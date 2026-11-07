@@ -259,3 +259,52 @@ void Light_Vertices(float *q, const float (*v)[3], const float (*normals)[3], co
         q[i] = below(r, 1.0) ? F32(r) : 1.0f;
     }
 }
+
+void Light_ShadowDir(float out[3], const void *node, const float c[3])
+{
+    if (exe_u32(ENV(g_light_env)) == 1) {
+        memcpy(out, g_sun, 3 * sizeof *out);
+        return;
+    }
+    float p[3];
+    Frame_Points(&p, (const float (*)[3])c, 1, &((const Node *)node)->frame);
+    float thresh = F32(MUL(exe_f32(ENV(g_light_env) + 0xc), 1.5));   /* 0x4a5ec8 */
+    float best = 0, best_k = 0;
+    const Light *bl = NULL;
+    for (int i = 0; i < g_lights_seen_count; i++) {
+        const Light *l = g_lights_seen[i];
+        if (!l->node || l->node == node) continue;
+        float dx = F32(SUB(l->wpos2[0], p[0])), dy = F32(SUB(l->wpos2[1], p[1])), dz = F32(SUB(l->wpos2[2], p[2]));
+        double r2 = ADD(ADD(MUL(dy, dy), MUL(dz, dz)), MUL(dx, dx));
+        float r2f = F32(r2);
+        double att = DIV(1.0, ADD(MUL(r2, l->inv_r2), 1.0));   /* 0x4a5e98 */
+        float k = 1, w;
+        if (l->flags & 1) {   /* a spot: its cone, from the light's real height (ybias) */
+            float a = F32(att);
+            double s = ADD(MUL(ADD(MUL(dy, 2.0), l->ybias), l->ybias), r2f);   /* 0x4a5ecc */
+            float dyb = F32(ADD(l->ybias, dy));
+            double dot = ADD(ADD(MUL(l->wdir[0], dx), MUL(l->wdir[1], dyb)), MUL(l->wdir[2], dz));
+            double t = MUL(ADD(DIV(dot, fpu_sqrt(s)), 1.0), 0.5);   /* 0x4a5e80, 0x4a5e88 */
+            float pw = below_eq(t, 0.001) ? 0.0f : x87_pow(t, MUL(l->exponent, 0.25));   /* 0x4a5eb8, 0x4a5ed0 */
+            w = F32(MUL(a, pw));
+            k = pw;
+        } else
+            w = F32(att);
+        if (!below_eq(w, best)) {
+            best = w;
+            best_k = k;
+            bl = l;
+        }
+    }
+    if (!bl || !below(thresh, best)) {   /* none brighter than 1.5 x the environment's strength: the sun */
+        memcpy(out, g_sun, 3 * sizeof *out);
+        return;
+    }
+    /* towards the light, 15 x its cone factor lower (0x4a5ed8) */
+    float dx = F32(SUB(bl->wpos2[0], p[0])), dz = F32(SUB(bl->wpos2[2], p[2]));
+    float dy = F32(SUB(SUB(bl->wpos2[1], MUL(best_k, 15.0)), p[1]));
+    double inv = Fast_InvSqrt(ADD(ADD(MUL(dy, dy), MUL(dz, dz)), MUL(dx, dx)));
+    out[0] = F32(MUL(dx, inv));
+    out[1] = F32(MUL(dy, inv));
+    out[2] = F32(MUL(inv, dz));
+}

@@ -19,6 +19,8 @@
 #include "render/draw.h"
 #include "render/obj_draw.h"
 #include "render/palette.h"
+#include "render/poly.h"
+#include "render/shadow.h"
 #include "render/queue.h"
 #include "render/road_draw.h"
 #include "render/sky.h"
@@ -29,6 +31,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* the shadow mask (the display record's surface 0x58d890, its bits at 0x58d8a0): a bit per pixel. The
+   original's is made with the display mode, not ported yet; the port's rows are 640 bits and a dword more,
+   and one row more than the screen */
+#define SHADOW_STRIDE (640 / 8 + 4)
+static uint8_t shadow_mask[SHADOW_STRIDE * 481];
 
 static Pcx screen;
 
@@ -55,6 +63,9 @@ static bool viewer_init(const char *mission)
         return false;
     }
     Objects_DrawInit();
+    Shadow_Init();
+    g_shadow_mask = shadow_mask;
+    g_shadow_stride = SHADOW_STRIDE;
     Objects_Init();
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
@@ -106,8 +117,7 @@ static bool viewer_init(const char *mission)
 /* Render_World 0x407550, its ported parts */
 static void viewer_frame(void)
 {
-    /* with DET_SHADOWS the original clears the shadow mask's surface (0x58d890) here; no shadows are
-       drawn yet */
+    if (g_detail.b[DET_SHADOWS]) memset(g_shadow_mask, 0, sizeof shadow_mask);   /* Surface_Fill(0x58d890, 0) */
     Render_SetHeading(&view);
     Terrain_Draw(&view);
     Roads_Draw(&view);

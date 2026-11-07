@@ -27,9 +27,9 @@ polygons). Each one gets a `--param`, a play-page setting and a line in the publ
 layer, the exe check, the 8-bit presentation path and the renderer's core (DrawPoly, the queue, the
 terrain, the roads, the sky; `tools/emu/regress.sh` diffs them against the original) work, and so do
 the objects (entities, node trees, levels of detail, collision set-up, and their drawing with the
-dynamic lights; docs/re/objects.md). The app shows disc 1's loading screen, or with `--param
+dynamic lights and the shadows; docs/re/objects.md). The app shows disc 1's loading screen, or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
-camera (vehicles, shadows, effects and the rest of the frame are not ported yet). Read
+camera (vehicles, effects and the rest of the frame are not ported yet). Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 
