@@ -13,6 +13,7 @@ diff_terrain 20000
 diff_terrvis 1000
 diff_terrdraw 200
 diff_terrpatch 200
+diff_sky 300
 diff_clip 1000
 diff_draw 1000"}
 fail=0

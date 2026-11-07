@@ -548,3 +548,83 @@ Everything in a frame goes through a queue sorted by depth (0x48d0c0-0x48e110), 
   sizes, so this aliasing doesn't happen. The game queues those types with vertices only.
 - **Not ported yet.** The merge entry points 0x48d450 and 0x48d530 (scene nodes), and the object types'
   draw functions.
+
+## The frame, Render_World 0x407550
+
+Render_World draws a frame in this order:
+
+1. 0x46d300, then 0x471390 when 0x4a847c is 1.
+2. Surface_Fill(0x58d890, 0) when the detail byte 0x5e14d6 is set.
+3. A yaw-only frame from the camera at 0x58c4a0.
+4. Terrain_Draw 0x48e8d0, the roads 0x491180, then the object and entity drawers 0x46bdc0, 0x46d3d0,
+   0x424b90, 0x46ebb0, 0x46c9b0, 0x42edc0, 0x46e360, and the hook at 0x58dc54. All of these queue their
+   polygons.
+5. The sky, Sky_Draw(view, 0xef, 0x5e14d1 ? 2 : 1). It draws straight onto the surface, before the flush.
+6. Queue_Flush(view, 1).
+7. 0x4279c0 (when 0x4a847c is 1), 0x427db0(view, 0), and the hook at 0x58dc58.
+
+Only the terrain and the sky are ported so far.
+
+## The sky (ported, diffed)
+
+`src/render/sky.c` and `src/render/sprite.c`. They are checked against the original by
+`tools/emu/diff_sky.py` (the sky's pixels through the real DrawPoly and blitter, the clipper, the blitter
+alone, and the set-up), at nearest and rounding down.
+
+- **Sky_Init 0x407a10.** It runs once, until Sky_Free 0x407b10 clears 0x4a8868.
+  - It clears the drift doubles 0x4edc28 / 0x4ed9d8 and the sun flag 0x4ed9d4.
+  - With the detail byte 0x5e14d1, it loads the sky map, Tex_Pixels(the WRLD's sky name 0x58c490), into
+    0x4ed9d0. If that fails, or there is no sun map 0x5e0450, it stops; its messages are the no-op
+    0x407470.
+  - It makes the sun map into a surface with Surface_Make 0x4391c0, at 0x4edbf8.
+  - The sun's frame 0x4ed9e0 is Frame_AxisAngle(Light_Elevation, the axis 0x4d6848).
+- **Sky_Draw 0x407b40(view, colour, mode).** Without a sky map the mode is always 1.
+  - It saves the view at 0x4eda20 and remakes it in place: View_Create with fov `2·atan(tan_half)`
+    (fpatan), the same aspect and zoom, and range 600. sx and sy take the saved signs (0 for ±0), and the
+    camera is the saved camera's inverse. The view is restored at the end.
+  - **Mode 0:** the flat sky above the plane y = 0, mode 8 in the colour.
+  - **Mode 1:**
+    - h = eye.y + 50.
+    - The flat sky above h, its q set to 0, mode 8.
+    - The haze for h + 30, mode 9.
+  - **Mode 2:**
+    - The clouds: a square, x and z from −1000 to 2000 and y = 50 (0x4a87f0), in the frame 0x4db298 (the
+      identity) placed at (floor(x/1000)·1000, h, floor(z/1000)·1000). It is drawn through the camera in
+      mode 0x16 with the sky map. u and v come from 0x4a8838 (0–12) plus the drift; q is 1.
+    - The drift then moves by `u = fmod(u − 1/1024, 1)` and `v = fmod(v + 1/1024, 1)`. It moves once per
+      frame drawn, so it depends on the frame rate.
+    - The haze for h + 80, mode 9.
+    - The sun, when the flag is set:
+      - Its frame is placed at the eye and taken into camera space.
+      - The point is 300 along the frame's second row, plus the camera-space position's x for every
+        coordinate (a slip; that x is about 0).
+      - Behind znear it is not drawn. Otherwise the square ±20 about it (0x4a8820) is projected with w = 1/z
+        and rounded by the 1.5·2^52 trick, then drawn with Sprite_Draw mode 3 in colour + 0xc.
+- **Sky_Flat 0x407780(h).**
+  - It takes the screen rectangle as four screen-space vertices: w = 0, q = 1, u and v left as the stack
+    had them.
+  - It clips them to the side above the plane y = h.
+  - The plane is taken into camera space (Plane_Transform) and becomes a screen line:
+    - `a = nx/sx` and `b = ny/sy`;
+    - `c = ((nz − (cy/sy)·ny) − (cx/sx)·nx) + d/zfar`.
+- **Sky_ClipLine 0x4078b0.**
+  - It keeps a·x + b·y + c > 0.
+  - The previous vertex's value is a float, and "inside" tests its bits as a signed integer (> 0).
+  - A new vertex is `p − t·(v − p)` with `t = f(p)/(a·dx + b·dy)`. It gets w = 0 and the given q, and u and
+    v are not written.
+- **Sky_Ground 0x4080d0(h).** The haze lies between two lines.
+  - **The low horizon.** The screen rectangle (q = −1) is clipped to above the horizon of the terrain's
+    lowest point (y = Terrain_Low). This uses the saved view, the one the frame came with.
+  - **The farthest vertex.** Of what is left, it takes the vertex with the least `a·x + b·y` against that
+    line.
+  - **The plane.** The result is then clipped to below the plane y = h of the sky's view. The line is
+    negated, with c negated before its rounding to float, and new vertices get q = 0.
+  - **q.** Each vertex's q is its line value times `1/value` at the farthest vertex, cut to 1 when above
+    and to 0 when its bits are negative.
+- **Sprite_Draw 0x43df60(dst, src, x0, y0, x1, y1, mode, colour).**
+  - The corners may come in either order. The steps are `(src span << 16) / (dst span)` in 16.16.
+  - The rectangle is clipped to dst's viewport (Rect_Clip).
+  - A column's source x is pre-incremented: the first column is already a step in, so the last can read
+    past the row. Rows are not pre-incremented.
+  - Mode 3 skips texel 0xff and writes `lum[(colour − dst) << 8 | texel]`.
+  - Modes 1 (0x43e6e0), 2, 4 and 5 are not ported yet.

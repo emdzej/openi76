@@ -196,3 +196,13 @@
 0048e650	Terrain_FreeTextures	terrain	high	releases the levels' names and clears the levels
 0048e690	Terrain_ReloadTextures	terrain	high	free, then load
 0048e810	Terrain_Low	terrain	high	the lowest vertex's height (0x5e30f0)
+00407a10	Sky_Init	sky	high	once: with 0x5e14d1, the sky map (Tex_Pixels), the sun's surface and frame
+00407b10	Sky_Free	sky	high	releases the sky map
+00407b40	Sky_Draw	sky	high	the flat sky, clouds, haze and sun through a range-600 view; ported, diffed
+00407780	Sky_Flat	sky	high	the screen above a height's horizon
+004080d0	Sky_Ground	sky	high	the haze between the terrain's lowest horizon and a height's, q by depth
+004078b0	Sky_ClipLine	sky	high	a screen-space polygon clipped to a line
+00407470	Msg_Nop	misc	high	the release build's message: a bare ret
+004391c0	Surface_Make	render	high	a surface over a bitmap (allocated when none)
+0043df60	Sprite_Draw	render	high	the scaled sprite blitter, modes 1-5 (3: through lum, 0xff clear); mode 3 ported, diffed
+00407550	Render_World	render	high	a frame: terrain, roads, objects, the sky, the flush, the HUD
