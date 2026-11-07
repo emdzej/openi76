@@ -440,7 +440,7 @@
 00451820	Frame_Yaw	math	high	the identity turned about y; ported, diffed
 00471860	Integrate	physics	high	position and velocity step under an acceleration; ported, diffed
 004719f0	Integrate_Turn	physics	high	the rotation step; ported, diffed
-00473600	Vehicle_Drive	physics	high	the driving step: throttle, slip, integrate, turn, project on the ground (being ported)
+00473600	Vehicle_Drive	physics	high	the driving step: force, grip, drag, integration, the turn about the rear axle, the ground; ported, diffed
 0042d3a0	Vehicle_Throttle	vehicle	high	data +0xe4
 004759b0	Vehicle_Grip	physics	high	the yaw rate from the steering, limited by the wheels loads and the ground; slide and grip; ported, diffed
 00475d00	Terrain_Grip	physics	high	the terrain class record +0; 0 above 0.2 with flag 0x400

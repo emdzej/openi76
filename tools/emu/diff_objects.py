@@ -157,8 +157,35 @@ def call_drag(exe, n, fpcw):
         CALL_OUT.append(exe.read(o, 40).hex())
 
 
+def call_drive(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    m = struct.unpack("<9f", exe.read(n + 0x18, 36))
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
+    save = exe.read(d, 0x50C)
+    for j, thr in enumerate((0.7, -0.8, 0.7, 0.7)):
+        exe.write(d, save)
+        v = [f32(f32(f32(m[6 + k] * 12.0) + f32(m[k] * 3.0))) for k in range(3)]
+        exe.write(d + 0xBC, struct.pack("<fff", *v))
+        exe.write(d + 0xC8, struct.pack("<fff", 0, 0.4, 0))
+        exe.write(d + 0x460, struct.pack("<fff", 0.2, 0.97, 0.1))
+        exe.write(d + 0xAC, struct.pack("<f", 12.4))
+        exe.write(d + 0xB0, struct.pack("<f", f32(1.0 / f32(12.4))))
+        exe.write(d + 0xE4, struct.pack("<f", thr))
+        exe.write(d + 0xE0, struct.pack("<f", 0.3))
+        exe.write(d + 0x104, struct.pack("<i", 3))
+        if j == 2:
+            exe.write(d + 0x454, bytes([exe.read(d + 0x454, 1)[0] | 2]))
+        if j == 3:
+            exe.write(d + 0x455, bytes([exe.read(d + 0x455, 1)[0] & ~0x10 & 0xFF]))
+        o = exe.put(bytes(0x30 + 0x40))
+        exe.call(0x473600, n, o + 4, o + 8, o + 0x14, o + 0x18, o + 0x24, o + 0x30, struct.unpack("<I", struct.pack("<f", 0.05))[0],
+                 fpcw=fpcw)
+        exe.write(o + 0x30 + 0x24, bytes(4))
+        CALL_OUT.append(exe.read(o, 0x70).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None

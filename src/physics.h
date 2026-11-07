@@ -55,3 +55,8 @@ void Mat_Rows(float out[3], const float v[3], const float *m);
    when sliding or upside down the friction (into drag, the yaw torque into turn); *slide = 1 when the
    slope is more than the grip */
 void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3], float slope[3], float turn[3]);
+/* Vehicle_Drive 0x473600: a step of a vehicle on its wheels: the force, the grip, the drag; the velocity
+   and the place integrated; the turn about the rear axle; the velocity along the ground. The results:
+   the flags (+0x454), the velocity, the signed speed, the acceleration, the turn (its y the yaw rate),
+   the frame. In the air (Vehicle_Air) its results instead, and 1 */
+int Vehicle_Drive(Node *n, uint32_t *flags, float vel[3], float *speed, float acc[3], float w[3], Frame *f, float dt);

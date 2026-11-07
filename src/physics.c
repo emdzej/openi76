@@ -604,3 +604,173 @@ void Vehicle_Drag(Node *n, int upside, int sliding, int32_t *slide, float drag[3
     static const uint32_t order[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
     for (int i = 0; i < 4; i++) wheel_friction(n, slot(d, order[i]), k, br, drag, turn);
 }
+
+/* the velocity reversed against v0 by the step: the step undone (0x4a675c) */
+static int reversed(const float v[3], const float v0[3])
+{
+    return below(ADD(ADD(MUL(v[1], v0[1]), MUL(v[2], v0[2])), MUL(v[0], v0[0])), 0);
+}
+
+/* p += a dt^2 / 2 (p doubles) */
+static void drift(double p[3], const float a[3], float dt)
+{
+    double dd = MUL(dt, dt);
+    p[0] = ADD(MUL(MUL(dd, a[0]), 0.5), p[0]);   /* 0x4a67c8 */
+    p[1] = ADD(MUL(MUL(dd, a[1]), 0.5), p[1]);
+    p[2] = ADD(MUL(MUL(dd, a[2]), 0.5), p[2]);
+}
+
+int Vehicle_Drive(Node *n, uint32_t *flags, float vel[3], float *speed, float acc_out[3], float w_out[3], Frame *f_out,
+                  float dt)
+{
+    uint8_t *d = n->data;
+    const Frame *fr = &n->frame;
+    float thr = rdf(d + 0xe4);
+    memset(acc_out, 0, 12);
+    if (Vehicle_Air(n, dt, flags, vel, speed, w_out, f_out)) return 1;
+    uint32_t fl = (uint32_t)rd32(d + 0x454);
+    *flags = fl;
+    float up[3] = {fr->m[3], fr->m[4], fr->m[5]}, fw[3] = {fr->m[6], fr->m[7], fr->m[8]};
+    float rt[3] = {fr->m[0], fr->m[1], fr->m[2]};
+    double p[3] = {fr->pos[0], fr->pos[1], fr->pos[2]}, p0[3] = {p[0], p[1], p[2]};
+    int upside = below(ADD(ADD(MUL(rdf(d + 0x460), up[0]), MUL(rdf(d + 0x464), up[1])), MUL(rdf(d + 0x468), up[2])), 0.1f);
+    int mode = rd32(d + 0x104);
+    if (upside || rd32(d + 0xf0) || mode == 0) thr = -1.0f;
+    int32_t tb;
+    memcpy(&tb, &thr, 4);
+    if ((uint32_t)tb < 0xb8d1b717u && mode == 2) thr = 0, tb = 0;
+    if ((uint32_t)tb > 0x80000000u && rd32(d + 0xf4)) thr = F32(MUL(thr, 2.0f)), memcpy(&tb, &thr, 4);
+    float v0[3];
+    memcpy(v0, d + 0xbc, 12);
+    float sp = rdf(d + 0xac);
+    if (below(ADD(ADD(MUL(fw[1], v0[1]), MUL(fw[2], v0[2])), MUL(fw[0], v0[0])), 0)) sp = -sp;   /* going backward */
+    float spin = 1.0f;   /* L40 */
+    int32_t sliding, slid;   /* L30, L38 */
+    int32_t acb;
+    memcpy(&acb, d + 0xac, 4);
+    if (below(MUL(rdf(d + 0xe8), sp), -1.0f) && tb > 0x38d1b717) {   /* driving against its motion */
+        sliding = slid = 1;
+        *flags = fl | 2;
+    } else if (rd32(d + 0xf0) && acb > 0x40000000) {
+        sliding = slid = 1;
+        if (!(fl & 2)) spin = F32(MUL(sp, 0.1f));
+    } else {
+        slid = 0;
+        sliding = fl & 2;
+    }
+    float a;   /* L34 */
+    Vehicle_Force(n, thr, upside, fw, *flags, &a, &slid);
+    if (slid) sliding = 1;
+    float grip = 1.0f, yaw = 0;   /* Lbc, L3c */
+    *flags &= ~0x2000u;
+    if (!sliding && !upside) {
+        Vehicle_Grip(n, sp, &yaw, &slid, &grip);
+        if (slid) sliding = 1;
+    }
+    float drag[3], slope[3], turn[3];   /* Lb0, Ld8, L124 */
+    Vehicle_Drag(n, upside, sliding, &slid, drag, slope, turn);
+    if (slid) sliding = 1;
+    float v[3], acc[3], l[3];   /* L20, L4c, L10 */
+    if (sliding) {
+        *flags |= 2;
+        memcpy(v, v0, 12);
+        Integrate(p, v, drag, dt);
+        if (reversed(v, v0)) {
+            memset(v, 0, 12);
+            memcpy(p, p0, sizeof p);
+        }
+        for (int k = 0; k < 3; k++) l[k] = F32(ADD(MUL(fw[k], a), slope[k]));
+        drift(p, l, dt);
+        for (int k = 0; k < 3; k++) v[k] = F32(ADD(MUL(dt, l[k]), v[k]));
+        for (int k = 0; k < 3; k++) acc[k] = F32(ADD(drag[k], l[k]));
+        if (fl & 0x1000) {   /* the yaw from the steering, eased toward */
+            double t = MUL(MUL(rdf(d + 0xe0), rdf(d + 0xe8)), 3.1415927f);   /* 0x4a67b0 */
+            float tf = F32(t), target;
+            if (acb < 0x3f800000) tf = F32(MUL(rdf(d + 0xac), tf));
+            double r = MUL(rdf(d + 0xb4), dt);
+            float rf = F32(r);
+            int32_t rb;
+            memcpy(&rb, &rf, 4);
+            if (below(r, 0) || rb > 0x3f733333) {
+                target = tf;
+            } else {
+                double g = SUB(tf, rdf(d + 0xcc));
+                target = below(fabs(g), 0.005) ? tf : F32(ADD(MUL(F32(g), rf), rdf(d + 0xcc)));
+            }
+            yaw = F32(MUL(target, spin));
+        } else {   /* the friction's torque turns it */
+            float wv[3], ang[3];
+            memcpy(wv, d + 0xc8, 12);
+            Integrate_Turn(ang, wv, turn, dt);
+            int32_t db;
+            memcpy(&db, &dt, 4);
+            yaw = db > 0x38d1b717 ? F32(DIV(ang[1], dt)) : F32(MUL(ang[1], exe_f32(0x4a6778)));
+        }
+    } else {
+        float side;   /* L10: the sideways pull that turns it */
+        if (memcpy(&acb, &grip, 4), acb < 0x3f800000) {   /* part of the grip lost */
+            memcpy(v, v0, 12);
+            side = F32(-MUL(MUL(grip, yaw), sp));
+            *flags |= 0x2000;
+        } else {
+            for (int k = 0; k < 3; k++) v[k] = F32(MUL(fw[k], sp));
+            side = F32(-MUL(yaw, sp));
+        }
+        float b[3];
+        for (int k = 0; k < 3; k++) b[k] = F32(ADD(MUL(side, rt[k]), drag[k]));
+        memcpy(drag, b, 12);
+        if ((uint32_t)tb > 0x80000000u)
+            for (int k = 0; k < 3; k++) drag[k] = F32(ADD(MUL(fw[k], a), b[k]));
+        Integrate(p, v, drag, dt);
+        if (reversed(v, v0)) {
+            memset(v, 0, 12);
+            memcpy(p, p0, sizeof p);
+        }
+        if (tb > 0)
+            for (int k = 0; k < 3; k++) acc[k] = F32(ADD(MUL(fw[k], a), slope[k]));
+        else
+            memcpy(acc, slope, 12);
+        drift(p, acc, dt);
+        for (int k = 0; k < 3; k++) v[k] = F32(ADD(MUL(dt, acc[k]), v[k]));
+        for (int k = 0; k < 3; k++) acc[k] = F32(ADD(drag[k], acc[k]));
+    }
+    /* turn about the rear axle (+0x11c ahead of the node) by the yaw for the step */
+    float rr = rdf(d + 0x11c);
+    for (int k = 0; k < 3; k++) p[k] = ADD(MUL(fw[k], rr), p[k]);
+    Frame rot, m;
+    Frame_Yaw(&rot, F32(-MUL(dt, yaw)));
+    Frame_Mul(&m, &rot, fr);
+    for (int k = 0; k < 3; k++) p[k] = ADD(MUL(-rr, m.m[6 + k]), p[k]);
+    for (int k = 0; k < 3; k++) m.pos[k] = p[k];
+    /* the velocity along the ground: (N x v) x N, and the signed speed */
+    const float nx = rdf(d + 0x460), ny = rdf(d + 0x464), nz = rdf(d + 0x468);
+    float c[3] = {F32(SUB(MUL(ny, v[2]), MUL(nz, v[1]))), F32(SUB(MUL(nz, v[0]), MUL(nx, v[2]))),
+                  F32(SUB(MUL(nx, v[1]), MUL(ny, v[0])))};
+    float g[3] = {F32(SUB(MUL(nz, c[1]), MUL(ny, c[2]))), F32(SUB(MUL(nx, c[2]), MUL(nz, c[0]))),
+                  F32(SUB(MUL(ny, c[0]), MUL(nx, c[1])))};
+    memcpy(v, g, 12);
+    float s = F32(fpu_sqrt(ADD(ADD(MUL(g[1], g[1]), MUL(g[2], g[2])), MUL(g[0], g[0]))));
+    if (below(ADD(ADD(MUL(g[1], m.m[7]), MUL(g[2], m.m[8])), MUL(g[0], m.m[6])), 0)) s = -s;
+    int32_t sb;
+    memcpy(&sb, &s, 4);
+    if ((uint32_t)tb > 0x80000000u && (uint32_t)sb < 0xbf800000u && sb < 0x3f800000) {   /* braked to a stop */
+        s = 0;
+        memset(v, 0, 12);
+        sliding = 0;
+        *flags &= ~0x2002u;
+    }
+    if (sliding && !slid) {   /* no longer sliding sideways */
+        double lat = ADD(ADD(MUL(m.m[1], v[1]), MUL(m.m[2], v[2])), MUL(m.m[0], v[0]));
+        float lf = F32(lat);
+        int32_t lb;
+        memcpy(&lb, &lf, 4);
+        if (!below_eq(lat, -3.0f) && lb < 0x40400000) *flags &= ~0x2002u;   /* 0x4a67e0 */
+    }
+    memcpy(vel, v, 12);
+    *speed = s;
+    memcpy(acc_out, acc, 12);
+    memcpy(w_out, d + 0xc8, 12);
+    w_out[1] = yaw;
+    *f_out = m;
+    return 0;
+}

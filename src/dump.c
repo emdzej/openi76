@@ -420,6 +420,40 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 8: {   /* the driving step (dt 0.05) moving as for the drag, mode 3, steering 0.3: throttle 0.7,
+                       braking -0.8, sliding (+0x454 bit 2), and without bit 0x1000 */
+            float v[3], w[3] = {0, 0.4f, 0}, nv[3] = {0.2f, 0.97f, 0.1f}, sp = 12.4f, isp = 1.0f / 12.4f;
+            static const float thr[4] = {0.7f, -0.8f, 0.7f, 0.7f}, st = 0.3f;
+            int32_t mode = 3;
+            uint8_t save[0x50c];
+            memcpy(save, n->data, sizeof save);
+            for (int j = 0; j < 4; j++) {
+                memcpy(n->data, save, sizeof save);
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * 12.0f + n->frame.m[k] * 3.0f;
+                memcpy(n->data + 0xbc, v, 12);
+                memcpy(n->data + 0xc8, w, 12);
+                memcpy(n->data + 0x460, nv, 12);
+                memcpy(n->data + 0xac, &sp, 4);
+                memcpy(n->data + 0xb0, &isp, 4);
+                memcpy(n->data + 0xe4, &thr[j], 4);
+                memcpy(n->data + 0xe0, &st, 4);
+                memcpy(n->data + 0x104, &mode, 4);
+                if (j == 2) n->data[0x454] |= 2;
+                if (j == 3) n->data[0x455] &= ~0x10;
+                struct { int32_t r; uint32_t flags; float vel[3], speed, acc[3], w[3]; } o;
+                Frame f;
+                memset(&o, 0, sizeof o);
+                memset(&f, 0, sizeof f);
+                o.r = 0;
+                Vehicle_Drive(n, &o.flags, o.vel, &o.speed, o.acc, o.w, &f, 0.05f);
+                f.pad = 0;
+                uint8_t b[sizeof o + sizeof f];
+                memcpy(b, &o, sizeof o);
+                memcpy(b + sizeof o, &f, sizeof f);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);
