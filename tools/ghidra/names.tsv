@@ -424,3 +424,7 @@
 0042d920	Special_Kind	vehicle	high	a special's node's data word 0 (0 for none)
 0042d4f0	Vehicle_Mode	vehicle	high	the vehicle's data +0x104
 004761b0	Engine_SoundStart	audio	med	0x476240 (the engine's sound) as a boolean
+00429eb0	Vehicle_Die	vehicle	med	the death: wreck, explosions, score, messages
+0042b790	Vehicle_Kill	vehicle	high	flag 0x20 and 0x429eb0 unless dying; ported
+0046fe20	Vehicle_Upright	physics	high	on its back at rest: the user is turned over, others die; ported, diffed
+004683c0	Sound_At	audio	med	a sound by id at a node

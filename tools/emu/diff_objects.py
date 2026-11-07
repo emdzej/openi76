@@ -72,7 +72,12 @@ SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
               41: (0x24,)}   # 41: the pad word of a frame 0x433370 copies from its stack (garbage)
-START = "--start" in sys.argv
+# --call NAME [times]: after the start, a per-frame function on every listed vehicle (the port's
+# Dump_CallVehicles), with the vehicles' death and the sounds stubbed
+CALLS = {"upright": (0, 0x46FE20)}
+UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
+CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
+START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
 START_LATER = (0x41FFF0, 0x433810,
                # the user vehicle's set-up (cockpit, camera, weapons' display, dashboard) and the engine's sound
@@ -186,6 +191,24 @@ def original():
         # the game goes on in the rounding Mission_Load left (exe.call would start at nearest)
         from unicorn import x86_const
         exe.call(0x425920, limit=500_000_000, fpcw=exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
+    if CALL:
+        exe.stub(0x429EB0, lambda *a: 0, 3)   # the death
+        exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
+        c, k = struct.unpack("<I", exe.read(0x54F884, 4))[0], 0
+        while c:
+            nxt, _, n = struct.unpack("<III", exe.read(c, 12))
+            if n and struct.unpack("<i", exe.read(n + 0x6C, 4))[0] == 1:
+                k += 1
+                if UPSIDE:
+                    for j in range(3, 6):
+                        a = n + 0x18 + 4 * j
+                        exe.write(a, struct.pack("<f", -struct.unpack("<f", exe.read(a, 4))[0]))
+                    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+                    exe.write(d + 0xC8, bytes(12))
+                    exe.write(d + 0x460, struct.pack("<fff", 0, 1, 0))
+                exe.call(CALLS[CALL][1], n, 0, limit=50_000_000, fpcw=exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
+            c = nxt
+        print(f"--call {CALL}: {k} vehicles", file=sys.stderr)
     m = Mem(exe)
     budget[0] = 100000
     count = m.i32(0x4D3B5C)
@@ -305,6 +328,8 @@ def port():
     r = lib.Mission_Load(M.encode())
     if START:
         lib.Class_StartAll()
+    if CALL:
+        print(f"--call {CALL}: {lib.Dump_CallVehicles(CALLS[CALL][0], int(UPSIDE))} vehicles (port)", file=sys.stderr)
     buf = ctypes.create_string_buffer(64 << 20)
     lib.Objects_Dump.restype = ctypes.c_size_t
     ctypes.c_int.in_dll(lib, "g_dump_texanims").value = int(START)

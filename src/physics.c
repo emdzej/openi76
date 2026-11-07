@@ -8,6 +8,7 @@
 #include "terrain.h"
 #include "weapons.h"
 #include "render/fpu.h"
+#include <math.h>
 #include <string.h>
 
 #define ADD fpu_add
@@ -23,6 +24,7 @@ static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
+static int below(double a, double b) { return a < b || a != a || b != b; }
 static Node *slot(uint8_t *d, uint32_t off) { return *Data_Ptr(d, off); }
 
 /* 0x42fe30: a wheel's ground height under its place, into its data's +0x2c and +0x30; +0x34 = 0 (the
@@ -107,4 +109,50 @@ void Vehicle_PhysInit(Node *n)
     brakes_set(slot(d, 0x3cc), F32(MUL(rdf(d + 0xa8), 2300.0f)));   /* 0x4a676c */
     Engine_Step(engine, 0, rdf(d + 0xac), (uint32_t)rd32(d + 0x454), 0, rd32(d + 0x104));   /* 0x42d4f0 */
     /* 0x4761b0: the engine's sound (0x476240); no audio yet */
+}
+
+/* 0x429eb0: a vehicle's death (the wreck, the explosions, the score and the messages); not ported yet */
+static void vehicle_die(Node *n) { (void)n; }
+
+void Vehicle_Kill(Node *n)
+{
+    if (!n || n->cls != 1) return;
+    uint8_t *d = n->data;
+    if (rd32(d + 0x454) & 0x8020) return;
+    put32(d + 0x454, rd32(d + 0x454) | 0x20);
+    vehicle_die(n);
+}
+
+/* 0x4683c0: a sound at the node (4: the vehicle righted); no audio yet */
+static void sound(int id, Node *n) { (void)id, (void)n; }
+
+int Vehicle_Upright(Node *n)
+{
+    uint8_t *d = n->data;
+    float v[3], up[3] = {n->frame.m[3], n->frame.m[4], n->frame.m[5]};
+    memcpy(v, d + 0xc8, sizeof v);
+    float dot = F32(ADD(ADD(MUL(rdf(d + 0x460), up[0]), MUL(rdf(d + 0x464), up[1])), MUL(rdf(d + 0x468), up[2])));
+    /* turning slowly about x and z, and the up axis along the ground's normal (either way) */
+    if (!below(fabsf(v[0]), 0.6283185307179586) || !below(fabsf(v[2]), 0.6283185307179586)) return 1;   /* 0x4a6618 */
+    if (!(fabsf(dot) > 0.8f)) return 1;   /* 0x4a6620 */
+    uint32_t flags = (uint32_t)rd32(d + 0x454), bits;
+    memcpy(&bits, &dot, 4);
+    if (!(flags & 0x24) && bits > 0x80000000u) {   /* upside down */
+        if (n->flags & 0x20) {
+            memset(d + 0xc8, 0, 12);
+        } else if ((flags & 0x10000) /* && not a network game (0x461900) */) {
+            /* the user's (or Taurus's) is put back on its wheels: the up and right axes reversed */
+            for (int k = 0; k < 3; k++) n->frame.m[3 + k] = -n->frame.m[3 + k];
+            for (int k = 0; k < 3; k++) n->frame.m[k] = -n->frame.m[k];
+            sound(4, n);
+        } else {
+            Vehicle_Kill(n);
+            memset(d + 0xc8, 0, 12);
+        }
+    }
+    if (rd32(d + 0x454) & 0x200) {
+        sound(4, n);
+        put32(d + 0x454, rd32(d + 0x454) & ~0x200);
+    }
+    return 0;
 }

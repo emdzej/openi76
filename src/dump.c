@@ -307,3 +307,26 @@ size_t Objects_Dump(char *buf, size_t cap)
     }
     return o.len;
 }
+
+/* the harness's --call (tools/emu/diff_objects.py): one function on every listed class 1 node, in the
+   class list's order */
+#include "physics.h"
+int Dump_CallVehicles(int which, int upside)
+{
+    int k = 0;
+    for (Cell *c = g_class_nodes; c; c = c->next) {
+        Node *n = c->value;
+        if (!n || n->cls != 1) continue;
+        k++;
+        if (upside) {   /* on its back, still, on flat ground (the normal +0x460 straight up) */
+            static const float normal[3] = {0, 1, 0};
+            for (int j = 3; j < 6; j++) n->frame.m[j] = -n->frame.m[j];
+            memset(n->data + 0xc8, 0, 12);
+            memcpy(n->data + 0x460, normal, sizeof normal);
+        }
+        switch (which) {
+        case 0: Vehicle_Upright(n); break;
+        }
+    }
+    return k;
+}
