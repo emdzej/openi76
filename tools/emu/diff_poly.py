@@ -73,9 +73,16 @@ FILLERS = {
 }
 
 
-class Surface(ctypes.Structure):
-    _fields_ = [("pitch", ctypes.c_int), ("x0", ctypes.c_int), ("pixels", ctypes.c_void_p), ("y0", ctypes.c_int),
-                ("w", ctypes.c_int), ("h", ctypes.c_int)]
+class Surface(ctypes.Structure):   # src/render/surface.h
+    _fields_ = [("pitch", ctypes.c_int), ("pixels", ctypes.c_void_p), ("x0", ctypes.c_int), ("y0", ctypes.c_int),
+                ("x1", ctypes.c_int), ("y1", ctypes.c_int), ("on", ctypes.c_int), ("w", ctypes.c_int),
+                ("h", ctypes.c_int)]
+
+
+def surface_record(pitch, pixels, x0=0, y0=0, x1=W - 1, y1=H - 1, on=1):
+    """The original's surface record: +0 pitch, +0x10 pixels, +0x18 left, +0x1c top, +0x20 right, +0x24 bottom,
+    +0x28 on."""
+    return struct.pack("<IIIIIiiiii", pitch, 0, 0, 0, pixels, 0, x0, y0, x1, y1) + struct.pack("<i", on)
 
 
 def polygon(rng, kind):
@@ -162,7 +169,7 @@ def run(name, count, seed, up, verbose):
             ctypes.c_void_p.in_dll(lib, "g_shadow_mask").value = ctypes.cast(port_mask, ctypes.c_void_p).value
             ctypes.c_int.in_dll(lib, "g_shadow_stride").value = MASK_STRIDE
         bits = exe.put(dest)
-        surf = exe.put(struct.pack("<IIIIIIII", W, 0, 0, 0, 0, 0, bits, 0))
+        surf = exe.put(surface_record(W, bits))
         vp = exe.put(verts)
         arg4 = colour
         if reads:
@@ -188,7 +195,7 @@ def run(name, count, seed, up, verbose):
             continue
         want, want_v = exe.read(bits, W * H), exe.read(vp, len(verts))
         buf = ctypes.create_string_buffer(dest, W * H)
-        s = Surface(W, 0, ctypes.cast(buf, ctypes.c_void_p), 0, W, H)
+        s = Surface(W, ctypes.cast(buf, ctypes.c_void_p), 0, 0, W - 1, H - 1, 1, W, H)
         vbuf = ctypes.create_string_buffer(verts)
         if stale[0] is not None:
             ctypes.c_int.in_dll(lib, "g_poly_stale_row").value = stale[0]

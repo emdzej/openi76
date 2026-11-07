@@ -56,3 +56,5 @@
 004449a0	Poly_FillNone_47	render	high	mode 0x47 affine: a bare ret
 0043d370	Poly_FillOutline	render	high	modes 0xe3 etc.: forwards to Poly_Outline 0x43e940
 0043e940	Poly_Outline	render	high	draws each edge with the line rasterizer 0x44b310 (rounded ends)
+0044b310	Line_Draw	render	high	Cohen-Sutherland clip to the surface viewport, Bresenham via a two-entry step table, end point excluded; ported, diffed
+0043d4c0	DrawLine	render	high	3D segment: near/far z clip (in place), project through the view, Line_Draw; a second line above 480 rows

@@ -37,8 +37,10 @@ The terrain renderer (0x48f7b0, 0x48ffa0) indexes the clip table directly.
 
 ## Surface
 
-The span code reads only these fields: +0 pitch, +0x10 x origin, +0x18 the pixels, +0x1c y origin. A
-pixel lives at `pixels + (y + y0) * pitch + x0 + x`.
++0 pitch, +0x10 the pixels, +0x18 left, +0x1c top, +0x20 right, +0x24 bottom (the viewport, inclusive),
++0x28 nonzero when it can be drawn on. The fillers draw relative to the viewport, at
+`pixels + (y + top) * pitch + left + x`. The fillers add +0x10 and +0x18 together, so only the line
+rasterizer showed which is the pointer.
 
 ## Vertices
 
@@ -236,3 +238,17 @@ is built in a byte register pair (t = texel, d = destination).
 - **Outline** 0x43d370 (0xe3, 0xe7, ...) forwards to 0x43e940, which draws each edge (the previous vertex
   to this one, ends rounded) with the line rasterizer 0x44b310. That is the next thing to port, with
   DrawPoint and DrawLine.
+
+## Line_Draw 0x44b310 (ported, diffed)
+
+`(surface, x0, y0, x1, y1, colour, test)`, all integers.
+
+- **Clipping.** Cohen-Sutherland against the viewport, in absolute coordinates. The outcode bits are
+  8 left, 4 right, 2 above and 1 below, each the sign of a 32-bit difference (`add`, `adc`). An intersection
+  is `y0 + (y1 - y0) * (edge - x0) / (x1 - x0)`, with a 64-bit product and a truncating divide. The address
+  then adds left and top again, which is harmless for a viewport at 0, 0.
+- **Early exits.** Nothing is drawn when the surface is off, or when `test` is nonzero (the clipping still
+  runs).
+- **Stepping.** Bresenham over `max(|dx|, |dy|)` pixels, so the end point is left out. The error starts at
+  `2 minor - major`. Its sign picks the step and the increment from two-entry tables (`{both axes, 2 minor
+  - 2 major}`, `{the major axis, 2 minor}`). The pixel is written before the step.
