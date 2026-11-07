@@ -33,10 +33,10 @@ LATER = {0x40A550: 2, 0x40A640: 2, 0x40A670: 4, 0x40A770: 4, 0x41F1E0: 1, 0x41F2
 
 
 # the AI's orders (0x40cc10) run; the tactics' functions the port has not ported yet are stubbed, and so are
-# the weapons' list (0x408c40), the aim (0x40f410) and the sounds
+# the aim (0x40f410) and the sounds
 TACTICS_PORTED = {0, 0x417A10, 0x40A580, 0x40A600, 0x40A620, 0x41D1C0, 0x41D4A0, 0x41D5D0, 0x41D5F0, 0x41D620,
-                  0x41D650, 0x41D6F0, 0x4183A0, 0x418400, 0x418460, 0x4184B0, 0x4189C0}
-AI_LATER = {0x408C40: 1, 0x40F410: 3, 0x4683C0: 3}
+                  0x41D650, 0x41D6F0, 0x4183A0, 0x418400, 0x418460, 0x4184B0, 0x4189C0, 0x417B00, 0x417C00}
+AI_LATER = {0x40F410: 3, 0x4683C0: 3}
 
 
 def tactic_functions(exe):
@@ -112,6 +112,10 @@ def original():
                 for b in exe.read(ai + 0xB0, max(0, min(np, 2000)) * 0x14) if np > 0 else b"":
                     h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
                 s += f" {h:08x}"
+                h = 0x811C9DC5
+                for b in exe.read(ai + 0xA6F4, 0xA818 - 0xA6F4):
+                    h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+                s += f" w {u(ai + 0xA6F4):x} {h:08x} {u(ai + 0xA82C):08x}"
                 out.append(s)
         m = u(0x4A88EC)
         while m:

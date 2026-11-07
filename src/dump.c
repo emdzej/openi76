@@ -886,7 +886,11 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 int32_t np = *(int32_t *)(ai + 0xac);
                 uint32_t h = 0x811c9dc5;
                 for (int32_t k = 0; k < np * 0x14 && k < 2000 * 0x14; k++) h = (h ^ ai[0xb0 + k]) * 0x01000193;
-                len += (size_t)snprintf(o + len, cap - len, " %08x\n", h);
+                len += (size_t)snprintf(o + len, cap - len, " %08x", h);
+                /* the weapons' list (+0xa6f4-+0xa818) and the attack's time (+0xa82c) */
+                h = 0x811c9dc5;
+                for (int k = 0xa6f4; k < 0xa818; k++) h = (h ^ ai[k]) * 0x01000193;
+                len += (size_t)snprintf(o + len, cap - len, " w %x %08x %08x\n", *(uint32_t *)(ai + 0xa6f4), h, *(uint32_t *)(ai + 0xa82c));
             }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {
             uint32_t sp = (uint32_t)Fsm_Word(m + 0x10b0);

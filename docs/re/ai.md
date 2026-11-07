@@ -39,7 +39,7 @@ calls it again each frame (an order and then a yield, in a loop), and each call 
 frame. Ported (`src/orders.c`): the port reads the table from the exe and calls each function by its
 address. Ported so far: 0x417a10 (accepts any target), sit's frame 0x40a580 (also guard's and hide's),
 and hide's enter 0x40a600 and leave 0x40a620. The others do nothing and answer 0, and the port logs each
-once. The weapons' list (0x408c40) and the aim (0x40f410) are not ported yet.
+once. The aim (0x40f410) is not ported yet.
 
 **The target.** The AI block's +0xa9b4 keeps the target with a reference tagged "ai". When the target is
 freed (`Node_Live`), or 0x417a10 refuses it (it always accepts), 0x40a500 stops the vehicle: the
@@ -219,3 +219,67 @@ by AI_Frame's count (0x505518, 0x40fad0); all four at most 0.1 push 0x12 (not po
 **Class 9** (the helicopters) follow the same tactics with their own steering (0x409fe0: the sine of a
 0.15th of the shorter way round, by the throttle and speed) and speed control (in 0x409cc0: the speed
 error x 0.15 plus 0.00155 x speed², x 0.0495, within +-0.999).
+
+## The weapons' list (0x408c40)
+
+`src/combat.c` (Weapons_Refresh). Each order, while +0xa714 is set (AI_Rethink sets it), the AI block
+takes its vehicle's weapons from the hard points (0x454f80; none: count 0):
+
+- +0xa718 the count of slots with an instance, in slot order, and +0xa71c their instances; +0xa730 and
+  +0xa734 then hold slot 5's and slot 6's (so a vehicle with six or seven weapons has its fifth and
+  sixth entries overwritten by them).
+- +0xa738, 0x20 bytes per weapon (0x455080): the definition's slot index and kind, its words 0, 2 and 9,
+  the ordnance's speed (0x458f10: the kind of word 8 found among all 20 ordnance records, +0x34), the
+  hard point's id and type. A weapon of a missing ordnance kind reads the record before the table (the
+  port logs it). With seven weapons the last records run over +0xa81c and +0xa820 (the speed and
+  steering gains).
+- 0x4089d0: +0xa6f4 counts, and +0xa6f8 lists, the weapons whose muzzle's z axis (0x4551d0, its world
+  frame) is within 0.96 (a dot product, 0x4a5170) of the vehicle's. A type 3 slot is skipped; unless the
+  vehicle is the user's, its hard points' +4 gets the weapon's place in the list (0x456810).
+
+Then +0xa714 is cleared. `diff_fsm.py` hashes +0xa6f4-+0xa818 each frame.
+
+## Attacking (6)
+
+Enter (0x417b00): +0xa82c = game time + rand() % 15 + 20 (a float), +0xa998 the target, no hand brake
+(+0xf0), mode 3, forward, the order's speed 35. Frame (0x417c00): Combat (0x41e0d0) in mode 1.
+
+**Combat.** h is the vehicle's heading, a the heading to the target (0x42e4a0, centre to centre). The
+vehicle's sector is Angle_Sector(h, a) (0x42e500: the angle a - h in [0, 2pi), shifted an eighth, in
+eighths, 0 dead ahead); the target's is 4 when it is not a vehicle or its +0x454 has bit 2, else its own
+sector toward the vehicle. The distance over the ground (0x42e4c0) gives a band: under 9, 24, 60, 200,
+beyond. A signed byte of the table at 0x4d2f20, indexed ((sector + (mode x 5 + band) x 8) x 8 + their
+sector), picks the manoeuvre:
+
+| state | |
+|---|---|
+| 0, 2 | cruising speed, a quarter turn's half (pi/4) left / right of the heading |
+| 1, 3 | speed 1000, the same |
+| 4 | pursue (0x41d900) |
+| 5 | ram (0x41ddf0): speed 1000 at the target's predicted place |
+| 6 | match its course (0x41df40) |
+| 7 | abreast: speed 1000, pi/4 to the side away from the target's angle |
+| 8, 0xe | pursue, and brake when nearer 24 / 140 and within 0.19 / 0.1 rad of it |
+| 0xa, 0xb | speed 1000 / cruising, straight on |
+| 0xc, 0xd | nothing |
+
+Another value reports "Unknown ai combat state".
+
+**The prediction.** 0x4139f0: the time two points moving at constant velocities come closest (1e7 when
+the relative velocity's square is under 0.01). 0x413810: where a vehicle is in time s plus 0.09: along
+its velocity when its yaw rate (+0xcc) is under 0.05, else round the circle of radius speed / |rate|.
+
+**Pursue** (0x41d900) aims at the target's place at the closest approach (clamped to 0.01-5 s), the
+vehicle's velocity plus the first forward weapon's ordnance speed along its z axis; the distance less
+20 m sets the speed: a still target (under 1 m/s) is approached at 0.3 x (d - 1), braking within 4 m; a
+moving one is matched plus a margin (0.7 x (d - 2) over 50 m, 0.4 x (d - 1) under, flat out over 150 m,
+half its speed within 1 m). Steering hard (|steer| 0.4 or more) the vehicle slows: cruising speed, or
+when within 100 m 0.75 of the target's speed if both face the same way (over 0.7) and the target is
+behind, else its speed less 5.
+
+**Match** (0x41df40, with 0x414db0): the velocity that reaches the target's place in a time (distance /
+(speed + 25), 0.4-1.75 s), scaled to the vehicle's speed x 0.9 (x 1000 when nearly still; above 25 m/s
+less 25) unless that turns it backward. It steers along it; against a moving target it holds that speed
+(cruising when the throttle is over 0.4); against a still one it brakes from 60 m, slowing by 0.2 x
+(d - 60) beyond, cruising when not facing it within 0.19.
+

@@ -1,6 +1,9 @@
 /* The AI's orders and tactics (orders.h). In the current rounding mode (render/fpu.h). */
 #include "orders.h"
 #include "ai.h"
+#include "clock.h"
+#include "combat.h"
+#include "crt.h"
 #include "damage.h"
 #include "drive.h"
 #include "entity.h"
@@ -281,6 +284,26 @@ static int stuck(Node *n, Node *t)
 }
 
 /* a tactic's function by its address */
+/* ---- attack (6) ---- */
+
+/* attack's enter 0x417b00: a time 20-34 s on (+0xa82c), the target (+0xa998), forward, mode 3, the order's
+   speed 35 */
+static int attack_enter(Node *n, Node *t)
+{
+    uint8_t *d = n->data, *ai = ai_of(n);
+    int r = crt_rand();
+    putf(ai + 0xa82c, F32(ADD(ADD(g_clock_game, r % 15), 20.0f)));   /* 0x4a556c */
+    *Data_Ptr(ai, 0xa998) = t;
+    put32(d + 0xf0, 0);
+    Vehicle_SetMode(n, 3);
+    put32(d + 0xe8, 0x3f800000);
+    put32(ai + 0x80, 0x420c0000);
+    return 0;
+}
+
+/* attack's frame 0x417c00: Combat in mode 1 (its answer is whatever Combat left in eax; the caller drops it) */
+static int attack_frame(Node *n, Node *t) { Combat(n, t, 1); return 0; }
+
 static int call(uint32_t va, Node *n, Node *t)
 {
     switch (va) {
@@ -294,6 +317,8 @@ static int call(uint32_t va, Node *n, Node *t)
     case 0x418460: return back_enter(n, t);
     case 0x4184b0: return back_frame(n, t);
     case 0x4189c0: return stuck(n, t);
+    case 0x417b00: return attack_enter(n, t);
+    case 0x417c00: return attack_frame(n, t);
     case 0x41d1c0: return goto_enter(n, t);
     case 0x41d4a0: return goto_frame(n, t);
     case 0x41d5d0: return searched(n, t);
@@ -323,9 +348,6 @@ static int call(uint32_t va, Node *n, Node *t)
 
 static int generic(int order) { return order >= 0 && order <= 0xf && order != 7; }
 
-/* 0x408c40: the weapons' list (+0xa718, from 0x454f80 / 0x455080, then 0x4089d0) while +0xa714 is set;
-   not ported yet */
-static void weapons_refresh(Node *n) { (void)n; }
 /* 0x40f410: the aim at the target; not ported yet */
 static void aim(Node *n, uint8_t *ai, Node *t) { (void)n, (void)ai, (void)t; }
 
@@ -348,7 +370,7 @@ void AI_Order(Node *n, Node *t, int order, int slow)
         }
     }
     /* 0x417a10 takes any target */
-    weapons_refresh(n);
+    Weapons_Refresh(n);
     int32_t top;
     memcpy(&top, ai + 0xa93c, 4);
     int32_t bottom;
