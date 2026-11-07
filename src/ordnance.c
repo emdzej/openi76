@@ -1,6 +1,7 @@
 /* The shots (0x458f40-0x45d710; docs/re/weapons.md "The launch"). In the current rounding mode
    (render/fpu.h). */
 #include "ordnance.h"
+#include "contrail.h"
 #include "clock.h"
 #include "avoid.h"
 #include "collide.h"
@@ -221,9 +222,9 @@ static void place(Node *s, const Launch *l)
 
 /* ---- the launch (0x458f40) ---- */
 
-/* not ported yet, as the effects: 0x46ef60 the trail (smoke by kind), 0x46d090 the
-   types 9-11's (flares, oil, caltrops: dropped per shot) */
-static void trail(Node *s, int k) { (void)s, (void)k; }
+/* the trail (0x46ef60, contrail.c); not ported yet, as the effects: 0x46d090 the types 9-11's (flares,
+   oil, caltrops: dropped per shot) */
+static void trail(Node *s, int k) { Contrail_Start(s, k); }
 static void dropped(Node *muzzle, int k, int32_t w, const Ordnance *o) { (void)muzzle, (void)k, (void)w, (void)o; }
 
 /* the kind's pool: w7 (50) shots made at the first launch, each with its record (0x48 bytes) */
@@ -540,8 +541,8 @@ static int fly_gun(Node *s, float t)
     return !hit;
 }
 
-/* not ported yet, as the effects: 0x46f170 the trail's step (its smoke behind the shot) */
-static void trail_step(Node *s) { (void)s; }
+/* the trail's step (0x46f170, contrail.c): its smoke behind the shot */
+static void trail_step(Node *s) { Contrail_Step(s); }
 
 /* the delayed hits (0x4dc470): a spent shot's later hits round it */
 typedef struct Delayed {

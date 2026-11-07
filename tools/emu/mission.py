@@ -106,6 +106,21 @@ def seed(exe):
 
 
 last_lum = [None]   # the world's .lum, as the display's set-palette was given it
+last_pal = [None]   # and its palette
+
+
+def set_palette_now(exe, fpcw=None):
+    """what the port's display does with the world's palette (Display_SetPalette): colour 0 black, the
+    gamma row of the detail, Palette_Set (0x43c170, 0x43bcc0); the lum table as given"""
+    if not last_pal[0]:
+        return
+    shown = bytearray(last_pal[0])
+    shown[0:3] = bytes(3)
+    rec = exe.put(bytes(0xE0) + bytes(shown))   # a display record: its shown palette at +0xe0
+    kw = {} if fpcw is None else {"fpcw": fpcw}
+    exe.call(0x43C170, rec + 0xE0, 0, 256, 3, limit=50_000_000, **kw)   # row 3, gamma 1.0: the port's at the load (its detail 0)
+    lum = exe.put(last_lum[0]) if last_lum[0] else 0
+    exe.call(0x43BCC0, rec, lum, limit=50_000_000, **kw)
 
 
 def setup(log=None):
@@ -124,9 +139,20 @@ def setup(log=None):
     exe.stub(0x402C80, lambda msg: (_ for _ in ()).throw(x86.Fault(f"fatal: {cstr(exe, msg)}")), 1)
     # the display's functions (the record 0x58d860's table): set-palette 0x58dc5c
     # (its lum table kept for the checks that draw pixels: the port's copies it, 0x43bcc0)
+    # The display applies the palette at once (the port's Display_SetPalette: colour 0 black, the gamma row,
+    # Palette_Set 0x43bcc0): the colours the load matches (Color_Match 0x43c050, the objects' untextured
+    # faces) depend on it. Unicorn can't nest a call in a hook, so the port's float palette is written in.
+    lib.Gamma_Build()
+    lib.Display_SetPalette.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p]
     def set_palette(rec, first, count, pal, lum):
         if lum:
             last_lum[0] = exe.read(lum, 0x10000)
+            exe.write(0x5C0450, last_lum[0])
+        if pal:
+            last_pal[0] = exe.read(pal, 768)
+            shown = ctypes.create_string_buffer(768)
+            lib.Display_SetPalette(shown, first, count, last_pal[0], None)
+            exe.write(0x5AE550, bytes((ctypes.c_uint8 * 3072).in_dll(lib, "g_pal_rgb")))
         return 0
     exe.stub_pointer(0x58DC5C, set_palette, 5)
     exe.stub(0x44E380, lambda size: exe.alloc(size), 1)

@@ -8,6 +8,7 @@
 0041f130	Objective_Succeed	mission	high	marks an objective succeeded; ported
 0041f1e0	Objective_Fail	mission	high	marks an objective failed; ported
 00439c80	Font_AddResource	gfx	med	installs ee_____.ttf through a .fot font resource
+004816e0	Tex_PutRegionOn	tex	high	a picture's .etbl region onto a given surface at a table's region, through the remap table; ported (radar.c put_region)
 00484c20	Cd_FindByLabel	files	med	finds the CD drive by volume label (I76_CD)
 00484db0	Files_Init	files	high	start-up: the CD by label, the xyzzy probe, then i76.zix (fatal without it)
 0048b830	Zix_ReadRoots	files	med	reads a ZIX's root lines (disc label lines, DIR:, CD<n>:) up to the separator
@@ -574,10 +575,20 @@
 0042f480	Engine_Points	damage	high	the engine's +0 and +4 (300 each without data)
 00430650	Part17_Points	damage	high	class 0x17's +0 and +4 (300 each without data)
 004304a0	Part16_Points	damage	high	class 0x16's +4 and +8 (300 each without data)
-0046e170	Smoke_Start	effects	med	a smoke trail on an object (list 0x5772ec, enabled by 0x4dd080)
-0046e220	Smoke_Stop	effects	med	removes an object's smoke trail
-0046e270	Smoke_Density	effects	med	an object's smoke trail's density
-0046e2b0	Smoke_Kind	effects	med	an object's smoke trail's kind
+0046e170	Smoke_Start	effects	high	a smoke trail on a node from a point in its frame, the vehicle's body for the puffs' motion; ported, diffed
+0046e220	Smoke_Stop	effects	high	a node's smoke trail ends, its reference dropped; ported, diffed
+0046e270	Smoke_Density	effects	high	sets two puffs a frame whatever the density (a quirk); ported
+0046e2b0	Smoke_Kind	effects	high	a node's trail's kind (its puffs' frames); ported, diffed
+0046e2e0	Trail_Alloc	effects	high	a free smoke trail record; ported
+0046e300	Trail_Release	effects	high	a smoke trail unlinked onto the free list; ported
+0046e360	Smoke_Frame	effects	high	the trails' two new puffs each, then each puff drawn, moved, slowed and shaken by the noise, gone at 20 frames; ported, diffed
+0046e5f0	Puff_Release	effects	high	a puff unlinked onto the free list; ported
+0046e830	Puff_New	effects	high	a puff at a point with the vehicle's direction, speed and velocity (+1.2 up); ported, diffed
+0046e910	Puff_Alloc	effects	high	a free puff, or the oldest; ported
+0046dfb0	Smoke_Init	effects	high	the 36 smoke frames, 256 puffs, 128 trails; off when a frame is missing; ported, diffed
+0046e0c0	Smoke_Free	effects	high	the trails' nodes let go, the pools and frames freed; ported
+00451510	Noise_Init	math	high	the 256-float noise table 0x5e0f90: a closed random curve by midpoint displacement, stored as differences; ported, diffed
+00451620	Noise_Subdivide	math	high	the midpoints between two points, left half by recursion, right by loop; ported
 0042d010	Side_Whole	damage	high	a side's lesser of the chassis's and the armour's health
 0045d7c0	Impact_Damage	damage	high	an impact's packet (mass x (v.-n)^2 x k, or a projectile's) through Class_Damage
 00408bf0	AI_Rethink	ai	high	every team's vehicles' AI block +0xa714 = 1
@@ -961,10 +972,10 @@
 004213d0	Radar_ToggleRange	radar	high	radar_range_toggle: +0 toggled when working
 00421400	Radar_RangeReset	radar	high	radar_range_reset: +0 = 1
 00421430	Radar_ToggleCamera	radar	high	radar_camera_toggle: bit 2 toggled while a contact is chosen
-004208f0	Radar_Display	radar	med	the user's radar display, a texture animation; not ported
-004210b0	Radar_DrawView	radar	med	the display's top-down view drawn into the surface; not ported
+0041fcf0	Radar_Colours	radar	high	the blips' 255 greens and every colour's nearest by luminance, the greys 0.7, 0.5 and yellow; ported, diffed
+004208f0	Radar_Display	radar	high	the user's radar display (texture animation): the sweep, range picture, blips and LED, or the target view; ported, diffed
+004210b0	Radar_DrawView	radar	high	the target camera's view in the blips' greens, framed by zradmask; ported from the disassembly, unchecked
 00421f30	Jammer_Use	radar	med	the jammer special switched on: sounds, a charge, +0x454 bit 0x40000
-00421dc0	Radar_Surface	radar	med	the radar's display surface (+0x80)
 0045d4d0	Radar_Kinds	radar	high	each weapon kind's target along the vehicle's axes (0x46b050)
 0046b050	Dir_Pick	radar	high	the nearest car within 650 m in a cone (cos^2 0.933) along a direction
 00455030	Hardpoints_Kinds	weapons	high	the vehicle's hard points' kinds or-ed (+0x2c0)
@@ -1091,8 +1102,8 @@
 00429da0	Vehicle_End	classes	high	class 1's end (word 11): the mirror's flag, texture copy and mask; ported as Mirror_End
 00425580	Class_EndAll	classes	med	every listed node's end handler (the class table's word 11)
 0047c890	Tex_Restore	tex	high	an owner's private texture copy given back (or refreshed from the shared); ported
-0046e950	Smoke_DrawPuffs	effects	med	the puffs list 0x5772f8 queued as sprites (0x46e650), with 0x4dd080
-0046e650	Smoke_DrawPuff	effects	med	one puff: a type 9 sprite record, 0x8c
+0046e950	Smoke_DrawPuffs	effects	high	every puff drawn into another view (the mirror's, the radar's); ported
+0046e650	Smoke_DrawPuff	effects	high	one puff: a 0.8 m screen-space square, type 9 mode 0x8c, within 60; ported, diffed
 00456c10	Dash_Diode	weapons	high	a slot's health diode by five ranges (0x4db490); ported, diffed
 004569b0	Dash_Plate	weapons	high	a weapon's name plate from four tables by kind, index, turret, lit; ported
 00456cf0	Dash_Counter	weapons	high	a slot's four rolling digits of rounds; ported, diffed
@@ -1113,3 +1124,9 @@
 00456630	Dash_Surface	weapons	high	the weapons' display's surface 0x570a70
 0042d9c0	Specials_Surface	cockpit	high	the specials' panel's surface 0x550968
 00421dc0	Radar_Surface	radar	high	the radar data's +0x80, the display's surface
+0046e980	Contrails_Init	effects	high	the seven kinds' 13 frames each (into the table 0x4dd2a0), the ring of n trails, the sections' ring of 23, the roll's steps; ported, diffed
+0046eb70	Contrails_Free	effects	high	the ring freed; ported
+0046ebb0	Contrails_Draw	effects	high	each trail aged (its tail eats four a frame in its last 2 s), its sections drawn as three strips of quads; ported, diffed
+0046ef60	Contrail_Start	effects	high	the ring's next trail on a shot (kind < 7), a random roll, its first section; ported, diffed
+0046f170	Contrail_Step	effects	high	a shot's newest trail on to it: 2 m sections, straight or along a Hermite curve by forward differences; ported, diffed
+0046f960	Contrail_Section	effects	high	a section on at a frame, rolled (kinds 0-2), the end time 2 s on; ported, diffed

@@ -1,5 +1,6 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "smoke.h"
 #include "camera.h"
 #include "cockpit.h"
 #include "ordnance.h"
@@ -30,6 +31,7 @@ static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 static Node *slot(uint8_t *d, uint32_t off) { return *Data_Ptr(d, off); }
+static void smoke_stop(uint8_t *d);
 
 /* 0x42e250 and 0x42e290: the node, everything after it and everything under it */
 static void flags_set_all(Node *n, uint32_t bits)
@@ -176,7 +178,7 @@ void Vehicle_State(Node *n, float dt)
             Entity *e = Entity_OfNode(n);
             if (!(n->flags & 0x10)) {
                 if (rd32(d + 0x454) & 0x4000) {
-                    /* 0x46e220: its fire */
+                    smoke_stop(d);   /* 0x46e220: its fire */
                     put32(d + 0x454, rd32(d + 0x454) & ~0x40);
                     Vehicle_Lights(n, 0);
                     if (n->flags & 0x800) Light_Remove(n, &n->flags);
@@ -1042,12 +1044,16 @@ double Vehicle_Health(Node *n)
     }
 }
 
-/* the smoke trails (0x46e170 start, 0x46e270 its density, 0x46e2b0 its kind, 0x46e220 stop): the
-   effects are not ported yet */
-static void smoke_start(uint8_t *d, float k) { (void)d, (void)k; }
-static void smoke_density(uint8_t *d, float k) { (void)d, (void)k; }
-static void smoke_kind(uint8_t *d, int kind) { (void)d, (void)kind; }
-static void smoke_stop(uint8_t *d) { (void)d; }
+/* the smoke trails (smoke.c) of the vehicle's node (its entity's) */
+static Node *smoke_node(uint8_t *d) { Entity *e = (Entity *)slot(d, 0); return e ? e->node : NULL; }
+static void smoke_start(uint8_t *d, float k)
+{
+    Node *part = slot(d, 0x410);   /* 0x46e170: from (0, 0, the body part's least z) */
+    Smoke_Start(smoke_node(d), d + 0xa4, 0, 0, part ? part->bmin[2] : 0, k);
+}
+static void smoke_density(uint8_t *d, float k) { Smoke_Density(smoke_node(d), k); }   /* 0x46e270 */
+static void smoke_kind(uint8_t *d, int kind) { Smoke_Kind(smoke_node(d), kind); }    /* 0x46e2b0 */
+static void smoke_stop(uint8_t *d) { Smoke_Stop(smoke_node(d)); }                    /* 0x46e220 */
 
 void Vehicle_Smoke(uint8_t *d, float health)
 {

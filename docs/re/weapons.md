@@ -443,10 +443,77 @@ heap's word. Nothing ever sets bit 1 again.
     ported yet.
 - **0x4218a0** chooses a given vehicle's contact, letting the old choice go first. On a vehicle with flag
   0x20 the contact list is made of that vehicle alone.
-- Not ported yet: the jammer's activation (0x421f30), and the display (0x4208f0, 0x4210b0, with the
-  mask zradmask.map).
+- Not ported yet: the jammer's activation (0x421f30).
 - **The removal callback (0x41fef0).** A removed entity's cell leaves the list. Its node, if still
   alive, loses the radar's reference.
+
+### The display (0x4208f0, 0x4210b0; ported, diffed)
+
+The user's radar draws its picture into the radar node's first texture, the one the start's animation
+holds. The flat cockpit shows the same surface as its first gauge (`Radar_Surface` 0x421dc0).
+
+**The set-up.**
+- The radar's start pass (0x41fbc0) loads the target view's frame, the mask `zradmask.map` (0x4d3adc).
+  The flag 0x4d3aa4 records that it was found; otherwise "Radar Mask not found" goes to the no-op logger.
+  The pass also fills the sweep's step table (0x50a5e0, 30 words: each frame's next, 29 back to 0).
+- **The colours (0x41fcf0).** WinMain runs this once after the mission's load, so it depends on the world's
+  palette.
+  - There are 255 blip colours (0x50a4d8). Each is the palette's nearest to a green, (0.388, 0.776,
+    0.388) at first, darkened a step of 0x4a5834/0x4a5838 per colour. Entry 0 is the brightest, so a
+    contact's brightness byte (+0x1c, counted up as it fades) indexes it directly.
+  - Each blip colour's luminance is kept: b, g and r weighted by 0x4a583c, 0x4a5840 and 0x4a5844.
+  - Every palette colour is then mapped to the blip colour of nearest luminance (0x50a3a0), the first of
+    equals. The decompiler shows an aliasing that is not there; the index lives in a register.
+  - Last come the greys 0.7 and 0.5 (0x50a658, 0x50a5d8) and yellow (1, 1, 0) as the 256th blip colour.
+
+**The animation (0x4208f0)** runs on the user's vehicle only, with the start's argument: the time of
+the next sweep step, then three words (29, the last frame, the current frame).
+1. A radar not working, or switched off (bit 1 clear or bit 4 set), shows frame 30, the dark one.
+2. With the target camera on (bits 0x10 and 2), the mask loaded, a contact chosen and a target frame
+   (+0x50), the target view is drawn instead (below).
+3. Otherwise nothing is drawn outside the pilot's camera (camera mode 0).
+4. **A contact chosen (bit 0x10, the camera off):** the frame points at it. The frame is its bearing,
+   atan2 of the contact's x and z, turned into 0..2π (0x4a5854, 0x4a585c), times 30/2π (0x4a5860),
+   truncated and wrapped to 0-29. The range's scale picture goes on, then the blips: the chosen one
+   included, the sweep's arc from the last frame to this one.
+5. **The sweep:** each 0x4a586c seconds of the game's clock the frame steps on through the table. The
+   clock may jump several steps in one frame. While the target camera is set (bit 2) the frame shown is
+   30 instead. Then come the range's picture and, when there are contacts, the blips.
+6. **The range's picture** is `Drange_1`-`_4` (0x4d3a50, 12 bytes a name, by the range at +0) at the
+   region named by 0x4d3b20 of the texture table 0x4d3b14. It goes through `put_region` 0x4816e0: a
+   picture's region from the `.etbl` onto a given surface, through the remap table. As in the other
+   region copies, a picture found but no surface keeps the picture's use count (a quirk, kept).
+7. **The blips.** Only vehicles (0x42e570) are drawn, plus the chosen contact in step 4.
+   - Each position is the contact's x and z over the range's scale (0x4d3a48 by the range). Contacts
+     beyond the circle (x² + z² over 0x4a5858) are skipped.
+   - The position is scaled by 0x4a5868 and drawn as a 2 x 2 square round (0x61, 0x39) in the blip
+     colour of its brightness. The square's corner is clamped to the surface; its second row and column
+     are not, and fall where they fall inside the buffer.
+   - A contact whose bearing lies in the sweep's arc this frame, if not the chosen one, is lit again
+     (brightness 0). That would play CRADAR.WAV on the radar's node; the sound is not ported.
+   - The arc runs from the last frame's angle to the current one's, each `frame · 2π/29` (the word 29),
+     and is put past π less a turn. The low end follows the high one's sign: a negative high end (its
+     bits above 0x80000000) takes a turn off the low one unconditionally.
+8. **The LED** (`radled_1` when any blip was drawn, `radled_0` otherwise, at the region 0x4d3b0c). When it
+   lights, CGROWL.WAV plays once (0x4d3aa0 remembers it until the LED goes out; the sound is not ported).
+
+**The target view (0x4210b0).**
+1. The display is filled grey 0.5 over its top 5/8 and grey 0.7 below.
+2. A view is made on it: a field of view of 30, zoom 10, depth -10 to 500, and the radar's target camera
+   frame (+0x10).
+3. The objects are drawn as in the mirror's mode 1 (0x424550), with the other vehicles' tracers.
+4. Every pixel is mapped through the luminance table (0x43d8a0), so the scene comes out in the blips'
+   greens.
+5. The mask is blitted on through the remap table: colour 1 is see-through, and the mask's 0xff becomes
+   the first grey (0x58dcb8).
+
+The smoke's puffs (0x46e950) are not drawn yet, in the view or anywhere else.
+
+**Checked:** `--call rdisp` (case 58) runs the radar's frames and its next contact. It then calls
+the animation seven times, the clock 0.3 s on each time and a contact chosen before the fifth (0x421540).
+It compares the texture's CRC-32, the argument and the flags each time. It is identical on t01, s01 and a01. The target view itself is
+reached only where a contact is chosen with a target frame, which no mission gives at the load: it is
+ported from the disassembly, unchecked.
 
 ## The artillery (0x428cc0-0x428e80)
 

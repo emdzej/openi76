@@ -1,7 +1,8 @@
 /* The radar (0x41fbc0-0x421fc0; docs/re/weapons.md "The radar"): a vehicle's radar part (class 34) keeps
    the vehicles around it as contacts, one of them chosen, and for each weapon kind the target its
-   weapons would take. The user's display (0x4208f0, 0x4210b0) is not ported yet. */
+   weapons would take. The user's display (0x4208f0, 0x4210b0) draws its texture. */
 #pragma once
+#include "render/surface.h"
 #include "scene.h"
 #include <stdint.h>
 
@@ -62,3 +63,11 @@ int Radar_Choose(Node *v, Node *t);
 void Radar_ToggleRange(Node *v);
 void Radar_RangeReset(Node *v);
 void Radar_ToggleCamera(Node *v);
+/* Radar_Colours 0x41fcf0 (WinMain's, after the load): the blips' greens by brightness and every colour's
+   nearest of them by luminance (the target view's), the target view's two greys */
+void Radar_Colours(void);
+/* Radar_Surface 0x421dc0: v's radar display's surface (the flat cockpit's gauge), NULL without a radar */
+Surface *Radar_Surface(Node *v);
+/* Radar_Display 0x4208f0: the display's texture animation on the user's radar node n (its texture name, the
+   argument the start made: the time of the next step, 29 steps, the last and the current frame) */
+void Radar_Display(Node *n, const char *name, void *arg);

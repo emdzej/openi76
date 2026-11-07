@@ -343,6 +343,8 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "combat.h"
 #include "cockpit.h"
 #include "mirror.h"
+#include "smoke.h"
+#include "contrail.h"
 #include "render/sky.h"
 #include "render/obj_draw.h"
 #include "render/queue.h"
@@ -1252,6 +1254,111 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 59: {   /* the smoke (0x46e360) on the user's vehicle: WinMain's noise (0x451510) and smoke (0x46dfb0),
+                        the main view 15 m behind n and 4 up; n's body given a speed of 8 (its inverse 0.125)
+                        and a velocity (2, 0.5, 7.5), a trail started on it (0x46e170 as 0x42d230 does); 26
+                        frames with steps of 0.06, 0.5 (frames 8-10) and 0.001 (11-13), the kind k mod 3,
+                        the trail stopped before the 18th; after each the screen's CRC-32, the puffs' count
+                        and their CRC-32 */
+            if (!g_user_entity || g_user_entity->node != n || !n->data) break;
+            static int ready;
+            if (!ready) {
+                char err[200];
+                ready = Draw_Init(err, sizeof err) && Queue_Init();
+                if (!ready) break;
+            }
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            Noise_Init();
+            Smoke_Init();
+            const uint32_t fov = 0x3fc90fda;   /* make_view's (diff_objects.py): pi/2 a bit under 1.5707964f */
+            float fovf;
+            memcpy(&fovf, &fov, 4);
+            View_Create(&g_view, &sf, fovf, 1.0f, 150.0f, 1.0f);
+            Frame f = n->frame;
+            for (int i = 0; i < 3; i++) f.pos[i] = f.pos[i] - 15.0 * (double)n->frame.m[6 + i] + (i == 1 ? 4.0 : 0.0);
+            View_SetCamera(&g_view, &f);
+            uint8_t *d = n->data;
+            const float body[2] = {8.0f, 0.125f}, vel[3] = {2.0f, 0.5f, 7.5f};
+            memcpy(d + 0xac, body, 8);
+            memcpy(d + 0xbc, vel, 12);
+            Node *part = *(Node **)Data_Ptr(d, 0x410);
+            Smoke_Start(n, d + 0xa4, 0, 0, part ? part->bmin[2] : 0, 1.0f);
+            static uint8_t dump[256 * 0x40];
+            for (int k = 0; k < 26; k++) {
+                g_clock_step = k >= 8 && k <= 10 ? 0.5f : k >= 11 && k <= 13 ? 0.001f : 0.06f;
+                if (k == 18) Smoke_Stop(n);
+                Smoke_Kind(n, k % 3);
+                g_fpu_round = FPU_DOWN;
+                memset(px, 0, sizeof px);
+                g_q_zmin = -10.0f, g_q_zmax = 500.0f;   /* the queue's depths (the mirror's) */
+                Smoke_Frame(&g_view);
+                Queue_Flush(&g_view, 1);
+                int c = Smoke_Dump(dump, 256);
+                uint32_t b[3] = {crc32(px, sizeof px), (uint32_t)c, crc32(dump, (size_t)c * 0x40)};
+                call_line(b, sizeof b);
+            }
+            break;
+        }
+        case 60: {   /* the contrails (0x46e980-0x46f960) with the user's vehicle's node for the shot: WinMain's set-up
+                        (0x46e980 with 8), the main view 20 m behind n and 6 up; for kinds 1 and 4 a trail started
+                        on n (0x46ef60), then 30 steps of 0.1 s: moves of 1.5 m, then 9 m, then 9 m turning
+                        (the x and z rows mixed by 0.96875 and 0.25), each a step (0x46f170) and the drawing
+                        (0x46ebb0); then 25 drawings 0.2 s apart; after each the screen's CRC-32 and the
+                        trails' records' */
+            if (!g_user_entity || g_user_entity->node != n) break;
+            static int ready;
+            if (!ready) {
+                char err[200];
+                ready = Draw_Init(err, sizeof err) && Queue_Init();
+                if (!ready) break;
+            }
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            Contrails_Init(8);
+            const uint32_t fov = 0x3fc90fda;
+            float fovf;
+            memcpy(&fovf, &fov, 4);
+            View_Create(&g_view, &sf, fovf, 1.0f, 150.0f, 1.0f);
+            Frame cam = n->frame;
+            for (int i = 0; i < 3; i++) cam.pos[i] = cam.pos[i] - 20.0 * (double)n->frame.m[6 + i] + (i == 1 ? 6.0 : 0.0);
+            View_SetCamera(&g_view, &cam);
+            const Frame start = n->frame;
+            static uint8_t dump[8 * 0x3a0];
+            float t = g_clock_time;
+            for (int pass = 0; pass < 2; pass++) {
+                n->frame = start;
+                Contrail_Start(n, pass ? 4 : 1);
+                for (int k = 0; k < 55; k++) {
+                    t = (float)((double)t + (k < 30 ? 0.1 : 0.2));
+                    g_clock_time = t;
+                    g_fpu_round = FPU_DOWN;
+                    if (k < 30) {
+                        if (k >= 20)
+                            for (int i = 0; i < 3; i++) {
+                                float x = n->frame.m[i], z = n->frame.m[6 + i];
+                                n->frame.m[i] = (float)(0.96875 * x - 0.25 * z);
+                                n->frame.m[6 + i] = (float)(0.25 * x + 0.96875 * z);
+                            }
+                        for (int i = 0; i < 3; i++) n->frame.pos[i] += (k < 10 ? 1.5 : 9.0) * (double)n->frame.m[6 + i];
+                        Contrail_Step(n);
+                    }
+                    memset(px, 0, sizeof px);
+                    g_q_zmin = -10.0f, g_q_zmax = 500.0f;
+                    Contrails_Draw(&g_view);
+                    Queue_Flush(&g_view, 1);
+                    int c = Contrails_Dump(dump, 8);
+                    uint32_t b[2] = {crc32(px, sizeof px), crc32(dump, (size_t)c * 0x3a0)};
+                    call_line(b, sizeof b);
+                }
+            }
+            n->frame = start;
+            break;
+        }
         case 55: {   /* the rear-view mirror (0x471390) on the user's vehicle, in the cockpit, the camera's entity
                         the user's: the radar's frame twice and its next contact, the cockpit's initialisation
                         (0x426070); with the detail byte 13 1 and then 2 the mirror's set-up (0x471060) and three
@@ -1346,6 +1453,7 @@ int Dump_CallVehicles(int which, int upside)
             if (!e || !g_user_entity || g_user_entity->node != n || !d) break;
             Settings_Defaults(3);
             g_detail.b[8] = 0;
+            Radar_Colours();   /* WinMain's */
             static uint8_t px[640 * 480];
             static Surface sf;
             sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
@@ -1372,6 +1480,36 @@ int Dump_CallVehicles(int which, int upside)
                 uint32_t c = crc32(px, sizeof px);
                 call_line(&c, sizeof c);
 
+            }
+            break;
+        }
+        case 58: {   /* the radar's display (0x4208f0) on the user's radar: the class 3 detail, the radar's colours
+                        (0x41fcf0), the pilot's camera; the radar's frame twice, then seven calls of the display at
+                        the times 0.3 (k + 1), the next contact chosen (0x421540) before the fifth; after each the
+                        display texture's CRC-32 and size, the display's argument and the radar's flags */
+            if (!g_user_entity || g_user_entity->node != n || !n->data) break;
+            Node *rn = *(Node **)Data_Ptr(n->data, 0x434);
+            if (!rn || !rn->data) break;
+            Settings_Defaults(3);
+            Radar_Colours();
+            g_camera_mode = 0;
+            g_clock_step = 0.06f;
+            const char *name = Node_FirstTexture(rn, 0);
+            void *arg = *Data_Ptr(rn->data, 8);
+            g_fpu_round = FPU_DOWN;
+            for (int f = 0; f < 2; f++) Radar_Frame(rn);
+            for (int k = 0; k < 7; k++) {
+                g_fpu_round = FPU_DOWN;
+                if (k == 4) Radar_Next(n);
+                g_clock_time = 0.3f * (float)(k + 1);
+                Radar_Display(rn, name, arg);
+                const Surface *sf = Radar_Surface(n);
+                uint32_t b[3 + 4 + 1] = {sf && sf->pixels ? crc32(sf->pixels, (size_t)(sf->pitch * sf->h)) : 0,
+                                         sf && sf->pixels ? (uint32_t)sf->pitch : 0, sf && sf->pixels ? (uint32_t)sf->h : 0};
+                if (arg) memcpy(b + 3, arg, 16);
+
+                memcpy(b + 7, rn->data + 0xc, 4);
+                call_line(b, sizeof b);
             }
             break;
         }

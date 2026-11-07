@@ -675,11 +675,11 @@ void Cockpit_Draw(const View *view)
     else if (dst && g_camera_mode != 2) {
         /* the nine gauges, by the screen mode (the table 0x4d4b80: 0x18 bytes a gauge and a mode, 8 modes a
            gauge: the surface, the kind, x, y, w, h). Their surfaces are filled in while they are shown:
-           the radar's display (0x421dc0: not ported, none), the weapons' (0x456630), the warning lights,
+           the radar's display (0x421dc0), the weapons' (0x456630), the warning lights,
            the compass, the speedometer and the tachometer (when their pictures are there), the gear, the
            specials' panel (0x42d9c0) and the mirror's texture (0x471040, while it is on) */
         if (!flat_hidden) {
-            Surface *gauge[9] = {NULL, &g_dash_surf, &light_surf, &compass_surf, sped_pic ? &sped_surf : NULL,
+            Surface *gauge[9] = {Radar_Surface(e->node), &g_dash_surf, &light_surf, &compass_surf, sped_pic ? &sped_surf : NULL,
                                  rpm_pic ? &rpm_surf : NULL, &gear_surf, &spec_surf, Mirror_Surface()};
             for (int g = 0; g < 9; g++) {
                 const uint8_t *t = exe_data(0x4d4b80 + 0x18u * (uint32_t)(g_detail.b[DET_SCREEN] + 8 * g), 0x18);

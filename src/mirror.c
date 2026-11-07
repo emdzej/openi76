@@ -1,5 +1,6 @@
 /* The rear-view mirror (0x471060-0x471680); see mirror.h */
 #include "mirror.h"
+#include "smoke.h"
 #include "camera.h"
 #include "cockpit.h"
 #include "entity.h"
@@ -140,7 +141,7 @@ void Mirror_Draw(void)
         g_q_zmax = 500.0f;
         Objects_DrawMirror(v);
         Tracers_DrawOther(v);   /* 0x46c5e0 */
-        /* the smoke's puffs (0x46e950) and 0x46d3d0 are not ported yet */
+        Smoke_DrawPuffs(v);     /* 0x46e950; 0x46d3d0 is not ported yet */
         Queue_Flush(v, 0);
         Hud_Draw(v, 1);
     } else {
@@ -150,7 +151,7 @@ void Mirror_Draw(void)
         /* 0x46d3d0 is not ported yet */
         Objects_DrawMirror(v);
         Tracers_DrawOther(v);
-        /* nor the smoke's puffs (0x46e950) */
+        Smoke_DrawPuffs(v);   /* 0x46e950 */
         Sky_Draw(v, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
         Queue_Flush(v, 1);
         Hud_Draw(v, 1);

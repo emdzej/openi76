@@ -15,6 +15,15 @@
 #include "texanim.h"
 #include "weapons.h"
 #include "render/fpu.h"
+#include "render/view.h"
+#include "render/sprite.h"
+#include "render/queue.h"
+#include "render/palette.h"
+#include "render/obj_draw.h"
+#include "tracers.h"
+#include "mirror.h"
+#include "smoke.h"
+#include "camera.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,8 +98,231 @@ static uint8_t *radar_data(Node *v)
     return n ? n->data : NULL;
 }
 
-/* not ported yet, as the cockpit: 0x4208f0, the display drawn into the radar's texture */
-static void radar_display(Node *n, const char *name, void *arg) { (void)n, (void)name, (void)arg; }
+/* ---- the display (0x41fbc0's mask and steps, 0x41fcf0's colours, 0x4208f0, 0x4210b0) ---- */
+
+static Surface radar_mask;     /* 0x50a4a8: zradmask.map, the target view's frame */
+static int32_t mask_ok;        /* 0x4d3aa4 */
+static int32_t sweep_next[30]; /* 0x50a5e0: the sweep's next frame, 0-29 round */
+static int32_t growled;        /* 0x4d3aa0: the LED's sound played since it last went out */
+static uint8_t blip_colour[256], view_colour[256];   /* 0x50a4d8 (by a contact's brightness), 0x50a3a0 */
+static uint8_t grey70, grey50;                        /* 0x50a658, 0x50a5d8 */
+static Surface radar_surf;     /* the user's radar data's +0x80: the display's texture, as last drawn on */
+
+static float fhex(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
+
+void Radar_Colours(void)
+{
+    /* the blips' 255 colours, the palette's nearest to a green that darkens a step each (0x4a5834, 0x4a5838),
+       with each one's luminance (0x4a5844 r, 0x4a5840 g, 0x4a583c b) */
+    float r = fhex(0x3ec6c6c7), g = fhex(0x3f46c6c7), b = fhex(0x3ec6c6c7), lum[256];
+    for (int k = 0; k < 255; k++) {
+        int c = Color_Match(r, g, b);
+        r = F32(SUB(r, exe_f32(0x4a5834)));
+        g = F32(SUB(g, exe_f32(0x4a5838)));
+        b = F32(SUB(b, exe_f32(0x4a5834)));
+        blip_colour[k] = (uint8_t)c;
+        float cr, cg, cb;
+        Color_Get(c, &cr, &cg, &cb);
+        lum[k + 1] = F32(ADD(ADD(MUL(cb, exe_f32(0x4a583c)), MUL(cg, exe_f32(0x4a5840))), MUL(cr, exe_f32(0x4a5844))));
+    }
+    grey70 = (uint8_t)Color_Match(fhex(0x3f333333), fhex(0x3f333333), fhex(0x3f333333));
+    grey50 = (uint8_t)Color_Match(0.5f, 0.5f, 0.5f);
+    /* every colour's nearest blip colour by luminance (the first of equals; the index carried from the last
+       colour when none is nearer than 1e6) */
+    int best = 0;
+    for (int c = 0; c < 256; c++) {
+        float cr, cg, cb;
+        Color_Get(c, &cr, &cg, &cb);
+        float l = F32(ADD(ADD(MUL(cb, exe_f32(0x4a583c)), MUL(cg, exe_f32(0x4a5840))), MUL(cr, exe_f32(0x4a5844))));
+        float least = 1e6f;
+        for (int k = 0; k < 255; k++) {
+            double s = SUB(l, lum[k + 1]), d = MUL(s, s);
+            if (d < least || d != d) {   /* fcom: below or unordered */
+                best = k;
+                least = F32(d);
+            }
+        }
+        view_colour[c] = blip_colour[best];
+    }
+    blip_colour[255] = (uint8_t)Color_Match(1.0f, 1.0f, 0);   /* 0x50a5d7: yellow */
+}
+
+/* 0x4816e0: a picture's region (Etbl_Source) onto a surface at the table's region, through the remap table */
+static void put_region(const char *tex, const char *region, const char *picture, Surface *dst)
+{
+    EtblSource src = Etbl_Source(picture);
+    const uint8_t *at = Etbl_Region(tex, region);
+    if (!at || !src.name[0]) return;
+    const Texture *pic = Tex_Pixels(src.name);
+    if (!pic || !dst->pixels) return;   /* a picture found but no surface keeps its count (quirk, kept) */
+    Surface ps = Surface_Make(pic->w, pic->h, (uint8_t *)pic->pixels);
+    Surface_SetViewport(&ps, src.x, pic->h - src.y, src.w + src.x - 1, pic->h - src.y - src.h + 1);
+    Surface_Blit(dst, &ps, rd32(at + 0x10), dst->h - rd32(at + 0x14) - src.h, 1);
+    Tex_PixelsRelease(src.name);
+}
+
+/* 0x4210b0: the target camera's view (the data's +0x10 frame) into the display, 5/8 of its height grey
+   0.5 and the rest 0.7 under the objects, then through the luminance table onto the blips' greens, and
+   framed by the mask */
+static void target_view(uint8_t *r)
+{
+    Surface *s = &radar_surf;
+    int h = s->h;
+    Surface_SetViewport(s, 0, 0, s->pitch, h * 5 >> 3);
+    Surface_FillRect(s, grey50);
+    Surface_SetViewport(s, 0, h * 5 >> 3, s->pitch, h);
+    Surface_FillRect(s, grey70);
+    Surface_SetViewport(s, 0, 0, s->pitch, h);
+    View v;
+    View_Create(&v, s, 30.0f, -1.0f, 500.0f, 1.0f);   /* a field of view of 30 (held to the limits) */
+    View_SetZoom(&v, 10.0f);
+    Frame f;
+    memcpy(&f, r + 0x10, sizeof f);
+    View_SetCamera(&v, &f);
+    g_q_zmin = -10.0f;
+    g_q_zmax = 500.0f;
+    Objects_DrawMirror(&v);   /* 0x424550 */
+    Tracers_DrawOther(&v);    /* 0x46c5e0 */
+    Smoke_DrawPuffs(&v);      /* 0x46e950 */
+    Queue_Flush(&v, 0);
+    uint8_t *p = v.surface->pixels;   /* 0x43d8a0: every pixel through the table */
+    for (int i = 0, n = v.surface->pitch * v.surface->h; i < n; i++) p[i] = view_colour[p[i]];
+    Remap_Set(1, 0xff);
+    g_rtab[RT_REMAP + 0xffff] = g_grey;   /* 0x5e044f */
+    Surface_Blit(s, &radar_mask, 0, 0, 1);
+    g_rtab[RT_REMAP + 0xffff] = 0xff;
+    Remap_Set(1, 1);
+}
+
+/* the sweep's arc, from the last frame's angle to this one's (each arg[1]-th of a turn, past pi less a turn) */
+static void sweep_arc(const int32_t *arg, float *lo, float *hi)
+{
+    const float turn = exe_f32(0x4a585c), half = exe_f32(0x4a5864);
+    float k = F32(fpu_div(turn, (double)arg[1]));
+    double a = MUL((double)arg[3], k);
+    *hi = F32(a);
+    if (a > half) *hi = F32(SUB(*hi, turn));   /* test 0x41: only above */
+    double b = MUL((double)arg[2], k);
+    uint32_t hb;
+    memcpy(&hb, hi, 4);
+    if (hb > 0x80000000u) *lo = F32(SUB(b, turn));
+    else {
+        *lo = F32(b);
+        if (b > half) *lo = F32(SUB(*lo, turn));
+    }
+}
+
+/* the contacts as 2 x 2 blips round (0x61, 0x39), in the range's scale (0x4d3a48) times 0x4a5868; a
+   contact the sweep crosses this frame (not the chosen one) is lit again (CRADAR.WAV); the chosen one is
+   drawn too while a target is chosen. True when any is drawn */
+static int blips(uint8_t *r, float lo, float hi, int with_chosen)
+{
+    int any = 0;
+    Contact *chosen_c = *chosen(r);
+    float s = exe_f32(0x4d3a48 + 4u * (uint32_t)rd32(r));
+    for (Contact *c = *contacts(r); c; c = c->next) {
+        if (!is_vehicle(*c->node) && !(with_chosen && chosen_c == c)) continue;   /* 0x42e570 */
+        any = 1;
+        Surface t = radar_surf;
+        float xs = F32(fpu_div(c->rx, s));
+        double zd = fpu_div(c->rz, s);
+        float zs = F32(zd);
+        double sum = ADD(MUL(zd, zs), MUL(xs, xs));
+        if (sum > exe_f32(0x4a5858)) continue;
+        xs = F32(MUL(xs, exe_f32(0x4a5868)));
+        zs = F32(MUL(zs, exe_f32(0x4a5868)));
+        double a = atan2((double)c->rx, (double)c->rz);   /* fpatan: the C library's, to nearest */
+        float af = F32(a);
+        if (!(a < lo || a != a) && !(hi < af || af != af) && chosen_c != c) {
+            c->b = 0;
+            /* CRADAR.WAV on the radar's node (0x4765d0): not ported */
+        }
+        uint8_t col = blip_colour[c->b];
+        int32_t y = (int32_t)zs + 0x39, x = (int32_t)xs + 0x61;
+        if (x > t.pitch - 1) x = t.pitch - 1;
+        if (y > t.h - 1) y = t.h - 1;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        for (int i = x; i < x + 2; i++)   /* the second column and row past the edge as they fall (unchecked) */
+            for (int j = y; j < y + 2; j++)
+                if (j * t.pitch + i < t.pitch * t.h) t.pixels[j * t.pitch + i] = col;
+    }
+    return any;
+}
+
+/* the range's picture (Drange_1-4) and the LED (radled_1 lit while any contact shows, CGROWL.WAV when it
+   lights) */
+static void radar_led(int any)
+{
+    put_region(exe_str(0x4d3b14), exe_str(0x4d3b0c), exe_str(any ? 0x4d3a78 : 0x4d3a84), &radar_surf);
+    if (!any) growled = 0;
+    else if (!growled) growled = 1;   /* CGROWL.WAV (0x4765d0): not ported */
+}
+
+/* 0x4208f0, the display's animation on the user's radar texture: off (not working, or switched off) its
+   frame 30; with the target camera on a chosen contact, the target's view (0x4210b0); in the pilot's camera
+   (0 only) the sweep: each 0x4a586c seconds a frame on round the 29 (the target camera's 30 while it is
+   set), or, with a contact chosen, the frame pointing at it; the range's picture, the blips and the LED */
+void Radar_Display(Node *n, const char *name, void *argp)
+{
+    int32_t *arg = argp;
+    uint8_t *r = n->data;
+    Entity *u = g_user_entity;
+    if (!u || vehicle_of(r) != u->node || !arg) return;
+    uint32_t fl = flags_of(r);
+    if (!(fl & 1) || (fl & 4)) {
+        Tex_SetFrame((uintptr_t)n, name, 0, 0x1e, true);
+        return;
+    }
+    if ((fl & 0x10) && (fl & 2) && mask_ok && *chosen(r) && rd32(r + 0x50)) {
+        target_view(r);
+        return;
+    }
+    if (g_camera_mode != 0) return;
+    float lo, hi;
+    if (fl & 0x10) {
+        Tex_SetFrame((uintptr_t)n, name, 1, 1, false);
+        Contact *c = *chosen(r);
+        double a = atan2((double)c->rx, (double)c->rz);
+        float af = F32(a);
+        if (a < exe_f32(0x4a5854) || a != a) af = F32(ADD(af, exe_f32(0x4a585c)));
+        int32_t f = (int32_t)MUL(af, exe_f32(0x4a5860));
+        arg[3] = f;
+        if (f >= 0x1e) arg[3] = f - 0x1e;
+        else if (f < 0) arg[3] = f + 0x1e;
+        Tex_SetFrame((uintptr_t)n, name, 0, arg[3], true);
+        radar_surf = Tex_Writable((uintptr_t)n, name);
+        put_region(exe_str(0x4d3b14), exe_str(0x4d3b20), exe_str(0x4d3a50 + 12u * (uint32_t)rd32(r)), &radar_surf);
+        sweep_arc(arg, &lo, &hi);
+        radar_led(blips(r, lo, hi, 1));
+        return;
+    }
+    float t = g_clock_time, at;   /* 0x450f40 */
+    memcpy(&at, &arg[0], 4);
+    if (t < at || t != t) return;
+    Tex_SetFrame((uintptr_t)n, name, 1, 0, false);
+    arg[2] = arg[3];
+    while (at < t || at != at) {
+        at = F32(ADD(at, exe_f32(0x4a586c)));
+        arg[3] = sweep_next[arg[3]];
+    }
+    memcpy(&arg[0], &at, 4);
+    Tex_SetFrame((uintptr_t)n, name, 0, (fl & 2) ? 0x1e : arg[3], true);
+    radar_surf = Tex_Writable((uintptr_t)n, name);
+    put_region(exe_str(0x4d3b14), exe_str(0x4d3b20), exe_str(0x4d3a50 + 12u * (uint32_t)rd32(r)), &radar_surf);
+    int any = 0;
+    if (*contacts(r) && radar_surf.pixels) {
+        sweep_arc(arg, &lo, &hi);
+        any = blips(r, lo, hi, 0);
+    }
+    radar_led(any);
+}
+
+Surface *Radar_Surface(Node *v)   /* 0x421dc0 */
+{
+    uint8_t *r = radar_data(v);
+    return r ? &radar_surf : NULL;
+}
 
 void Radar_Start(Node *n)
 {
@@ -105,7 +337,7 @@ void Radar_Start(Node *n)
     if (g_user_entity && v == g_user_entity->node) {
         const char *t = Node_FirstTexture(n, 0);   /* 0x482ea0 */
         if (t && *t) {
-            TexAnim_Add(n, t, radar_display, 0x4208f0, arg);
+            TexAnim_Add(n, t, Radar_Display, 0x4208f0, arg);
             Tex_SetFrame((uintptr_t)n, t, 1, 0, 0);
             Tex_SetFrame((uintptr_t)n, t, 0, arg[3], 1);
         }
@@ -312,7 +544,17 @@ static void radar_remove(Entity *e)
         }
 }
 
-void Radar_Init(void) { Entity_OnRemove(radar_remove); }
+void Radar_Init(void)
+{
+    Entity_OnRemove(radar_remove);
+    /* 0x41fbc0's display part: the target view's mask (zradmask.map; "Radar Mask not found" to the no-op
+       0x407470) and the sweep's steps */
+    const Texture *m = Tex_Pixels(exe_str(0x4d3adc));
+    mask_ok = m != NULL;
+    if (m) radar_mask = Surface_Make(m->w, m->h, (uint8_t *)m->pixels);
+    growled = 0;
+    for (int i = 0; i < 30; i++) sweep_next[i] = i + 1 < 30 ? i + 1 : 0;
+}
 
 /* 0x421ba0: the chosen contact's node, while it is not freed (its +8 0) */
 Node *Radar_Current(Node *v)

@@ -1143,6 +1143,8 @@ def call_flat(exe, n, fpcw):
     det = bytearray(exe.read(0x4DAF38 + 3 * 14, 14))   # the detail: a fast machine's, the flat cockpit
     det[8] = 0
     exe.write(0x5E14D0, bytes(det))
+    exe.write(0x5E0780, struct.pack("<I", det[0]))   # the screen mode in use, the detail's (as the port's)
+    exe.call(0x41FCF0, limit=500_000_000, fpcw=rd)  # the radar's colours (WinMain's)
     make_view(exe, rd)
     px = exe.put(bytes(640 * 480))
     exe.write(0x58D860 + 0x10, struct.pack("<I", px))
@@ -1165,6 +1167,127 @@ def call_flat(exe, n, fpcw):
         exe.write(px, bytes(640 * 480))
         exe.call(0x4279C0, 0x4A8488, limit=500_000_000, fpcw=rd)
         CALL_OUT.append(struct.pack("<I", zlib.crc32(exe.read(px, 640 * 480))).hex())
+
+
+def call_rdisp(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n or not u(n + 0x70):
+        return
+    rn = u(u(n + 0x70) + 0x434)
+    if not rn or not u(rn + 0x70):
+        return
+    r = u(rn + 0x70)
+    exe.stub(0x4765D0, lambda *x: 0, 3)   # a sound
+    exe.write(0x5E14D0, exe.read(0x4DAF38 + 3 * 14, 14))
+    exe.call(0x41FCF0, limit=500_000_000, fpcw=rd)
+    exe.write(0x4A8480, bytes(4))
+    exe.write(0x4DB138, struct.pack("<f", 0.06))
+    name = exe.call(0x482EA0, rn, 0, limit=50_000_000, fpcw=rd)
+    arg = u(r + 8)
+    for _ in range(2):
+        exe.call(0x4202D0, rn, limit=2_000_000_000, fpcw=rd)
+    for k in range(7):
+        if k == 4:
+            exe.call(0x421540, n, limit=50_000_000, fpcw=rd)   # a contact chosen: the bearing
+        exe.write(0x4DB140, struct.pack("<f", 0.3 * (k + 1)))
+        exe.call(0x4208F0, rn, name, arg, limit=500_000_000, fpcw=rd)
+        w, h, px = u(r + 0x80), u(r + 0x84), u(r + 0x90)
+        c = zlib.crc32(exe.read(px, w * h)) if px and w * h > 0 else 0
+        CALL_OUT.append((struct.pack("<III", c, w, h) + exe.read(arg, 16) + exe.read(r + 0xC, 4)).hex())
+
+
+def call_smoke(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n or not u(n + 0x70):
+        return
+    exe.call(0x451510, limit=50_000_000, fpcw=rd)   # the noise (WinMain's)
+    exe.call(0x46DFB0, limit=50_000_000, fpcw=rd)   # the smoke
+    make_view(exe, rd)
+    px = exe.put(bytes(640 * 480))
+    exe.write(0x58D860 + 0x10, struct.pack("<I", px))
+    exe.write(0x58D860 + 0x28, struct.pack("<I", 1))
+    exe.write(0x4A8488 + 0x38, struct.pack("<I", 0x58D860))
+    m = struct.unpack("<9f", exe.read(n + 0x18, 36))
+    pos = struct.unpack("<3d", exe.read(n + 0x40, 24))
+    f = exe.read(n + 0x18, 0x28) + struct.pack("<3d", *[pos[i] - 15.0 * m[6 + i] + (4.0 if i == 1 else 0.0) for i in range(3)])
+    exe.call(0x43CF00, 0x4A8488, exe.put(f), limit=50_000_000, fpcw=rd)
+    d = u(n + 0x70)
+    exe.write(d + 0xAC, struct.pack("<ff", 8.0, 0.125))
+    exe.write(d + 0xBC, struct.pack("<fff", 2.0, 0.5, 7.5))
+    part = u(d + 0x410)
+    z = exe.read(part + 0x9C, 4) if part else bytes(4)
+    exe.call(0x46E170, n, d + 0xA4, 0, 0, struct.unpack("<I", z)[0], 0x3F800000, limit=50_000_000, fpcw=rd)
+    for k in range(26):
+        exe.write(0x4DB138, struct.pack("<f", 0.5 if 8 <= k <= 10 else 0.001 if 11 <= k <= 13 else 0.06))
+        if k == 18:
+            exe.call(0x46E220, n, limit=50_000_000, fpcw=rd)
+        exe.call(0x46E2B0, n, k % 3, limit=50_000_000, fpcw=rd)
+        exe.write(px, bytes(640 * 480))
+        exe.write(0x5F31A4, struct.pack("<f", -10.0))   # the queue's depths (the mirror's)
+        exe.write(0x5F319C, struct.pack("<f", 500.0))
+        exe.call(0x46E360, 0x4A8488, limit=500_000_000, fpcw=rd)
+        exe.call(0x48D820, 0x4A8488, 1, limit=500_000_000, fpcw=rd)
+        dump, p = b"", u(0x5772F8)
+        while p and len(dump) < 256 * 0x40:
+            dump += exe.read(p, 0x40)
+            p = u(p + 0x40)
+        CALL_OUT.append(struct.pack("<III", zlib.crc32(exe.read(px, 640 * 480)), len(dump) // 0x40, zlib.crc32(dump)).hex())
+
+
+def call_contrail(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    exe.call(0x46E980, 8, limit=50_000_000, fpcw=rd)
+    make_view(exe, rd)
+    px = exe.put(bytes(640 * 480))
+    exe.write(0x58D860 + 0x10, struct.pack("<I", px))
+    exe.write(0x58D860 + 0x28, struct.pack("<I", 1))
+    exe.write(0x4A8488 + 0x38, struct.pack("<I", 0x58D860))
+    start = exe.read(n + 0x18, 0x40)
+    m = struct.unpack("<9f", start[:36])
+    pos = struct.unpack("<3d", start[0x28:])
+    cam = start[:0x28] + struct.pack("<3d", *[pos[i] - 20.0 * m[6 + i] + (6.0 if i == 1 else 0.0) for i in range(3)])
+    exe.call(0x43CF00, 0x4A8488, exe.put(cam), limit=50_000_000, fpcw=rd)
+    t = struct.unpack("<f", exe.read(0x4DB140, 4))[0]
+    for p in range(2):
+        exe.write(n + 0x18, start)
+        exe.call(0x46EF60, n, 4 if p else 1, limit=50_000_000, fpcw=rd)
+        for k in range(55):
+            t = f32(t + (0.1 if k < 30 else 0.2))
+            exe.write(0x4DB140, struct.pack("<f", t))
+            if k < 30:
+                fm = list(struct.unpack("<9f", exe.read(n + 0x18, 36)))
+                fp = list(struct.unpack("<3d", exe.read(n + 0x40, 24)))
+                if k >= 20:
+                    for i in range(3):
+                        x, z = fm[i], fm[6 + i]
+                        fm[i], fm[6 + i] = f32(0.96875 * x - 0.25 * z), f32(0.25 * x + 0.96875 * z)
+                for i in range(3):
+                    fp[i] += (1.5 if k < 10 else 9.0) * fm[6 + i]
+                exe.write(n + 0x18, struct.pack("<9f", *fm))
+                exe.write(n + 0x40, struct.pack("<3d", *fp))
+                exe.call(0x46F170, n, limit=50_000_000, fpcw=rd)
+            exe.write(px, bytes(640 * 480))
+            exe.write(0x5F31A4, struct.pack("<f", -10.0))
+            exe.write(0x5F319C, struct.pack("<f", 500.0))
+            exe.call(0x46EBB0, 0x4A8488, limit=500_000_000, fpcw=rd)
+            exe.call(0x48D820, 0x4A8488, 1, limit=500_000_000, fpcw=rd)
+            dump, c = b"", u(0x4DD8DC)
+            while True:
+                r = bytearray(exe.read(c, 0x3A0))
+                r[0:4] = bytes(4)
+                r[8:12] = bytes(4)
+                dump += bytes(r)
+                c = u(c)
+                if c == u(0x4DD8DC) or len(dump) >= 8 * 0x3A0:
+                    break
+            CALL_OUT.append(struct.pack("<II", zlib.crc32(exe.read(px, 640 * 480)), zlib.crc32(dump)).hex())
+    exe.write(n + 0x18, start)
 
 
 def call_orbit(exe, n, fpcw):
@@ -1241,7 +1364,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
@@ -1361,6 +1484,16 @@ def original():
         exe.write(0x58DCD0, USER_VCF.encode()[:15].ljust(16, b"\0"))
     p = exe.put(M.encode() + b"\0")
     r = exe.call(0x484410, p, limit=2_000_000_000)
+    from unicorn import x86_const as XC
+    cw = exe.uc.reg_read(XC.UC_X86_REG_FPCW)   # the rounding the load left, which the rest goes on in
+    # the gamma rows (WinMain's, before the game rounds down), then the palette as the port's display sets it
+    exe.call(0x43C1E0, limit=50_000_000)
+    # the gamma 1.0 row: the CRT's pow(x, 1) through the emulated fyl2x / f2xm1 comes out a little under x
+    # for 69 entries (truncated one lower); the port's exact row is taken (docs/re/render.md)
+    lib.Gamma_Build()
+    exe.write(0x5ADB50, bytes((ctypes.c_uint8 * 2560).in_dll(lib, "g_gamma")))
+    mission.set_palette_now(exe)
+    exe.uc.reg_write(XC.UC_X86_REG_FPCW, cw)
     if START:
         for f in START_LATER:
             exe.stub(f, lambda *a: 0, 1)
@@ -1378,7 +1511,7 @@ def original():
             exe.stub(f, lambda *a: 0, k)
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
         exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
-        for f, k in ((0x476580, 1), (0x462D60, 1), (0x46E220, 1), (0x4763B0, 1), (0x476480, 1), (0x469CD0, 1),
+        for f, k in ((0x476580, 1), (0x462D60, 1), (0x4763B0, 1), (0x476480, 1), (0x469CD0, 1),
                      (0x47DE00, 1), (0x42D800, 1)):
             exe.stub(f, lambda *a: 0, k)
         exe.stub(0x475EE0, lambda *a: 0, 3)   # the tyres' sounds and flats
@@ -1531,6 +1664,7 @@ def port():
     if not lib.vfs_mount_default() or not lib.vfs_zfs_layer() or not lib.exe_init(err, 200):
         sys.exit("no data")
     lib.Res_Init()
+    lib.Gamma_Build()   # WinMain's: without it the world's palette comes out black
     ctypes.c_int.in_dll(lib, "g_fpu_round").value = 0
     lib.Objects_Init()
     if USER_VCF:

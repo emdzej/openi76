@@ -11,6 +11,9 @@
 #include "camera.h"
 #include "cockpit.h"
 #include "mirror.h"
+#include "smoke.h"
+#include "contrail.h"
+#include "radar.h"
 #include "classes.h"
 #include "clock.h"
 #include "combat.h"
@@ -89,6 +92,7 @@ static bool viewer_init(const char *mission)
         return false;
     }
     Objectives_Load();   /* 0x41e5e0, after 0x484410 in WinMain */
+    Radar_Colours();     /* 0x41fcf0 */
     Sky_Init();
     Roads_Setup(mission);
     /* WinMain: the colours of black (0x58dcbc) and of the first grey that is not 0xff (0x58dcb8), the lum
@@ -144,9 +148,10 @@ static void viewer_frame(void)
     Roads_Draw(&view);
     /* 0x46bdc0 and 0x46d3d0 are not ported yet */
     Objects_Draw(&view);
-    /* nor 0x46ebb0 */
+    Contrails_Draw(&view);   /* 0x46ebb0 */
     Tracers_Draw(&view);   /* 0x46c9b0 */
-    /* nor 0x42edc0, 0x46e360 and the hook */
+    /* nor 0x42edc0 */
+    Smoke_Frame(&view);    /* 0x46e360; the hook 0x58dc54 is not ported */
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
     if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0 */
@@ -175,7 +180,11 @@ static bool play_init(void)
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
-    Tracers_Init(100);   /* 0x46c0e0, with WinMain's inits after the classes' start */
+    Contrails_Init(8);   /* 0x46e980, with WinMain's inits after the classes' start (0x46bba0 before it and
+                            0x46ce90 after are not ported yet) */
+    Tracers_Init(100);   /* 0x46c0e0 */
+    Noise_Init();        /* 0x451510 */
+    Smoke_Init();        /* 0x46dfb0 */
     Clock_Init();
     if (!Input_Init()) {
         plat_log("OpenI76: the input's tables are missing");

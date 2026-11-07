@@ -165,8 +165,8 @@ the instruments' surfaces and last states.
 
 **Checked (flat):** `--call flat` (case 57) clears the detail byte 8 and runs the cockpit's set-up. It
 then draws five frames of the cockpit's frame and drawing on a cleared 640 x 480 screen, with the gauges
-hidden before the fourth. The reticle-only frames are identical. The others differ in the first gauge,
-the radar's display, which is not ported yet.
+hidden before the fourth. It is identical on t01, s01 and a01, the radar's display (the first gauge,
+docs/re/weapons.md "The display") included.
 
 **Checked:** `--call hud` (case 54) runs the radar's frames, its next contact, 0x426070 and the pilot's
 view. It then draws four frames on a cleared 640 x 480 screen, the vehicle turned before the third and
@@ -231,7 +231,8 @@ merge for every type but 6, so it does not matter. The entities are type 5 recor
 
 **Checked:** `--call mirror` (case 55) sets the tables WinMain sets: the vertices and the pool, the
 tracers' ring, the inverse square root, the class 3 detail and the sky. The emulator also gets the
-world's lum table, which the display's stubbed set-palette was given. The check then runs the radar's
+world's palette and lum table as the load sets them (the stubbed set-palette applies them at once, as
+the display does, since the objects' untextured faces match their colours during the load). The check then runs the radar's
 frames, its next contact and 0x426070. With the byte 13 at 1 and then at 2, it calls the set-up and three
 frames, turning the vehicle round before the second. It compares the mirror texture's CRC-32, its size
 and the flag. It is identical on t01, s01, a01 and t06.
