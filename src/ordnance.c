@@ -543,10 +543,52 @@ static int fly_gun(Node *s, float t)
 /* not ported yet, as the effects: 0x46f170 the trail's step (its smoke behind the shot) */
 static void trail_step(Node *s) { (void)s; }
 
+/* the delayed hits (0x4dc470): a spent shot's later hits round it */
+typedef struct Delayed {
+    Node *shot;     /* +0 */
+    int32_t count;  /* +4 */
+    struct {
+        int32_t on;      /* +8 */
+        float p[3];      /* +0xc */
+        float t;         /* +0x18: when */
+    } e[14];
+    struct Delayed *next;   /* +0x120 */
+} Delayed;
+static Delayed *g_delayed;   /* 0x4dc470 */
+
+/* 0x45e4e0: a type 5 shot's delayed hits: 8 to 12 (rand x 4 + 8) of the 14 entries, each within 10 m
+   in x and z of its place, on the ground, within 1.8 s */
+static void delayed_add(Node *s)
+{
+    Delayed *r = calloc(1, sizeof *r);
+    if (!r) return;
+    float px = F32(s->frame.pos[0]), pz = F32(s->frame.pos[2]);
+    r->shot = s;
+    const float k = exe_f32(0x4a6310);
+    r->count = (int32_t)(int64_t)MUL(MUL((double)crt_rand(), k), exe_f32(0x4a6314)) + 8;
+    for (int i = 0; i < 14; i++) {
+        if (r->count < i) {
+            r->e[i].on = 0;
+            continue;
+        }
+        float ox = F32(SUB(MUL(MUL((double)crt_rand(), k), exe_f32(0x4a6318)), exe_f32(0x4a631c)));
+        int rz = crt_rand();
+        r->e[i].p[0] = F32(ADD(px, ox));
+        double z = ADD(SUB(MUL(MUL((double)rz, k), exe_f32(0x4a6318)), exe_f32(0x4a631c)), pz);
+        r->e[i].p[2] = F32(z);
+        r->e[i].p[1] = F32(Terrain_Height(r->e[i].p[0], z));   /* 0x491f00 */
+        float dt = F32(MUL(MUL((double)crt_rand(), k), exe_f32(0x4a6320)));
+        r->e[i].t = F32(ADD(g_clock_time, dt));
+        r->e[i].on = 1;
+    }
+    r->next = g_delayed;
+    g_delayed = r;
+}
+
 /* 0x45f8b0 (type 2, the rockets) and 0x460f40 (types 4 and 7): as the guns' flight, always turned along the
    path, the explosion where it hit, and a trail. The rockets ease the speed by half the step; 4 and 7 by
    the flight's time as the guns do, and their path's length keeps dz unrounded */
-static int fly_rocket(Node *s, float t, int t47)
+static int fly_rocket(Node *s, float t, int t47)   /* t47: 1 types 4 and 7, 2 type 5 (0x461340) */
 {
     uint8_t *r = s->data;
     float step = g_clock_step, trav;
@@ -573,13 +615,15 @@ static int fly_rocket(Node *s, float t, int t47)
     }
     const float *m = s->frame.m;
     float w[3];
-    w[0] = F32(ADD(ADD(MUL(m[3], st.v[1]), MUL(m[0], st.v[0])), MUL(m[6], st.v[2])));
+    w[0] = t47 == 2 ? F32(ADD(ADD(MUL(m[0], st.v[0]), MUL(m[6], st.v[2])), MUL(m[3], st.v[1])))
+                    : F32(ADD(ADD(MUL(m[3], st.v[1]), MUL(m[0], st.v[0])), MUL(m[6], st.v[2])));
     w[1] = F32(ADD(ADD(MUL(m[1], st.v[0]), MUL(m[4], st.v[1])), MUL(m[7], st.v[2])));
     w[2] = F32(ADD(ADD(MUL(m[5], st.v[1]), MUL(m[8], st.v[2])), MUL(m[2], st.v[0])));
     Integrate_F(st.p, w, st.g, t);   /* 0x471730 */
     float l[3];
     l[0] = F32(ADD(ADD(MUL(m[1], w[1]), MUL(m[0], w[0])), MUL(m[2], w[2])));
-    l[1] = F32(ADD(ADD(MUL(m[5], w[2]), MUL(m[3], w[0])), MUL(m[4], w[1])));
+    l[1] = t47 == 2 ? F32(ADD(ADD(MUL(m[4], w[1]), MUL(m[5], w[2])), MUL(m[3], w[0])))
+                    : F32(ADD(ADD(MUL(m[5], w[2]), MUL(m[3], w[0])), MUL(m[4], w[1])));
     l[2] = F32(ADD(ADD(MUL(m[8], w[2]), MUL(m[6], w[0])), MUL(m[7], w[1])));
     int hit = 0;
     int32_t cls = -1;
@@ -594,7 +638,7 @@ static int fly_rocket(Node *s, float t, int t47)
     float d[3];
     for (int i = 0; i < 3; i++) d[i] = F32(SUB(st.p[i], st.p0[i]));
     double l2 = ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]));
-    if (t47) {   /* fst: dz unrounded times its float */
+    if (t47 == 1) {   /* fst: dz unrounded times its float */
         double dz = SUB(st.p[2], st.p0[2]);
         trav = F32(ADD(fpu_sqrt(ADD(ADD(MUL(dz, d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]))), trav));
         l2 = ADD(ADD(MUL(d[2], d[2]), MUL(d[1], d[1])), MUL(d[0], d[0]));
@@ -610,6 +654,7 @@ static int fly_rocket(Node *s, float t, int t47)
             for (int i = 0; i < 3; i++) s->frame.pos[i] = st.p[i];
         memset(r + 0x14, 0, 12);
         hit_effect(s, st.p, st.who, cls);   /* 0x45c950, where it hit */
+        if (t47 == 2) delayed_add(s);       /* 0x45e4e0 */
     }
     trail_step(s);   /* 0x46f170 */
     return !hit;
@@ -625,9 +670,10 @@ int Shot_Fly(Node *s, float t)
     case 1:
     case 6:
     case 0x12: return fly_gun(s, t);
-    case 2: case 3: case 4: case 5: case 7: case 8:   /* 3, 5 and 8 not ported yet */
+    case 2: case 3: case 4: case 5: case 7: case 8:   /* 3 and 8 not ported yet */
         if (ty == 2) alive = fly_rocket(s, t, 0);
         else if (ty == 4 || ty == 7) alive = fly_rocket(s, t, 1);   /* 0x460f40 */
+        else if (ty == 5) alive = fly_rocket(s, t, 2);              /* 0x461340 */
         if (!alive && Node_IsUser(*(Node **)Data_Ptr(s->data, 0xc)) && s == g_user_shot)
             g_user_shot = NULL;   /* 0x45c8f0: the user's followed shot spent */
         break;
@@ -635,9 +681,35 @@ int Shot_Fly(Node *s, float t)
     return alive;
 }
 
-/* not ported yet, with the beams' flight (0x45e720, which adds them): 0x45e620's delayed hits (0x4dc470,
-   14 to a record, each swept and hit when its time comes) */
-static void delayed_hits(void) {}
+
+/* 0x45e620: each record's hits due are swept from their place and hit (0x45c950); a record whose count
+   reaches 0 is freed. Quirks: the entries are count + 1, so the last never fires; and the freed record's
+   next becomes the list's head even when it was not the head (those before it are lost); and an entry
+   not due has the frame's step taken off its time as well */
+static void delayed_hits(void)
+{
+    for (Delayed *r = g_delayed, *nx; r; r = nx) {
+        for (int i = 0; i < 14; i++) {
+            if (r->e[i].on != 1) continue;
+            if (g_clock_time <= r->e[i].t) {
+                r->e[i].t = F32(SUB(r->e[i].t, g_clock_step));
+            } else {
+                Node *s = r->shot, *who = NULL;
+                int32_t cls = -1;
+                for (int k = 0; k < 3; k++) s->frame.pos[k] = r->e[i].p[k];
+                Shot_Sweep(s, NULL, r->e[i].p, &who, &cls);   /* 0x46a9b0 */
+                hit_effect(s, r->e[i].p, who, cls);           /* 0x45c950 */
+                r->count--;
+                r->e[i].on = 0;
+            }
+        }
+        nx = r->next;
+        if (r->count == 0) {
+            g_delayed = nx;
+            free(r);
+        }
+    }
+}
 
 void Shots_Frame(void)
 {

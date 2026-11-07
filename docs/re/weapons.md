@@ -533,8 +533,28 @@ It is the guns' flight (0x4609d0) with these changes:
 is: by the flight's time, snapping when that time is negative or above 0.95. The path's length keeps
 dz unrounded, as the guns' does. Their sums are the rockets'.
 
-The flights of types 3, 5, 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet. Type 5
-(0x461340) is the same flight in other summing orders, plus 0x45e4e0 at the hit. That call leaves 8 to
-14 delayed hits around the point (0x4dc470), which 0x45e620 sweeps as their times come.
+**Type 5 (0x461340)** is 4 and 7's flight with two changes. The x of the velocity into the world, and
+the y back out of it, sum in other orders. Its length is the rockets'. At a hit, 0x45e4e0 also leaves
+delayed hits.
 
-Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4).
+**The delayed hits (0x4dc470, records of 0x124 bytes).** A record holds:
+- the shot and a count;
+- fourteen entries of 0x14 bytes (on, the place, the time);
+- the next record.
+
+The count is `ftol(rand / 32767 × 4) + 8`, and entries 0 to count are on. Each entry lies within 10 m in x
+and z of the shot (two rands), at the ground's height, and goes off within 1.8 s (a third rand).
+
+Each frame, before the shots fly, 0x45e620 walks the records:
+- An entry not yet due has the frame's step taken off its time. That is a quirk: its time also comes
+  nearer.
+- A due entry puts the shot at its place, sweeps it there (0x46a9b0, no owner) and hits (0x45c950). Then
+  the count drops.
+- When the count reaches 0 the record is freed, and its next becomes the list's head, even when it was
+  not the head. That drops the records before it. Since the entries number count + 1, the last one never
+  goes off.
+
+The flights of types 3, 8, 0xc, 0x11 and the beams (0xe-0x10, 0x13) are not ported yet.
+
+Checked: `diff_objects --call fly` on t01, s04, t05, s07, t12, s01 and t15 (t15 has type 4, s01 type 5).
+The delayed hits' walk is not covered by the harness.

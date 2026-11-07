@@ -810,7 +810,7 @@ def call_fly(exe, n, fpcw):
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
-        for a in (0x460480, 0x461340, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
+        for a in (0x460480, 0x45FCE0, 0x45F100, 0x45E720, 0x45F260):
             exe.stub(a, lambda *x: 1, 2)
         FLY["on"] = 1
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]

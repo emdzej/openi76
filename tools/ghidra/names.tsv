@@ -928,3 +928,6 @@
 00469cd0	Collide_Remove	collide	high	the collision's removal callback: off the moving/static and ground lists
 0045f8b0	Shot_FlyRocket	weapons	high	type 2's flight: the guns' with half-step easing, turned along its path, a trail
 00460f40	Shot_FlyType4	weapons	high	types 4 and 7's flight: the rockets' with the guns' easing
+00461340	Shot_FlyType5	weapons	high	type 5's flight: type 4's in other sum orders, delayed hits at the hit
+0045e4e0	Delayed_Add	weapons	high	a type 5 hit's delayed hits: 9-13 entries round it on the ground within 1.8 s
+0045e620	Delayed_Run	weapons	high	the delayed hits due swept and hit; a record done freed (its next becomes the head)
