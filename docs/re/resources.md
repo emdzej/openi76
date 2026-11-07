@@ -83,3 +83,27 @@ It is ported in `src/tex.c` and checked by `tests/tex_test.c`. The layouts are i
     fillers take.
   - The decoder never checks a codeword index against the codebook's count. Every file on the disc is in
     range.
+
+## Meshes (0x47d010-0x47dc70)
+
+They are ported in `src/geom.c` and checked by `tools/emu/diff_geom.py`. All 6,881 meshes of the paks are
+identical to the original's, with face colours matched against t01.act. The record's layout is in
+`src/geom.h`.
+
+- **Geom_Get 0x47d010** keys its cache by the name's first 8 bytes in upper case.
+  - The original reads 8 bytes whatever the name's length. For a name shorter than 7 characters, the key
+    takes bytes past the name's end. The port uses zeros there.
+  - A file that is not a mesh is cached as nothing.
+- **Geo_Build 0x47d2d0** adds a vector at 0x4de0b8 to every vertex and to every normal. Nothing writes the
+  vector, so it is 0. The addition still turns -0.0 into +0.0.
+- **Faceless meshes.** Two meshes, `MMCANNON.GEO` and `MMGUN.GEO` (weapon mounts), have no faces. The
+  original's face pointer then points just past its block, at whatever the heap holds there. The port
+  has no faces.
+- **The object's geometry record** (0x40 bytes, a hash at 0x57f558 keyed by the object). It is not
+  ported yet.
+  - It holds the current mesh and the previous one, each with its name, a damage state and a level of
+    detail.
+  - It also points to a chain of 0x74-byte records, one per damage state, each with 7 names, one per
+    level of detail.
+  - Geom_SelectLod 0x47dc70 switches the level of detail and Geom_SelectState 0x47db20 the damage state.
+    Each keeps the last mesh for a quick switch back, then refreshes the object's textures.

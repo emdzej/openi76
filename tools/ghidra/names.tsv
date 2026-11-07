@@ -127,3 +127,7 @@
 0043baf0	Hsv_ToRgb
 0043c1e0	Gamma_Build
 0043c170	Gamma_Apply
+0047d010	Geom_Get
+0047d160	Geom_Release
+0047d850	Geom_CopyObject
+0047db20	Geom_SelectState

@@ -14,6 +14,7 @@ from unicorn import x86_const as X
 STACK, STACK_SIZE = 0x0FF00000, 0x00100000
 HEAP, HEAP_SIZE = 0x10000000, 0x04000000
 SENTINEL = 0x0FEFF000
+STUBS = 0x0FEF0000   # a page of addresses the import stubs answer at
 
 
 class Fault(Exception):
@@ -43,6 +44,10 @@ class Exe:
         uc.mem_map(STACK, STACK_SIZE)
         uc.mem_map(HEAP, HEAP_SIZE)
         uc.mem_map(SENTINEL & ~0xFFF, 0x1000)
+        uc.mem_map(STUBS, 0x1000)
+        self.pe, self.raw = pe, d
+        self.next_stub = STUBS
+        self.imports = None
         self.heap = HEAP
         self.fault = None
         uc.hook_add(unicorn.UC_HOOK_MEM_INVALID, self._invalid)
@@ -105,3 +110,57 @@ class Exe:
         if eip != SENTINEL:
             raise Fault(f"stopped at {eip:#x} (instruction limit?)")
         return uc.reg_read(X.UC_X86_REG_EAX)
+
+    # ---- stubs ----
+    def stub(self, addr, fn, nargs=0, stdcall=False):
+        """Answers calls to addr with fn(*args) (the first nargs stack arguments): EAX gets the result and
+        the call returns (popping the arguments too for stdcall)."""
+        def hook(uc, a, size, user):
+            sp = uc.reg_read(X.UC_X86_REG_ESP)
+            ret = struct.unpack("<I", uc.mem_read(sp, 4))[0]
+            args = struct.unpack(f"<{nargs}I", uc.mem_read(sp + 4, 4 * nargs)) if nargs else ()
+            r = fn(*args)
+            uc.reg_write(X.UC_X86_REG_EAX, (r or 0) & 0xFFFFFFFF)
+            uc.reg_write(X.UC_X86_REG_ESP, sp + 4 + (4 * nargs if stdcall else 0))
+            uc.reg_write(X.UC_X86_REG_EIP, ret)
+        self.uc.hook_add(unicorn.UC_HOOK_CODE, hook, None, begin=addr, end=addr)
+
+    def import_slots(self):
+        """{name: IAT address} from the import directory"""
+        if self.imports is None:
+            d, pe = self.raw, self.pe
+            rva = struct.unpack_from("<I", d, pe + 24 + 96 + 8)[0]
+            self.imports = {}
+            while True:
+                lookup, _, _, name, iat = struct.unpack("<5I", self.read(self.base + rva, 20))
+                if not name:
+                    break
+                k = 0
+                while True:
+                    ent = self.u32(self.base + (lookup or iat) + 4 * k)
+                    if not ent:
+                        break
+                    if not ent & 0x80000000:
+                        nm = self.read(self.base + ent + 2, 64).split(b"\0")[0].decode()
+                        self.imports[nm] = self.base + iat + 4 * k
+                    k += 1
+                rva += 20
+        return self.imports
+
+    def stub_import(self, name, fn, nargs):
+        """Points the import's IAT slot at a stub answered by fn (Win32 imports are stdcall)."""
+        a = self.next_stub
+        self.next_stub += 16
+        self.uc.mem_write(a, b"\xc3")
+        self.write(self.import_slots()[name], struct.pack("<I", a))
+        self.stub(a, fn, nargs, stdcall=True)
+
+    def stub_heap(self):
+        """HeapAlloc / HeapFree / HeapReAlloc on the emulator's bump heap (zeroed with HEAP_ZERO_MEMORY)."""
+        def alloc(heap, flags, size):
+            a = self.alloc(size)
+            if flags & 8:
+                self.write(a, bytes(size))
+            return a
+        self.stub_import("HeapAlloc", alloc, 3)
+        self.stub_import("HeapFree", lambda h, f, p: 1, 3)
