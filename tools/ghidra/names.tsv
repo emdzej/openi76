@@ -607,3 +607,8 @@
 00450e80	Clock_Script	clock	high	returns 0x55f73c, the steps summed after the first three ticks
 00409b00	Fsm_SetTaurus	fsm	high	0x505454 = the node
 004240c0	Names_FindId	entity	high	Names_Find (0x492bd0 on 0x54f7a8) by the 8-byte name as two words
+0040cc10	AI_Order	ai	high	an order (vehicle, target, order, slow): the tactics' stack, the top's frame, the aim
+0040cc00	AI_GenericTactic	ai	high	returns 6: the tactic of the generic orders 0-6, 8-0xf
+0040a500	AI_Stop	ai	med	the throttle to 0x474eb0(n, -1) x k (0x4a51c8); the user's flag 0x505494
+00408c40	AI_Weapons	ai	med	with +0xa714: the weapons' list (+0xa718) refreshed
+00409b80	AI_UserInScene	ai	med	the user's vehicle while 0x505490 is clear, outside network play
