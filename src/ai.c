@@ -6,6 +6,7 @@
 #include "clock.h"
 #include "combat.h"
 #include "nav.h"
+#include "avoid.h"
 #include "fsm.h"
 #include "orders.h"
 #include "terrain.h"
@@ -163,6 +164,49 @@ void AI_Frame(void)
         g_ai_505448 = 0;
     }
     AI_SearchTurns();
+}
+
+/* 0x4099e0: one line of sight a frame while the user hides (the first ask since the reset, and then each
+   time the asks so far match the grants); the count of asks goes up either way */
+static int sight_turn(void)
+{
+    if (!g_ai_50545c && g_ai_505448 == g_ai_50544c) {
+        g_ai_50544c++;
+        g_ai_50545c = 1;
+        g_ai_505448++;
+        return 1;
+    }
+    g_ai_505448++;
+    return 0;
+}
+
+/* the last time t was seen (+0xa94c): now while the user does not hide (0x409a20), else when this frame's
+   line of sight (AI_CanSee 0x413570) finds it. 1 when that is more than 5 s ago */
+static int lost_for_5s(Node *n, Node *t, int *hidden)
+{
+    uint8_t *ai = *Data_Ptr(n->data, 0x108);
+    *hidden = g_ai_505458 != 0;
+    if (!*hidden) {
+        memcpy(ai + 0xa94c, &g_clock_game, 4);   /* 0x450e70 */
+        return 0;
+    }
+    if (sight_turn() && AI_CanSee(n, t)) memcpy(ai + 0xa94c, &g_clock_game, 4);
+    float seen;
+    memcpy(&seen, ai + 0xa94c, 4);
+    double s5 = fpu_add(seen, 5.0f);   /* 0x4a55dc */
+    return s5 < g_clock_game || s5 != s5;
+}
+
+int AI_TargetLost(Node *n, Node *t)
+{
+    int hidden;
+    return lost_for_5s(n, t, &hidden);
+}
+
+int AI_TargetSeen(Node *n, Node *t)
+{
+    int hidden, lost = lost_for_5s(n, t, &hidden);
+    return hidden ? !lost : 1;
 }
 
 void AI_SearchTurns(void)

@@ -30,3 +30,8 @@ void AI_Begin(void);
 /* the end of 0x409020: the search's turns for the next frame; a search not called this frame is dropped
    (0x40fdf0 on its vehicle's AI block) */
 void AI_SearchTurns(void);
+/* 0x419930: the tactics' test that the target t was lost: the user hides from the radar (0x421e30) and n
+   has not seen t (one line of sight a frame, 0x4099e0) for more than 5 s */
+int AI_TargetLost(Node *n, Node *t);
+/* 0x4199a0: its opposite, 1 too while the user does not hide */
+int AI_TargetSeen(Node *n, Node *t);

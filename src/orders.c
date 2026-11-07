@@ -1345,6 +1345,8 @@ int AI_TacticCall(uint32_t va, Node *n, Node *t)
     case 0x41c6b0: return chase_frame(n, t);
     case 0x41c950: return chase_over(n, t);
     case 0x4198c0: return crowded(n, t);
+    case 0x419930: return AI_TargetLost(n, t);
+    case 0x4199a0: return AI_TargetSeen(n, t);
     case 0x4198f0: return room_again(n, t);
     case 0x4195f0: return hang_enter(n, t);
     case 0x419730: return hang_frame(n, t);

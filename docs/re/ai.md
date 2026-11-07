@@ -1,4 +1,4 @@
-# The AI (set-up ported, driving not yet)
+# The AI
 
 `src/ai.c`. `tools/emu/diff_objects.py` checks the teams and the vehicles' AI blocks (by CRC, with
 their two pointer words masked) against the original's.
@@ -37,9 +37,14 @@ It runs for vehicles (classes 1 and 9; class 8, the artillery, is skipped).
 `AI_Order` 0x40cc10 (vehicle, target, order, slow flag) is how the script drives a vehicle. A script
 calls it again each frame (an order and then a yield, in a loop), and each call also runs the tactic's
 frame. Ported (`src/orders.c`): the port reads the table from the exe and calls each function by its
-address. Ported so far: 0x417a10 (accepts any target), sit's frame 0x40a580 (also guard's and hide's),
-and hide's enter 0x40a600 and leave 0x40a620. The others do nothing and answer 0, and the port logs each
-once. The aim (0x40f410) is ported ("Firing" below).
+address. Every function the table names is ported (the sections below); an address it does not know
+answers 0 and is logged once. The aim (0x40f410) is ported ("Firing" below).
+
+**Losing the target** (0x419930, the leave test of most tactics; 0x4199a0, tactic 0x1d's opposite). While
+the user does not hide from the radar (0x409a20: AI_Frame's 0x505458 from 0x421e30), the AI block's
++0xa94c is the game's time and the target is never lost. While it hides, one line of sight a frame
+(0x4099e0 hands out the turn: 0x50545c and the counts 0x50544c, 0x505448, reset by AI_Frame) may see the
+target (`AI_CanSee` 0x413570) and renew +0xa94c. The target is lost when +0xa94c + 5 is under the time.
 
 **The target.** The AI block's +0xa9b4 keeps the target with a reference tagged "ai". When the target is
 freed (`Node_Live`), or 0x417a10 refuses it (it always accepts), 0x40a500 stops the vehicle: the
