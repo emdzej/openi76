@@ -215,6 +215,43 @@ frames, its next contact and 0x426070. With the byte 13 at 1 and then at 2, it c
 frames, turning the vehicle round before the second. It compares the mirror texture's CRC-32, its size
 and the flag. It is identical on t01, s01, a01 and t06.
 
+## The special weapons' panel (0x42d9d0-0x42e250)
+
+`Specials_Setup` and `Specials_Frame` in `src/cockpit.c`. The panel is a part of the user's vehicle, like
+the weapons' display (docs/re/weapons.md), and is drawn into its texture the same way: the vehicle's three
+special slots (the data's +0x3ec, each a class 0x18 node whose data is the kind, the count +4, the health
++8 of +0xc, and the on flag +0x10).
+
+**The set-up, 0x42dc00.** It runs in the user vehicle's start, after the weapons' display, and when the
+screen mode changes.
+1. The panel's surface 0x550968 is emptied.
+2. The panel is the node textured `zbks_.map` (`zbks_320.map` below mode 6); the other one is hidden. It
+   is kept in the data's +0x43c and shown.
+3. 0x42dfc0 draws it whole. For each slot:
+   - its bracket (`3sp_bracket_<k+1>`) and a housing (`3housing1`-`5`, one rand() a slot, taken even for an
+     empty slot);
+   - for a special, its diode: its health as a percentage (+8 over +0xc, times 100, truncated) in one of
+     five ranges (0x4d5978, 0x18 bytes a range). It is drawn for any range it falls in, and the state is
+     kept at 0x4d5c18;
+   - its plate (`3sp_dymo_<k+1>`): by its kind (0-9), from the table 0x4d58d8 when it is on (with any
+     left, its +0x10), else from 0x4d5838. The plate's state 0x4d5c08 is set to -1;
+   - its counter, the weapons' rolling digits (0x42dcd0, `3sp_num_ones_<k+1>` and on, 0x4a5a60 the step).
+
+**The frame, 0x42d9d0.** It is the last step of the cockpit's frame (0x426b60).
+1. Each special's plate is drawn when its state differs from 0x4d5c08. Nothing but the set-up writes that
+   word, so the plate is drawn every frame (quirk, kept).
+2. Its diode is drawn when its range changes.
+3. Its counter rolls a digit a frame towards the count.
+
+The state is one block, 0x4d5c08-0x4d5c67: the plates', the diodes', then the four digits' runs, four
+words each. Its first values are the exe's (the digits 10), and its last word, 0x4d5c64, is the names'
+choice by the screen mode.
+
+**Checked:** `--call cockpit` CRCs the panel's texture with the instruments'. Before each of its five
+frames, each special loses k from its count and has (4 - k) quarters of its health. The default user
+vehicle has no specials, so `USER_VCF=vppt10` (or vppt15) gives the user a mission's Piranha with three.
+The panel changes every frame and is identical on t01, s01 and t06.
+
 ## The dashboard's swap (0x4286e0-0x428890)
 
 The user's vehicle's model holds two versions of a part of the dashboard, told apart by a texture: the

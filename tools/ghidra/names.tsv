@@ -1097,3 +1097,7 @@
 004569b0	Dash_Plate	weapons	high	a weapon's name plate from four tables by kind, index, turret, lit; ported
 00456cf0	Dash_Counter	weapons	high	a slot's four rolling digits of rounds; ported, diffed
 00481800	Tex_PutRoll	cockpit	high	the vertical strip: a digit's window of a column into a region; ported, diffed
+0042dc00	Specials_Setup	cockpit	high	the special weapons' panel's node (zbks_.map) into +0x43c, drawn whole; ported, diffed
+0042dfc0	Specials_Draw	cockpit	high	the panel whole: brackets, housings, diodes, plates, counters; ported, diffed
+0042d9d0	Specials_Frame	cockpit	high	the panel's frame: plates, diodes on change, rolling counters; ported, diffed
+0042dcd0	Specials_Counter	cockpit	high	a special's four rolling digits; ported, diffed

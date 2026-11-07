@@ -1,5 +1,6 @@
 /* The cockpit's dashboard swap (0x4286e0-0x428890); see cockpit.h */
 #include "cockpit.h"
+#include "crt.h"
 #include "camera.h"
 #include "clock.h"
 #include "entity.h"
@@ -454,7 +455,136 @@ void Cockpit_Frame(Node *n)
     warning_lights(n);
     compass(n);
     gear(n);
-    /* not ported yet: the user's handset picture (0x426970) and the special weapons' panel (0x42d9d0) */
+    /* not ported yet: the user's handset picture (0x426970, the flat cockpit's) */
+    Specials_Frame(n);   /* 0x42d9d0 */
+}
+
+/* ---- the special weapons' panel (0x42d9d0-0x42e250) ---- */
+
+/* 0x4d5c08-0x4d5c67 as one block: the plates' last states (+0, never written but by the set-up: a plate is
+   drawn every frame), the diodes' (+0x10), then the counters' four digits (+0x20 the ones, +0x30 the tens,
+   +0x40 the hundreds, +0x50 the thousands), four words a run for the three slots; the last word, 0x4d5c64,
+   is the names' choice by the screen mode (1 below mode 6). Its first values are the exe's */
+static int32_t spec_words[24];
+static int spec_loaded;
+#define SPEC_PLATE(k) spec_words[(k)]
+#define SPEC_DIODE(k) spec_words[4 + (k)]
+#define SPEC_DIGIT(d, k) spec_words[8 + 4 * (d) + (k)]
+#define spec_hires spec_words[23]
+static Node *spec_dash;   /* 0x4d5814: the panel's node (zbks_.map) */
+static Surface spec_surf; /* 0x550968 */
+
+static const char *spec_tex(void) { return exe_str(0x4d57f8 + (uint32_t)spec_hires * 0xd); }   /* zbks_320.map, zbks_.map */
+static const char *spec_name(uint32_t base, int k) { return exe_str(base + (uint32_t)(k * 0x10) + (uint32_t)spec_hires); }
+static Node *spec_slot(const Node *v, int k) { return *Data_Ptr(v->data, 0x3ec + 4 * (uint32_t)k); }
+/* a special's kind, its data's first word (0 for none) */
+static int32_t spec_kind(const Node *s) { return s ? rd32(s->data) : 0; }
+
+/* a special's plate, by its kind (0-9) and whether it is on (its +0x10 while it has any left) */
+static const char *spec_plate(const Node *s, int32_t kind)
+{
+    int32_t on = rd32(s->data + 4) >= 1 ? rd32(s->data + 0x10) : 0;
+    if (kind >= 10 || kind < 0) return NULL;
+    return spec_name(on ? 0x4d58d8 : 0x4d5838, kind);   /* 3sp_empty_on.., 3sp_empty_off.. */
+}
+
+/* its health, +8 over +0xc, times 100 (0x4a5a5c), truncated */
+static int32_t spec_health(const uint8_t *d)
+{
+    return (int32_t)MUL(fpu_div((double)rd32(d + 8), (double)rd32(d + 0xc)), exe_f32(0x4a5a5c));
+}
+
+/* 0x42dcd0: slot k's counter (the special's +4), as the weapons' (0x456cf0) */
+static void spec_counter(const uint8_t *d, int k, int force)
+{
+    int32_t a = rd32(d + 4), t[4] = {a % 10, a / 10 % 10, a / 100 % 10, a / 1000 % 10};
+    static const uint32_t region[4] = {0x4d5b48, 0x4d5b78, 0x4d5ba8, 0x4d5bd8};   /* 3sp_num_ones_1 .. thous */
+    for (int e = 0; e < 4; e++) {
+        if (SPEC_DIGIT(e, k) == t[e] && !force) continue;
+        if (!force) SPEC_DIGIT(e, k)--;
+        if (SPEC_DIGIT(e, k) == -1) SPEC_DIGIT(e, k) = 9;
+        float f = F32(MUL((double)SPEC_DIGIT(e, k), exe_f32(0x4a5a60)));
+        spec_surf = Tex_PutRoll((uintptr_t)spec_dash, spec_tex(), spec_name(region[e], k),
+                                exe_str(0x4d5818 + (uint32_t)spec_hires), exe_str(0x4d5828 + (uint32_t)spec_hires), f);
+    }
+}
+
+/* 0x42dfc0: the panel drawn whole: each of the three slots' bracket and a random housing, then for a
+   special its diode (any range it is in), its plate and its counter */
+static void specials_draw(Node *v)
+{
+    if (!v->data) return;
+    for (int k = 0; k < 3; k++) {
+        Node *s = spec_slot(v, k);
+        int32_t kind = spec_kind(s);
+        int housing = (int)(int64_t)MUL(MUL((double)crt_rand(), exe_f32(0x4a5a64)), exe_f32(0x4a5a68));
+        Tex_PutRegion((uintptr_t)spec_dash, spec_tex(), spec_name(0x4d5ab8, k), spec_name(0x4d5a68, housing), &spec_surf);
+        if (!kind) continue;
+        const uint8_t *d = s->data;
+        SPEC_DIODE(k) = -1;
+        int32_t h = spec_health(d);
+        for (int e = 0; e < 5; e++)
+            if ((int32_t)exe_u32(0x4d5988 + 0x18u * (uint32_t)e) <= h && h <= (int32_t)exe_u32(0x4d598c + 0x18u * (uint32_t)e)) {
+                Tex_PutRegion((uintptr_t)spec_dash, spec_tex(), spec_name(0x4d5ae8, k), exe_str(0x4d5978 + 0x18u * (uint32_t)e + (uint32_t)spec_hires),
+                              &spec_surf);
+                SPEC_DIODE(k) = e;
+            }
+        SPEC_PLATE(k) = -1;
+        const char *p = spec_plate(s, kind);
+        if (p && *p) Tex_PutRegion((uintptr_t)spec_dash, spec_tex(), spec_name(0x4d5b18, k), p, &spec_surf);
+        int32_t a = rd32(d + 4);
+        for (int e = 0; e < 4; e++, a /= 10) SPEC_DIGIT(e, k) = a % 10;
+        spec_counter(d, k, 1);
+    }
+}
+
+void Specials_Setup(Node *v)
+{
+    if (!spec_loaded) {
+        memcpy(spec_words, exe_data(0x4d5c08, sizeof spec_words), sizeof spec_words);
+        spec_loaded = 1;
+    }
+    spec_surf = Surface_Make(0, 0, NULL);   /* 0x4392b0, 0x4391c0 */
+    if (!v) return;
+    spec_hires = g_detail.b[DET_SCREEN] < 6;
+    Node_SetFlags(Node_FindTexture(v, exe_str(spec_hires ? 0x4d57f8 : 0x4d5805)), 1);
+    spec_dash = Node_FindTexture(v, spec_tex());
+    if (!spec_dash) return;
+    Node_ClearFlags(spec_dash, 1);
+    if (!v->data) return;
+    *Data_Ptr(v->data, 0x43c) = spec_dash;
+    specials_draw(v);
+}
+
+void Specials_Frame(Node *v)
+{
+    if (!v->data) return;
+    /* the plates whose state differs from the last drawn (always: the frame does not keep it) */
+    for (int k = 0; k < 3; k++) {
+        Node *s = spec_slot(v, k);
+        int32_t kind = spec_kind(s);
+        if (!kind) continue;
+        int32_t on = rd32(s->data + 4) >= 1 ? rd32(s->data + 0x10) : 0;
+        if (SPEC_PLATE(k) == on) continue;
+        const char *p = spec_plate(s, kind);
+        if (p && *p) Tex_PutRegion((uintptr_t)spec_dash, spec_tex(), spec_name(0x4d5b18, k), p, &spec_surf);
+    }
+    for (int k = 0; k < 3; k++) {
+        Node *s = spec_slot(v, k);
+        if (!spec_kind(s)) continue;
+        int32_t h = spec_health(s->data);
+        for (int e = 0; e < 5; e++)
+            if ((int32_t)exe_u32(0x4d5988 + 0x18u * (uint32_t)e) <= h && h <= (int32_t)exe_u32(0x4d598c + 0x18u * (uint32_t)e) &&
+                SPEC_DIODE(k) != e) {
+                Tex_PutRegion((uintptr_t)spec_dash, spec_tex(), spec_name(0x4d5ae8, k), exe_str(0x4d5978 + 0x18u * (uint32_t)e + (uint32_t)spec_hires),
+                              &spec_surf);
+                SPEC_DIODE(k) = e;
+            }
+    }
+    for (int k = 0; k < 3; k++) {
+        Node *s = spec_slot(v, k);
+        if (spec_kind(s)) spec_counter(s->data, k, 0);
+    }
 }
 
 void Cockpit_Draw(const View *view)

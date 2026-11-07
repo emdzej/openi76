@@ -68,7 +68,7 @@ def chunk_rec(m, n):
 
 budget = [0]
 VEH_PTRS = (0x108, 0x398, 0x3A0, 0x3A4, 0x3A8, 0x3AC, 0x3B0, 0x3B4, 0x3B8, 0x3BC, 0x3C0, 0x3C4, 0x3C8, 0x3CC,
-            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x420, 0x424, 0x428, 0x42C, 0x430, 0x434, 0x438, 0x440, 0x508)
+            0x3D0, 0x3D4, 0x3D8, 0x3DC, 0x3E0, 0x3E4, 0x3E8, 0x3EC, 0x3F0, 0x3F4, 0x3F8, 0x3FC, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414, 0x418, 0x41C, 0x420, 0x424, 0x428, 0x42C, 0x430, 0x434, 0x438, 0x43C, 0x440, 0x508)
 SMALL = {30: 0x88, 20: 8, 21: 0x2C, 22: 0x18, 23: 0x20, 24: 0x18, 7: 0xA0, 41: 0x40, 31: 8, 35: 0x4C, 36: 0x4C, 40: 0xB8, 34: 0x80}
 # the pointer words in the small classes' data (0 in the port's raw image)
 SMALL_PTRS = {30: (0x84,), 31: (0,), 40: (0,),
@@ -966,7 +966,7 @@ def call_cockpit(exe, n, fpcw):
     rd = (fpcw & ~0xC00) | 0x400
     if not u(0x4D3B64) or u(u(0x4D3B64)) != n or not u(n + 0x70):
         return
-    for a, k in ((0x4765D0, 3), (0x426970, 0), (0x42D9D0, 1)):   # a sound; the handset, the specials' panel
+    for a, k in ((0x4765D0, 3), (0x426970, 0)):   # a sound; the handset
         exe.stub(a, lambda *x: 0, k)
     d = u(n + 0x70)
     hi = int(exe.read(0x5E14D0, 1)[0] < 6)
@@ -985,9 +985,17 @@ def call_cockpit(exe, n, fpcw):
         if eng and u(eng + 0x70):
             exe.write(u(eng + 0x70) + 0x1C, struct.pack("<f", 1500.0 * k + 700.5))
             exe.write(u(eng + 0x70) + 0x24, struct.pack("<f", 37.25 * k - 5.0))
+        for j in range(3):   # the specials: k fewer, (4 - k) quarters of their health
+            sp = u(d + 0x3EC + 4 * j)
+            if sp and u(sp + 0x70):
+                sd = u(sp + 0x70)
+                c4 = struct.unpack("<i", exe.read(sd + 4, 4))[0]
+                exe.write(sd + 4, struct.pack("<i", max(c4 - k, 0)))
+                whole = struct.unpack("<i", exe.read(sd + 0xC, 4))[0] * (4 - k)
+                exe.write(sd + 8, struct.pack("<i", abs(whole) // 4 * (1 if whole >= 0 else -1)))
         exe.call(0x421FC0, limit=50_000_000, fpcw=rd)
         exe.call(0x426B60, n, limit=500_000_000, fpcw=rd)
-        b = bytearray(2 * 0x48 + 16)
+        b = bytearray(2 * 0x48 + 20)
         for i in range(2):
             nd = u(d + 0x3F8 + 4 * i)
             if not nd or not u(nd + 0x70):
@@ -995,7 +1003,8 @@ def call_cockpit(exe, n, fpcw):
             b[0x48 * i:0x48 * i + 0x40] = exe.read(nd + 0x18, 0x40)
             b[0x48 * i + 0x24:0x48 * i + 0x28] = bytes(4)
             b[0x48 * i + 0x40:0x48 * i + 0x48] = exe.read(u(nd + 0x70) + 0x44, 8)
-        for i, (o, t) in enumerate(((0x420, 0x4D48C8), (0x424, 0x4D48E2), (0x428, 0x4D48FC), (0x438, 0x4D4916))):
+        for i, (o, t) in enumerate(((0x420, 0x4D48C8), (0x424, 0x4D48E2), (0x428, 0x4D48FC), (0x438, 0x4D4916),
+                                    (0x43C, 0x4D57F8))):
             part = u(d + o)
             c = 0
             if part:
@@ -1198,13 +1207,14 @@ def call_raze(exe, n, fpcw):
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
 CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash)}
+USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
 START_LATER = (
-               # the user vehicle's set-up (camera, special weapons' panel) and the engine's sound
-               0x403360, 0x42DC00, 0x476240)
+               # the user vehicle's set-up (camera) and the engine's sound
+               0x403360, 0x476240)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}
 
 
@@ -1312,6 +1322,8 @@ def original():
         exe.call(f, limit=200_000_000)
     mission.seed(exe)
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
+    if USER_VCF:   # another user vehicle than WinMain's default (as the shell's choice)
+        exe.write(0x58DCD0, USER_VCF.encode()[:15].ljust(16, b"\0"))
     p = exe.put(M.encode() + b"\0")
     r = exe.call(0x484410, p, limit=2_000_000_000)
     if START:
@@ -1486,6 +1498,8 @@ def port():
     lib.Res_Init()
     ctypes.c_int.in_dll(lib, "g_fpu_round").value = 0
     lib.Objects_Init()
+    if USER_VCF:
+        (ctypes.c_char * 16).in_dll(lib, "g_user_vcf").value = USER_VCF.encode()[:15]
     lib.Mission_Load.argtypes = [ctypes.c_char_p]
     r = lib.Mission_Load(M.encode())
     if START:

@@ -72,7 +72,7 @@ int g_dump_texanims;
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
                                     0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x400, 0x404, 0x408, 0x40c, 0x410,
-                                    0x414, 0x418, 0x41c, 0x420, 0x424, 0x428, 0x42c, 0x430, 0x434, 0x438, 0x440, 0x508};
+                                    0x414, 0x418, 0x41c, 0x420, 0x424, 0x428, 0x42c, 0x430, 0x434, 0x438, 0x43c, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
 {
@@ -1170,7 +1170,7 @@ int Dump_CallVehicles(int which, int upside)
             uint8_t *d = n->data;
             if (!g_user_entity || g_user_entity->node != n || !d) break;
             int hi = g_detail.b[DET_SCREEN] < 6;
-            static const uint32_t tex[4] = {0x4d48c8, 0x4d48e2, 0x4d48fc, 0x4d4916};
+            static const uint32_t tex[5] = {0x4d48c8, 0x4d48e2, 0x4d48fc, 0x4d4916, 0x4d57f8};
             for (int k = 0; k < 5; k++) {
                 if (k == 2)
                     for (int j = 0; j < 9; j += 2)
@@ -1188,10 +1188,19 @@ int Dump_CallVehicles(int which, int upside)
                     memcpy(eng->data + 0x1c, &rpm, 4);
                     memcpy(eng->data + 0x24, &sp, 4);
                 }
+                for (int j = 0; j < 3; j++) {   /* the specials: k fewer, (4 - k) quarters of their health */
+                    Node *sp = *Data_Ptr(d, 0x3ec + 4 * (uint32_t)j);
+                    if (!sp || !sp->data) continue;
+                    int32_t c4, whole;
+                    memcpy(&c4, sp->data + 4, 4);
+                    put32(sp->data + 4, c4 - k < 0 ? 0 : c4 - k);
+                    memcpy(&whole, sp->data + 0xc, 4);
+                    put32(sp->data + 8, whole * (4 - k) / 4);
+                }
                 Rel_Clear();
                 g_fpu_round = FPU_DOWN;
                 Cockpit_Frame(n);
-                uint8_t b[2 * 0x48 + 16];
+                uint8_t b[2 * 0x48 + 20];
                 memset(b, 0, sizeof b);
                 for (int i = 0; i < 2; i++) {
                     Node *nd = *Data_Ptr(d, 0x3f8 + 4 * i);
@@ -1200,8 +1209,8 @@ int Dump_CallVehicles(int which, int upside)
                     memset(b + 0x48 * i + 0x24, 0, 4);
                     memcpy(b + 0x48 * i + 0x40, nd->data + 0x44, 8);
                 }
-                for (int i = 0; i < 4; i++) {
-                    Node *part = *Data_Ptr(d, i < 3 ? 0x420 + 4 * i : 0x438);
+                for (int i = 0; i < 5; i++) {
+                    Node *part = *Data_Ptr(d, i < 3 ? 0x420 + 4 * (uint32_t)i : i == 3 ? 0x438 : 0x43c);
                     const Texture *t = part ? Tex_Get((uintptr_t)part, exe_str(tex[i] + (uint32_t)hi * 0xd)) : NULL;
                     uint32_t c = t ? crc32(t->pixels, (size_t)t->w * (size_t)t->h) : 0;
                     memcpy(b + 0x90 + 4 * i, &c, 4);

@@ -67,6 +67,11 @@ if [ -z "$1" ]; then
     out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py s01.msn --call $c 2>&1) || fail=1
     echo "$out" | grep -q identical || { echo "[--call $c s01.msn]"; echo "$out" | tail -4; }
   done
+  # the cockpit with a user vehicle that has specials (the default, vppirna1, has none): their panel
+  for c in cockpit wdash mirror; do
+    out=$(USER_VCF=vppt10 nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py t06.msn --call $c 2>&1) || fail=1
+    echo "$out" | grep -q identical || { echo "[--call $c t06.msn vppt10]"; echo "$out" | tail -4; }
+  done
   echo "[diff_objects --call] done"
 fi
 exit $fail

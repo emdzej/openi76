@@ -1,6 +1,6 @@
-/* The cockpit (0x426410-0x428900; docs/re/cockpit.md): its set-up, the instruments, the 3D cockpit's
-   drawing, the HUD and the dashboard's swap. Not ported yet: the flat cockpit, the mask's drawing
-   (0x428770) and the special weapons' panel. The rear-view mirror is mirror.c. */
+/* The cockpit (0x426410-0x428900; docs/re/cockpit.md): its set-up, the instruments, the special weapons'
+   panel, the 3D cockpit's drawing, the HUD and the dashboard's swap. Not ported yet: the flat cockpit and
+   the mask's drawing (0x428770). The rear-view mirror is mirror.c. */
 #pragma once
 #include <stdint.h>
 #include "scene.h"
@@ -40,13 +40,22 @@ void Hud_Draw(const View *view, int mode);
 void Cockpit_Setup(Node *n);
 /* Cockpit_Frame 0x426b60 (the user's vehicle's second frame, 0x429d70): the first time the parts' scales
    (0x425e50); the speedometer's and the tachometer's needles; the damage diagram, the warning lights, the
-   compass and the gear's indicator, pasted into the cockpit's textures when they change. Not ported yet:
-   the flat cockpit's gauge frames, the handset (0x426970) and the special weapons' panel (0x42d9d0) */
+   compass and the gear's indicator, pasted into the cockpit's textures when they change. Not ported
+   yet: the flat cockpit's gauge frames and the handset (0x426970); the specials' panel is Specials_Frame */
 void Cockpit_Frame(Node *n);
 /* Cockpit_Draw 0x4279c0 (Render_World's after the flush, in the cockpit): with the detail byte 8 (the
    default) the camera's vehicle drawn from inside (0x435be0); without it the 2D instruments, not ported
    yet */
 void Cockpit_Draw(const View *view);
+
+/* Specials_Setup 0x42dc00 (the user's start, after the weapons' display): the panel's node by its texture
+   (zbks_.map, zbks_320.map below mode 6; the other's hidden) into the data's +0x43c, then drawn whole
+   (0x42dfc0): each of the three special slots' (+0x3ec) bracket and a random housing, and for a special
+   its health diode, its plate (on or off) and its counter */
+void Specials_Setup(Node *v);
+/* Specials_Frame 0x42d9d0 (the cockpit's frame's last): each special's plate, its diode when its range
+   changes, its counter rolling a digit a frame */
+void Specials_Frame(Node *v);
 
 /* Dash_Setup 0x4286e0 (from the cockpit's set-up 0x426410, on the user's vehicle n): the two parts found by
    their textures (Node_FindTexture, which sets each node it looks at to level 4), the main one shown, the

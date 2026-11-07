@@ -35,8 +35,8 @@ camera. With `--param play=1` too it runs the game loop's ported parts: the vehi
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
 cameras: every mode of the presets F1-F11, the death's and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
-trace=<frames>` logs the user's vehicle. The 3D cockpit with its instruments, the HUD's target box and the
-rear-view mirror run (docs/re/cockpit.md). Not ported yet: the flat cockpit and the special weapons' panel, the
+trace=<frames>` logs the user's vehicle. The 3D cockpit with its instruments, the weapons' and specials' panels, the HUD's target box and the
+rear-view mirror run (docs/re/cockpit.md). Not ported yet: the flat cockpit, the
 mission's script's movies and salvage (its machines, conditions, orders, objectives and the rest
 of its actions run: docs/re/fsm.md), the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the wrecks' effects are not ported), the radar's display (its contacts and targets work: docs/re/weapons.md), the shell and audio. Read
