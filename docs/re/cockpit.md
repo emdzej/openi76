@@ -113,7 +113,46 @@ only here. Nothing is drawn in network play in the state 0x10, or without an ent
 of the user's vehicle's centre looking every way, and compares every polygon. 20/20 and 30/30 are
 identical on t01 and s01, rounding down and at nearest.
 
-The rear-view mirror (Render_World's 0x471390, through the view 0x5e2ae0) and the HUD (0x427db0) are not
+## The HUD, Hud_Draw 0x427db0
+
+Render_World's last step calls it with mode 0, in every camera mode. It draws around the user's radar
+target (`Radar_Current`) when the user's vehicle is a vehicle and nothing holds its controls this frame
+(0x409b70).
+
+1. **The place.** The target's aim point (`Shot_Target` 0x45d710) goes to camera space, z replaced by
+   1/z. The box's size is the target's cached radius (0x4225d0, the relations' cache's +0x18) times the
+   view's sx and 1/z, truncated, made positive and held to 23-150.
+2. **On the screen** (0x428220): x = sx·x·(1/z) + cx and y = y·sy·(1/z) + cy, each truncated. Behind the
+   camera, x is the rectangle's right edge when the point's x is not negative, else its left. Then both
+   are held to the view's rectangle. Any change marks the point off the screen.
+3. **Off the screen**, the arrow picture (`ztarg901`, `ztarg902` at the low resolutions, loaded by the
+   set-up) is centred on the held point, except in mode 1.
+4. **On it**, four corner pictures by the target's kind (node bits 16-18; `ztarg<kind+2><corner>.map`,
+   loaded by 0x426070 for 8 kinds) are drawn through the remap table. With a = 0.6·size, b = 0.4·size and
+   y lowered by b/3 (each truncated):
+   - corner 0 at (x - a, y + b + its height);
+   - corner 1 at (x + a - its width, y + b + its height);
+   - corner 2 at (x - a, y - b);
+   - corner 3 at (x + a - its width, y - b).
+5. **The health bar** is a 30 x 5 picture of its own.
+   - The health is `Vehicle_Health`, at most 100.
+   - Its colour level is 3 (white) at exactly 100. Otherwise it counts thirds of 33.33 up to 2 while the
+     next third is below the health, with nothing counted at 33.33 or under: red, yellow, green.
+   - The bar is filled with 0xff. Its half length w is sqrt(health · 0.01)·15 + 0.5, truncated. Columns
+     15 - w to 15 + w - 1 get the edge's colour 0xfe, and inside that rows 1-3 the level's colour.
+   - It is drawn centred at y - b - 5 (mode 1: under the box, at y + b + corner 0's height + 10).
+6. **The colours** come from the set-up, the palette's nearest to white, (0.32, 0.61, 0.32), (0.8, 0.78,
+   0.13) and (0.82, 0, 0.16).
+
+`Cockpit_Init` 0x426070 (WinMain's, before the play) loads the corners and makes the bar. It also resets
+the instruments' surfaces and last states.
+
+**Checked:** `--call hud` (case 54) runs the radar's frames, its next contact, 0x426070 and the pilot's
+view. It then draws four frames on a cleared 640 x 480 screen, the vehicle turned before the third and
+mode 1 in the fourth, and compares the screen's CRC-32. It is identical on s07 and a01: the box, the edge
+arrow, and nothing in mode 1 off the screen. t01 has no target at the load.
+
+The rear-view mirror (Render_World's 0x471390, through the view 0x5e2ae0) is not
 ported yet. The mirror's frame is drawn but empty.
 
 ## The dashboard's swap (0x4286e0-0x428890)

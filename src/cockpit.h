@@ -20,6 +20,14 @@ Surface Tex_PutRegion(uintptr_t owner, const char *tex, const char *region, cons
 Surface Tex_PutStrip(uintptr_t owner, const char *tex, const char *region, const char *first, const char *last,
                      float f);
 
+/* Cockpit_Init 0x426070 (WinMain's, before a mission's play): the HUD's pictures (the target box's corners
+   ztarg201-904), the health bar, the instruments' last states and surfaces cleared */
+void Cockpit_Init(void);
+/* Hud_Draw 0x427db0 (Render_World's last, mode 0): around the user's radar target (not while something
+   holds the user's controls, 0x409b70) a box of four corners by the target's kind (node bits 16-18), sized
+   by its radius on the screen (23-150), with its health bar under it (mode 1: over it); off the screen the
+   arrow at the edge (not in mode 1) */
+void Hud_Draw(const View *view, int mode);
 /* Cockpit_Setup 0x426410 (the user's vehicle's start, 0x4294e0): the radar's lock let go (0x421480), the
    dashboard's swap set up, the screen mode's parts chosen (zsy_, zcm_: the high resolutions' below mode 6,
    the _320 ones from it; the others hidden) and kept in the data (+0x420, +0x424, +0x428, the gear's

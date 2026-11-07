@@ -1076,3 +1076,9 @@
 0047c650	Tex_Writable	tex	high	the owner's texture made its own copy (flag 1), as a surface; ported, diffed
 0043d910	Surface_Blit	render	high	a surface onto another, modes 1 remap, 2 tbl, 4, 5 flipped, else copy; ported, diffed
 00422200	Node_Heading	combat	high	the relations' cache's plain heading (+4); ported
+00427db0	Hud_Draw	cockpit	high	the radar target's box, health bar, off-screen arrow; ported, diffed
+00428220	Hud_OnScreen	cockpit	high	a camera point on the screen, held to the view's rectangle (1 when off); ported, diffed
+00426070	Cockpit_Init	cockpit	high	WinMain's: the target box's corners, the health bar, the instruments' state; ported but the flat gauges'
+00426260	Cockpit_Free	cockpit	high	the cockpit's pictures and tables released
+00439420	Surface_FillRect	render	high	a surface's viewport filled with a colour; ported
+004225d0	Node_Radius	combat	high	the relations' cache's radius (+0x18)

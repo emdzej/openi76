@@ -144,7 +144,8 @@ static void viewer_frame(void)
     /* nor 0x42edc0, 0x46e360 and the hook */
     Sky_Draw(&view, 0xef, g_detail.b[DET_SKY] ? 2 : 1);
     Queue_Flush(&view, 1);
-    if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0; 0x427db0 (the HUD) and the hook not ported */
+    if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0 */
+    Hud_Draw(&view, 0);                         /* 0x427db0; the hook 0x58dc58 is not ported */
     plat_present(pixels, 640, 480, 640, g_shown_pal);
 }
 
@@ -165,6 +166,7 @@ static bool play_init(void)
     if (plat_param("tick", v, sizeof v)) g_clock_fake_ms = 0, tick_ms = atof(v);
     Rel_Clear();   /* 0x421fc0 as the mission starts */
     g_screen = &surf;
+    Cockpit_Init();     /* 0x426070 */
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */

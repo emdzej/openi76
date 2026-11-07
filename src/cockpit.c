@@ -7,6 +7,14 @@
 #include "render/obj_draw.h"
 #include "render/fpu.h"
 #include "render/sprite.h"
+#include "render/palette.h"
+#include "render/terrain_draw.h"
+#include "ai.h"
+#include "combat.h"
+#include "damage.h"
+#include "ordnance.h"
+#include "radar.h"
+#include <stdlib.h>
 #include "tex.h"
 #include "vehicle.h"
 #include <string.h>
@@ -64,7 +72,22 @@ Surface Tex_PutStrip(uintptr_t owner, const char *tex, const char *region, const
     return t;
 }
 
-static int32_t hires;   /* 0x4d4b8c: the high resolutions' parts (screen modes below 6) */
+static float fhex(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
+
+static int32_t hires;
+/* the HUD's pictures: the arrow 0x550178 (surface 0x54f8d8) and the reticles 0x54f9d0 (0x54f898) and
+   0x550174 (0x5500e0); the target box's corners 0x550060 (8 kinds of 4; surfaces 0x54fa60, 0x30 apart);
+   the health bar 0x54f988 (its picture 0x54f9c8, 30 wide), its edge's colour 0x54fa58 and the levels'
+   colours 0x54fa48-0x54fa54 */
+static const Texture *pic[3];
+static Surface pic_surf[3];
+static const Texture *corner_pic[8][4];
+static Surface corner_surf[8][4];
+static Surface bar;
+static int32_t bar_w;
+static uint8_t bar_edge, level_colour[4];
+static Surface zone_surf, light_surf, compass_surf, gear_surf;   /* 0x550140, 0x550110, 0x54f9d8, 0x5501d8 */
+static int scaled;   /* 0x4d4b8c: the high resolutions' parts (screen modes below 6) */
 /* the instruments' last states: the gear 0x54f950 (-1 at the set-up) and the compass's degrees 0x5501a0
    (-500); the lights' 0x54fa20 and the diagram's 0x550180 below */
 static int32_t gauge_c;
@@ -89,9 +112,131 @@ void Cockpit_Setup(Node *n)
     for (int i = 0; i < 8; i++) light_last[i < 7 ? i : 0] = zone_last[i] = -1;
     gauge_d = -500.0f;   /* 0xc3fa0000 */
     gauge_c = -1;
-    /* not ported yet: the target and reticle pictures (ztarg901/902, zretc_4/1, zretc_5/1 by the resolution,
-       made surfaces at 0x54f8d8, 0x54f898, 0x5500e0), the gauges' tables (zcbhd, zrpms, zsped .tmt, 0x5ad1d4,
-       0x5ad1d0, 0x5ad1cc; 0x4d4b90 = 0) and four palette colours (0x54fa54-0x54fa48) */
+    /* the off-screen target's arrow (ztarg901 / 902) and the two reticles (zretc_4 / zretc_1, zretc_5 /
+       zretc_1), each made a surface; the low resolutions' names 13 bytes on. What a previous set-up loaded is
+       released first, by the names of the resolution's other kind (quirk, kept: the counts stay up) */
+    static const uint32_t pics[3] = {0x4d4ad0, 0x4d4af0, 0x4d4b10};
+    for (int i = 0; i < 3; i++)
+        if (pic[i]) Tex_PixelsRelease(exe_str(pics[i] + (hires ? 0 : 0xd)));
+    for (int i = 0; i < 3; i++) {
+        pic[i] = Tex_Pixels(exe_str(pics[i] + (uint32_t)hires * 0xd));
+        if (pic[i]) pic_surf[i] = Surface_Make(pic[i]->w, pic[i]->h, (uint8_t *)pic[i]->pixels);
+    }
+    /* the third is tried a second time when missing (quirk, kept: the same name again) */
+    if (!pic[2] && (pic[2] = Tex_Pixels(exe_str(pics[2] + (uint32_t)hires * 0xd))))
+        pic_surf[2] = Surface_Make(pic[2]->w, pic[2]->h, (uint8_t *)pic[2]->pixels);
+    /* not ported yet: the flat gauges' tables (zcbhd, zrpms, zsped .tmt, 0x5ad1d4, 0x5ad1d0, 0x5ad1cc; 0x4d4b90
+       = 0) */
+    /* the health bar's colours: white, green, yellow, red (0x54fa54, 0x54fa50, 0x54fa4c, 0x54fa48) */
+    level_colour[3] = (uint8_t)Color_Match(1.0f, 1.0f, 1.0f);
+    level_colour[2] = (uint8_t)Color_Match(fhex(0x3ea4a4a5), fhex(0x3f1c9c9d), fhex(0x3ea4a4a5));
+    level_colour[1] = (uint8_t)Color_Match(fhex(0x3f4ccccd), fhex(0x3f47c7c8), fhex(0x3e088889));
+    level_colour[0] = (uint8_t)Color_Match(fhex(0x3f51d1d2), 0, fhex(0x3e24a4a5));
+}
+
+/* ---- the HUD's target box (0x427db0) ---- */
+
+void Cockpit_Init(void)
+{
+    hires = -1;
+    gauge_d = -500.0f;
+    zone_surf = light_surf = compass_surf = gear_surf = Surface_Make(0, 0, NULL);
+    /* the health bar, 30 x 5, filled with its edge's colour 0xfe */
+    static Texture *bar_pic;   /* 0x54f9c8 */
+    if (!bar_pic && (bar_pic = malloc(8 + 30 * 5))) bar_pic->w = 30, bar_pic->h = 5;
+    bar = bar_pic ? Surface_Make(30, 5, bar_pic->pixels) : Surface_Make(0, 0, NULL);
+    bar_w = 30;
+    bar_edge = 0xfe;
+    Surface_Fill(&bar, 0xfe);
+    /* the box's corners for each of the 8 kinds of target: ztarg201.map, 202, 203, 204, 301 .. 904 */
+    for (int t = 0; t < 8; t++)
+        for (int c = 0; c < 4; c++) {
+            const Texture *p = Tex_Pixels(exe_str(0x4d4930 + 0xdu * (uint32_t)(4 * t + c)));
+            corner_pic[t][c] = p;
+            if (p) corner_surf[t][c] = Surface_Make(p->w, p->h, (uint8_t *)p->pixels);
+        }
+    scaled = 0;
+    /* also 0x54f90c, 0x54fa44 = 0, the .tmt handles and the flat gauges' pictures cleared, 0x54f9cc = -1,
+       0x54fa18 = 0 (the flat cockpit's, not ported yet) */
+}
+
+/* 0x428220: the camera-space point (x, y, 1/z) on the screen, truncated; behind the camera at the side its
+   x is on; then held to the view's rectangle. 1 when off it */
+static int on_screen(const float s[3], const View *v, int32_t *x, int32_t *y)
+{
+    int off = 0;
+    *x = (int32_t)ADD(MUL(MUL(v->sx, s[0]), s[2]), v->cx);
+    *y = (int32_t)ADD(MUL(MUL(s[1], v->sy), s[2]), v->cy);
+    if (fbits(s[2]) > 0x80000000u) {
+        *x = fbits(s[0]) <= 0x80000000u ? (int32_t)v->xmax : (int32_t)v->xmin;
+        off = 1;
+    }
+    if (*x < (int32_t)v->xmin) off = 1, *x = (int32_t)v->xmin;
+    if (*x > (int32_t)v->xmax) off = 1, *x = (int32_t)v->xmax;
+    if (*y < (int32_t)v->ymin) off = 1, *y = (int32_t)v->ymin;
+    if (*y > (int32_t)v->ymax) off = 1, *y = (int32_t)v->ymax;
+    return off;
+}
+
+void Hud_Draw(const View *view, int mode)
+{
+    Entity *ue = g_user_entity;   /* 0x423fc0 */
+    if (!ue || !ue->node) return;
+    Node *un = ue->node;
+    if (!(un->cls == 1 || un->cls == 8 || un->cls == 9) || g_user_pressed) return;   /* 0x42e570, 0x409b70 */
+    Node *t = Radar_Current(un);
+    if (!t) return;
+    int kind = (int)((t->flags & 0x70000) >> 16);
+    float p[3], s[3], c[4];
+    Shot_Target(p, t);   /* 0x45d710 */
+    View_ToCamera(view, s, p[0], p[1], p[2]);
+    s[2] = F32(fpu_div(1.0f, s[2]));
+    Node_Centre(c, t);   /* 0x4225d0: the cached radius */
+    int32_t size = (int32_t)MUL(MUL(c[3], view->sx), s[2]);
+    if (size < 0) size = -size;
+    if (size < 0x17) size = 0x17;
+    if (size > 0x96) size = 0x96;
+    int32_t x, y;
+    Surface *dst = view->surface;
+    if (on_screen(s, view, &x, &y)) {
+        /* off the screen: the arrow at the edge, unless in the mode 1 */
+        if (pic[0] && mode != 1) Surface_Blit(dst, &pic_surf[0], x - pic[0]->w / 2, y - pic[0]->h / 2, 1);
+        return;
+    }
+    const Texture *const *cp = corner_pic[kind];
+    if (!cp[0] || !cp[1] || !cp[2] || !cp[3]) return;
+    int32_t a = (int32_t)MUL(exe_f32(0x4a5950), (double)size);   /* 0.6 */
+    int32_t b = (int32_t)MUL((double)size, exe_f32(0x4a5954));   /* 0.4 */
+    y -= (int32_t)MUL((double)b, exe_f32(0x4a5958));            /* 1/3 */
+    Surface_Blit(dst, &corner_surf[kind][0], x - a, cp[0]->h + y + b, 1);
+    Surface_Blit(dst, &corner_surf[kind][1], a - cp[1]->w + x, cp[1]->h + y + b, 1);
+    Surface_Blit(dst, &corner_surf[kind][2], x - a, y - b, 1);
+    Surface_Blit(dst, &corner_surf[kind][3], a - cp[3]->w + x, y - b, 1);
+    /* the health bar: its length sqrt(health / 100) times 15 a side, its colour by thirds (white when whole) */
+    double hv = Vehicle_Health(t);   /* 0x40aae0 */
+    float h = hv > 100.0 ? 100.0f : F32(hv);
+    int level = 0;
+    if (fbits(h) == 0x42c80000u) level = 3;
+    else if ((int32_t)fbits(h) > 0x42055555) {
+        double acc = 0;
+        const float third = exe_f32(0x4a595c);   /* 33.33 */
+        while (level < 2) {
+            acc = ADD(acc, third);
+            double next = ADD(third, acc);
+            level++;
+            if (!(next < h)) break;
+        }
+    }
+    Surface_Fill(&bar, 0xff);
+    int32_t w = (int32_t)ADD(MUL(fpu_sqrt(MUL(h, 0.01)), 15.0), 0.5);   /* 0x4a5960, 0x4a5968, 0x4a5970 */
+    int32_t lo = 15 - w, hi = w + 15;
+    Surface_SetViewport(&bar, lo, 0, hi - 1, 4);
+    Surface_FillRect(&bar, bar_edge);
+    Surface_SetViewport(&bar, lo + 1, 1, hi - 2, 3);
+    Surface_FillRect(&bar, level_colour[level]);
+    Surface_SetViewport(&bar, 0, 0, 0x1d, 4);
+    int32_t by = mode == 1 ? cp[0]->h + y + b + 10 : y - b - 5;
+    Surface_Blit(dst, &bar, x - bar_w / 2, by, 1);
 }
 
 /* ---- the cockpit's frame ---- */
@@ -102,7 +247,6 @@ static void sound(const char *name, Node *n) { (void)name, (void)n; }
 /* the parts' scales, 100 / their full counts (0x425e50, once, 0x54fa10): the 8 armour and chassis words
    (0x54f940-0x54f94c, 0x54f9b8-0x54f9c4), then the engine, the suspension, the brakes and the four tyres
    (0x54f8cc, 0x550170, 0x54fa08, 0x54f890, 0x54fa0c, 0x54f8c8, 0x54fa14) */
-static int scaled;
 static float zone_scale[8], part_scale[7];
 static const uint16_t part_node[7] = {0x3c4, 0x3c8, 0x3cc, 0x3b8, 0x3bc, 0x3a8, 0x3ac};
 static const uint8_t part_off[7] = {0, 0, 4, 4, 4, 4, 4};   /* 0x42f480, 0x430650 at +0; 0x4304a0, 0x42fd90 +4 */
@@ -198,7 +342,6 @@ static int level_of(uint32_t table, int32_t v, int k)
    level's picture when the level changes, the dark one with CWSTAT.WAV. In the original's order, each
    level for every zone in turn */
 /* zone_last: 0x550180 */
-static Surface zone_surf;      /* 0x550140 */
 static void damage_diagram(Node *n)
 {
     static const uint8_t order[8] = {0, 2, 3, 1, 4, 6, 7, 5};
@@ -223,7 +366,6 @@ static void damage_diagram(Node *n)
    the four tyres (rear right, rear left, front right, front left) as percentages of their full counts; the
    dark ones with CWSTAT.WAV and the part's warning (GDSGC21-24.WAV) */
 /* light_last: 0x54fa20 (8 words, the eighth unused) */
-static Surface light_surf;      /* 0x550110 */
 static void warning_lights(Node *n)
 {
     static const uint32_t levels[7] = {0x4d46e8, 0x4d4760, 0x4d47d8, 0x4d4850, 0x4d4850, 0x4d4850, 0x4d4850};
@@ -252,7 +394,6 @@ static void warning_lights(Node *n)
 
 /* the compass on the zcm_ part (+0x428): the heading (0x42e440) in degrees as a window along its strip,
    redrawn when it changes */
-static Surface compass_surf;   /* 0x54f9d8 */
 static void compass(Node *n)
 {
     Node *part = *Data_Ptr(n->data, 0x428);
@@ -270,7 +411,6 @@ static void compass(Node *n)
 
 /* the gear's indicator (+0x438): on a change VSHIF1A.WAV, the "prnd" region cleared with "prndback" and the
    arrow pasted at the gear's name (0x4d42a8, 16 apart: park, reverse, neutral, drive, second, first) */
-static Surface gear_surf;   /* 0x5501d8 */
 static void gear(Node *n)
 {
     Node *part = *Data_Ptr(n->data, 0x438);

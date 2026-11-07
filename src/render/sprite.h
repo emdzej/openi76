@@ -18,3 +18,5 @@ void Sprite_Draw(Surface *dst, const Surface *src, int x0, int y0, int x1, int y
    translucency table, 4 through the table 0x5c0150 (the remap table under 8 columns), 5 as 1 with src's
    rows bottom up, any other a copy. Nothing when either surface is off */
 void Surface_Blit(Surface *dst, const Surface *src, int x, int y, int mode);
+/* Surface_FillRect 0x439420: the viewport filled with a colour (nothing when the surface is off) */
+void Surface_FillRect(Surface *s, uint8_t c);

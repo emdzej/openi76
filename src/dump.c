@@ -1204,6 +1204,39 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 54: {   /* the HUD (0x427db0) on the user's vehicle: a 640 x 480 view on a cleared screen, the radar's
+                        frame twice and its next contact (0x421540), the cockpit's initialisation (0x426070), the
+                        pilot's view (Camera_SetMode 0x19); four frames of the view's frame and the HUD (mode 1 in
+                        the fourth), n turned half round about y before the third; after each the screen's
+                        CRC-32 and whether the radar has a target */
+            Entity *e = Entity_OfNode(n);
+            if (!e || !g_user_entity || g_user_entity->node != n) break;
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            View_Create(&g_view, &sf, 1.5707964f, 1.0f, 150.0f, 1.0f);
+            g_camera_mode = 0;
+            g_clock_step = 0.06f;
+            Node *rn = n->data ? *(Node **)Data_Ptr(n->data, 0x434) : NULL;
+            for (int f = 0; f < 2 && rn; f++) Radar_Frame(rn);
+            Radar_Next(n);
+            Cockpit_Init();
+            Camera_SetMode(e, 0x19);
+            for (int k = 0; k < 4; k++) {
+                if (k == 2)
+                    for (int j = 0; j < 9; j += 2)
+                        if (j != 4) n->frame.m[j] = -n->frame.m[j];
+                g_fpu_round = FPU_DOWN;
+                Rel_Clear();
+                if (g_camera_fn) g_camera_fn();
+                memset(px, 0, sizeof px);
+                Hud_Draw(&g_view, k == 3);
+                uint32_t b[2] = {crc32(px, sizeof px), Radar_Current(n) != NULL};
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 38: {   /* the turrets (0x455560) after the radar's frame (as in 37), three frames, every vehicle given
                         a current weapon (the hard points' +4, -1 at the load) so that the turrets turn */
             for (int i = 0; i < g_hardpoint_count; i++)

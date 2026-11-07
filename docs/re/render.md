@@ -566,7 +566,7 @@ Render_World draws a frame in this order:
 
 Ported: the terrain, the roads, the objects (0x424b90), the tracers (0x46c9b0), the sky, the flush and,
 after it, the cockpit's 3D branch (0x4279c0, docs/re/cockpit.md). Not yet: 0x46d300, the mirror 0x471390,
-0x46bdc0, 0x46d3d0, 0x46ebb0, 0x42edc0, 0x46e360, the hooks and the HUD 0x427db0.
+0x46bdc0, 0x46d3d0, 0x46ebb0, 0x42edc0, 0x46e360, the hooks. The HUD 0x427db0 is ported (docs/re/cockpit.md).
 
 ## The sky (ported, diffed)
 

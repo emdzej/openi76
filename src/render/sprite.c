@@ -95,3 +95,11 @@ void Surface_Blit(Surface *dst, const Surface *src, int x, int y, int mode)
         else
             memcpy(d, s, (size_t)w);
 }
+
+void Surface_FillRect(Surface *s, uint8_t c)
+{
+    if (!s->on) return;
+    uint8_t *p = s->pixels + s->pitch * s->y0 + s->x0;
+    int w = s->x1 - s->x0 + 1;
+    for (int h = s->y1 - s->y0 + 1; h > 0; h--, p += s->pitch) memset(p, c, (size_t)w);
+}
