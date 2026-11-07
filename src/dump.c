@@ -20,6 +20,7 @@
 #include "fsm.h"
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -86,7 +87,13 @@ static void class_data(Out *o, const Node *n)
             void *p = *Data_Ptr(d, veh_ptrs[i]);
             out(o, " %x:", veh_ptrs[i]);
             if (!p) out(o, "-");
-            else if (veh_ptrs[i] == 0x108) out(o, "%08x", crc32(p, 0xa9d8));
+            else if (veh_ptrs[i] == 0x108) {   /* the words that are addresses cleared, as tools/emu/diff_objects.py */
+                static uint8_t ai[0xa9d8];
+                memcpy(ai, p, sizeof ai);
+                static const uint16_t addr[] = {0, 0x60, 0x88, 0x8c, 0xa96c, 0xa998};
+                for (size_t j = 0; j < sizeof addr / sizeof addr[0]; j++) memset(ai + addr[j], 0, 4);
+                out(o, "%08x", crc32(ai, sizeof ai));
+            }
             else if (veh_ptrs[i] == 0x508) hex(o, p, c == 9 ? 0x18 : 0x54);
             else name8(o, ((const Node *)p)->name);
         }
@@ -320,6 +327,9 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "physics.h"
 #include "nav.h"
 #include "fsm.h"
+#include "roads.h"
+#include "roadwar.h"
+#include "combat.h"
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 /* the calls' results, a line per vehicle (Dump_CallOut) */
 static char call_out[1 << 23];
@@ -347,6 +357,7 @@ int Dump_CallVehicles(int which, int upside)
         Node *n = c->value;
         if (!n || n->cls != 1) continue;
         k++;
+        Rel_Clear();   /* as tools/emu/diff_objects.py: each vehicle from an empty relations' cache */
         if (upside) {   /* on its back, still, on flat ground (the normal +0x460 straight up) */
             static const float normal[3] = {0, 1, 0};
             for (int j = 3; j < 6; j++) n->frame.m[j] = -n->frame.m[j];
@@ -925,6 +936,120 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 28: {   /* the fights' tactics (4, 5, 7, 8, 9, 0xb-0xf, 0x14) against the user's vehicle: each one's
+                        enter, frames and pops at 15 m/s, then at 0.5 m/s; each call's answer, the controls,
+                        the mode, the AI block's +0x64-+0x6c, +0x80, +0x84, +0xa0-+0xa8, +0xa82c, +0x9d34,
+                        +0xa954, +0xa970-+0xa97c, the target */
+            Node *t = g_user_entity ? g_user_entity->node : NULL;
+            if (!t || t == n || !*Data_Ptr(t->data, 0x108)) break;
+            uint8_t *ai = *Data_Ptr(n->data, 0x108), *d = n->data;
+            int round0 = g_fpu_round;
+            static const uint32_t fns[] = {
+                0x417a40, 0x417ab0, 0x417ad0, 0x418260, 0x41a7b0,             /* 4 */
+                0x417f30, 0x417fc0, 0x41a580, 0x41a580, 0x41a580,             /* 5, the slide's push */
+                0x41a6f0, 0x41a760, 0x41a760, 0x418290,                       /* 7 */
+                0x417fe0, 0x418070,                                           /* 8 */
+                0x417d00, 0x417da0, 0x417da0,                                 /* 9 */
+                0x419a20, 0x419b20, 0x419be0,                                 /* 0xb */
+                0x419b40, 0x419c10, 0x419c10, 0x419c10, 0x419c10, 0x419e20, 0x419e80,   /* 0xc */
+                0x419eb0, 0x417c00, 0x419fa0,                                 /* 0xd */
+                0x418090, 0x418170,                                           /* 0xe */
+                0x418190, 0x418220,                                           /* 0xf */
+                0x419450, 0x4194f0, 0x4195a0,                                 /* 0x14 */
+                0x41a070, 0x41a0a0, 0x41a0a0,                                 /* 0x1e */
+            };
+            static const uint32_t tests[] = {0x417ad0, 0x418260, 0x41a7b0, 0x41a580, 0x418290, 0x419e20, 0x419450, 0x4195a0};
+            for (int pass = 0; pass < 2; pass++) {
+                float sp = pass ? 0.5f : 15.0f, st = 0.3f, one = 1.0f, v[3];
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
+                memcpy(d + 0xbc, v, 12);
+                memcpy(d + 0xac, &sp, 4);
+                memcpy(d + 0xe0, &st, 4);
+                memcpy(d + 0xe4, &one, 4);
+                for (size_t k = 0; k < sizeof fns / sizeof fns[0]; k++) {
+                    g_fpu_round = round0;
+                    int32_t r = AI_TacticCall(fns[k], n, t);
+                    bool test = false;
+                    for (size_t j = 0; j < sizeof tests / sizeof tests[0]; j++) test |= fns[k] == tests[j];
+                    if (!test) r = 0;
+                    uint8_t w[4 + 16 + 4 + 12 + 8 + 12 + 8 + 4 + 16 + 4];
+                    uint8_t *o = w;
+                    memcpy(o, &r, 4), o += 4;
+                    memcpy(o, d + 0xe0, 12), o += 12;
+                    memcpy(o, d + 0xf0, 4), o += 4;
+                    memcpy(o, d + 0x104, 4), o += 4;
+                    memcpy(o, ai + 0x64, 12), o += 12;
+                    memcpy(o, ai + 0x80, 8), o += 8;
+                    memcpy(o, ai + 0xa0, 12), o += 12;
+                    memcpy(o, ai + 0xa82c, 4), o += 4;
+                    memcpy(o, ai + 0x9d34, 4), o += 4;
+                    memcpy(o, ai + 0xa954, 4), o += 4;
+                    memcpy(o, ai + 0xa970, 16), o += 16;
+                    int32_t is_t = *Data_Ptr(ai, 0xa998) == t ? 1 : *Data_Ptr(ai, 0xa998) ? 2 : 0;
+                    memcpy(o, &is_t, 4), o += 4;
+                    call_line(w, (size_t)(o - w));
+                }
+            }
+            break;
+        }
+        case 27: {   /* the road war against the user's vehicle (docs/re/ai.md "The road war"): 0x41c250, then
+                        tactics 1, 2, 3 and 0xa and hanging back's functions in turn, each followed by its
+                        answer, the controls, the AI block's +0x80, +0xa82c, both places (the piece as its
+                        number in the list), whether the target is t, +0xa99c-+0xa9b0 */
+            Node *t = g_user_entity ? g_user_entity->node : NULL;
+            if (!t || t == n || !*Data_Ptr(t->data, 0x108)) break;
+            uint8_t *ai = *Data_Ptr(n->data, 0x108), *tai = *Data_Ptr(t->data, 0x108), *d = n->data;
+            int round0 = g_fpu_round;
+            float sp = 15.0f, st = 0.3f, one = 1.0f, v[3];
+            for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
+            memcpy(d + 0xbc, v, 12);
+            memcpy(d + 0xac, &sp, 4);
+            memcpy(d + 0xe0, &st, 4);
+            memcpy(d + 0xe4, &one, 4);
+            static const uint32_t fns[] = {0, 0x41c060, 0x41c0a0, 0x41c1a0, 0x41c0c0, 0x41c180, 0x41c1a0, 0x41c340,
+                                           0x41c3a0, 0x41c3c0, 0x41c410, 0x41c6b0, 0x41c6b0, 0x41c950, 0x4198c0,
+                                           0x4198f0, 0x4195f0, 0x419730, 0x419730, 0x419910};
+            for (int pass = 0; pass < 2; pass++)
+            for (size_t k = 0; k < sizeof fns / sizeof fns[0]; k++) {
+                if (pass && !k) {   /* both onto n's nearest road: n 1.5 m off its point, t -2 m off three on */
+                    const RoadPiece *p = *(const RoadPiece **)Data_Ptr(ai, 0xa96c);
+                    int32_t i;
+                    memcpy(&i, ai + 0xa950, 4);
+                    if (!p) break;
+                    int j = i + 3 < p->n ? i + 3 : i - 3 >= 0 ? i - 3 : i;
+                    for (int c = 0; c < 3; c++) {
+                        n->frame.pos[c] = (double)p->pts[i][3 + c] + (c == 0 ? 1.5 : 0.0);
+                        t->frame.pos[c] = (double)p->pts[j][3 + c] - (c == 0 ? 2.0 : 0.0);
+                    }
+                }
+                g_fpu_round = round0;
+                int32_t r = fns[k] ? AI_TacticCall(fns[k], n, t) : Road_Together(n, t);
+                static const uint32_t tests[] = {0, 0x41c1a0, 0x41c3c0, 0x41c950, 0x4198c0, 0x4198f0};
+                bool test = false;
+                for (size_t j = 0; j < sizeof tests / sizeof tests[0]; j++) test |= fns[k] == tests[j];
+                if (!test) r = 0;
+                uint8_t w[4 + 12 + 8 + 2 * 0x20 + 4 + 0x18];
+                memset(w, 0, sizeof w);
+                memcpy(w, &r, 4);
+                memcpy(w + 4, d + 0xe0, 12);
+                memcpy(w + 16, ai + 0x80, 4);
+                memcpy(w + 20, ai + 0xa82c, 4);
+                for (int side = 0; side < 2; side++) {
+                    uint8_t *b = side ? tai : ai, *o = w + 24 + side * 0x20;
+                    memcpy(o, b + 0xa950, 0x1c);
+                    const RoadPiece *p = *(const RoadPiece **)Data_Ptr(b, 0xa96c);
+                    int32_t num = -1, c = 0;
+                    for (const RoadPiece *q = g_roads; q && p; q = q->next, c++)
+                        if (q == p) { num = c; break; }
+                    memcpy(o + 0x1c, &num, 4);
+                }
+                int32_t is_t = *Data_Ptr(ai, 0xa998) == t ? 1 : *Data_Ptr(ai, 0xa998) ? 2 : 0;
+                memcpy(w + 88, &is_t, 4);
+                memcpy(w + 92, ai + 0xa99c, 0x18);
+                call_line(w, sizeof w);
+            }
             break;
         }
         case 26: {   /* stuck (0x12) and backing out (0x13): steering 0.3 at 15 m/s, then backing 9 m/s; the

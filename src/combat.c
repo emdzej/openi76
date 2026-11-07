@@ -27,7 +27,7 @@ static uint32_t ubits(float f) { return (uint32_t)bits(f); }
 static uint8_t *ai_of(Node *n) { return *Data_Ptr(n->data, 0x108); }   /* 0x42d380 */
 static bool is_vehicle(const Node *n) { return n->cls == 1 || n->cls == 8 || n->cls == 9; }   /* 0x42e570 */
 
-void Node_Centre(float out[4], Node *n)
+void Node_CentreNow(float out[4], Node *n)
 {
     Node *top = n;
     while (top->prev) top = top->prev;   /* 0x42e6b0 */
@@ -47,24 +47,71 @@ void Node_Centre(float out[4], Node *n)
     memcpy(out, p, sizeof p);
 }
 
-float Pair_Angle(Node *a, Node *b)
+/* The relations' cache (0x421fc0-0x423b50): what a node's heading and centre (0x50cd80, 200 entries of
+   0x20) and a pair's distances and headings (0x50e848, 0x34 each) were when first asked for, until the
+   frame's end (Rel_Clear). A pair's entry is made from its nodes' entries, the one at the lower address
+   first: its distances from that one's centre less the other's, rounded so, its headings each from the
+   difference taken its own way. The port orders the nodes by when they were made (Node.serial), as the
+   heap hands them out. The original's hash chains only find entries; a list does the same. */
+typedef struct { Node *n; float h, c[4]; } RelNode;
+typedef struct { Node *lo, *hi; float d2, d3, a_lh, a_hl; } RelPair;
+#define REL_NODES 200
+#define REL_PAIRS 2048
+static RelNode rel_node[REL_NODES];
+static RelPair rel_pair[REL_PAIRS];
+static int rel_nodes, rel_pairs;
+
+void Rel_Clear(void) { rel_nodes = rel_pairs = 0; }
+
+/* 0x422c20 and its copies: the node's entry, made when missing */
+static const RelNode *rel_node_of(Node *n)
 {
-    float pa[4], pb[4];
-    Node_Centre(pa, a);
-    Node_Centre(pb, b);
-    float dx = F32(SUB(pb[0], pa[0])), dz = F32(SUB(pb[2], pa[2]));
-    if (fabsf(dx) == 0 && fabsf(dz) == 0) return 0;
-    return F32(atan2(dx, dz));   /* fpatan */
+    for (int i = 0; i < rel_nodes; i++)
+        if (rel_node[i].n == n) return &rel_node[i];
+    static RelNode spare;
+    RelNode *e = rel_nodes < REL_NODES ? &rel_node[rel_nodes++] : &spare;   /* the original runs off its table */
+    if (e == &spare) plat_log("OpenI76: the relations' node table is full");
+    e->n = n;
+    e->h = AI_HeadingNow(n);
+    Node_CentreNow(e->c, n);
+    return e;
 }
 
-float Pair_Dist(Node *a, Node *b)
+/* 0x4227b0 and 0x423220's entry, made when missing */
+static const RelPair *rel_pair_of(Node *a, Node *b)
 {
-    float pa[4], pb[4];
-    Node_Centre(pa, a);
-    Node_Centre(pb, b);
-    float dx = F32(SUB(pa[0], pb[0])), dz = F32(SUB(pa[2], pb[2]));
-    return F32(fpu_sqrt(ADD(MUL(dz, dz), MUL(dx, dx))));
+    Node *lo = a, *hi = b;
+    if (hi->serial < lo->serial) lo = b, hi = a;
+    for (int i = 0; i < rel_pairs; i++)
+        if (rel_pair[i].lo == lo && rel_pair[i].hi == hi) return &rel_pair[i];
+    const RelNode *l = rel_node_of(lo), *h = rel_node_of(hi);
+    static RelPair spare;
+    RelPair *e = rel_pairs < REL_PAIRS ? &rel_pair[rel_pairs++] : &spare;
+    if (e == &spare) plat_log("OpenI76: the relations' pair table is full");
+    e->lo = lo, e->hi = hi;
+    float dx = F32(SUB(l->c[0], h->c[0])), dy = F32(SUB(l->c[1], h->c[1])), dz = F32(SUB(l->c[2], h->c[2]));
+    e->a_hl = fabsf(dx) == 0 && fabsf(dz) == 0 ? 0 : F32(atan2(dx, dz));   /* fpatan */
+    double xx = MUL(dx, dx), zz = MUL(dz, dz), yy = MUL(dy, dy);
+    e->d2 = F32(fpu_sqrt(ADD(zz, xx)));
+    e->d3 = F32(fpu_sqrt(ADD(xx, ADD(zz, yy))));
+    float ex = F32(SUB(h->c[0], l->c[0])), ez = F32(SUB(h->c[2], l->c[2]));
+    e->a_lh = fabsf(ex) == 0 && fabsf(ez) == 0 ? 0 : F32(atan2(ex, ez));
+    return e;
 }
+
+float AI_Heading(Node *n) { return rel_node_of(n)->h; }
+
+void Node_Centre(float out[4], Node *n) { memcpy(out, rel_node_of(n)->c, 4 * sizeof out[0]); }
+
+float Pair_Angle(Node *a, Node *b)
+{
+    const RelPair *e = rel_pair_of(a, b);
+    return e->lo == a ? e->a_lh : e->a_hl;
+}
+
+float Pair_Dist(Node *a, Node *b) { return rel_pair_of(a, b)->d2; }
+
+float Pair_Dist3(Node *a, Node *b) { return rel_pair_of(a, b)->d3; }
 
 int Angle_Sector(float a, float b)
 {
@@ -93,8 +140,8 @@ void Class_Velocity(Node *n, float v[3], float *speed)
     *speed = 0;
 }
 
-/* 0x4139f0: when p1 moving at v1 and p2 at v2 come closest; 1e7 for nearly equal velocities */
-static double closest(const float p1[3], const float v1[3], const float p2[3], const float v2[3])
+/* AI_Closest 0x4139f0 (combat.h): when p1 moving at v1 and p2 at v2 come closest; 1e7 for nearly equal velocities */
+double AI_Closest(const float p1[3], const float v1[3], const float p2[3], const float v2[3])
 {
     float dx = F32(SUB(p1[0], p2[0])), dy = F32(SUB(p1[1], p2[1])), dz = F32(SUB(p1[2], p2[2]));
     float wx = F32(SUB(v2[0], v1[0])), wy = F32(SUB(v2[1], v1[1]));
@@ -144,7 +191,7 @@ static float approach(Node *n, Node *t, const float me[3], const float v[3], con
 {
     float tv[3], tsp;
     Class_Velocity(t, tv, &tsp);
-    double x = closest(me, v, tp, tv);
+    double x = AI_Closest(me, v, tp, tv);
     float s = F32(x);
     if (x < 0.01f) s = 0.01f;   /* 0x4a5770 */
     else if (bits(s) > 0x40a00000) s = 5.0f;
@@ -177,7 +224,7 @@ static void pursue(Node *n, Node *t)
         }
         float tv[3];
         Class_Velocity(t, tv, &tsp);
-        double x = closest(me, v, tc, tv);
+        double x = AI_Closest(me, v, tc, tv);
         s = F32(x);
         if (x < 0.01f) s = 0.01f;
         else if (bits(s) > 0x40a00000) s = 5.0f;
@@ -220,7 +267,7 @@ static void pursue(Node *n, Node *t)
 }
 
 /* 0x41ddf0: ramming, flat out at where t will be */
-static void ram(Node *n, Node *t)
+void AI_Ram(Node *n, Node *t)
 {
     float me[3] = {F32(n->frame.pos[0]), F32(n->frame.pos[1]), F32(n->frame.pos[2])};
     float tc[4];
@@ -320,7 +367,7 @@ void Combat(Node *n, Node *t, int mode)
     case 2: AI_Speed(n, AI_Cruise(n)); AI_Steer(n, F32(ADD(h, q))); return;
     case 3: AI_Speed(n, 1000.0f); AI_Steer(n, F32(ADD(h, q))); return;
     case 4: pursue(n, t); return;
-    case 5: ram(n, t); return;
+    case 5: AI_Ram(n, t); return;
     case 6: match(n, t, h, dist); return;
     case 7: {   /* side by side: away from its side */
         double x = Angle_Diff(h, a);

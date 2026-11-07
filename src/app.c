@@ -8,6 +8,7 @@
 #include "camera.h"
 #include "classes.h"
 #include "clock.h"
+#include "combat.h"
 #include "input.h"
 #include "physics.h"
 #include "exe.h"
@@ -151,6 +152,7 @@ static bool play_init(void)
 {
     char v[16];
     if (plat_param("tick", v, sizeof v)) g_clock_fake_ms = 0, tick_ms = atof(v);
+    Rel_Clear();   /* 0x421fc0 as the mission starts */
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
     Clock_Init();
@@ -200,6 +202,7 @@ static void play_frame(void)
         memcpy(g_view_pos, g_view.eye, sizeof g_view_pos);   /* 0x4a85e8 is the view's eye */
         /* 0x404170 (the objects' detail by distance) and the sounds are not ported yet */
         viewer_frame();
+        Rel_Clear();   /* 0x421fc0 after the frame's drawing */
         static int32_t shown_state = 5;
         if (g_game_state != shown_state) {   /* the mission's end: WinMain's loop would leave (not ported yet) */
             char m[64];

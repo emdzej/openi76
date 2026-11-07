@@ -6,8 +6,10 @@
 #include <stdint.h>
 
 /* AI_Heading 0x422020 (0x42e3f0): the node's heading, atan2 of its z axis's x and z (for a vehicle times its
-   direction +0xe8, so a reversing one faces back); 0 for an upright axis */
+   direction +0xe8, so a reversing one faces back); 0 for an upright axis. As it was when first asked for
+   this frame (combat.c's cache); AI_HeadingNow computes it. */
 float AI_Heading(Node *n);
+float AI_HeadingNow(Node *n);
 /* Angle_Diff 0x4137c0: b - a folded once into [-pi, pi] */
 double Angle_Diff(float a, float b);
 /* Dir_Cos 0x40f2d0: the cosine between b - a and p - a (1 when either is under 0.01 long) */

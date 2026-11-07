@@ -570,8 +570,96 @@ def call_stuck(exe, n, fpcw):
             CALL_OUT.append((struct.pack("<i", r) + exe.read(d + 0xE0, 12) + exe.read(d + 0x104, 4) + exe.read(ai + 0x9D20, 0x20) + exe.read(ai + 0x9D58, 0x10)).hex())
 
 
+def call_roadwar(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    ue = u(0x4D3B64)
+    t = u(ue) if ue else 0
+    if not t or t == n or not u(u(t + 0x70) + 0x108):
+        return
+    d = u(n + 0x70)
+    ai, tai = u(d + 0x108), u(u(t + 0x70) + 0x108)
+    z = struct.unpack("<3f", exe.read(n + 0x30, 12))
+    exe.write(d + 0xBC, struct.pack("<3f", *(f32(c * 15.0) for c in z)))
+    exe.write(d + 0xAC, struct.pack("<f", 15.0))
+    exe.write(d + 0xE0, struct.pack("<2f", 0.3, 1.0))
+    pieces = []
+    q = u(0x4EB6F8)
+    while q:
+        pieces.append(q)
+        q = u(q + 4)
+    tests = (0x41C1A0, 0x41C3C0, 0x41C950, 0x4198C0, 0x4198F0)
+    for pss in range(2):
+        if pss:   # both onto n's nearest road (as dump.c's case 27)
+            p = u(ai + 0xA96C)
+            if not p:
+                break
+            i = struct.unpack("<i", exe.read(ai + 0xA950, 4))[0]
+            cnt = struct.unpack("<i", exe.read(p + 0x14, 4))[0]
+            j = i + 3 if i + 3 < cnt else i - 3 if i - 3 >= 0 else i
+            pts = u(p + 0x28)
+            a = struct.unpack("<3f", exe.read(pts + 0x18 * i + 0xC, 12))
+            b = struct.unpack("<3f", exe.read(pts + 0x18 * j + 0xC, 12))
+            exe.write(n + 0x40, struct.pack("<3d", a[0] + 1.5, a[1], a[2]))
+            exe.write(t + 0x40, struct.pack("<3d", b[0] - 2.0, b[1], b[2]))
+        roadwar_pass(exe, n, t, d, ai, tai, pieces, tests, fpcw)
+
+
+def roadwar_pass(exe, n, t, d, ai, tai, pieces, tests, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    for f in (0x41C250, 0x41C060, 0x41C0A0, 0x41C1A0, 0x41C0C0, 0x41C180, 0x41C1A0, 0x41C340, 0x41C3A0, 0x41C3C0,
+              0x41C410, 0x41C6B0, 0x41C6B0, 0x41C950, 0x4198C0, 0x4198F0, 0x4195F0, 0x419730, 0x419730, 0x419910):
+        # Road_Chase's unset local (entry - 0x1c): the port's stand-in (orders.c LEFT_WORD)
+        exe.write(x86.STACK + x86.STACK_SIZE - 0x100 - 8 - 4 - 0x1C, struct.pack("<I", 0x009C0000))
+        r = exe.call(f, n, t, limit=2_000_000_000, fpcw=fpcw)
+        if f not in tests and f != 0x41C250:
+            r = 0
+        w = struct.pack("<i", r) + exe.read(d + 0xE0, 12) + exe.read(ai + 0x80, 4) + exe.read(ai + 0xA82C, 4)
+        for b in (ai, tai):
+            p = u(b + 0xA96C)
+            w += exe.read(b + 0xA950, 0x1C) + struct.pack("<i", pieces.index(p) if p in pieces else -1)
+        tg = u(ai + 0xA998)
+        w += struct.pack("<i", 1 if tg == t else 2 if tg else 0) + exe.read(ai + 0xA99C, 0x18)
+        CALL_OUT.append(w.hex())
+
+
+def call_tactics(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    ue = u(0x4D3B64)
+    t = u(ue) if ue else 0
+    if not t or t == n or not u(u(t + 0x70) + 0x108):
+        return
+    d = u(n + 0x70)
+    ai = u(d + 0x108)
+    fns = (0x417A40, 0x417AB0, 0x417AD0, 0x418260, 0x41A7B0, 0x417F30, 0x417FC0, 0x41A580, 0x41A580, 0x41A580,
+           0x41A6F0, 0x41A760, 0x41A760, 0x418290, 0x417FE0, 0x418070, 0x417D00, 0x417DA0, 0x417DA0,
+           0x419A20, 0x419B20, 0x419BE0, 0x419B40, 0x419C10, 0x419C10, 0x419C10, 0x419C10, 0x419E20, 0x419E80,
+           0x419EB0, 0x417C00, 0x419FA0, 0x418090, 0x418170, 0x418190, 0x418220, 0x419450, 0x4194F0, 0x4195A0,
+           0x41A070, 0x41A0A0, 0x41A0A0)
+    tests = (0x417AD0, 0x418260, 0x41A7B0, 0x41A580, 0x418290, 0x419E20, 0x419450, 0x4195A0)
+    z = struct.unpack("<3f", exe.read(n + 0x30, 12))
+    for sp in (15.0, 0.5):
+        exe.write(d + 0xBC, struct.pack("<3f", *(f32(c * sp) for c in z)))
+        exe.write(d + 0xAC, struct.pack("<f", sp))
+        exe.write(d + 0xE0, struct.pack("<2f", 0.3, 1.0))
+        for f in fns:
+            # Road_Chase's unset local (as call_roadwar), and one frame deeper for 0xb's (0x419b20 calls it)
+            exe.write(x86.STACK + x86.STACK_SIZE - 0x100 - 8 - 4 - 0x1C, struct.pack("<I", 0x009C0000))
+            exe.write(x86.STACK + x86.STACK_SIZE - 0x100 - 8 - 4 - 0x28, struct.pack("<I", 0x009C0000))
+            r = exe.call(f, n, t, limit=2_000_000_000, fpcw=fpcw)
+            if f not in tests:
+                r = 0
+            tg = u(ai + 0xA998)
+            w = (struct.pack("<i", r) + exe.read(d + 0xE0, 12) + exe.read(d + 0xF0, 4) + exe.read(d + 0x104, 4)
+                 + exe.read(ai + 0x64, 12) + exe.read(ai + 0x80, 8) + exe.read(ai + 0xA0, 12) + exe.read(ai + 0xA82C, 4)
+                 + exe.read(ai + 0x9D34, 4) + exe.read(ai + 0xA954, 4) + exe.read(ai + 0xA970, 16)
+                 + struct.pack("<i", 1 if tg == t else 2 if tg else 0))
+            CALL_OUT.append(w.hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -598,6 +686,9 @@ def class_data(m, cls, d):
                 ai = bytearray(m.raw(p, 0xA9D8))
                 ai[0:4] = bytes(4)   # the pointer words: the node's frame and the block's own +100
                 ai[0x60:0x64] = bytes(4)
+                ai[0xA96C:0xA970] = bytes(4)   # the road piece and the target (the calls compare them)
+                ai[0x88:0x90] = bytes(8)   # the paths followed and the script's (addresses)
+                ai[0xA998:0xA99C] = bytes(4)
                 s += f"{zlib.crc32(bytes(ai)):08x}"
             elif o == 0x508:
                 s += m.raw(p, 0x18 if cls == 9 else 0x54).hex()
@@ -727,6 +818,7 @@ def original():
                     exe.write(d + 0xC8, bytes(12))
                     exe.write(d + 0x460, struct.pack("<fff", 0, 1, 0))
                 fpcw = exe.uc.reg_read(x86_const.UC_X86_REG_FPCW)
+                exe.call(0x421FC0, fpcw=fpcw)   # the relations' cache emptied (as the port's Dump_CallVehicles)
                 if callable(CALLS[CALL][1]):
                     CALLS[CALL][1](exe, n, fpcw)
                 else:

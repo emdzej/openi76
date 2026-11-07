@@ -20,3 +20,8 @@ int Nav_Search(uint8_t *ai, int32_t *count);
 void Nav_Reset(uint8_t *ai);
 /* Nav_Bridges 0x4109b0: the bridges' links rebuilt from the class 0xc objects (0x4100a0) */
 void Nav_Bridges(void);
+/* Road_Next 0x41ac40: the next point along the strip going dir (1 or -1), at least 1 mm from this one
+   (the original's fatal after ten tries, here a log); 0 off the strip's end (*pp and *pi then moved as
+   far as they went) */
+struct RoadPiece;
+int Road_Next(const struct RoadPiece **pp, int dir, int32_t *pi);

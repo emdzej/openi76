@@ -36,6 +36,8 @@ void Fsm_Frame(void);
 /* the arena: an address's word */
 int32_t Fsm_Word(uint32_t a);
 void Fsm_SetWord(uint32_t a, int32_t v);
+/* the address the words use for size bytes at p outside the arena (the same each time for one p) */
+uint32_t Fsm_Window(uint8_t *p, uint32_t size);
 /* entity record i's node, refreshed (Node_Live: a freed one becomes NULL) */
 Node *Fsm_Entity(int32_t i);
 

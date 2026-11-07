@@ -34,7 +34,7 @@ static bool is_vehicle(const Node *n) { return n->cls == 1 || n->cls == 8 || n->
    when it is tiny (the bounds as bits, as the original tests them) */
 static bool tiny(double l2x, float l2) { return !(l2x <= -9.999999747378752e-05) && bits(l2) < 0x38d1b717; }
 
-float AI_Heading(Node *n)
+float AI_HeadingNow(Node *n)
 {
     float x = n->frame.m[6], y = n->frame.m[7], z = n->frame.m[8];
     (void)y;

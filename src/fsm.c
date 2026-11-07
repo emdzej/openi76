@@ -43,8 +43,29 @@ static uint32_t alloc(uint32_t n)
     return a;
 }
 
+/* the blocks outside the arena that the words may point into (an AI block's own path, 0x4194f0), each
+   at a window of 1 MB from WIN_BASE */
+#define WIN_BASE 0x40000000u
+static struct { uint8_t *p; uint32_t size; } win[256];
+static int wins;
+
+uint32_t Fsm_Window(uint8_t *p, uint32_t size)
+{
+    int i = 0;
+    while (i < wins && win[i].p != p) i++;
+    if (i == wins) {
+        if (wins == 256) return 0;
+        win[wins].p = p, win[wins].size = size, wins++;
+    }
+    return WIN_BASE + ((uint32_t)i << 20);
+}
+
 static uint8_t *at(uint32_t a)
 {
+    if (a >= WIN_BASE) {
+        uint32_t i = (a - WIN_BASE) >> 20, off = a & 0xfffff;
+        if (i < (uint32_t)wins && off + 4 <= win[i].size) return win[i].p + off;
+    }
     if (a < BASE || a - BASE + 4 > mem_len) {
         static uint8_t junk[8];   /* outside the arena: the original would read whatever is there */
         memset(junk, 0, sizeof junk);
@@ -63,6 +84,7 @@ void Fsm_Reset(void)
     free(mem);
     mem = NULL;
     mem_len = mem_cap = 0;
+    wins = 0;
     free(ent_node);
     ent_node = NULL;
     ent_cap = 0;

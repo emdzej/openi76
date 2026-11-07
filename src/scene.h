@@ -32,6 +32,7 @@ typedef struct Node {
     float radius;            /* +0x90 */
     float bmin[3], bmax[3];  /* +0x94, +0xa0 */
     uint32_t fac;            /* +0xac */
+    uint32_t serial;         /* the port's: the order made, standing for the original's heap addresses (combat.c) */
 } Node;
 
 extern Node *g_root;   /* 0x50a394 (and 0x50a398): the last node made without a parent */

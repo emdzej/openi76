@@ -493,8 +493,8 @@ static bool road_shorter(int dir, int n, const RoadPiece *a, int ia, const RoadP
     }
 }
 
-/* 0x41ac40: the next point along the strip going dir at least 1 mm from this one; 0 off its end */
-static int road_next(const RoadPiece **pp, int dir, int32_t *pi)
+/* Road_Next 0x41ac40 (nav.h) */
+int Road_Next(const RoadPiece **pp, int dir, int32_t *pi)
 {
     const float *s = (*pp)->pts[*pi];
     float sx = s[3], sy = s[4], sz = s[5];
@@ -591,30 +591,30 @@ static void road_follow(const RoadPiece *a, int32_t ia, const RoadPiece *b, int3
         do {
             put_lane(p, i, dir == 1, q, k);
             if (road_same_point(p, i, b, ib)) return;
-        } while (road_next(&p, dir, &i));
+        } while (Road_Next(&p, dir, &i));
     } else if (dir == -1) {
         do {
             put_lane(p, i, 0, q, k);
             if (road_same_point(p, i, first, 0)) break;
-        } while (road_next(&p, -1, &i));
+        } while (Road_Next(&p, -1, &i));
         if (road_same_point(first, 0, last, lasti)) lasti = lastn - 2;
         p = last, i = lasti;
         for (;;) {
             put_lane(p, i, 0, q, k);
             if (road_same_point(p, i, b, ib)) break;
-            if (!road_next(&p, -1, &i)) return;
+            if (!Road_Next(&p, -1, &i)) return;
         }
     } else {
         do {
             put_lane(p, i, 1, q, k);
             if (road_same_point(p, i, last, lasti)) break;
-        } while (road_next(&p, dir, &i));
+        } while (Road_Next(&p, dir, &i));
         i = road_same_point(last, lasti, first, 0) ? 1 : 0;
         p = first;
         for (;;) {
             put_lane(p, i, 1, q, k);
             if (road_same_point(p, i, b, ib)) break;
-            if (!road_next(&p, dir, &i)) return;
+            if (!Road_Next(&p, dir, &i)) return;
         }
     }
 }

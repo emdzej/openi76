@@ -387,3 +387,169 @@ full throttle. Pop: the time. Leave (0x418d80): the direction flipped.
 
 The flip: +0xe8 - 1 within 1e-4 (going forward): backward, mode 1; else forward, mode 3.
 
+
+## The relations' cache (0x421fc0-0x423b50)
+
+Every heading, centre, distance and angle the AI asks for between vehicles goes through a cache. It holds
+what each was when first asked for in the frame, and it is emptied after each frame's drawing (0x421fc0,
+in WinMain's loop) and as a mission starts. Ported in `src/combat.c` (confirmed with the road war's check,
+which moves the cars after the first queries).
+
+- **A node's entry** (0x50cd80, 200 of 0x20 bytes): the node, its heading (atan2 of the z axis's x and z),
+  its heading times its direction +0xe8 (vehicles), and its entity's centre and radius (0x424130).
+  `AI_Heading` (0x422020) returns the second heading; `Node_Centre` (0x4223e0) the centre.
+- **A pair's entry** (0x50e848, 0x34 bytes): the two nodes, the lower address first. It is made from
+  their entries: the difference (first less second, each part rounded to a float), its negation, the
+  distance over the ground and in space from that difference, and the heading each way, each from the
+  difference taken its own way (second less first, then first less second). `Pair_Dist` (0x4227b0)
+  returns the ground distance, `Pair_Angle` (0x423220) the heading from its first argument to its second.
+- The hash chains (by `(a ^ b) * 0x6cd + 0xaab`) only find entries. A list does the same.
+
+Quirk: the distance depends on which node lies lower in memory. In the rounding-down mode, `F32(a - b)`
+and `F32(b - a)` can differ by one unit in the last place. The port orders nodes by when they were made
+(`Node.serial`), as the heap hands them out (inferred). The emulator's heap gives the same order.
+
+## The road war (tactics 1, 2, 3)
+
+`src/roadwar.c` (the module's own messages say "roadwar"). The tactics fight a vehicle on the road: 1
+(enter 0x41c060, frame `Road_War(n, t, 0)` 0x41c0a0), 2 (0x41c0c0, mode 1) and 3 (0x41c340, mode 3).
+Each sets the order's speed +0x80 = 35 and a time +0xa82c: 1 in 5 s, 2 in 1-4 s for a target that is
+not a vehicle or 3-7 s for one (keeping the target with chance +0xa818 in 4), 3 in 25-39 s. Pops:
+0x41c1a0 for all three (on t's road, and t off the ground or the road going on from n's point, which looks
+inverted but is the original), and 0x41c3c0 for 3 (t under 5 m/s and within 30 m).
+
+**The place** (the AI block's +0xa950): +0 the road point, +4 the way (1 along the strip, -1 back), +8 the
+lane's band, +0xc the aspect, +0x10 cleared by 0xa's enter, +0x14 the signed distance off the line, +0x18
+a heading, +0x1c the piece. A strip runs from a piece after one with +0xc set to the next with it set.
+`Road_Next` 0x41ac40 moves along it.
+
+- `Road_Place` 0x41b7f0: the distance from the point's segment (0x41b0d0: the foot of the perpendicular,
+  the length and unit vector to it, or the segment turned a quarter when on the line). The side comes
+  from the sign of a product with the segment (for way 1 `<= 0` as an int, else bits `<= 0x80000000`).
+  On the left the band is 1 under 5 m, else 0, and the distance is negated. On the right the bands are 2,
+  3, 4, 5 at 5, 10 and 15 m. At the strip's end: band 2, 3.45 m.
+- `Road_Aspect` 0x41aec0: with band 0, the quarter t lies in from n's heading (`floor((d + pi/4) *
+  2/pi)`, 0 past 7/4 pi). Else, by the next segment against n's z axis (unnormalized): under -0.707 or at
+  the end 2, over 0.707 0, else 1 or 3 by a cross product.
+- `Road_Steer` 0x41b2b0: the line moved `way x offset` to the side, by the first segment's normal turned
+  `(-dz, dy, dx)`. The y part is kept, and it is scaled by the offset over that segment's length. Aim at
+  its first point if beyond `lead`. Else walk on, and aim at `rest` along the step that passes `lead`,
+  measured from the step's far end (a quirk: it overshoots). Off the strip's end it aims at the last step
+  (or, at once, along n's own axis) and answers 0.
+- `Road_War` 0x41ba90: both places from the nearest road points (0x490f80). n's way is toward t's piece
+  (1 if t's lies on along the strip from n's, or on the same piece at a later point), t's the opposite.
+  The distance along is 0, 1-8 or 9+ points, and the side is t more than 2 m out, within 2 m, or more
+  than 2 m in. The table 0x4d25d0 (mode x 3 sides x 3 distances x 4 x 4 aspects) picks one of seven:
+  0 drive at t's offset; 1 at t's offset + 5; 2 turn the way round, at 10 m (or the line when t is 5 m
+  or more out); 3 ram (0x41ddf0); 4 and 6 pace t (0x41b6e0: 4 m past its offset, -10 beyond -12 m, 20
+  beyond 22; at t's speed plus 5 per point between them, cruising when steering over 0.6); 5 by t's
+  offset (10 m off within 5 m, the line to 10 m, else 1.7 or 8.2 by the way). Each steers 20 m ahead
+  (`AI_Steer`), then cruises over 0.75 of steering, 30 m/s over 0.5, else 100.
+
+## Chasing down the road (0xa) and hanging back (0x1c)
+
+**0xa** (enter 0x41c410, frame `Road_Chase` 0x41c6b0, pop 0x41c950: the road goes on and t is beyond 160
+m). Enter: speed 35, maybe the target, a time (1-4 s, or 6-10 s plus +0xa818 for a vehicle). The place
+is put on the nearest road, the way toward the piece's farther half. Frame: near the strip's end (within
+5 points of a last piece) it turns back at 8.2 m; near its start it goes on at 1.7. Else, with t a
+vehicle on the same RSEG, it takes t's way reversed and both places: 8.2 m when t is within 3.5 m of the
+line, 1.7 beyond 6.5, else its old offset. Then it steers 9 m ahead, and goes 50 m/s within 50 m of t
+while steering under 0.65, else cruises.
+
+Quirk: the offset is a local the original never sets on two paths: t not a vehicle, or t on another
+road. There it holds a word of the stack left by an earlier call at the same depth: the AI block's place
+pointer from 0x41c250's last call, or a node or return address. As a float that is a tiny positive
+number. The port uses 0x009c0000 (about 1.4e-38). Only its sign matters, except where it rounds a
+coordinate down by one unit.
+
+**0x1c** (pushed from most tactics by 0x4198c0: t is the user's vehicle, and t's room +0xa948 of
+attackers is full, 0x4098f0: other vehicles not wrecked with t as their target +0xa998; popped by
+0x4198f0 when there is room). Enter 0x4195f0: forward, mode 3, no target, 3-7 s; +0xa9a0 0 within 30 m,
+else 0 or 1 at random; +0xa99c-+0xa9b0 cleared, +0xa9a4 set (0x409a90, the partner, is always none).
+Frame 0x419730: under 50 m state 0, over 160 state 1, between them switching every 4-8 s. State 0
+chases on the road (0x41c6b0) when on t's road (0x41c250: both nearest points from n's place, a quirk,
+on one RSEG, and t on the ground 2-4), else `Combat` mode 4. State 1 is the road war mode 3, else
+`Combat` mode 2. Leave 0x419910: t is the target again.
+
+Checked: `diff_objects.py --call roadwar` runs 0x41c250 and these functions, in tactic order, on every
+vehicle against the user's: first where the cars stand, then with both on n's nearest road (1.5 m and
+-2 m off, three points apart). It is identical on t01 and t05.
+
+## The fights by Combat's modes, sliding, wandering, turning (4, 5, 7-9, 0xb-0xf)
+
+`src/orders.c`. Most tactics share two pops: 0x417ad0 (hit this frame: +0xa6d8 is the AI's frame
+counter, 0x40fae0) and 0x418260 (the time +0xa82c is past). 0x41a7b0 (a third for 5, 6 and 8) holds for
+a target that is not a vehicle, within its node's radius + 35 m (the child's when it has no geometry).
+
+| Tactic | Enter | Frame |
+|---|---|---|
+| 4 | 7 s, t the target, forward, mode 3, speed 35 (0x417a40) | `Combat` mode 0 |
+| 5 | 20-34 s (0x417f30) | mode 3 |
+| 8 | 10-19 s (0x417fe0) | mode 2 |
+| 9 | 7-16 s, +0xa97c set (0x417d00) | 0x417da0, below |
+| 0xe | maybe the target; 0.5 s, or for a vehicle 0.3 + 0.1 x +0xa818 (0x418090) | mode 4 |
+| 0xf | 30-34 s, no target (0x418190) | 10 m/s, turning 1 rad off its heading (0x418220) |
+
+**9's frame:** while +0xa97c is set and t is within 70 m, it steers away (t's heading + 3.14, folded as
+6.24 less it past 3.14, not 2 pi) and opens up. Then +0xa97c clears, and it steers at t and stops once
+facing it within 0.1 (`Angle_Diff`), else cruises. It first asks for t's heading and drops it (only
+the cache keeps it).
+
+**Sliding (7)**, pushed from 5, 6 and 8 by 0x41a580. Not for class 9; t a vehicle; 1 in
+`8 + trunc((1 - skill +0xa820) x 40)` at random; over 12 m/s. The steering's sideways force (mass
++0x110 x v² when that is under the four wheels' loads +0xc x 7.84, else `steer / v x` the loads) times v
+must pass 13 (0x475d00, the ground's grip, is asked for and dropped). Enter 0x41a6f0: full lock the way
+it steers, the handbrake, +0x9d34 in 0.5 s. Frame 0x41a760: the handbrake one more frame, opening up.
+Pop: +0x9d34 (0x418290).
+
+**Backing down the road (0xb):** 0x419a20 backward (mode 1), 2-3 s, the place on the nearest road (as
+0xa's). Frame `Road_Chase` (0x419b20). Leave 0x419be0 forward.
+
+**The handbrake turn (0xc):** 0x419b40: 7 s, the z axis noted (+0xa970), backward. Frame 0x419c10
+states (+0xa97c): 0 backing straight to 14 m/s, then the axis noted again, full lock either way at
+random, the handbrake; 1 until under 1 m/s or the axes' dot under -0.4, the handbrake off; 2 braking to
+1 m/s, then the steering mirrored and the direction flipped; 3 cruising (else the message "unkown turn
+state"). Pop 0x419e20: the time, or the dot under -0.85. Leave 0x419e80: forward.
+
+**Backing into t (0xd):** 0x419eb0: 5-8 s, backward, speed 20. Frame: attack's (0x417c00). Leave
+0x419fa0 forward.
+
+## Evade (0x14), and driving in company (0x19, 0x1b)
+
+**0x14** is pushed by 0x419450 when t is too far: for class 9 beyond 720 m, for a target that is not a
+vehicle beyond 200 m, else 30 m above or below or 180 m away in space (`Pair_Dist3` 0x422dc0). Popped by
+0x4195a0 when within 720 or 180 m in space. Enter 0x4194f0: the AI block's own one-point path (+0xc, its
+point at +0x64 through the pointer at +0x60, its count +0x5c = 1) is set at t's place and followed as
+goto's. The port gives the block a window in the script's address space (`Fsm_Window`) so the path's
+words resolve. Frame: goto's.
+
+**0x19 and 0x1b** follow the script's path (`Path_Advance`). Every 2-5 s (+0x9cf8) the side +0x9cfc
+flips. Within 90 m of t, and clear of team 0 (0x409aa0: no team-0 car's position dotted with this
+one's, a dot product rather than a distance, under 6400), and for 0x1b with +0xa6f0 within the last 20
+s, it aims 22 m on at its side; else 11 m on the line. It drives at the order's speed, cruising when
+steering past 0.6 (on the line past 0.4, or 0.5 for 0x1b). Enters 0x41d730 and 0x41a070 (0x1e's): no
+handbrake, forward.
+
+**Racing (0x1a).** Enter 0x41d240 sets the script's path up as goto's (a search to start, forward, mode
+3). When it has not looped (+0x9c clear), 0x41d0a0 picks the race's point +0xa0: the path's nearest point
+over the ground (differences unrounded), then on, round the loop at most once, while the next point does
+not lie behind (`Dir_Cos` above -0.1, compared as bits). Frame: goto's. Pushed to 0x1b (driving in
+company, above) when the path changes.
+
+Note on the unset local of `Road_Chase`: tactic 0xb's frame calls it through a wrapper (0x419b20), so
+there the word sits one frame deeper. It is a float left by earlier calls at that depth (in the check, n's
+z place from the enter's road lookup; in play, often the previous chase's own offset). It cannot be
+known in general. The port uses the same stand-in, and the check writes it at both depths.
+
+**Formation (0x1e).** Enter 0x41a070: no handbrake, forward. Frame 0x41a0a0 drives to its place in the
+leader's frame: +0xa980 across and +0xa984 along, through the leader's frame (0x452740); +0xa988 is set
+within 2.5 m. It steers at the place (its own heading within 1e-6 m). Then:
+- leader under 1 m/s: cruising when steering right past 0.4, stopping within 4 m, else `(d - 1) x 0.3`;
+- leader moving, steering under 0.4: 1000 beyond 150 m, the leader's speed + `(d - 2) x 0.7` beyond 50,
+  else + `(d - 1) x 0.4` (each part at least 0);
+- steering harder: cruising beyond 100 m or with the leader under 5 m/s. When the place lies behind
+  (its offset against its own axis negative) and both face alike (axes' dot over 0.7), it aims 4 x d
+  along the leader's axis past the place at 0.75 of the leader's speed. Else it takes the leader's speed
+  - 5 while they still close (0x4139f0 positive), cruising otherwise.
+
+It asks for the leader's heading and an angle difference and drops both.

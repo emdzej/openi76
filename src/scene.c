@@ -23,6 +23,8 @@ Node *Node_Create(Node *parent)
 {
     Node *n = calloc(1, sizeof *n);   /* HeapAlloc(0x4d3a38, HEAP_ZERO_MEMORY) */
     if (!n) return NULL;
+    static uint32_t made;
+    n->serial = ++made;
     n->facemask = 0xffffffff;
     n->f58 = -1;
     identity(&n->frame);
