@@ -193,3 +193,53 @@ bool Terrain_Inside(double x, double z)
     double a = fpu_mul(x, g_inv_cell), b = fpu_mul(g_inv_cell, z);
     return -3072.0 < a && a < 13311.0 && -3072.0 < b && b < 13311.0;
 }
+
+/* Terrain_Line 0x45cfd0: 1 m steps from from (to floats) towards to, each checked under the ground; the
+   first one at or below it bisected nine times between it and the step before */
+int Terrain_Line(const double from[3], float to[3])
+{
+    float a[3] = {fpu_f32(from[0]), fpu_f32(from[1]), fpu_f32(from[2])};
+    float d[3], step[3];
+    for (int i = 0; i < 3; i++) d[i] = fpu_f32(fpu_sub(to[i], a[i]));
+    /* z's square from its unrounded difference */
+    double l2 = fpu_add(fpu_add(fpu_mul(fpu_sub(to[2], a[2]), d[2]), fpu_mul(d[1], d[1])), fpu_mul(d[0], d[0]));
+    double len = fpu_sqrt(l2), k = fpu_div(1.0, len);   /* 0x4a62b0 */
+    step[0] = fpu_f32(fpu_mul(d[0], k));
+    step[1] = fpu_f32(fpu_mul(d[1], k));
+    step[2] = fpu_f32(fpu_mul(k, d[2]));
+    int32_t n = (int32_t)(int64_t)len + 1;   /* _ftol */
+    float cur[3], prev[3];
+    memcpy(cur, a, sizeof a);
+    memcpy(prev, a, sizeof a);
+    int i = 0;
+    for (;; i++) {
+        if (i > n) return 0;
+        if (!Terrain_Inside(cur[0], cur[2])) {   /* off the grid: blocked at the start */
+            memcpy(to, a, sizeof a);
+            return 1;
+        }
+        if (!(Terrain_Height(cur[0], cur[2]) < cur[1])) break;   /* unordered counts as above */
+        memcpy(prev, cur, sizeof cur);
+        for (int j = 0; j < 3; j++) cur[j] = fpu_f32(fpu_add(step[j], cur[j]));
+    }
+    if (i == 0) {
+        memcpy(to, cur, sizeof cur);
+        return 1;
+    }
+    float mid[3];
+    for (int j = 0; j <= 8; j++) {
+        float e[3];
+        for (int c = 0; c < 3; c++) e[c] = fpu_f32(fpu_sub(cur[c], prev[c]));
+        mid[0] = fpu_f32(fpu_add(fpu_mul(e[0], 0.5f), prev[0]));   /* 0x4a62b4 */
+        float hy = fpu_f32(fpu_mul(e[1], 0.5f)), hz = fpu_f32(fpu_mul(e[2], 0.5f));
+        mid[1] = fpu_f32(fpu_add(hy, prev[1]));
+        double z = fpu_add(hz, prev[2]);   /* the height's z unrounded */
+        mid[2] = fpu_f32(z);
+        double h = Terrain_Height(mid[0], z);
+        if (!(fpu_sub(mid[1], h) >= 0.019999999552965164)) break;   /* 0x4a62b8: close enough, or under */
+        if (!(fpu_f32(h) > mid[1])) memcpy(prev, mid, sizeof mid);
+        else memcpy(cur, mid, sizeof mid);
+    }
+    memcpy(to, mid, sizeof mid);
+    return 1;
+}

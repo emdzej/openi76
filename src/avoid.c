@@ -713,3 +713,33 @@ int AI_Blocked(Node *n)
     }
     return 0;
 }
+
+/* ---- the line of sight (0x413570) ---- */
+
+int AI_CanSee(Node *a, Node *b)
+{
+    if (!a || !b) return 0;   /* the original reads through them: the scripts never pass none */
+    float dt = g_clock_dt, p[3], q[4], seg[6];
+    Node_Centre(q, a);   /* 0x4223e0 */
+    memcpy(p, q, sizeof p);
+    p[1] = F32(ADD(p[1], 1.5f));   /* 0x4a53a8 */
+    Node_Centre(q, b);
+    q[1] = F32(ADD(q[1], 1.5f));
+    float inv = g_clock_inv;
+    memcpy(seg, p, sizeof p);
+    for (int i = 0; i < 3; i++) seg[3 + i] = F32(MUL(F32(SUB(q[i], p[i])), inv));
+    double eye[3] = {a->frame.pos[0], ADD(a->frame.pos[1], 1.5), a->frame.pos[2]};   /* 0x4a53b0 */
+    if (Terrain_Line(eye, q)) return 0;
+    CollIter it;
+    for (Entity *e = coll_first(&it); e; e = coll_next(&it)) {
+        Node *o = e->node, *who;
+        if (is_vehicle(o) || o == b) continue;
+        float r = F32(ADD(e->r, 3.0f));   /* 0x4a53b8 */
+        float oc[3], ov[3], osp, t, off[3];
+        Frame_Points(&oc, (const float(*)[3])e->c, 1, &o->frame);   /* 0x471b30 */
+        Class_Velocity(o, ov, &osp);
+        if (!sphere_sweep(seg, seg + 3, oc, ov, r, dt, &t, off)) continue;
+        if (sweep(seg, seg + 3, e, &who, &t, off, 3.0f, 0)) return 0;
+    }
+    return 1;
+}

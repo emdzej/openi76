@@ -29,3 +29,7 @@ int AI_Blocked(Node *n);
 /* AI_TerrainAhead: 0x415080 forward (rough) from p along n's z axis: a step down of 3 m or up of 3.4 within
    2-7.5 m, or the terrain's flag */
 int AI_TerrainAhead(Node *n, const float p[3], float *slow, float *t);
+/* AI_CanSee 0x413570: 1 when b's centre is in sight from a's, both 1.5 m up (a's eye from its frame): not
+   cut by the ground (Terrain_Line) nor by any static entity but b, each swept as the look ahead's objects
+   over the frame (the line as a segment moving through it, a sphere 3 m wider, then closely) */
+int AI_CanSee(Node *a, Node *b);

@@ -7,6 +7,7 @@
 #include "crt.h"
 #include "ai.h"
 #include "avoid.h"
+#include "terrain.h"
 #include "orders.h"
 #include "effects.h"
 #include "entity.h"
@@ -936,6 +937,30 @@ int Dump_CallVehicles(int which, int upside)
                 call_line(w, sizeof w);
             }
             *Data_Ptr(ai, 0x9d2c) = NULL;
+            break;
+        }
+        case 29: {   /* the line of sight (0x413570) from n to the user's vehicle and back, then the terrain's
+                        line (0x45cfd0) from 3 m above n's place to 50, 150 and 400 m along its z axis, 0, 5 and 2 m
+                        lower: each answer, the line's point */
+            Node *t = g_user_entity ? g_user_entity->node : NULL;
+            int round0 = g_fpu_round;
+            int32_t r[2] = {0, 0};
+            if (t && t != n) {
+                r[0] = AI_CanSee(n, t);
+                g_fpu_round = round0;
+                r[1] = AI_CanSee(t, n);
+            }
+            call_line(r, sizeof r);
+            static const float far[3] = {50.0f, 150.0f, 400.0f}, low[3] = {0.0f, 5.0f, 2.0f};
+            for (int k = 0; k < 3; k++) {
+                struct { int32_t r; float to[3]; } w;
+                for (int i = 0; i < 3; i++)
+                    w.to[i] = (float)(n->frame.pos[i] + (double)n->frame.m[6 + i] * far[k] - (i == 1 ? low[k] : 0.0));
+                double from[3] = {n->frame.pos[0], n->frame.pos[1] + 3.0, n->frame.pos[2]};
+                g_fpu_round = round0;
+                w.r = Terrain_Line(from, w.to);
+                call_line(&w, sizeof w);
+            }
             break;
         }
         case 28: {   /* the fights' tactics (4, 5, 7, 8, 9, 0xb-0xf, 0x14) against the user's vehicle: each one's

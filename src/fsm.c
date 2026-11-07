@@ -1,5 +1,6 @@
 /* The mission's script (fsm.h, docs/re/fsm.md). */
 #include "fsm.h"
+#include "avoid.h"
 #include "clock.h"
 #include "crt.h"
 #include "entity.h"
@@ -467,7 +468,7 @@ static void action(uint32_t m, int32_t index)
     case 82: E(m, 0); later(0x40b740); break;  /* setSiren */
     case 83: E(m, 0); later(0x40b760); break;  /* setAvoid */
     case 84: E(m, 0); later(0x40b780); break;  /* setMaxAttackers */
-    case 85: E(m, 1); E(m, 0); SET(m + M_FLAG, later(0x413570)); break;   /* canSee */
+    case 85: b = E(m, 1); a = E(m, 0); SET(m + M_FLAG, AI_CanSee(a, b)); break;   /* canSee */
     case 86: E(m, 0); SET(m + M_FLAG, later(0x40b7a0)); break;   /* isAirborne */
     case 87: later(0x40f0d0); break;           /* teleportOffset (the node not refreshed) */
     case 88: E(m, 0); SET(m + M_FLAG, later(0x40af90)); break;   /* isGroovesFault */

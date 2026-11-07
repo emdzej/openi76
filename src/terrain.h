@@ -41,3 +41,6 @@ int Terrain_Class(double x, double z);
 int Terrain_Flag(double x, double z);
 /* Terrain_Inside 0x48e210: (x, z) inside the grid's cells -3072..13311 */
 bool Terrain_Inside(double x, double z);
+/* Terrain_Line 0x45cfd0: 1 when the ground cuts the line from from (a point in doubles) to to, to then
+   where (to the start when the line leaves the grid); 0 when clear, to unchanged */
+int Terrain_Line(const double from[3], float to[3]);

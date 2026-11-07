@@ -553,3 +553,33 @@ within 2.5 m. It steers at the place (its own heading within 1e-6 m). Then:
   - 5 while they still close (0x4139f0 positive), cruising otherwise.
 
 It asks for the leader's heading and an angle difference and drops both.
+
+## Line of sight (0x413570) and the terrain's line (0x45cfd0)
+
+`AI_CanSee(a, b)` (the script's canSee, the firing decision 0x413b10): 1 when b's centre can be seen from
+a's. Both centres come from the per-frame cache (0x4223e0), each raised 1.5 m (0x4a53a8). Two tests,
+either of which blocks:
+- **The ground.** `Terrain_Line` from a's frame place (the doubles, raised 1.5 m in double, 0x4a53b0) to
+  b's raised centre.
+- **The static entities.** Every collision entity in the moving list, then the static list (0x46b1e0 /
+  0x46b230), except vehicles and b itself. a's own entity is not skipped, but a is a vehicle. The line
+  is treated as a segment moving over one frame: from a's raised centre, with velocity (b - a) x
+  1 / dt. It is swept against each entity as the look ahead sweeps its objects: the moving sphere (0x46a1d0, the
+  entity's radius + 3, within dt, against the entity's centre and velocity 0x471b30), then the close
+  sweep by collision kind (0x476610, 3 m, no faces). The sphere test's offset doubles as the close sweep's
+  normal buffer, as in the look ahead. Any hit: 0.
+
+`Terrain_Line(from, to)`: from rounded to floats, the difference d to floats (its z squared from the
+unrounded difference: `fst` keeps it), summed z, y, x. The step is d x 1 / |d|, a metre long. It takes
+`ftol(|d|) + 2` steps (i = 0 to n + 1). At each, a point off the grid (`Terrain_Inside`) ends it: hit,
+with `to` set to the start. A point whose ground height is not below it (unordered counts as not
+below) stops the walk. If that is the very first point, `to` is that point. Otherwise it bisects nine
+times between the last point above and the first below:
+- the halves are `F32(F32(cur - prev) x 0.5) + prev`, x unrounded into its float, z's sum passed
+  unrounded to `Terrain_Height`;
+- under 0.02 m above the ground (or below it) ends it at the mid point;
+- otherwise mid replaces prev when the ground (as a float) is at or below it, else cur.
+After nine halvings `to` is the last mid point. A walk that ends clear returns 0 and leaves `to`.
+
+Checked: `diff_objects --call see` (both directions to the user's vehicle, and lines 3 m above each
+vehicle to 50, 150 and 400 m along its axis, 0, 5 and 2 m down) on t01, t05 and s04.

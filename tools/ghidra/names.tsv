@@ -822,3 +822,5 @@
 0x41d240	Race_Enter
 0x41d0a0	Race_Start
 0x409aa0	AI_ClearOfTeam0
+0x413570	AI_CanSee
+0x45cfd0	Terrain_Line

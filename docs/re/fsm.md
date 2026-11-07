@@ -119,7 +119,7 @@ isEqualId.
   - test 0x40a970, isWithin 0x40a9e0, isShot 0x40aaa0, hpLesser 0x40af00, ammoLesser 0x40b550;
   - isRammed 0x40af30, isDead 0x40af70, isLit 0x40afe0, isArrived 0x40a9a0;
   - isWithinNav 0x40b010, isWithinSqNav 0x40b060, isWithinEnemy 0x409810, isAttacked 0x40b0c0;
-  - allBlgDead 0x40b2d0, allEnemyDead 0x409770, isAtFollow 0x40b4e0, canSee 0x413570;
+  - allBlgDead 0x40b2d0, allEnemyDead 0x409770, isAtFollow 0x40b4e0, canSee 0x413570 (ported: docs/re/ai.md "Line of sight");
   - isAirborne 0x40b7a0, isGroovesFault 0x40af90;
   - whoRammed 0x40a670, whoShot 0x40a770, whoAttacked 0x40a870, nearestEnemy 0x409590, nearestBlg 0x40b190.
 - **The objectives:** success 0x41f1e0, fail 0x41f130, 0x41f280.
