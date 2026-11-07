@@ -283,3 +283,43 @@ less 25) unless that turns it backward. It steers along it; against a moving tar
 (cruising when the throttle is over 0.4); against a still one it brakes from 60 m, slowing by 0.2 x
 (d - 60) beyond, cruising when not facing it within 0.19.
 
+## Looking ahead (0x416a80)
+
+`src/avoid.c`. `diff_objects.py --call avoid` checks it on every vehicle (a 300 m box, 15 m/s near the
+camera and 40 far, five sets of controls); `diff_fsm.py` checks the boxes each frame.
+
+**The look-ahead box** (in AI_Frame, before the script): from the vehicle's centre along its z axis laid
+on the ground (n x (z x n), n the terrain's normal under the centre), for 50 x the frame rate (0x450e60,
+at most 10000) x the direction +0xe8, 3 m wider all round: +0x9d40 / +0x9d4c the x range, +0x9d48 /
++0x9d54 the z range. At 30 frames a second the box runs 1.5 km ahead (confirmed: the factor is the rate,
+not the step).
+
+**AI_Avoid(n, steer, throttle, ...)** puts the controls in +0xe0 / +0xe4 for one step of the frame's
+length (0x473590: the far drive 0x474750 far from the camera or for class 9, else 0x473600), puts them
+back, and looks from the step's place p with its velocity v:
+
+1. Unless only cars are asked: the terrain (0x415080, the sides): two lines 2.5 m either side of the
+   z axis, every 2.5 m from 2.5 m out to the larger of 20 m and 1.5 x the speed. The terrain's flag
+   (0x48e280) stops it (*t = distance / speed); so does a step along a line down more than 1 m or up
+   more than 1.5, or a fall across of more than 1.5 or a rise of more than 1.5 (also *factor 0.5).
+   Another mode (forward, 2-7.5 m, steps of 3 down or 3.4 up) is not used here.
+2. The vehicles (0x415da0): those of class 1 (and 8 unless only cars) whose box meets this one's, within
+   100 m; unless all round, only those ahead within 60 degrees of v. At their closest approach (0x4139f0's
+   sum, clamped to 0-3 s), ten points of the other's body (2.5 m steps along it, 1.3 m to either side,
+   0x415b80) seen from this one moved as far: one within 2.5 m ahead and 1.3 m aside is a hit: *slow 1,
+   *factor min(t, 0.5) (0.3 for one going 5 m/s or more), *who.
+3. Unless only cars: the objects (0x4158c0) from p 0.3 m down its y axis, moving along the ground's
+   forward direction x the box's length: the static entities (not vehicles, not class 4) whose ground box
+   meets the look-ahead box, whose sphere (radius + 3, about the entity's centre moving with its class's
+   velocity) the motion meets within the frame (0x46a1d0); roads (11) only when not within 0.8 of the
+   vehicle's axis, bridges (12) only within 0.9 either way; then the close sweep (0x476610, 3 m): an
+   entity of collision kind 1 by its COLP box (0x4766b0), 2 always, 3 by its node tree (0x4768c0: every
+   node not of type 0x1000, its sphere then its box in its frame, the children too; spheres alone count
+   for types 0x4000 and 0x5000). A hit: *slow 1, *factor 1.25, *who, *t the time the two centres come
+   closest.
+4. With probability (150 x (1 - steering gain +0xa820)) / 1000 (rand() % 1000 above 850 + that): the
+   shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19. Shots are not ported yet; with
+   none the original finds none either.
+
+None: *slow 0, *factor 0.5, answer 0.
+

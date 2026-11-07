@@ -1381,6 +1381,13 @@ static void far_drive(Node *n, uint32_t *flags, float vel[3], float *speed, floa
     *speed = sp;
 }
 
+void Vehicle_Probe(Node *n, uint32_t *flags, float vel[3], float *speed, float acc[3], float w[3], Frame *f)
+{
+    float dt = g_clock_dt;
+    if (View_Distance(n, 25.0f) == 2 || n->cls == 9) far_drive(n, flags, vel, speed, w, f, dt);   /* 0x42b810 */
+    else Vehicle_Drive(n, flags, vel, speed, acc, w, f, dt);
+}
+
 void Vehicle_FarStep(Node *n, float dt)
 {
     if (n->flags & 0x20) return;

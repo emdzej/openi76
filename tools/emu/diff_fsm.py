@@ -77,6 +77,7 @@ def original():
     for f, k in AI_LATER.items():
         exe.stub(f, lambda *a: 0, k)
     exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
+    exe.stub(0x421E30, lambda *a: 0, 0)   # the radar's (not ported)
     for f in tactic_functions(exe):
         exe.stub(f, lambda *a: 0, 2)
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
@@ -84,16 +85,7 @@ def original():
     for fr in range(FRAMES):
         t = struct.unpack("<f", struct.pack("<f", t + DT))[0]
         exe.write(0x55F73C, struct.pack("<f", t))
-        args = (u(0x4A8900), u(0x4A88FC), u(0x4A88CC), u(0x4A88D0), u(0x4A88D4), u(0x4A88D8), u(0x4A88DC),
-                u(0x4A88E0), u(0x4A88E4), 0x4A88E8, 0x4A88EC, 0x4A88F0, u(0x4A88F4), u(0x4A88F8), u(0x505444), 0)
-        exe.call(0x40EF00, *args, limit=2_000_000_000, fpcw=fpcw)
-        # the end of 0x409020: AI_Frame's count (0x40fad0), the search's turns
-        exe.write(0x505518, struct.pack("<i", struct.unpack("<i", exe.read(0x505518, 4))[0] + 1))
-        exe.write(0x4A88C8, bytes(4))
-        if not u(0x4EEC30) and u(0x505440):
-            exe.call(0x40FDF0, u(u(u(0x505440) + 0x70) + 0x108), fpcw=fpcw)
-            exe.write(0x505440, bytes(4))
-        exe.write(0x4EEC30, bytes(4))
+        exe.call(0x409020, 0, limit=2_000_000_000, fpcw=fpcw)   # AI_Frame: the boxes, the script, the turns
         code, ncode, consts, nconsts = u(0x4A88FC), u(0x4A8900), u(0x4A88F4), u(0x4A88F8)
         state = struct.unpack("<i", exe.read(0x4A80F4, 4))[0]
         s = f"frame {fr} state {state} end {u(0x5054B0):08x} consts" + "".join(f" {u(consts + 4 * i):x}" for i in range(nconsts))
@@ -116,6 +108,7 @@ def original():
                 for b in exe.read(ai + 0xA6F4, 0xA818 - 0xA6F4):
                     h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
                 s += f" w {u(ai + 0xA6F4):x} {h:08x} {u(ai + 0xA82C):08x}"
+                s += "".join(f" {u(ai + w):08x}" for w in (0x9D40, 0x9D48, 0x9D4C, 0x9D54))
                 out.append(s)
         m = u(0x4A88EC)
         while m:

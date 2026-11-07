@@ -6,6 +6,7 @@
 #include "damage.h"
 #include "crt.h"
 #include "ai.h"
+#include "avoid.h"
 #include "effects.h"
 #include "entity.h"
 #include "weapons.h"
@@ -826,6 +827,41 @@ int Dump_CallVehicles(int which, int upside)
             put32(ai + 0x88, 0);   /* an arena address here, the original's pointer there */
             break;
         }
+        case 24: {   /* the look ahead (0x416a80): a 300 m look-ahead box, going along its axis 15 m/s near the
+                        camera and 40 far, five sets of controls and flags: the answer, what (its name), slow,
+                        factor, t */
+            uint8_t *ai = *Data_Ptr(n->data, 0x108);
+            float px = (float)n->frame.pos[0], pz = (float)n->frame.pos[2];
+            float box[4] = {px - 300.0f, pz - 300.0f, px + 300.0f, pz + 300.0f};
+            memcpy(ai + 0x9d40, &box[0], 4);
+            memcpy(ai + 0x9d48, &box[1], 4);
+            memcpy(ai + 0x9d4c, &box[2], 4);
+            memcpy(ai + 0x9d54, &box[3], 4);
+            static const float ctl[5][2] = {{0, 1}, {0.6f, 1}, {-0.6f, 0.5f}, {0, 1}, {0, -1}};
+            static const int fl[5][2] = {{0, 0}, {0, 0}, {0, 1}, {1, 0}, {0, 1}};
+            for (int cam = 0; cam < 2; cam++) {
+                float v[3], sp = cam ? 40.0f : 15.0f;   /* far: 40 m/s */
+                for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
+                memcpy(n->data + 0xbc, v, 12);
+                memcpy(n->data + 0xac, &sp, 4);
+                g_view_pos[0] = cam ? 1e6 : n->frame.pos[0];
+                g_view_pos[1] = cam ? 0 : n->frame.pos[1];
+                g_view_pos[2] = cam ? 1e6 : n->frame.pos[2];
+                for (int j = 0; j < 5; j++) {
+                    Node *who = NULL;
+                    float slow = -1, factor = -1, t = -1;
+                    int32_t r = AI_Avoid(n, ctl[j][0], ctl[j][1], &who, &slow, &factor, fl[j][0], fl[j][1], &t);
+                    uint8_t w[4 + 8 + 12] = {0};
+                    memcpy(w, &r, 4);
+                    if (who) memcpy(w + 4, who->name, 8);
+                    memcpy(w + 12, &slow, 4);
+                    memcpy(w + 16, &factor, 4);
+                    memcpy(w + 20, &t, 4);
+                    call_line(w, sizeof w);
+                }
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);
@@ -865,8 +901,7 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
     size_t len = 0;
     for (int f = 0; f < frames; f++) {
         g_clock_total = (float)((double)g_clock_total + dt);   /* to nearest, as diff_fsm.py's */
-        Fsm_Frame();
-        AI_SearchTurns();
+        AI_Frame();   /* the boxes, the script, the turns */
         len += (size_t)snprintf(o + len, cap - len, "frame %d state %d end %08x consts", f, (int)g_game_state, fbits32(g_fsm_end_time));
         for (int32_t i = 0; i < g_fsm.n_consts && len + 16 < cap; i++) len += (size_t)snprintf(o + len, cap - len, " %x", (uint32_t)Fsm_Word(g_fsm.consts + (uint32_t)i * 4));
         len += (size_t)snprintf(o + len, cap - len, "\n");
@@ -890,7 +925,9 @@ size_t Dump_Fsm(char *o, size_t cap, int frames, float dt)
                 /* the weapons' list (+0xa6f4-+0xa818) and the attack's time (+0xa82c) */
                 h = 0x811c9dc5;
                 for (int k = 0xa6f4; k < 0xa818; k++) h = (h ^ ai[k]) * 0x01000193;
-                len += (size_t)snprintf(o + len, cap - len, " w %x %08x %08x\n", *(uint32_t *)(ai + 0xa6f4), h, *(uint32_t *)(ai + 0xa82c));
+                len += (size_t)snprintf(o + len, cap - len, " w %x %08x %08x", *(uint32_t *)(ai + 0xa6f4), h, *(uint32_t *)(ai + 0xa82c));
+                for (int k = 0; k < 4; k++) len += (size_t)snprintf(o + len, cap - len, " %08x", *(uint32_t *)(ai + 0x9d40 + 8 * (k & 1) + 0xc * (k >> 1)));
+                len += (size_t)snprintf(o + len, cap - len, "\n");
             }
         for (uint32_t m = g_fsm.machines; m && len + 64 < cap; m = (uint32_t)Fsm_Word(m + 0x10b8)) {
             uint32_t sp = (uint32_t)Fsm_Word(m + 0x10b0);

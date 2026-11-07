@@ -1,5 +1,7 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
+#include "clock.h"
+#include "combat.h"
 #include "nav.h"
 #include "fsm.h"
 #include "orders.h"
@@ -8,6 +10,7 @@
 #include <string.h>
 
 #define ADD fpu_add
+#define SUB fpu_sub
 #define MUL fpu_mul
 #define DIV fpu_div
 #define F32 fpu_f32
@@ -97,11 +100,53 @@ void AI_Begin(void)
     g_user_pressed = g_user_pressed_prev = 0;
 }
 
+/* counters 0x40f0a0, 0x40f050 and 0x40f060 keep each frame; nothing else reads them */
+static int32_t g_ai_505514, g_ai_505508, g_ai_50550c = 1, g_ai_505510 = 1;   /* as 0x40f010 sets them */
+
+/* the look-ahead box of each team's vehicles (in 0x409020): from the centre along its z axis laid on the
+   ground (n x (z x n), n the ground's normal there) for 50 x the frame rate (at most 10000) x the
+   direction +0xe8, 3 m wider all round: +0x9d40 / +0x9d4c the x range, +0x9d48 / +0x9d54 the z range */
+static void ai_boxes(void)
+{
+    for (int t = 0; t < AI_TEAMS; t++)
+        for (int i = 0; i < g_team_count[t]; i++) {
+            Node *n = g_teams[t][i]->node;
+            uint8_t *d = n->data;
+            float c[4], nr[3];
+            Node_Centre(c, n);   /* 0x4223e0 */
+            Terrain_Normal(nr, c[0], c[2]);
+            const float *z = &n->frame.m[6];
+            float u0 = F32(SUB(MUL(z[2], nr[1]), MUL(z[1], nr[2])));
+            float u1 = F32(SUB(MUL(z[0], nr[2]), MUL(z[2], nr[0])));
+            float u2 = F32(SUB(MUL(z[1], nr[0]), MUL(z[0], nr[1])));
+            float v0 = -u0, v1 = -u1, v2 = -u2;   /* z x n */
+            float w0 = F32(SUB(MUL(v2, nr[1]), MUL(v1, nr[2])));
+            float w1 = F32(SUB(MUL(v0, nr[2]), MUL(v2, nr[0])));
+            float w2 = F32(SUB(MUL(v1, nr[0]), MUL(v0, nr[1])));
+            (void)w1;
+            float fps = g_clock_inv > 10000.0f ? 10000.0f : g_clock_inv;   /* 0x4a5178 */
+            double k = MUL(MUL(fps, 50.0f), rdf(d + 0xe8));                 /* 0x4a517c */
+            float x = F32(ADD(MUL(w0, k), c[0]));
+            float z2 = F32(ADD(c[2], F32(MUL(k, w2))));
+            uint8_t *ai = ai_of(n);
+            float lo = c[0] < x ? c[0] : x, hi = c[0] < x ? x : c[0];
+            putf(ai + 0x9d40, F32(SUB(lo, 3.0f)));   /* 0x4a5180 */
+            putf(ai + 0x9d4c, F32(ADD(hi, 3.0f)));
+            lo = c[2] < z2 ? c[2] : z2, hi = c[2] < z2 ? z2 : c[2];
+            putf(ai + 0x9d48, F32(SUB(lo, 3.0f)));
+            putf(ai + 0x9d54, F32(ADD(hi, 3.0f)));
+        }
+}
+
 void AI_Frame(void)
 {
     g_user_pressed_prev = g_user_pressed;   /* 0x409b50 */
     g_user_pressed = 0;
+    g_ai_505514 = 0;   /* 0x40f0a0 */
+    g_ai_505508 = 0;   /* 0x40f050 */
+    ai_boxes();
     Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
+    g_ai_505510 = g_ai_505508 < g_ai_50550c ? 1 : g_ai_505508 == g_ai_50550c ? 0 : 2;   /* 0x40f060 */
     AI_SearchTurns();
 }
 

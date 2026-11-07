@@ -485,8 +485,34 @@ def call_search(exe, n, fpcw):
     exe.write(ai + 0x88, bytes(4))
 
 
+def call_avoid(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    d = u(n + 0x70)
+    ai = u(d + 0x108)
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    px, py, pz = struct.unpack("<3d", exe.read(n + 0x40, 24))
+    fpx, fpz = f32(px), f32(pz)
+    for off, val in ((0x9D40, fpx - 300), (0x9D48, fpz - 300), (0x9D4C, fpx + 300), (0x9D54, fpz + 300)):
+        exe.write(ai + off, struct.pack("<f", f32(val)))
+    z = struct.unpack("<3f", exe.read(n + 0x30, 12))
+    ctl = ((0, 1), (0.6, 1), (-0.6, 0.5), (0, 1), (0, -1))
+    fl = ((0, 0), (0, 0), (0, 1), (1, 0), (0, 1))
+    bits = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
+    for cam in range(2):
+        sp = 40.0 if cam else 15.0
+        exe.write(d + 0xBC, struct.pack("<3f", *(f32(c * sp) for c in z)))
+        exe.write(d + 0xAC, struct.pack("<f", sp))
+        exe.write(0x4A85E8, struct.pack("<3d", *((1e6, 0.0, 1e6) if cam else (px, py, pz))))
+        for (st, th), (co, ar) in zip(ctl, fl):
+            who = exe.put(bytes(4))
+            out = exe.put(struct.pack("<3f", -1, -1, -1))
+            r = exe.call(0x416A80, n, bits(st), bits(th), who, out, out + 4, co, ar, out + 8, limit=500_000_000, fpcw=fpcw)
+            w = u(who)
+            CALL_OUT.append((struct.pack("<i", r) + (exe.read(w, 8) if w else bytes(8)) + exe.read(out, 12)).hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -771,6 +797,8 @@ def port():
         print(f"--call {CALL}: {lib.Dump_CallVehicles(CALLS[CALL][0], int(UPSIDE))} vehicles (port)", file=sys.stderr)
         lib.Dump_CallOut.restype = ctypes.c_char_p
         PORT_OUT.extend(lib.Dump_CallOut().decode().split())
+        if os.environ.get("OPENI76_CALL_SHOW"):
+            print("\n".join(PORT_OUT), file=sys.stderr)
     buf = ctypes.create_string_buffer(64 << 20)
     lib.Objects_Dump.restype = ctypes.c_size_t
     ctypes.c_int.in_dll(lib, "g_dump_texanims").value = int(START)

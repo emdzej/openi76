@@ -95,6 +95,9 @@ int View_Distance(const Node *n, float r);
 /* Vehicle_FarStep 0x473440: a vehicle away from the camera, once a frame: on a flat plane (+0x460 up, class
    2), the force and the grip along its forward axis (0x474750), +0x454 bit 0x20000; the engine */
 void Vehicle_FarStep(Node *n, float dt);
+/* Vehicle_Probe 0x473590: a step of the frame's length (g_clock_dt) into the results given, the vehicle
+   left as it was: the far drive (0x474750) far from the camera or for class 9, else Vehicle_Drive */
+void Vehicle_Probe(Node *n, uint32_t *flags, float vel[3], float *speed, float acc[3], float w[3], Frame *f);
 /* Vehicle_Near 0x475b40: back near the camera: on the ground under it, settled (keep, the frame's step),
    bit 0x20000 off */
 void Vehicle_Near(Node *n);
