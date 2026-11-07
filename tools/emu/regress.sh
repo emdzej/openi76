@@ -10,6 +10,7 @@ diff_palette 20
 diff_geom 10
 diff_queue 300
 diff_terrain 20000
+diff_terrvis 1000
 diff_clip 1000
 diff_draw 1000"}
 fail=0

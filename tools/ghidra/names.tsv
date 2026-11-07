@@ -170,3 +170,13 @@
 0048d400	Queue_FindMember	render	high	the merge member of a node, its bucket set
 0048d450	Queue_MergeAdd	render	med	adds a node (its root) to the merges
 0048d530	Queue_Merge	render	med	merges two nodes (the "merge" property)
+0048eaa0	Terrain_Visible	terrain	high	the view's ground footprint: bounds, quadtree depth, hull edges (0x5e3100); ported, diffed
+0048e450	Terr_Plane	terrain	high	the plane through three points (doubles) as a footprint edge
+0048e3f0	Terr_Key	terrain	high	the hull's key: atan2 angle (0-2pi) * 1e7 + distance squared
+00491f00	Terrain_Height	terrain	high	bilinear height; sets RC down and never restores it; ported, diffed
+0048e380	Terrain_Class	terrain	high	the cell's top 3 bits
+0048e280	Terrain_Flag	terrain	high	the cell's bit 12
+0048e210	Terrain_Inside	terrain	high	inside the grid's cells -3072..13311
+0048e820	Terrain_Setup	terrain	high	lod, cell size, zone grid
+00494bc0	Terrain_Tdef	terrain	high	the TDEF walk: TREV, ZMAP, ZONE, EXIT
+0044e260	Settings_Defaults	settings	high	the detail preset by machine class

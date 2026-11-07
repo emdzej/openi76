@@ -21,19 +21,9 @@ def dwords(d):
     return struct.unpack("<II", struct.pack("<d", d))
 
 
-def main():
-    exe = x86.Exe()
-    lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
-    argv, down = x86.rounding(exe, lib, sys.argv)
-    count = int(argv[1]) if len(argv) > 1 else 20000
-    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
-    mode = ctypes.c_int.in_dll(lib, "g_fpu_round")
-    lib.Terrain_Height.restype = ctypes.c_double
-    lib.Terrain_Height.argtypes = [ctypes.c_double] * 2
-    for f in (lib.Terrain_Class, lib.Terrain_Flag, lib.Terrain_Inside):
-        f.argtypes = [ctypes.c_double] * 2
-    lib.Terrain_Inside.restype = ctypes.c_bool
-
+def setup_grid(exe, lib, rng, down):
+    """12 random zones over a 6 x 6 block of the grid at (24, 24), the rest the empty zone, in both; the
+    cell scale as Terrain_Setup leaves it. Returns what must stay alive."""
     # 12 random zones over a 6 x 6 block of the grid at (24, 24), the rest the original's empty zone
     empty = exe.put(bytes(0x8000))
     zones = [rng.randbytes(0x8000) for _ in range(12)]
@@ -55,7 +45,23 @@ def main():
     # 1 / 5 as Terrain_Setup leaves it: rounded to nearest for the first mission, down for the later ones
     inv.value = struct.unpack("<f", struct.pack("<I", 0x3E4CCCCC if down else 0x3E4CCCCD))[0]
     exe.write(0x5E30C4, struct.pack("<f", inv.value))
+    return pz, port_empty
 
+
+def main():
+    exe = x86.Exe()
+    lib = ctypes.CDLL(glob.glob("build/libi76core.*")[0])
+    argv, down = x86.rounding(exe, lib, sys.argv)
+    count = int(argv[1]) if len(argv) > 1 else 20000
+    rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
+    mode = ctypes.c_int.in_dll(lib, "g_fpu_round")
+    lib.Terrain_Height.restype = ctypes.c_double
+    lib.Terrain_Height.argtypes = [ctypes.c_double] * 2
+    for f in (lib.Terrain_Class, lib.Terrain_Flag, lib.Terrain_Inside):
+        f.argtypes = [ctypes.c_double] * 2
+    lib.Terrain_Inside.restype = ctypes.c_bool
+
+    keep = setup_grid(exe, lib, rng, down)
     # a stub that calls Terrain_Height with its four argument dwords and stores st0 at OUT
     out = exe.put(bytes(8))
     stub = x86.STUBS + 0x800
