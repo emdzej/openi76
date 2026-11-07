@@ -121,3 +121,9 @@
 0047eac0	Tex_AnimStart2
 0047d2d0	Geo_Build
 0047dc70	Geom_SelectLod
+0043bcc0	Palette_Set
+0043c010	Color_Get
+0043b5f0	Lum_Ramp
+0043baf0	Hsv_ToRgb
+0043c1e0	Gamma_Build
+0043c170	Gamma_Apply

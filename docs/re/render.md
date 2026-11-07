@@ -368,3 +368,34 @@ has 9 floats, then a double position at +0x28. The routines are checked by `diff
   - The normal is rotated to `n M` and kept unrounded on the stack.
   - The distance becomes `d - (n M) . pos`.
 - Plane_From, Fast_InvSqrt and Frame_Invert are described above, under the view.
+
+## The palette module (ported, diffed)
+
+`src/render/palette.c` is checked against the original by `tools/emu/diff_palette.py`.
+
+- **Palette_Set 0x43bcc0** `(record, lum)` takes the palette at the record's +0xe0 and turns each channel
+  into a float (`byte * (1/255)f`) at 0x5ae550. With a lum table (a world's `.lum`), it copies the table.
+  - Without one, it builds a lum table from the palette: 24 shades towards white and 8 towards black,
+    each nearest-matched. That path is not ported yet.
+- **Color_Match 0x43c050** finds the nearest colour by squared distance:
+  - The distance is summed as `(dg^2 + dr^2) + db^2` and compared unrounded against the best so far,
+    which is stored as a float.
+  - It starts at 1e6, and the first of equal colours wins.
+  - Geo_Build uses it for the faces' colours.
+- **Glow_Build 0x43b690** (at start, from the palette):
+  - Each colour is converted to HSV (h in degrees, -1 for grey).
+  - The value is stepped up 16 times by `min(0.35, 0.95 - v) / 16`, back to RGB (Hsv_ToRgb 0x43baf0),
+    and each step is nearest-matched into glow row i.
+  - The shadow row (+0x11200) is the colour 0.6 below the last step.
+  - Colours 0xe0-0xef glow as themselves.
+  - Each of the three searches sums its squares in its own order, which the port keeps.
+  - Hsv_ToRgb leaves its outputs untouched for a grey with h != -1, and for a sector above 5.
+- **The remap and key tables.**
+  - Remap_Reset 0x43b5a0 sets the remap rows to all their own colour, plus the identity row and the 0xff
+    row.
+  - Remap_Set 0x43c0c0 sets one remap row.
+  - Remap_Key 0x43c100 makes a colour see-through: its remap and tbl rows become the identity, and the
+    0xff row becomes the colour.
+- **Lum_Ramp 0x43b5f0** writes shades 0-31 of one colour as an 8.16 ramp between two colour numbers.
+  Shades 32-143 copy shade 31, and shades 144-255 copy shade 0.
+- **Not yet ported:** the gamma tables (Gamma_Build 0x43c1e0, `pow`; Gamma_Apply 0x43c170).
