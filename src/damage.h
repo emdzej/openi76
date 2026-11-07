@@ -1,6 +1,7 @@
 /* A vehicle's state from step to step (0x42b830-0x42d800, docs/re/vehicles.md "The state"): the engine
-   started and stopped, the lights, and the wreck's timer. The damage itself (0x45d7c0, 0x42a5d0) and
-   the death (0x429eb0, 0x42c580) are not ported yet. */
+   started and stopped, the lights, and the wreck's timer; the damage on sides and parts, the health
+   and rough ground's wear. An impact's damage (0x45d7c0) and the death (0x429eb0, 0x42c580) are not
+   ported yet. */
 #pragma once
 #include "scene.h"
 
@@ -46,3 +47,15 @@ int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed);
    0x4d5428) in states 0-3; from 5 a wheel's model in state 0, or above level 2 state 1 with the tyre
    blown (its radius shrunk once); the entity's sphere is dropped when a mesh changed */
 void Damage_Look(uint8_t *d, uint32_t part, uint32_t level);
+/* Vehicle_Health 0x40aae0: a node's health in percent. A vehicle (class 1): the least of its engine's,
+   0x17's, 0x16's and four wheels' ratios, those below 0.02 counted as broken; whole (0.99999 and none
+   broken) 28 + 72 x the least side of the chassis or armour, else 15 + 13 x, 5 + 8 x, 5 x, 0.1 x by the
+   count broken. A structure: 100 x its children's least ratio; classes 8 and 9 the 0x508 block's; else 100 */
+double Vehicle_Health(Node *n);
+/* Vehicle_Smoke 0x42d230: smoke by the health (0-1): none from 0.75, else light, half or full (0, 0.5, 1
+   above 0.6, 0.4, else), started once (+0x454 bit 0x100) */
+void Vehicle_Smoke(uint8_t *d, float health);
+/* Terrain_Wear 0x42a5d0: rough ground's wear (the amount summed at +0x458): each whole unit goes as an
+   armour packet on a random side (rand % 6: 0, 1, 1, 2, 2, 3) and then its parts (that number as the
+   list), and the smoke follows the health */
+void Terrain_Wear(Node *n, float amount);

@@ -714,6 +714,25 @@ int Dump_CallVehicles(int which, int upside)
             }
             break;
         }
+        case 19: {   /* rough ground's wear, eight amounts in turn: the health, the sum, the flags, the
+                        chassis and armour (+0x138-+0x1a0) and every part's first 0x18 bytes */
+            static const float amounts[8] = {0.25f, 3.5f, 0.75f, 40.0f, 120.0f, 7.25f, 600.0f, 2000.0f};
+            for (int j = 0; j < 8; j++) {
+                Terrain_Wear(n, amounts[j]);
+                double h = Vehicle_Health(n);
+                uint8_t b[8 + 8 + 0x68 + 20 * 0x18];
+                memset(b, 0, sizeof b);
+                memcpy(b, &h, 8);
+                memcpy(b + 8, n->data + 0x454, 8);
+                memcpy(b + 0x10, n->data + 0x138, 0x68);
+                for (int i = 0; i < 20; i++) {
+                    Node *pn = *Data_Ptr(n->data, 0x3a8 + 4 * i);
+                    if (pn && pn->data) memcpy(b + 0x78 + i * 0x18, pn->data, 0x18);
+                }
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 3: {   /* the brakes released */
             uint32_t f;
             memcpy(&f, n->data + 0x454, 4);

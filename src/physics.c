@@ -4,6 +4,7 @@
 #include "classes.h"
 #include "clock.h"
 #include "collide.h"
+#include "damage.h"
 #include "engine.h"
 #include "entity.h"
 #include "exe.h"
@@ -1217,9 +1218,6 @@ void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float 
     put32(d + 0xd0, 0);
 }
 
-/* 0x42a5d0: the wear of rough ground (the terrain class's +0x10 times dt summed at +0x458, a random part
-   damaged per whole unit, 0x42bac0, 0x42bf90, 0x42d230): with the damage, not ported yet */
-static void terrain_wear(Node *n, float amount) { (void)n, (void)amount; }
 /* 0x4683c0: a sound by number at a node: no sound yet */
 static void sound_id(int id, Node *n, int a) { (void)id, (void)n, (void)a; }
 
@@ -1288,7 +1286,7 @@ void Vehicle_Physics(Node *n, float dt)
     if ((int32_t)fbits(speed) > 0x40f4cccd && !(n->flags & 0x20)) {   /* faster than 7.65 */
         int32_t tc = rd32(d + 0x45c);
         float wear = (float)rd32(g_world.lights + 0x14 * (uint32_t)tc + 0x10);   /* 0x48e360 */
-        terrain_wear(n, F32(MUL(wear, dt)));
+        Terrain_Wear(n, F32(MUL(wear, dt)));   /* 0x42a5d0 */
     }
     Engine_Step(engine, rdf(d + 0xe4), speed, flags, reverse, rd32(d + 0x104));
 }

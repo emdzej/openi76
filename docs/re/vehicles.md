@@ -447,3 +447,71 @@ Structures, vehicles and the other classes have handlers of their own, not porte
 
 Checked: `diff_objects.py --call parts` (ten packets per vehicle, all parts' state and every gun's points
 after each) is identical on t01, s04, t15, s01, a01, t10 and t05, and upside down on t01 and s04.
+
+## Rough ground's wear (0x42a5d0)
+
+`Terrain_Wear` 0x42a5d0 (`src/damage.c`) is called by the physics with the terrain class's wear (+0x10)
+times the step. A dead vehicle (+0x454 bit 0x20) takes none, and none while 0x45dbb0 returns non-zero
+(it reads 0x4dc464, which no code writes: always 0).
+
+1. The amount is summed at +0x458. Its whole part (ftol) goes into a packet as the armour's amount
+   (+0x14, mask 8) and leaves the sum. The subtraction loads the count as a 64-bit integer with a zero high
+   word. The packet's other amounts and its +6 word are not set; with mask 8 and a speed of 100 they are
+   never read.
+2. `r = rand() % 6` picks the side for `Damage_Side`: 0, 1, 1, 2, 2, 3. The user flag is the node's
+   bit 0x10 (0x42e620).
+3. While the side returns something, `Damage_Parts(d, r, packet, 0, 100)`. The list is `r` itself, not the
+   side.
+4. The health (0x40aae0) times 0.01, compared unrounded: below 1, `Vehicle_Smoke` 0x42d230 gets it as a
+   float.
+
+### The health (0x40aae0)
+
+`Vehicle_Health` 0x40aae0 returns a percentage in st0, unrounded. It dispatches on the class (the table
+0x40aed4 with the byte index 0x40aeec):
+
+| Class | Health |
+|---|---|
+| 1 | below |
+| 2, 3, 0xb, 0xc | 100 × the least `+0 / +4` of the children that are structures (0x42e5a0), have bits 12-15 of their flags above 1, data and a positive +4. Compared unrounded, stored as a float. |
+| 8, 9 | the 0x508 block: 100 with its +4 below 1, else `+0 × +8 (float) × 100` |
+| others | 100 (0x4a5208) |
+
+A vehicle in a network game that is dead returns +0x484 (not ported: no network play). Otherwise seven
+ratios, each `cur / max` of two ints stored as a float. A missing part leaves the two locals as they were
+(the port takes 300 / 300):
+
+| Part | Getter | cur, max |
+|---|---|---|
+| +0x3c4 the engine | 0x42f480 | +0, +4 |
+| +0x3c8 class 0x17 | 0x430650 | +0, +4 |
+| +0x3cc class 0x16 | 0x4304a0 | +4, +8 |
+| +0x3b8, +0x3bc, +0x3a8, +0x3ac the wheels | 0x42fd90 | +4, +8 |
+
+All getters give 300 / 300 without data. Per ratio, by its bits: below 0x3ca3d70a (0.02, signed, so
+negatives and the x87's negative NaN of 0 / 0 too) it counts as broken. Otherwise it is held to 1 (signed
+above 0x3f800000), and it becomes the minimum when less (or unordered).
+
+- With the minimum at least 0x3f7ff972 (0.99999) and none broken, the sides decide. For each of the four
+  sides with a positive maximum, the chassis's `+0x138 / +0x158` and the armour's `+0x148 / +0x168` are
+  held to [0, 1] (0 when the unrounded quotient is below 0). Each keeps its least value. The result is
+  `least × 72 + 28` (0x4a5218, 0x4a521c), with the chassis's least only when the armour's is greater.
+  The armour's least is a local the original never initialises. Every armour maximum 0 would leave the
+  stack's value; the port starts it at FLT_MAX.
+- Otherwise, by the count broken: 0 gives `min × 13 + 15`, 1 `min × 8 + 5`, 2 `min × 5`, more `min × 0.1`
+  (0x4a5220-0x4a5230). With every ratio broken the minimum is still FLT_MAX: a quirk, kept.
+
+### The smoke (0x42d230)
+
+`Vehicle_Smoke` 0x42d230 takes the health from 0 to 1, compared by its bits:
+
+- **0.75 and above:** a smoking vehicle (+0x454 bit 0x100) stops (0x46e220) and the bit is cleared.
+- **Below 0.75:** the density is 0 above 0.6, 0.5 above 0.4, else 1; the kind is 0, 1 or 2. Not smoking yet:
+  a trail starts (0x46e170, at +0xa4 with the body part +0x410's +0x9c) and the bit is set. Smoking already:
+  the density is set (0x46e270). Then the kind (0x46e2b0).
+
+The smoke trails (0x46e0c0-0x46e2e0, the list 0x5772ec, enabled by 0x4dd080) are not ported yet.
+
+Checked: `diff_objects.py --call wear` (eight amounts in turn per vehicle: the health, the sum, the flags,
+the chassis and armour, and all parts' state after each) is identical on t01, s04, t15, s01, a01, t10 and
+t05, and upside down on t01. The physics and the frame, now with the wear, stay identical on t01, s04 and t15.

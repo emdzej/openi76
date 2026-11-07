@@ -583,3 +583,13 @@
 00456890	Gun_Points	weapons	high	the weapon instance's +0xc by its gun node
 004568d0	Gun_Whole	weapons	high	the definition's +0x5c by its gun node
 0042fd90	Wheel_Points	damage	high	a wheel's +4 and +8 (300 each without data)
+0040aae0	Vehicle_Health	damage	high	a node's health in percent (st0): a vehicle's parts and sides, a structure's children
+0042d230	Vehicle_Smoke	damage	high	smoke by the health 0-1: stops from 0.75, else density 0/0.5/1 and kind 0-2
+0045dbb0	Damage_Off	damage	med	returns 0x4dc464 (never written: 0); the wear is skipped when set
+0042f480	Engine_Points	damage	high	the engine's +0 and +4 (300 each without data)
+00430650	Part17_Points	damage	high	class 0x17's +0 and +4 (300 each without data)
+004304a0	Part16_Points	damage	high	class 0x16's +4 and +8 (300 each without data)
+0046e170	Smoke_Start	effects	med	a smoke trail on an object (list 0x5772ec, enabled by 0x4dd080)
+0046e220	Smoke_Stop	effects	med	removes an object's smoke trail
+0046e270	Smoke_Density	effects	med	an object's smoke trail's density
+0046e2b0	Smoke_Kind	effects	med	an object's smoke trail's kind

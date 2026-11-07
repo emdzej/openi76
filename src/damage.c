@@ -602,3 +602,147 @@ int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float speed)
     }
     return packet_sum(p);
 }
+
+/* a part's two counts by its getter (0x42f480 the engine's +0 / +4, 0x430650 class 0x17's +0 / +4,
+   0x4304a0 class 0x16's +4 / +8, 0x42fd90 a wheel's +4 / +8; 300 each without data). Without the part
+   the original leaves its locals as they were: the port takes 300 / 300 then */
+static void counts(const Node *n, uint32_t off, int32_t *a, int32_t *b)
+{
+    *a = *b = 300;
+    if (n && n->data) {
+        *a = rd32(n->data + off);
+        *b = rd32(n->data + off + 4);
+    }
+}
+
+/* cur / max as the FPU makes it: 0 / 0 is the x87's default NaN, negative */
+static float ratio(int32_t a, int32_t b)
+{
+    if (a == 0 && b == 0) { uint32_t u = 0xffc00000u; float f; memcpy(&f, &u, 4); return f; }
+    return fpu_f32(fpu_div((double)a, (double)b));
+}
+
+static int32_t fb(float f) { int32_t v; memcpy(&v, &f, 4); return v; }
+
+/* cur / max held to [0, 1] (below 0 by the unrounded value, above 1 by its bits) */
+static float held(int32_t cur, int32_t max)
+{
+    double q = fpu_div((double)cur, (double)max);
+    float r = (q < 0 || q != q) ? 0.0f : fpu_f32(q);
+    return fb(r) > 0x3f800000 ? 1.0f : r;
+}
+
+double Vehicle_Health(Node *n)
+{
+    const float hundred = exe_f32(0x4a5208);
+    switch (n->cls) {
+    case 1: break;
+    case 2: case 3: case 0xb: case 0xc: {
+        float min = 3.4028235e38f;
+        for (Node *c = n->child; c; c = c->next) {
+            if (!Class_IsStructure(c->cls) || (c->flags & 0xf000) <= 0x1000 || !c->data) continue;
+            int32_t m = rd32(c->data + 4);
+            if (m <= 0) continue;
+            double q = fpu_div((double)rd32(c->data), (double)m);
+            if (q < min || q != q) min = fpu_f32(q);
+        }
+        return fpu_mul(min, hundred);
+    }
+    case 8: case 9: {
+        const uint8_t *b = *Data_Ptr(n->data, 0x508);
+        if (rd32(b + 4) < 1) return hundred;
+        return fpu_mul(fpu_mul((double)rd32(b), rdf(b + 8)), hundred);
+    }
+    default: return hundred;
+    }
+    uint8_t *d = n->data;   /* 0x42d5e0; a dead vehicle in a network game (0x461900) reads +0x484 */
+    static const struct { uint32_t slot, off; } parts[7] = {
+        {0x3c4, 0}, {0x3c8, 0}, {0x3cc, 4}, {0x3b8, 4}, {0x3bc, 4}, {0x3a8, 4}, {0x3ac, 4}};
+    float min = 3.4028235e38f;
+    int broke = 0;
+    for (int i = 0; i < 7; i++) {
+        int32_t a, b;
+        counts(slot(d, parts[i].slot), parts[i].off, &a, &b);
+        float r = ratio(a, b);
+        if (fb(r) < 0x3ca3d70a) { broke++; continue; }   /* below 0.02 by its bits, negatives too */
+        if (fb(r) > 0x3f800000) r = 1.0f;
+        if (r < min || r != r) min = r;
+    }
+    if (fb(min) >= 0x3f7ff972 && broke <= 0) {
+        /* whole parts: the chassis's and the armour's sides decide. The armour's minimum is a local the
+           original never sets (a quirk): with every armour maximum 0 it is what the stack held, the port
+           takes FLT_MAX */
+        float ma = 3.4028235e38f, mb = 3.4028235e38f;
+        for (int i = 0; i < 4; i++) {
+            if (rd32(d + 0x158 + 4 * i) > 0) {
+                float r = held(rd32(d + 0x138 + 4 * i), rd32(d + 0x158 + 4 * i));
+                if (ma > r) ma = r;
+            }
+            if (rd32(d + 0x168 + 4 * i) > 0) {
+                float r = held(rd32(d + 0x148 + 4 * i), rd32(d + 0x168 + 4 * i));
+                if (mb > r) mb = r;
+            }
+        }
+        return fpu_add(fpu_mul(mb > ma ? ma : mb, exe_f32(0x4a5218)), exe_f32(0x4a521c));   /* 72, 28 */
+    }
+    switch (broke) {
+    case 0: return fpu_add(fpu_mul(min, exe_f32(0x4a5224)), exe_f32(0x4a5228));   /* 13, 15 */
+    case 1: return fpu_add(fpu_mul(min, exe_f32(0x4a522c)), exe_f32(0x4a5230));   /* 8, 5 */
+    case 2: return fpu_mul(min, exe_f32(0x4a5230));                                /* 5 */
+    default: return fpu_mul(min, exe_f32(0x4a5220));                               /* 0.1 */
+    }
+}
+
+/* the smoke trails (0x46e170 start, 0x46e270 its density, 0x46e2b0 its kind, 0x46e220 stop): the
+   effects are not ported yet */
+static void smoke_start(uint8_t *d, float k) { (void)d, (void)k; }
+static void smoke_density(uint8_t *d, float k) { (void)d, (void)k; }
+static void smoke_kind(uint8_t *d, int kind) { (void)d, (void)kind; }
+static void smoke_stop(uint8_t *d) { (void)d; }
+
+void Vehicle_Smoke(uint8_t *d, float health)
+{
+    int32_t h = fb(health);
+    uint32_t flags = (uint32_t)rd32(d + 0x454);
+    if (h >= 0x3f400000) {   /* 0.75 and up: no smoke */
+        if (flags & 0x100) {
+            smoke_stop(d);
+            put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) & ~0x100u));
+        }
+        return;
+    }
+    float k;
+    int kind;
+    if (h > 0x3f19999a) k = 0, kind = 0;          /* above 0.6 */
+    else if (h > 0x3ecccccd) k = 0.5f, kind = 1;  /* above 0.4 */
+    else k = 1.0f, kind = 2;
+    if (!(flags & 0x100)) {
+        smoke_start(d, k);   /* at +0xa4, the body part +0x410's +0x9c */
+        put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x100));
+    } else
+        smoke_density(d, k);
+    smoke_kind(d, kind);
+}
+
+void Terrain_Wear(Node *n, float amount)
+{
+    uint8_t *d = n->data;
+    if (rd32(d + 0x454) & 0x20) return;
+    /* 0x45dbb0 reads 0x4dc464, which nothing writes: 0 */
+    float acc = fpu_f32(fpu_add(rdf(d + 0x458), amount));
+    putf(d + 0x458, acc);
+    /* the packet: the armour's amount only (mask 8); the rest of it is not set, and unread with that
+       mask and a speed of 100 */
+    uint8_t p[0x18];
+    memset(p, 0, sizeof p);
+    p[4] = 8;
+    int32_t whole = ftol(acc);
+    put32(p + 0x14, whole);
+    putf(d + 0x458, fpu_f32(fpu_sub(acc, (double)(uint32_t)whole)));   /* the count as an unsigned qword */
+    int r = crt_rand() % 6;
+    static const uint8_t sides[6] = {0, 1, 1, 2, 2, 3};
+    int32_t left = Damage_Side(d, sides[r], p, (n->flags & 0x10) != 0);
+    while (left) left = Damage_Parts(d, r, p, 0, 100.0f);
+    double h = fpu_mul(Vehicle_Health(n), exe_f32(0x4a59fc));
+    if (h < 1.0 || h != h) Vehicle_Smoke(d, fpu_f32(h));
+}

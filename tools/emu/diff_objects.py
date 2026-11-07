@@ -17,6 +17,7 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(__file__))
 import mission  # noqa: E402
+import x86  # noqa: E402
 
 M = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "t01.msn"
 
@@ -379,8 +380,37 @@ def call_parts(exe, n, fpcw):
         CALL_OUT.append(b.hex())
 
 
+HEALTH = []
+
+
+def call_health(exe, n, fpcw):
+    """0x40aae0's st0, through a stub that stores it as a double"""
+    if not HEALTH:
+        out = exe.put(bytes(8))
+        stub = x86.STUBS + 0x900
+        code = b"\xff\x74\x24\x04" + b"\xe8" + struct.pack("<i", 0x40AAE0 - (stub + 9)) + b"\x83\xc4\x04" \
+            + b"\xdd\x1d" + struct.pack("<I", out) + b"\xc3"
+        exe.write(stub, code)
+        HEALTH[:] = [stub, out]
+    exe.call(HEALTH[0], n, fpcw=fpcw)
+    return struct.unpack("<d", exe.read(HEALTH[1], 8))[0]
+
+
+def call_wear(exe, n, fpcw):
+    d = struct.unpack("<I", exe.read(n + 0x70, 4))[0]
+    for a in (0.25, 3.5, 0.75, 40.0, 120.0, 7.25, 600.0, 2000.0):
+        exe.call(0x42A5D0, n, struct.unpack("<I", struct.pack("<f", a))[0], fpcw=fpcw)
+        h = call_health(exe, n, fpcw)
+        b = struct.pack("<d", h) + exe.read(d + 0x454, 8) + exe.read(d + 0x138, 0x68)
+        for i in range(20):
+            p = struct.unpack("<I", exe.read(d + 0x3A8 + 4 * i, 4))[0]
+            q = struct.unpack("<I", exe.read(p + 0x70, 4))[0] if p else 0
+            b += exe.read(q, 0x18) if q else bytes(0x18)
+        CALL_OUT.append(b.hex())
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear)}
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
@@ -502,7 +532,6 @@ def original():
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         exe.stub(0x45D7C0, lambda *a: 0, 3)   # an impact's damage
-        exe.stub(0x42A5D0, lambda *a: 0, 2)   # the terrain's wear
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
         exe.stub(0x42C580, lambda *a: 0, 2)   # the wreck
         exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
