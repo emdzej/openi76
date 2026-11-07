@@ -18,7 +18,12 @@ static int32_t warm;                  /* 0x55f740 */
 static int32_t frames;                /* 0x55f744 */
 
 /* GetTickCount in seconds (fild of the unsigned count, times 0.001 at 0x4a605c) */
-static float now_s(void) { return fpu_f32(fpu_mul((double)(uint32_t)(uint64_t)plat_ms(), 0.001f)); }
+double g_clock_fake_ms = -1;
+static float now_s(void)
+{
+    double ms = g_clock_fake_ms >= 0 ? g_clock_fake_ms : plat_ms();
+    return fpu_f32(fpu_mul((double)(uint32_t)(uint64_t)ms, 0.001f));
+}
 static int32_t bits(float f) { int32_t b; memcpy(&b, &f, 4); return b; }
 static float from(uint32_t b) { float f; memcpy(&f, &b, 4); return f; }
 

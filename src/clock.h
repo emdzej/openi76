@@ -9,6 +9,9 @@ extern float g_clock_inv;    /* 0x4db130: 1 / g_clock_dt (0x450e60) */
 extern float g_clock_game;   /* 0x4db134: the game's time (0x450e70) */
 extern uint32_t g_play_state;   /* 0x4db008: the play's state; any of 0x3e (a menu, the map, a pause) stops the clock */
 
+/* the port's: when not negative, the time (ms) the tick reads instead of the platform's clock */
+extern double g_clock_fake_ms;
+
 /* Timer_Init 0x451210: t[0] the rate 1 / period (1e30 for a period not above 1e-4), t[1] = t[2] = 0 */
 void Timer_Init(float t[3], float period);
 /* Clock_Init 0x450e90 (each mission): the steps at 0.06, the time at 0, the sub-steps' fractions 1 / n */

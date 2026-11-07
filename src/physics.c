@@ -1034,6 +1034,52 @@ static void load_shift(const float a[3], const float f[3], const float r[3], flo
     *o2 = F32(SUB(SUB(MUL(MUL(t[1], r[1]), -0.008f), MUL(MUL(t[2], r[2]), 0.008f)), MUL(MUL(t[0], r[0]), 0.008f)));
 }
 
+/* 0x4dd918, 0x4dd91c, 0x4dd920: the cockpit's sway, eased */
+static float sway_a, sway_b, sway_c;
+
+void Cockpit_Sway(Frame *out, const Node *n)
+{
+    float dt = g_clock_dt;
+    if (n->cls != 1) {
+        *out = (Frame){{1, 0, 0, 0, 1, 0, 0, 0, 1}, 0, {0, 0, 0}};   /* 0x4db298 */
+        return;
+    }
+    const uint8_t *d = n->data;
+    const float *m = n->frame.m;
+    float w = rdf(d + 0x114), l = rdf(d + 0x118);
+    float c[3] = {F32(MUL(w, -2.0f)), 0, F32(MUL(l, 2.0f))};
+    float a[3] = {F32(MUL(w, 2.0f)), 0, F32(MUL(l, 2.0f))};
+    float b[3] = {0, 0, F32(MUL(l, -2.0f))};
+    float fwd[3] = {m[6], m[7], m[8]}, right[3] = {m[0], m[1], m[2]};
+    float o1, o2;
+    load_shift((const float *)(d + 0xd4), fwd, right, &o1, &o2);
+    float k = F32(MUL(dt, 2.0f));
+    int bad = below((double)MUL(dt, 2.0f), 0.0) || (int32_t)fbits(k) > 0x3f733333;
+    /* the first: o1 - o2 (the step compared as computed, the ease from the rounded difference) */
+    double e = SUB(SUB(o1, sway_a), o2);
+    if (bad || below(fabs(e), 0.005)) sway_a = F32(SUB(o1, o2));
+    else sway_a = F32(ADD(MUL(MUL(F32(e), dt), 2.0f), sway_a));
+    /* the second: o2 + o1; and the third, -16 o1; these two also go straight to it for a step of -0 */
+    bad = fbits(k) > 0x80000000u || (int32_t)fbits(k) > 0x3f733333;
+    e = ADD(SUB(o2, sway_b), o1);
+    if (bad || below(fabs(e), 0.005)) sway_b = F32(ADD(o2, o1));
+    else sway_b = F32(ADD(MUL(MUL(dt, F32(e)), 2.0f), sway_b));
+    double t = MUL(o1, -16.0f);
+    if (bad) sway_c = F32(t);
+    else {
+        e = SUB(t, sway_c);
+        if (below(fabs(e), 0.005)) sway_c = F32(t);
+        else sway_c = F32(ADD(MUL(MUL(dt, F32(e)), 2.0f), sway_c));
+    }
+    c[1] = sway_a;
+    a[1] = sway_b;
+    b[1] = sway_c;
+    float nrm[3];
+    static const float z[3] = {0, 0, 1};
+    Plane_Normal(nrm, a, b, c);
+    Frame_UpFwd(out, nrm, z);
+}
+
 static float wheel_floor(Node *w) { return rdf(w->data + 0x2c); }   /* 0x430120: the wheel's ground */
 
 void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float dt)

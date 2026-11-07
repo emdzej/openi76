@@ -96,3 +96,7 @@ void Vehicle_FarStep(Node *n, float dt);
 /* Vehicle_Near 0x475b40: back near the camera: on the ground under it, settled (keep, the frame's step),
    bit 0x20000 off */
 void Vehicle_Near(Node *n);
+/* Cockpit_Sway 0x470d40: the cockpit's lean for a class 1 vehicle (else the identity): the load shifts of its
+   acceleration (+0xd4) eased at 2 per second into three heights on its track (+0x114) and wheelbase
+   (+0x118), the frame of their plane's normal */
+void Cockpit_Sway(Frame *out, const Node *n);

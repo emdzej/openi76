@@ -3,6 +3,11 @@
    start-up (WinMain, the shell, the intro movie) replaces this in steps 4, 5 and 10 of
    docs/re/port-plan.md. */
 #include "app.h"
+#include "camera.h"
+#include "classes.h"
+#include "clock.h"
+#include "input.h"
+#include "physics.h"
 #include "exe.h"
 #include "math3d.h"
 #include "mission.h"
@@ -49,7 +54,7 @@ static Pcx screen;
 static bool viewer;
 static Surface surf;           /* the display record 0x58d860's surface */
 static uint8_t *pixels;
-static View view;              /* 0x4a8488 */
+#define view g_view            /* 0x4a8488 (camera.c) */
 
 static bool viewer_init(const char *mission)
 {
@@ -129,6 +134,72 @@ static void viewer_frame(void)
     plat_present(pixels, 640, 480, 640, g_shown_pal);
 }
 
+/* The game in a mission (WinMain's loop while the state 0x4a80f4 is 5), its ported parts: after the load the
+   classes' start (0x425920) and the clock (0x450e90), the input (0x480250) and the view with its camera
+   (0x403360); each frame the clock's tick, the input's update, then unless the play is paused (0x4db008 &
+   0x3e) the user's controls (0x480870), the classes' two frames (0x425a20, 0x425b00), the camera's
+   function (0x4a8478) and the world drawn (0x407550), then the frame shown. The window's key messages are
+   the frame's last step in the original (its message pump); here the first, before the clock. With
+   --param tick=<ms> the clock reads a time that advances by that much a frame (for headless runs) instead
+   of the real one. */
+static bool play;
+static double tick_ms = -1;
+
+static bool play_init(void)
+{
+    char v[16];
+    if (plat_param("tick", v, sizeof v)) g_clock_fake_ms = 0, tick_ms = atof(v);
+    Class_StartAll();
+    Clock_Init();
+    if (!Input_Init()) {
+        plat_log("OpenI76: the input's tables are missing");
+        return false;
+    }
+    User_ControlsReset();
+    View_Init(1, &surf);
+    if (!g_user_entity) plat_log("OpenI76: the mission has no user vehicle");
+    return true;
+}
+
+static void play_frame(void)
+{
+    if (tick_ms >= 0) g_clock_fake_ms += tick_ms;
+    Input_Keys();
+    Clock_Tick();
+    Input_Update();
+    if (!(g_play_state & 0x3e)) {
+        Input_Poll();
+        Class_Frame(0);
+        Class_Frame(1);
+        /* not ported yet: the AI and the scripts (0x409020), the weapons (0x428e80), the chunks (0x4597a0),
+           the HUD's weapons (0x455d90), the texture animations (0x47e9a0) */
+        if (g_camera_fn) g_camera_fn();
+        static int frames, trace = -1;
+        if (trace < 0) {
+            char v[16];
+            trace = plat_param("trace", v, sizeof v) ? atoi(v) : 0;
+        }
+        if (trace > 0 && g_user_entity && ++frames % trace == 0) {   /* the port's: --param trace=<frames> */
+            const Node *u = g_user_entity->node;
+            const uint8_t *d = u->data;
+            float f[6];
+            memcpy(f, d + 0xe0, 8);
+            memcpy(f + 2, d + 0xac, 4);
+            int32_t gear, flags;
+            memcpy(&gear, d + 0x104, 4);
+            memcpy(&flags, d + 0x454, 4);
+            char m[200];
+            snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x",
+                     frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags);
+            plat_log(m);
+        }
+        memcpy(g_view_pos, g_view.eye, sizeof g_view_pos);   /* 0x4a85e8 is the view's eye */
+        /* 0x404170 (the objects' detail by distance) and the sounds are not ported yet */
+        viewer_frame();
+    } else
+        plat_present(pixels, 640, 480, 640, g_shown_pal);
+}
+
 bool app_init(void)
 {
     char err[256], m[300];
@@ -140,8 +211,12 @@ bool app_init(void)
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
-    char mission[32];
-    if (plat_param("mission", mission, sizeof mission)) return (viewer = viewer_init(mission));
+    char mission[32], v[16];
+    if (plat_param("mission", mission, sizeof mission)) {
+        if (!(viewer = viewer_init(mission))) return false;
+        if (plat_param("play", v, sizeof v) && atoi(v)) play = play_init();
+        return true;
+    }
     size_t n;
     uint8_t *d = vfs_read_all("LOADSCR.PCX", &n);
     bool ok = d && pcx_decode(d, n, &screen);
@@ -152,7 +227,8 @@ bool app_init(void)
 
 bool app_frame(void)
 {
-    if (viewer) viewer_frame();
+    if (play) play_frame();
+    else if (viewer) viewer_frame();
     else if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);
     return true;
 }

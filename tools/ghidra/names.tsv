@@ -495,3 +495,53 @@
 00425a20	Class_Frame0	classes	high	every listed nodes per-frame handler (word 3); ported
 00425b00	Class_Frame1	classes	high	the same with word 4; ported
 00450fa0	Clock_Tick	clock	high	the frame step from GetTickCount, clamped; ported
+0047eee0	Input_FindDevice	input	high	a listed device by name (-1 absent), else opened; ported
+0047ed20	Input_OpenDevice	input	high	the device from the first driver that has it, else listed absent; ported
+0047ef40	Input_AnalogChannel	input	high	an analog channel by number or name; ported
+0047f030	Input_DiscreteChannel	input	high	a discrete channel by number or name; ported
+0047f120	Input_FindAction	input	high	the action table 0x4e6340 by name; ported
+0047f160	Input_ReadLine	input	high	the next non-blank line, cut at a newline or #; ported
+0047f1f0	Input_Sink	input	high	an analog action's sink 0x4e2238 with its _plus _minus _reset _set; ported
+0047f550	Input_AddAnalog	input	high	an analog binding 0x4df038; ported
+0047f6c0	Input_ReadChord	input	high	a chord's lines up to }; ported
+0047f830	Input_ChordMet	input	high	every + channel down and every - up; ported
+0047f880	Input_ReadMap	input	high	input.map's bindings; ported
+0047fc40	Input_LoadMap	input	high	input.map then giddi\<device>.std; ported
+0047fe20	Input_LoadGameKeys	input	high	gamekey.map into 0x4e6fe8; ported
+004800a0	Input_Ramp	input	high	a sink's reset, set and plus/minus ramps; ported
+00480250	Input_Init	input	high	the maps, the keyboard; ported
+00480290	Input_Update	input	high	each frame: devices polled, chords into actions, sinks scaled; ported
+00480520	Input_Reset	input	high	devices closed, tables emptied, the drivers listed; ported
+00480680	Input_MenuOnly	input	high	0x4df024 = 0; ported
+00480690	Input_AllBindings	input	high	0x4df024 = 1; ported
+004806a0	Input_GameKey	input	high	a typed key's command from 0x4e6fe8; ported
+004806b0	Input_Error	input	high	the device and channel messages (to the no-op reporter)
+00480720	Input_MenuPoll	input	high	the menus' poll: the menu key; ported
+00480790	Cheat_Push	input	high	a Ctrl+Shift character into the ring 0x5e2fd0; ported
+004807c0	Cheat_Typed	input	high	the ring ends with a string; ported
+00480800	Cheat_Check	input	high	wiggleburger freelance getdown thirdnostril; ported (their effects not)
+004809b0	Game_Command	input	med	a typed key's command: views, pause, menus (a switch)
+00480db0	Kb_Count	input	high	keyboard driver: 1
+00480dc0	Kb_Describe	input	high	keyboard driver: 121 channels; ported
+00480e50	Kb_Poll	input	high	keyboard driver: the set out, releases applied, Alt quirk; ported
+00480ec0	Kb_Key	input	high	keyboard driver: the next typed key; ported
+00480f10	Kb_Init	input	high	keyboard driver: the typed ring emptied; ported
+00480f60	Kb_Messages	input	high	the window's key messages; ported as Input_Keys
+00481030	Kb_Typed	input	high	a key down's typed code with modifiers into the ring; ported
+004810e0	Kb_Message	input	high	a key message into the 128-bit set; ported
+004812b0	Kb_Clear	input	high	no keys down; ported
+00481be0	User_ControlsReset	input	high	the key ramps at 0; ported
+00481c10	User_Cockpit	input	med	the cockpit views' per-frame and the wind sound
+004821e0	User_Specials	input	med	the three specials' keys
+00482e50	Horn_Wait	input	high	the horn's timer down by the step; ported
+0047b660	Ms_Count	input	high	mouse driver: 1
+0047b670	Ms_Describe	input	high	mouse driver: 2 analog, 3 buttons; ported
+0047b7d0	Ms_Poll	input	high	mouse driver: buttons and position with the focus; ported without
+00404890	Camera_PilotStart	camera	high	mode 0x19: the pilot's view; ported
+00404520	Camera_Pilot	camera	high	the driver's eye with the glance and the sway; ported
+00470d40	Cockpit_Sway	physics	high	the cockpit's lean from the load shifts; ported
+00471390	Mirror_Draw	render	med	the rear-view mirror's view 0x5e2ae0
+0042d500	Vehicle_SetMode	vehicle	high	+0x104 for class 1
+0042d520	Vehicle_GearUp	vehicle	high	+0x104 up to 5; ported inline
+0042d540	Vehicle_GearDown	vehicle	high	+0x104 down to 0; ported inline
+00450ab0	Ui_KeyWindow	ui	med	the first window with flag 0x100 (takes the keys)
