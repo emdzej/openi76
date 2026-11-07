@@ -28,3 +28,16 @@ void Lum_Ramp(int from, int to, uint8_t c);
    stepped up towards 0.95 (rows past 15 run into the tbl table), the shadow row at +0x11200 (0.6 below
    the last step), and colours 0xe0-0xef glowing as themselves. Needs Palette_Set's floats. */
 void Glow_Build(const uint8_t pal[768]);
+
+/* Gamma_Build 0x43c1e0: ten rows (0x5adb50), one per gamma 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2,
+   2.5: entry i is (i / 255)^(1/gamma) * 255, truncated. */
+extern uint8_t g_gamma[10][256];
+extern uint8_t g_gamma_index;   /* 0x5e14dc, the setting: 1-10, anything else is 3 (gamma 1.0) */
+void Gamma_Build(void);
+/* Gamma_Apply 0x43c170: colours first..end-1 of pal through gamma row n (1-10; below 1 the setting) */
+void Gamma_Apply(uint8_t *pal, int first, int end, int n);
+/* The palette path of the display's set-palette 0x437b40: colours first..first+count-1 of pal into the
+   shown palette (the display record's +0xe0), colour 0 forced black, gamma applied to colours
+   first..count-1 (the original passes the count as the end), then Palette_Set on the result: the
+   float palette and the colour matching see the gamma-corrected colours. */
+void Display_SetPalette(uint8_t shown[768], int first, int count, const uint8_t *pal, const uint8_t *lum);

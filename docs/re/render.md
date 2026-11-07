@@ -398,4 +398,28 @@ has 9 floats, then a double position at +0x28. The routines are checked by `diff
     0xff row becomes the colour.
 - **Lum_Ramp 0x43b5f0** writes shades 0-31 of one colour as an 8.16 ramp between two colour numbers.
   Shades 32-143 copy shade 31, and shades 144-255 copy shade 0.
-- **Not yet ported:** the gamma tables (Gamma_Build 0x43c1e0, `pow`; Gamma_Apply 0x43c170).
+- **The gamma tables.**
+  - Gamma_Build 0x43c1e0 fills ten rows of 256 bytes at 0x5adb50, for the gammas 0.8, 0.9, 1.0, 1.2, 1.4,
+    1.6, 1.8, 2.0, 2.2 and 2.5. Entry i is `pow(i * (1/255), 1/gamma) * 255`, truncated.
+  - The runtime's `pow` works at 64-bit precision (control word 0x133f), then restores the caller's
+    53-bit control word, so the multiply by 255 rounds to a double.
+  - Even gamma 1.0 is not the identity: 24 entries (33, 37, 41, ...) come out one below. The product
+    (i/255)·255 rounds to just under i, and the truncation drops it.
+  - The emulator's `fyl2x`/`f2xm1` are less exact than a real FPU's, so its run of the original differs
+    from the port in 69 entries of that row. Every entry of the port's row stays the same under a `pow`
+    error of 2^-62 either way (a real FPU is within 2^-63), so the port's row is the hardware's
+    (confirmed by the analysis, not by a run).
+  - Gamma_Apply 0x43c170 (pal, first, end, n) maps colours first..end-1 through row n−1. For n < 1 it
+    uses the setting at 0x5e14dc; anything outside 1-10 becomes 3, which is gamma 1.0.
+- **The display's set-palette 0x437b40** (record, first, count, pal, lum). In the DirectDraw path
+  (record+0xd8 set, no driver table at +0x3e0) it:
+  - copies the colours to the record's shown palette at +0xe0 and forces colour 0 to black;
+  - calls Gamma_Apply(shown, first, **count**, 0). It passes the count as the end, a quirk the port
+    keeps;
+  - copies all 256 colours into the PALETTEENTRY table 0x4d613c (flags 4, `PC_NOCOLLAPSE`);
+  - calls Palette_Set(record, lum), so the float palette and colour matching see the gamma-corrected
+    colours;
+  - then sets the DirectDraw palette.
+
+  The port keeps the first three steps as Display_SetPalette; the shown palette is what goes to
+  `plat_present`.

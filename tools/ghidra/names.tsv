@@ -145,3 +145,4 @@
 00494d20	Terrain_UnmapFile
 0048e8d0	Terrain_Draw
 00407550	Render_World
+00437b40	Display_SetPalette

@@ -159,3 +159,38 @@ void Glow_Build(const uint8_t pal[768])
         for (int i = 0; i < 16; i++) glow[i * 256 + c] = (uint8_t)m;
     }
 }
+
+uint8_t g_gamma[10][256];
+uint8_t g_gamma_index;
+
+void Gamma_Build(void)
+{
+    static const double gamma[10] = {0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.5};
+    for (int k = 0; k < 10; k++) {
+        double e = 1.0 / gamma[k];
+        for (int i = 0; i < 256; i++)
+            g_gamma[k][i] = (uint8_t)(int32_t)(int64_t)trunc(pow(i * (1.0 / 255.0), e) * 255.0);   /* 0x4a5fa0/a8 */
+    }
+}
+
+static const uint8_t *gamma_row(int n)
+{
+    if (n < 1) n = g_gamma_index;
+    if (n < 1 || n > 10) n = 3;
+    return g_gamma[n - 1];
+}
+
+void Gamma_Apply(uint8_t *pal, int first, int end, int n)
+{
+    const uint8_t *g = gamma_row(n);
+    for (int i = first; i < end; i++)
+        for (int c = 0; c < 3; c++) pal[3 * i + c] = g[pal[3 * i + c]];
+}
+
+void Display_SetPalette(uint8_t shown[768], int first, int count, const uint8_t *pal, const uint8_t *lum)
+{
+    memcpy(shown + 3 * first, pal + 3 * first, 3 * (size_t)count);
+    shown[0] = shown[1] = shown[2] = 0;
+    Gamma_Apply(shown, first, count, 0);   /* the original passes the count as the end */
+    Palette_Set(shown, lum);
+}
