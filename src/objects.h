@@ -12,6 +12,9 @@
 const char *Obj_Name(const uint8_t *name8, const char *ext);
 /* the ODEF chunk's handler 0x484620 / 0x494140: OREV, OBJ (repeated), EXIT (0x4eb768) */
 int Objects_Odef(const uint8_t *payload, void *name, const uint8_t *end);
+/* the LDEF chunk's handler 0x484640 / 0x493530: LREV, OBJ (0x493560: a structure's pieces along a line),
+   EXIT (0x4eb6c8) */
+int Objects_Ldef(const uint8_t *payload, void *name, const uint8_t *end);
 /* OBJ 0x494170 (the chunk, header included) */
 int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end);
 /* Obj_Node 0x494790: a node for an object record (0x78 bytes: name, rotation, position, centre, radius,
@@ -30,6 +33,8 @@ typedef struct {
     int32_t has_b;
 } ObjCtx;
 
+/* Obj_Lists 0x493c10: count list pointers, each stride records of 100 bytes after the last */
+void Obj_Lists(const uint8_t **out, const uint8_t *first, int count, int32_t stride);
 /* Obj_Tree100 0x493c90: Obj_Tree's form for 100-byte records (VGEO, WGEO, VLOC's needles): the parent
    by name under parent (else parent itself), made_fn called for each node made, and a fourth level for
    the third under a class 0x32 parent */

@@ -7,8 +7,9 @@ entities, their node trees, levels of detail, destruction chunks, lights, spawn 
 the world list and the collision set-up. `tools/emu/diff_objects.py` finds the port's state identical to
 the original's for all 40 missions on disc 1.
 
-The vehicles' loading is in [vehicles.md](vehicles.md). **Not yet:** the vehicles' weapons (WEPN), the
-effects (`.xdf`, 0x493210), the constructors of classes 34 and 53, LDEF and ADEF.
+The vehicles' loading is in [vehicles.md](vehicles.md), their weapons' in [weapons.md](weapons.md),
+the effects' in [effects.md](effects.md), the AI's set-up in [ai.md](ai.md). Lines of objects (LDEF)
+are below. **Not yet:** the constructors of classes 34 and 53, and ADEF (the mission's script).
 
 ## The chain
 
@@ -195,5 +196,38 @@ resource layer, and the user vehicle is WinMain's default `vppirna1` (0x58dcd0, 
 before the shell's choice; without it the mission's EXIT 0x484820 ends in "No User vehicle in mission").
 With the set-up above (mission.INITS), t01 reads 494 files and makes 94 entities and 719 scene nodes, at
 most 4 levels deep. `diff_objects.py` runs the same load with the pieces the port lacks answered as the
-port answers them: vehicles fail, the `.xdf` gives "null", and LDEF and ADEF are skipped. ADEF would add
+port answers them: ADEF is skipped. ADEF would add
 a reference to the trees the AI names.
+
+## Lines of objects (LDEF, 0x493560)
+
+S01, S02, S06, S07 and T05 have them: fences and walls laid along a line of points. Ported; diffed with
+the rest (confirmed).
+
+- **The record** is an OBJ's (0x78 bytes), then a count at +0x64 and that many points (x, y, z) at +0x68.
+- **The group.** Its node is made on the ground (Obj_Node), with the identity rotation, at the first
+  point and the terrain's height there. Each point is replaced by its own height, then made relative
+  to the group (floats).
+- **The pieces.** One per segment:
+  - The first is the `.sdf`'s first child; the `.sdf` is named after the group.
+  - The others are class 3 nodes under the group, with the first's levels of detail (Lod_Copy 0x47d850:
+    the names, the current mesh, the sphere and box).
+  - Each takes the group's name. Its frame comes from Frame_FromDir 0x4522e0 along the segment, at the
+    segment's middle, lowered by its box's minimum y.
+- **Frame_FromDir.** z is the direction (normalised with Fast_InvSqrt). x is (z, 0, −x) normalised, or
+  (1, 0, 0) when x² + z² < 0.02. y = z × x.
+- **The entity, and splitting.** The group becomes an entity. While its radius is over 20 (compared as
+  the float's bits, > 0x41a00000), pieces are dropped from the end of the child list, the latest made
+  first, and the entity's centre and radius recomputed without them. The dropped pieces then go under
+  a new group node:
+  - The node is made from the record again, with the old group's frame.
+  - It is moved to the first dropped piece, and the pieces' positions are taken relative to it.
+  - The new group goes through the same steps, so a long fence becomes several entities.
+- **Quirks kept.** A group whose single piece has a radius over 20 stays as it is. The points are
+  copied into the drawers' vertex buffer (0x58dcb0) in the original.
+- **The harness.** The emulator now builds the inverse-sqrt table (0x4516f0) in mission.setup, as
+  WinMain does at start-up. Without it the original's Frame_FromDir gives unnormalised axes.
+
+## After the load
+
+The classes' start pass (0x425920) and the texture animations are in [classes.md](classes.md).

@@ -3,8 +3,8 @@
 `src/vehicle.c`, the class constructors in `src/entity.c`, and the radius in `src/collide.c`. Checked by
 `tools/emu/diff_objects.py`: every mission's vehicles (their node trees, levels of detail, chunks, class
 data, the COLP record and the entity) are identical to the original's (confirmed). The weapons (WEPN
-0x4863d0) and the AI's entity callback (0x408510) are not ported yet, and are stubbed the same way in the
-emulator. File formats: [docs/formats/vehicles.md](../formats/vehicles.md).
+0x4863d0) are in [weapons.md](weapons.md). The AI's entity callback (0x408510) is not ported yet, and
+is stubbed in the emulator. File formats: [docs/formats/vehicles.md](../formats/vehicles.md).
 
 ## The chain
 

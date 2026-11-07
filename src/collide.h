@@ -29,3 +29,6 @@ extern Cell *g_coll_static, *g_coll_moving, *g_coll_ground;   /* 0x577180, 0x577
 void Collide_Init(void);
 /* Collide_Add 0x469c10 */
 void Collide_Add(Entity *e);
+/* Ground_Height 0x477290: the ground under (px, py, pz): the highest walkable face of the ground entities
+   (classes 11-13) within 3 of py, else the highest below py, else the terrain; its normal if asked */
+void Ground_Height(float px, float py, float pz, float *out, float normal[3]);

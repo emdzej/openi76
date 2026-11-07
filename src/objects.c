@@ -1,8 +1,11 @@
 /* A mission's objects (objects.h). In the current rounding mode (render/fpu.h). */
 #include "objects.h"
 #include "vehicle.h"
+#include "weapons.h"
+#include "texanim.h"
 #include "collide.h"
 #include "crt.h"
+#include "effects.h"
 #include "entity.h"
 #include "exe.h"
 #include "lod.h"
@@ -17,6 +20,8 @@
 #define SUB fpu_sub
 #define ADD fpu_add
 #define F32 fpu_f32
+
+static uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 
 Frame g_spawn[2][64];
 int g_spawn_count[2];
@@ -138,6 +143,11 @@ Node *Obj_Tree(const uint8_t *const *lists, Node *parent, int nlod, int nstate, 
     return made[0];
 }
 
+void Obj_Lists(const uint8_t **out, const uint8_t *first, int count, int32_t stride)
+{
+    for (int i = 0; i < count; i++) out[i] = first + (size_t)i * (size_t)stride * 100;
+}
+
 Node *Obj_Tree100(const uint8_t *const *lists, Node *parent, int nlod, int nstate, int count,
                   void (*made_fn)(Node *n, Node *parent))
 {
@@ -171,15 +181,6 @@ Node *Obj_Tree100(const uint8_t *const *lists, Node *parent, int nlod, int nstat
     return made[0];
 }
 
-/* 0x493210: an .xdf (the effects) into out's 8-byte name; the file and its effect are not ported yet,
-   only its first step, the name "null" */
-static void xdf(const char *name, uint8_t *out)
-{
-    (void)name;
-    memset(out, 0, 8);
-    memcpy(out, "null", 4);
-}
-
 /* SDFC 0x4944e0 */
 static int sdfc(const uint8_t *c, void *arg, const uint8_t *end)
 {
@@ -190,7 +191,7 @@ static int sdfc(const uint8_t *c, void *arg, const uint8_t *end)
     int32_t cls = x->node->cls;
     uint8_t *d = x->node->data;
     if ((cls == 2 || cls == 3 || cls == 0xc || cls == 0xb) && d) {
-        xdf((const char *)c + 0x34, d + 0x10);
+        Xdf_Load((const char *)c + 0x34, d + 0x10, NULL);
         memcpy(d + 0x18, c + 0x41, 12);
         d[0x24] = c[0x4d];
     }
@@ -280,7 +281,7 @@ static void child_effects(Node *n)
     if (Class_IsStructure(n->cls)) {
         uint8_t *d = n->data;
         uint32_t i = ((n->flags & 0xc00) >> 10) * 13;
-        xdf(exe_str(0x4eb7f8 + i), d + 0x10);
+        Xdf_Load(exe_str(0x4eb7f8 + i), d + 0x10, NULL);
         memcpy(d + 0x18, exe_data(0x4eb830 + i, 12), 12);
         d[0x24] = *exe_data(0x4eb83c + i, 1);
     }
@@ -375,8 +376,7 @@ int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end)
         }
         return 1;
     }
-    /* 0x4257c0 (off the class lists) is not ported yet */
-    (void)structure;
+    if (structure) Class_Unlist(x.node);
     if (x.node) Node_Free(x.node);
     return 0;
 }
@@ -404,6 +404,133 @@ bool Objects_Scrounge(const char *path)
     return sdf_load(&x, Obj_Name(rec, ".sdf"));
 }
 
+/* the LDEF's OBJ 0x493560: a structure's pieces along a line of points on the ground (a fence, a wall).
+   The record is an object's (0x78 bytes), then the count at +0x64 and the points (x, y, z) at +0x68. */
+static int line_obj(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)arg, (void)end;
+    const uint8_t *rec = c + 8;
+    ObjCtx x;
+    memset(&x, 0, sizeof x);
+    if (!(x.node = Obj_Node(NULL, rec, (const char *)rec, true, true))) return 0;
+    uint8_t saved[0x78];
+    memcpy(saved, rec, sizeof saved);
+    int32_t n = rd32(rec + 0x64);
+    /* the original copies the points into the drawers' vertex buffer (0x58dcb0) */
+    float (*pt)[3] = calloc(n > 0 ? (size_t)n : 1, sizeof *pt);
+    memcpy(pt, rec + 0x68, (size_t)(n > 0 ? n : 0) * sizeof *pt);
+    /* the group at the first point, on the ground; the points relative to it */
+    float p0x = pt[0][0], p0z = pt[0][2];
+    float h0 = F32(Terrain_Height(p0x, p0z));
+    memcpy(&x.node->frame, exe_data(0x4db298, sizeof x.node->frame), sizeof x.node->frame);
+    x.node->frame.pos[0] = p0x;
+    x.node->frame.pos[1] = h0;
+    x.node->frame.pos[2] = p0z;
+    for (int i = 0; i < n; i++) {
+        float h = F32(Terrain_Height(pt[i][0], pt[i][2]));
+        pt[i][0] = F32(SUB(pt[i][0], p0x));
+        pt[i][1] = F32(SUB(h, h0));
+        pt[i][2] = F32(SUB(pt[i][2], p0z));
+    }
+    /* a piece in the middle of each segment along it: the .sdf's first child, then copies (class 3) */
+    Node *first = NULL;
+    for (int i = 0; i < n - 1; i++) {
+        Node *piece;
+        if (i == 0) {
+            if (!sdf_load(&x, Obj_Name((const uint8_t *)x.node->name, ".sdf"))) {
+                Class_Unlist(x.node);
+                Node_Free(x.node);
+                free(pt);
+                return 0;
+            }
+            piece = first = x.node->child;
+        } else {
+            if (!(piece = Node_Create(x.node))) break;
+            Class_Set(piece, 3);
+            Lod_Copy(first, piece);
+        }
+        memcpy(piece->name, x.node->name, 8);
+        const float *a = pt[i], *b = pt[i + 1];
+        float d[3];
+        for (int k = 0; k < 3; k++) d[k] = F32(SUB(b[k], a[k]));
+        float len = F32(MUL(fpu_sqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0]))), 0.5f));   /* 0x4a75c4 */
+        Frame f;
+        Frame_FromDir(&f, a, d);
+        float px = F32(ADD(MUL(len, f.m[6]), a[0]));
+        float py = F32(ADD(MUL(len, f.m[7]), a[1]));
+        float pz = F32(ADD(MUL(len, f.m[8]), a[2]));
+        f.pos[0] = px;
+        f.pos[1] = SUB(py, piece->bmin[1]);   /* standing on the ground */
+        f.pos[2] = pz;
+        piece->frame = f;
+    }
+    free(pt);
+    for (;;) {
+        Entity *e = Entity_Add(x.node, x.has_x ? colp_record(x.x) : NULL, x.has_b ? x.b : NULL);
+        if (!e) {
+            plat_log("Interstate '76 cannot create entity - The world is full!");   /* the original's fatal */
+            return 0;
+        }
+        /* the original finds the entity again by its node (0x423ff0, 0x423f60) */
+        Node *last = x.node->child;
+        if (!last) return 1;   /* fewer than two points: the original reads through a null node */
+        while (last->next) last = last->next;
+        if (!((int32_t)fbits(e->r) > 0x41a00000)) return 1;   /* a radius of 20 at most */
+        /* the pieces from the last one made (the list's first) taken while the radius is over 20 */
+        do {
+            Node *p = last->prev;
+            if (p == x.node) return 1;
+            p->next = NULL;
+            float mn[3], mx[3];
+            Node_Bounds(e->node, mn, mx);
+            for (int k = 0; k < 3; k++) e->c[k] = F32(MUL(ADD(mn[k], mx[k]), 0.5f));
+            e->r = F32(Node_Radius(e->node, e->c[0], e->c[1], e->c[2]));
+            p->next = last;
+            last = last->prev;
+        } while ((int32_t)fbits(e->r) > 0x41a00000);
+        /* the rest into a new group at the first of them */
+        Node *cut = last->next;
+        cut->prev->next = NULL;
+        cut->prev = NULL;
+        Node *nn = Obj_Node(NULL, saved, (const char *)rec, true, true);
+        if (!nn) {
+            /* the original starts from cut's next (it reads through a null one) */
+            Node *q = cut;
+            while (q->next) q = q->next;
+            while (q) {
+                Node *pr = q->prev;
+                Node_Free(q);
+                q = pr;
+            }
+            return 0;
+        }
+        nn->frame = x.node->frame;
+        nn->child = cut;
+        cut->prev = nn;
+        double dx = ADD(cut->frame.pos[0], nn->frame.pos[0]);
+        double dy = ADD(cut->frame.pos[1], nn->frame.pos[1]);
+        double dz = ADD(cut->frame.pos[2], nn->frame.pos[2]);
+        for (Node *q = cut; q; q = q->next) {
+            q->frame.pos[0] = ADD(SUB(nn->frame.pos[0], dx), q->frame.pos[0]);
+            q->frame.pos[1] = ADD(SUB(nn->frame.pos[1], dy), q->frame.pos[1]);
+            q->frame.pos[2] = ADD(SUB(q->frame.pos[2], dz), nn->frame.pos[2]);
+        }
+        nn->frame.pos[0] = dx;
+        nn->frame.pos[1] = dy;
+        nn->frame.pos[2] = dz;
+        x.node = nn;
+    }
+}
+
+static ChunkDesc ldef_table[] = {   /* 0x4eb6c8 */
+    {"LREV", Rev_Check, 0x2004}, {"OBJ", line_obj, 0x400}, {"EXIT", Objects_Exit, 0x1000},
+};
+
+int Objects_Ldef(const uint8_t *payload, void *name, const uint8_t *end)
+{
+    return Bwd2_Walk(payload, ldef_table, 3, NULL, name, true, end) != NULL;
+}
+
 static ChunkDesc odef_table[] = {   /* 0x4eb768 */
     {"OREV", Rev_Check, 0x2004}, {"OBJ", Objects_Obj, 0x400}, {"EXIT", Objects_Exit, 0x1000},
 };
@@ -420,7 +547,12 @@ void Objects_Init(void)
     Entity_Init();
     World_ListInit();
     Lod_Init();
+    TexAnim_Init();   /* 0x47e890 */
+    Weapons_Init();   /* 0x454b50 */
     Vehicle_Init();   /* 0x41fbc0, 0x4088a0 (its AI part not yet) and 0x428d80 */
+    Effects_Init();   /* 0x453ed0 and 0x454840, between the radar and the AI in the original's order:
+                         neither adds entities */
+    Muzzles_Init();
     Collide_Init();
     Chunks_Init();
     g_spawn_count[0] = g_spawn_count[1] = 0;   /* 0x461??? at the mission's end */

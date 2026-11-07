@@ -98,6 +98,63 @@ bool Lod_Select(Node *n, int lod)
     return n->geom != NULL;
 }
 
+bool Lod_SetState(Node *n, int state)
+{
+    LodRec *r = (LodRec *)Lod_Find(n);
+    if (!r) return false;
+    if (r->state == state) return true;
+    LodNames *l = r->names;
+    for (int i = state; i > 0; i--) l = l->next;
+    r->state = state;
+    if (r->lod == -1) return true;
+    if (r->prev) {
+        Geom_Release(r->prev);
+        r->prev = NULL;
+        memset(r->pname, 0, sizeof r->pname);
+    }
+    r->plod = -1;
+    if (strcmp(r->cname, l->name[r->lod]) == 0) return true;
+    if (r->cur) {
+        Geom_Release(r->cur);
+        r->cur = NULL;
+    }
+    strncpy(r->cname, l->name[r->lod], 15);
+    r->cur = Geom_Get(l->name[r->lod]);
+    n->geom = r->cur;
+    Tex_Refresh((uintptr_t)n);
+    return n->geom != NULL;
+}
+
+bool Lod_Copy(const Node *src, Node *dst)
+{
+    const LodRec *f = Lod_Find(src);
+    if (!f) return false;
+    LodRec *r = calloc(1, sizeof *r);
+    if (!r) plat_log("Failed to add object to the cache");   /* the original's fatal */
+    r->node = dst;
+    r->lod = r->plod = -1;
+    r->next = table[bucket(dst)];
+    table[bucket(dst)] = r;
+    LodNames **to = &r->names;
+    for (const LodNames *l = f->names; l; l = l->next) {
+        *to = calloc(1, sizeof **to);
+        memcpy((*to)->name, l->name, sizeof l->name);
+        to = &(*to)->next;
+    }
+    memcpy(dst->centre, src->centre, sizeof dst->centre);
+    dst->radius = src->radius;
+    memcpy(dst->bmin, src->bmin, sizeof dst->bmin);
+    memcpy(dst->bmax, src->bmax, sizeof dst->bmax);
+    r->plod = f->plod;   /* overwritten below, as the original's */
+    r->lod = f->lod;
+    r->state = f->state;
+    r->plod = -1;
+    strncpy(r->cname, f->cname, 15);
+    r->cur = Geom_Get(r->cname);
+    dst->geom = r->cur;
+    return true;
+}
+
 void Lod_Remove(Node *n)
 {
     if (!n) return;

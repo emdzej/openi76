@@ -39,6 +39,10 @@ void Entity_OnAdd(EntityFn fn);
    node's meshes. A node with flag 0x10 is the user's. NULL when full (the original's fatal at 256). */
 Entity *Entity_Add(Node *n, void *a, const int32_t *b);
 
+/* Body_Set 0x4716f0: at p the mass m and the inertia i, with 1 / m (+4) and m / i (+0x14; 1e10 when i is
+   not above 1e-4) */
+void Body_Set(uint8_t *p, float m, float i);
+
 /* Class_IsStructure 0x42e5a0 (a node's) and 0x42e5e0 (a class): 2, 3, 4, 0xb, 0xc */
 bool Class_IsStructure(int cls);
 /* Class_Set 0x425700: the node's class; structures but 4 use class 2's entry */
@@ -52,6 +56,11 @@ void Data_Free(uint8_t *d);
 
 /* Class_Free 0x4258c0: the class's destructor for its data */
 void Class_Free(int cls, uint8_t *data);
+/* Filter_Init 0x453df0: a two-pole filter (0x28 bytes) of damping a and period p */
+void Filter_Init(uint8_t *f, float a, float p);
+/* Class_Unlist 0x4257c0: a live node's class data freed (cls and data cleared), then the node off the
+   class lists, with the reference Class_Set took */
+void Class_Unlist(Node *n);
 /* for tests: the port's classes in the table's order (n of them) */
 const int32_t *Class_Table(int *n);
 
@@ -61,6 +70,8 @@ typedef struct Cell {
     void *value;
 } Cell;
 Cell *List_Push(Cell *head, Cell **prev, void *value);
+/* List_Remove 0x450df0: c out of the list at *head, freed */
+void List_Remove(Cell **head, Cell *c);
 extern Cell *g_class_nodes, *g_class_cells;   /* 0x54f884, 0x54f888 */
 extern int g_class_count[2];                   /* 0x4d3c18, 0x4d3c1c */
 

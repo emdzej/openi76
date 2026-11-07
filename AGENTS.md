@@ -27,10 +27,12 @@ polygons). Each one gets a `--param`, a play-page setting and a line in the publ
 layer, the exe check, the 8-bit presentation path and the renderer's core (DrawPoly, the queue, the
 terrain, the roads, the sky; `tools/emu/regress.sh` diffs them against the original) work, and so do
 the objects (entities, node trees, levels of detail, collision set-up, and their drawing with the
-dynamic lights and the shadows; docs/re/objects.md) and the vehicles' loading (docs/re/vehicles.md). The app shows disc 1's loading screen, or with `--param
+dynamic lights and the shadows; docs/re/objects.md), the lines of objects (LDEF), the vehicles' loading
+(docs/re/vehicles.md) with their weapons (docs/re/weapons.md), the effects' loading (docs/re/effects.md)
+the AI's set-up (docs/re/ai.md) and the classes' start pass but the vehicles' (docs/re/classes.md). The app shows disc 1's loading screen, or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
-camera (the vehicles stand still: their simulation, weapons, AI, effects and the rest of the frame are not
-ported yet). Read
+camera. Not ported yet: the vehicles' start, the mission's script (ADEF's FSM), the game loop and the classes' per-frame
+handlers (the vehicle simulation), firing, the AI's driving, the HUD, the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.
 

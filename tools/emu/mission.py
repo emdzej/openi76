@@ -119,6 +119,7 @@ def setup(log=None):
     exe.stub_import("PeekMessageA", lambda *a: 0, 5)
     exe.stub_import("GetLocalTime", lambda p: exe.write(p, bytes(16)), 1)
     exe.stub_import("GetSystemTime", lambda p: exe.write(p, bytes(16)), 1)
+    exe.call(0x4516F0)   # WinMain's start-up: the inverse square root's table (LDEF's frames use it)
     return exe, lib
 
 

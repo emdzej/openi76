@@ -1,5 +1,6 @@
 /* The vehicles' loading (vehicle.h). In the current rounding mode (render/fpu.h). */
 #include "vehicle.h"
+#include "ai.h"
 #include "chunks.h"
 #include "crt.h"
 #include "entity.h"
@@ -11,6 +12,7 @@
 #include "res.h"
 #include "scene.h"
 #include "tex.h"
+#include "weapons.h"
 #include "render/fpu.h"
 #include "render/light.h"
 #include <stdio.h>
@@ -32,19 +34,6 @@ static Node *ptr_node(uint8_t *d, uint32_t off) { return d ? *Data_Ptr(d, off) :
 
 char g_user_vcf[16];   /* 0x58dcd0: WinMain's default (0x4a8448) until the shell's choice */
 int g_vcf_forced;      /* 0x4e9c20 */
-
-/* _splitpath's file name: after the last \, / or :, up to the last . */
-static void crt_splitname(const char *path, char *out, size_t cap)
-{
-    const char *b = path;
-    for (const char *p = path; *p; p++)
-        if (*p == '\\' || *p == '/' || *p == ':') b = p + 1;
-    const char *dot = strrchr(b, '.');
-    size_t n = dot ? (size_t)(dot - b) : strlen(b);
-    if (n >= cap) n = cap - 1;
-    memcpy(out, b, n);
-    out[n] = 0;
-}
 
 /* a frame from 9 floats and a float position (the word at +0x24 is left as it was) */
 static void frame_from(Frame *f, const uint8_t *m, const uint8_t *pos)
@@ -185,12 +174,6 @@ static void vgeo_part(Node *n, Node *vehicle)
         if (n->cls == slots[i].cls) *Data_Ptr(d, slots[i].off) = n;
 }
 
-/* 0x493c10: count list pointers, each stride records of 100 bytes after the last */
-static void lists_of(const uint8_t **out, const uint8_t *first, int count, int32_t stride)
-{
-    for (int i = 0; i < count; i++) out[i] = first + (size_t)i * (size_t)stride * 100;
-}
-
 /* VGEO 0x485b80: the vehicle's parts, 7 levels by 4 states */
 static int vgeo(const uint8_t *c, void *arg, const uint8_t *end)
 {
@@ -198,7 +181,7 @@ static int vgeo(const uint8_t *c, void *arg, const uint8_t *end)
     ObjCtx *x = arg;
     const uint8_t *lists[0x1c];
     int32_t count = rd32(c + 8);
-    lists_of(lists, c + 0xc, 0x1c, count);
+    Obj_Lists(lists, c + 0xc, 0x1c, count);
     return Obj_Tree100(lists, x->node, 7, 4, count, vgeo_part) != NULL;
 }
 
@@ -389,7 +372,7 @@ static int wgeo(const uint8_t *c, void *arg, const uint8_t *end)
     WheelCtx *w = arg;
     const uint8_t *lists[16];
     int32_t count = rd32(c + 8);
-    lists_of(lists, c + 0xc, 16, count);
+    Obj_Lists(lists, c + 0xc, 16, count);
     if (!Obj_Tree100(lists, w->a, 4, 2, count, NULL)) return 0;
     return Obj_Tree100(lists + 8, w->b, 4, 2, count, NULL) != NULL;
 }
@@ -551,11 +534,11 @@ static int spec(const uint8_t *c, void *arg, const uint8_t *end)
     return 1;
 }
 
-/* WEPN 0x4863d0: a weapon on a hard point; not ported yet (it succeeds without one) */
+/* WEPN 0x4863d0: a weapon on a hard point (weapons.c) */
 static int wepn(const uint8_t *c, void *arg, const uint8_t *end)
 {
-    (void)c, (void)arg, (void)end;
-    return 1;
+    (void)end;
+    return Weapons_Wepn(c, arg);
 }
 
 static ChunkDesc vcf_table[] = {   /* 0x4e9c28 */
@@ -591,7 +574,7 @@ void Vehicle_Init(void)
     /* 0x41fbc0: the radar (its mask and its slots are not ported yet) */
     g_radar = NULL;
     Entity_OnAdd(radar_add);
-    /* 0x4088a0: the AI's callback 0x408510 (the teams, the AI blocks) is not ported yet */
+    AI_Init();   /* 0x4088a0 */
     g_artillery_count = 0;   /* 0x428d80 */
     Entity_OnAdd(artillery_add);
 }

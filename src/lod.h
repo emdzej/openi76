@@ -15,6 +15,12 @@ bool Lod_Add(Node *n, const char *name, int state, int lod);
    its name differs from the one shown; the previous one is kept for a switch back. True if the node has
    a mesh. False without a record. */
 bool Lod_Select(Node *n, int lod);
+/* Lod_SetState 0x47db20: the record's state (0 intact, 1 damaged...); with a level shown, that level's mesh
+   of the new state (the previous one dropped). False without a record or a mesh. */
+bool Lod_SetState(Node *n, int state);
+/* Lod_Copy 0x47d850: dst gets a record like src's (its names, level and state, the current mesh loaded
+   again) and src's sphere and box; false if src has none */
+bool Lod_Copy(const Node *src, Node *dst);
 /* Lod_Remove 0x47da30 */
 void Lod_Remove(Node *n);
 /* for tests: the record's current and previous names and levels, and the state's names (NULL if no

@@ -207,7 +207,7 @@ static void motion_init(uint8_t *p)
 
 /* 0x4716f0: the mass m and the inertia i, with 1 / m (0x4a66a4) and m / i (1e10 when i is not above
    1e-4, the bits compared as an integer) */
-static void body_set(uint8_t *p, float m, float i)
+void Body_Set(uint8_t *p, float m, float i)
 {
     uint32_t bm, bi;
     memcpy(&bm, &m, 4);
@@ -286,7 +286,7 @@ static uint8_t *vehicle_data(void)
     put32(d + 0x118, 0x402f5c29);
     put32(d + 0x120, 0);
     put32(d + 0x124, 0);
-    body_set(d + 0xa4, 1500.0f, 1500.0f);   /* 0x44bb8000 */
+    Body_Set(d + 0xa4, 1500.0f, 1500.0f);   /* 0x44bb8000 */
     put32(d + 0x12c, 0);
     put32(d + 0x130, 0);
     put32(d + 0x134, 0);
@@ -373,7 +373,7 @@ static uint8_t *class7_new(void)
 
 /* 0x453df0: a two-pole filter of damping a and period p (at least 4, the bits compared as an integer):
    its coefficients and the gain that makes its response to a unit step 1, from 200 steps */
-static void filter_init(uint8_t *f, float a, float p)
+void Filter_Init(uint8_t *f, float a, float p)
 {
     uint32_t bp;
     memcpy(&bp, &p, 4);
@@ -406,7 +406,7 @@ static uint8_t *class30_new(void)
     putf(d + 0x38, F32(fpu_mul(r, 0.25)));    /* 0x4a5cb8 */
     putf(d + 0x3c, F32(fpu_mul(r, -0.25)));   /* 0x4a5cbc */
     memset(d + 0x40, 0, 0x18);
-    filter_init(d + 0x58, 0.7f, 15.0f);   /* 0x3f333333, 0x41700000 */
+    Filter_Init(d + 0x58, 0.7f, 15.0f);   /* 0x3f333333, 0x41700000 */
     put32(d + 0x80, 0x40400000);
     put32(d + 0x84, 0);
     return d;
@@ -457,6 +457,35 @@ void Class_Set(Node *n, int cls)
         g_class_count[0]++;
         g_class_count[1]++;
     }
+}
+
+void List_Remove(Cell **head, Cell *c)
+{
+    if (c->next) c->next->prev = c->prev;
+    *(c->prev ? &c->prev->next : head) = c->next;
+    free(c);
+}
+
+void Class_Unlist(Node *n)
+{
+    Node *live = Node_Live(n);
+    if (live) {
+        if (live->data) Class_Free(live->cls, live->data);
+        live->cls = 0;
+        live->data = NULL;
+    }
+    Cell *c = g_class_nodes;
+    while (c && c->value != n) c = c->next;
+    if (!c) return;
+    if (live) Node_Unref(live);
+    for (Cell *k = g_class_cells; k; k = k->next)
+        if (k->value == c) {
+            List_Remove(&g_class_cells, k);
+            g_class_count[0]--;
+            break;
+        }
+    List_Remove(&g_class_nodes, c);
+    g_class_count[1]--;
 }
 
 void Class_Free(int cls, uint8_t *data)

@@ -126,7 +126,7 @@
 0043c170	Gamma_Apply
 0047d010	Geom_Get
 0047d160	Geom_Release
-0047d850	Geom_CopyObject
+0047d850	Lod_Copy	lod	high	a node's level-of-detail record copied to another; ported
 0047db20	Geom_SelectState
 00484300	Bwd2_Read
 00484390	Bwd2_ReadHeader
@@ -218,7 +218,7 @@
 0041f2c0	Node_InitHeaps	scene	high	the node and class-data heaps
 0041f320	Node_Create	scene	high	a cleared 0xb0 node with the identity frame, pushed under its parent; ported, diffed
 0041f440	Node_Ref	scene	high	+1 reference on a node and its descendants; ported, diffed
-0041f4b0	Node_Free	scene	high	unlinks and drops a reference; frees at none; ported (0x41f5e0 not)
+0041f4b0	Node_Free	scene	high	unlinks and drops a reference; frees at none; ported
 00484850	Node_New	scene	high	Node_Create and the 8-byte name; ported
 00484880	Node_Find	scene	high	depth-first by 8-byte name through siblings; ported
 0042e680	Node_Parent	scene	high	the parent, back along the previous-sibling links; ported
@@ -269,7 +269,7 @@
 00494b40	Sdf_ChildEffects	objects	high	the children's effects by flags; ported (the .xdf not)
 00494a30	Objects_Scrounge	objects	high	the scrounge: a class 5 node on the world list and its .sdf; ported, diffed
 004626f0	Spawn_Add	objects	high	spawn and regen points; ported, diffed
-00493210	Xdf_Load	effects	med	an effect .xdf into an 8-byte name; may make nodes
+00493210	Xdf_Load	effects	high	an .xdf: the name (null first), the tree, registered or a muzzle; ported
 0043a1f0	Light_Add	light	high	a node's dynamic light, not under the sun; ported, diffed
 00469bd0	Collide_Init	collide	high	the lists and the entity callbacks; ported in part
 00469c10	Collide_Add	collide	high	an entity into the collision world; ported, diffed
@@ -280,7 +280,7 @@
 00477200	Collide_Ground	collide	high	classes 11-13: their walkable faces; ported
 00477510	Coll_GroundFaces	collide	high	the meshes' faces with normal y above 0.4; ported
 004240e0	Entity_WorldSphere	entity	high	the entity's centre in the world and its radius
-00484820	Mission_Exit	world	high	no user vehicle: fatal
+00484820	Mission_Exit	mission	high	EXIT: no user vehicle is fatal (outside network play); ported
 00424b90	Objects_Draw	render	high	queues the entities in view (types 3/0xb shadows, 5/7 group children, 6); ported, diffed
 00434a40	Mesh_Faces	render	high	a node's faces in a frame into the face BSP, lit; ported, diffed
 004351f0	Mesh_PlaneRec	render	high	a face as a splitting plane only; ported, diffed
@@ -310,7 +310,7 @@
 00485030	Vehicle_Load	vehicle	high	a vehicle object's .vcf (the user's: the chosen one); ported, diffed
 004852a0	Vcf_Vcfc	vehicle	high	VCFC: .vdf, .vtf, wheels, components, armour; ported, diffed
 00485620	Vcf_Spec	vehicle	high	SPEC: a special's node (class 0x18); ported, diffed
-004863d0	Vcf_Wepn	vehicle	med	WEPN: a weapon on a hard point; not ported
+004863d0	Vcf_Wepn	weapons	high	WEPN: a .gdf on a hard point; ported, diffed
 004855a0	Vdf_Read	vehicle	high	the .vdf; ported
 004855e0	Vtf_Read	vehicle	high	the .vtf; ported
 00485df0	Wdf_Read	vehicle	high	a wheel pair's .wdf, placed by WLOC; ported, diffed
@@ -354,5 +354,55 @@
 0041fbc0	Radar_Init	radar	med	the radar's set-up and entity callbacks; callbacks ported
 0041fea0	Radar_Add	radar	high	a vehicle onto the radar list, referenced; ported, diffed
 00428cc0	Artillery_Add	entity	high	class 8 onto the artillery list; ported
-00408510	Ai_OnAdd	ai	med	the AI's entity callback: teams, AI blocks; not ported
+00408510	AI_EntityAdd	ai	high	a vehicle into its team; its AI block's start; ported, diffed
 0046b950	Collide_VehicleRadius	collide	high	radius to the COLP box's farthest corner + 0.1; ported, diffed
+0041f5e0	Node_Release	scene	high	children and siblings lose the parent's references; ported
+0041f6f0	Node_Unref	scene	high	Node_Free at one reference, else one less down the tree; ported
+0041f860	Node_UnrefList	scene	high	one reference less on a sibling chain and descendants; ported
+0041f890	Node_Live	scene	high	a node marked freed is released and NULL returned; ported
+0043a400	Light_Remove	light	high	a node's light out of the table, the last into its place; ported
+004257c0	Class_Unlist	entity	high	the class's data freed and the node off the class lists; ported
+00450df0	List_Remove	entity	high	a cell out of a list; ported
+0042e250	Node_SetFlagsAll	scene	high	or-s flags into a node, its siblings and descendants; ported
+00482ea0	Node_FirstTexture	lod	high	the first face texture of a node's mesh that is not a .map; ported
+00453ed0	Effects_Init	effects	high	the effects table and the three .xdf of the cars and buildings; ported
+00453f50	Effects_Register	effects	high	an effect's tree under its upper-cased name; 0 if there; ported
+00454840	Muzzles_Init	effects	high	the muzzle list cleared; ported
+00454860	Muzzles_Add	effects	high	a weapon node's muzzle flash record; ported
+00493300	Xdf_Load2	effects	high	Xdf_Load without the name's preset; ported
+004933e0	Xdf_Xdfc	effects	high	XDFC: ten words; ported
+00493400	Xdf_Xgeo	effects	high	XGEO: the name and the tree; ported
+00486ac0	Gdf_Gdfc	weapons	high	GDFC: the gun's node (class 0x32); ported
+00486b30	Gdf_Gpof	weapons	high	GPOF: the muzzle's place by hard point type; ported
+00486db0	Gdf_Ggeo	weapons	high	GGEO: the muzzle's meshes and node (class 0x29); ported
+00486f80	Gdf_Ordf	weapons	high	ORDF: 0x85 bytes; ported
+00486fb0	Gdf_Ogeo	weapons	high	OGEO: the ordnance's tree (class 0x33); ported
+00487020	Vcf_HardPoint	weapons	high	a .vdf hard point by id (count at scratch 0xa5c); ported
+00487550	Sound_Null	weapons	high	a sound named null is cleared; ported
+00454b50	Weapons_Init	weapons	high	the weapons' tables cleared; ported (the firing state not)
+00454c20	HardPoints_Add	weapons	high	a vehicle's hard point slot, sorted; ported
+00454e20	Weapons_AddDef	weapons	high	a weapon definition, then its instance; ported
+00457020	HardSlot_Compare	weapons	high	qsort compare: rank by type and side, then id; ported
+00457160	Weapons_AddInstance	weapons	high	a weapon instance on a slot: kind, mirror, turret; ported
+00458c50	Ordnance_Add	weapons	high	an ordnance kind with its entity; ported
+0045c920	Ordnance_Find	weapons	high	an ordnance kind by type; ported
+004589a0	Ordnance_Clear	weapons	high	the ordnance kinds cleared; ported
+0041fad0	Node_Detach	scene	high	out of the parent, references adjusted; ported
+0041fa20	Node_Attach	scene	high	first child of a parent, references adjusted; ported
+0041fa90	Node_RefsAdd	scene	high	a delta of references down a tree; ported
+004333b0	Class41_SetFrame	entity	high	a class 0x29 node's frame into its data; ported
+00495fe0	__splitpath	crt	high	MSVC _splitpath; the name part ported (crt_splitname)
+004088a0	AI_Init	ai	high	the teams emptied, the callbacks; partly ported
+00409be0	AI_Wheels	ai	high	the AI's 0xa994 from the four wheels; ported
+0040cbb0	AI_TacticsStart	ai	high	the tactics' state (and the table's tag check); ported
+0042e570	Class_IsVehicle	entity	high	classes 1, 8, 9; ported
+00484640	Mission_Ldef	mission	high	LDEF: 0x493530; ported
+00493530	Objects_Ldef	objects	high	LDEF's walk: LREV, OBJ, EXIT; ported
+00493560	Line_Obj	objects	high	a structure's pieces along a line, split at radius 20; ported, diffed
+004522e0	Frame_FromDir	math	high	a frame whose z axis is a direction; ported, diffed
+0040bf40	Fsm_ActionCode	fsm	med	an FSM action's name to its number
+00408400	Fsm_Load	fsm	med	ADEF's FSM chunk: the script's tables (0x40bc60, 0x40cb40)
+00450fa0	Clock_Tick	time	med	the frame's dt from GetTickCount, clamped 0.001-0.2
+00425920	Class_StartAll	entity	med	the classes' start handlers (word 2) after the load
+00425a20	Class_Update1	entity	med	the classes' first per-frame handlers (word 3)
+00425b00	Class_Update2	entity	med	the classes' second per-frame handlers (word 4)

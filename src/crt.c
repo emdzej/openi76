@@ -119,3 +119,15 @@ int crt_strnicmp(const char *a, const char *b, size_t n)
 }
 
 int crt_stricmp(const char *a, const char *b) { return crt_strnicmp(a, b, (size_t)-1); }
+
+void crt_splitname(const char *path, char *out, size_t cap)
+{
+    const char *b = path;
+    for (const char *p = path; *p; p++)
+        if (*p == '\\' || *p == '/' || *p == ':') b = p + 1;
+    const char *dot = strrchr(b, '.');
+    size_t n = dot ? (size_t)(dot - b) : strlen(b);
+    if (n >= cap) n = cap - 1;
+    memcpy(out, b, n);
+    out[n] = 0;
+}

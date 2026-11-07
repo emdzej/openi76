@@ -21,6 +21,9 @@ void Plane_From(float out[4], const float a[3], const float b[3], const float c[
    step */
 double Fast_InvSqrt(double x);
 void InvSqrt_Init(void);
+/* Frame_FromDir 0x4522e0: the frame at p whose z axis is d (normalised); its x axis horizontal, (1, 0, 0)
+   when d is near vertical, y = z x x. The word at +0x24 is the stack's in the original (0 here). */
+void Frame_FromDir(Frame *out, const float p[3], const float d[3]);
 /* Frame_Mul 0x4527c0: a's frame inside b's (out = a then b: M = Ma Mb, pos = pos_a Mb + pos_b) */
 Frame *Frame_Mul(Frame *out, const Frame *a, const Frame *b);
 /* Point_ToWorld 0x4525c0: a float point through a frame, the result in doubles (the products are exact,

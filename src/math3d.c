@@ -12,6 +12,8 @@
 #define DIV fpu_div
 #define F32 fpu_f32
 
+static int below(double a, double b) { return a < b || a != a || b != b; }
+
 static uint8_t invsqrt_tab[256];   /* 0x5e0e90 */
 static int invsqrt_ready;
 
@@ -73,6 +75,35 @@ void Plane_From(float out[4], const float a[3], const float b[3], const float c[
     out[1] = oy;
     out[2] = F32(z);
     out[3] = F32(-ADD(ADD(MUL(z, a[2]), MUL(a[1], oy)), MUL(a[0], ox)));
+}
+
+void Frame_FromDir(Frame *out, const float p[3], const float d[3])
+{
+    double inv = Fast_InvSqrt(ADD(ADD(MUL(d[1], d[1]), MUL(d[2], d[2])), MUL(d[0], d[0])));
+    float f[3], r[3];
+    f[0] = F32(MUL(d[0], inv));
+    f[1] = F32(MUL(d[1], inv));
+    double z = MUL(inv, d[2]);
+    f[2] = F32(z);
+    float zz = F32(MUL(z, f[2]));   /* the unrounded z by its float */
+    if (below(ADD(MUL(f[0], f[0]), zz), 0.02)) {   /* 0x4a60e0: the direction near vertical */
+        r[0] = 1.0f;
+        r[1] = r[2] = 0.0f;
+    } else {
+        /* the horizontal perpendicular, (z, 0, -x) normalised */
+        float nx = -f[0];
+        double inv2 = Fast_InvSqrt(ADD(MUL(nx, nx), zz));
+        r[0] = F32(MUL(f[2], inv2));
+        r[1] = 0.0f;
+        r[2] = F32(MUL(inv2, nx));
+    }
+    memset(out, 0, sizeof *out);
+    memcpy(out->m, r, sizeof r);
+    out->m[3] = F32(SUB(MUL(f[1], r[2]), MUL(f[2], r[1])));
+    out->m[4] = F32(SUB(MUL(f[2], r[0]), MUL(f[0], r[2])));
+    out->m[5] = F32(SUB(MUL(f[0], r[1]), MUL(f[1], r[0])));
+    memcpy(out->m + 6, f, sizeof f);
+    for (int k = 0; k < 3; k++) out->pos[k] = p[k];
 }
 
 Frame *Frame_Mul(Frame *out, const Frame *a, const Frame *b)

@@ -89,6 +89,16 @@ void Light_Add(const void *node, uint32_t *node_flags, const float *frame, int t
     }
 }
 
+void Light_Remove(const void *node, uint32_t *node_flags)
+{
+    for (int i = 0; i < g_light_count; i++)
+        if (g_lights[i].node == node) {
+            *node_flags &= ~0x800u;
+            g_lights[i] = g_lights[--g_light_count];   /* the last moves into its place */
+            return;
+        }
+}
+
 #define ADD fpu_add
 #define SUB fpu_sub
 #define MUL fpu_mul

@@ -2,6 +2,7 @@
 #include "collide.h"
 #include "exe.h"
 #include "lod.h"
+#include "terrain.h"
 #include "render/fpu.h"
 #include <stdlib.h>
 #include <string.h>
@@ -189,5 +190,117 @@ void Collide_Add(Entity *e)
     if (cls > 10 && cls < 0xe) {
         ground_faces(e->node, e, cls == 0xc);
         if (e->a) g_coll_ground = List_Push(g_coll_ground, NULL, e);
+    }
+}
+
+/* ---- the ground under a point ---- */
+
+/* 0x479340: (px, pz) inside the face's outline in x and z (its corners in v): first a box test, then the
+   edges crossing pz, to either side of px, counted until two decide (on an edge counts as inside) */
+static int face_has(const CollFace *f, const float (*v)[3], float px, float pz)
+{
+    unsigned m = 0;
+    for (int i = f->n; i > 0 && m != 0xf;) {
+        const float *p = v[f->refs[--i]];
+        m |= p[0] > px ? 2 : 1;
+        m |= !(pz >= p[2]) ? 8 : 4;
+    }
+    if (m != 0xf || f->n == 0) return 0;
+    const float *b = v[f->refs[0]];
+    int left = 0, right = 0;
+    for (int i = f->n - 1; i >= 0; i--) {
+        const float *a = v[f->refs[i]];
+        if ((pz <= a[2] || pz <= b[2]) && (a[2] <= pz || b[2] <= pz)) {
+            if (a[2] == pz && b[2] == pz) {   /* along the edge */
+                if (a[0] < px && b[0] < px) return 0;
+                if (px < a[0] && px < b[0]) return 0;
+                return 1;
+            }
+            if (a[2] != pz) {
+                if (px <= a[0] || px <= b[0]) {
+                    if (a[0] <= px || b[0] <= px) {
+                        double t = ADD(SUB(MUL(SUB(pz, a[2]), fpu_div(SUB(b[0], a[0]), SUB(b[2], a[2]))), px), a[0]);
+                        if (t < 0.0 || t != t) {   /* 0x4a6860 */
+                            if (left) return 0;
+                            if (right) return 1;
+                            left = 1;
+                            b = a;
+                            continue;
+                        }
+                        float tf = F32(t);
+                        int32_t bits;
+                        memcpy(&bits, &tf, 4);
+                        if (bits < 1) return 1;   /* on the edge */
+                    }
+                    if (right) return 0;
+                    if (left) return 1;
+                    right = 1;
+                } else {
+                    if (left) return 0;
+                    if (right) return 1;
+                    left = 1;
+                }
+            }
+        }
+        b = a;
+    }
+    return 0;
+}
+
+/* 0x479140: the face's plane's height at (px, pz) */
+static double face_height(const CollFace *f, float px, float pz)
+{
+    return -fpu_div(ADD(ADD(MUL(f->plane[2], pz), MUL(f->plane[0], px)), f->d), f->plane[1]);
+}
+
+/* 0x477620: the first of the entity's walkable faces (its +0x18 chain: face, corners, next) over (px, pz) */
+static int ground_face(float px, float pz, const Entity *e, float *h, float n[3])
+{
+    for (void *const *c = e->a; c; c = c[2]) {
+        const CollFace *f = c[0];
+        if (face_has(f, (const float (*)[3])c[1], px, pz)) {
+            *h = F32(face_height(f, px, pz));
+            memcpy(n, f->plane, 3 * sizeof *n);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static uint32_t ubits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
+
+void Ground_Height(float px, float py, float pz, float *out, float normal[3])
+{
+    const float none = -1e30f;
+    float band = none, below = none, nb[3] = {0}, nl[3] = {0};
+    for (Cell *c = g_coll_ground; c; c = c->next) {
+        const Entity *e = c->value;
+        /* 0x424250: the entity's sphere, its centre through the node's frame */
+        float ctr[1][3];
+        Frame_Points(ctr, (const float (*)[3])e->c, 1, &e->node->frame);
+        float dx = F32(SUB(px, ctr[0][0]));
+        double dzu = SUB(pz, ctr[0][2]);
+        float dz = F32(dzu);
+        if (MUL(e->r, e->r) < ADD(MUL(dzu, dz), MUL(dx, dx))) continue;   /* the stored dz times its unrounded value */
+        float h, n[3];
+        if (!ground_face(px, pz, e, &h, n)) continue;
+        if (ubits(band) == ubits(none) && py > h && below < h) {
+            below = h;
+            memcpy(nl, n, sizeof nl);
+        }
+        if (ADD(h, 3.0f) > py && SUB(h, 3.0f) < py && band < h) {   /* 0x4a6854: within 3 of py */
+            band = h;
+            memcpy(nb, n, sizeof nb);
+        }
+    }
+    if (ubits(band) < 0xf149f2ca) {
+        *out = band;
+        if (normal) memcpy(normal, nb, sizeof nb);
+    } else if (ubits(below) < 0xf149f2ca) {
+        *out = below;
+        if (normal) memcpy(normal, nl, sizeof nl);
+    } else {
+        *out = F32(Terrain_Height(px, pz));
+        if (normal) memset(normal, 0, 3 * sizeof *normal);   /* the terrain's normal 0x491bf0: not ported yet */
     }
 }

@@ -33,11 +33,13 @@ if [ -z "$1" ]; then
     m=$(basename "$f" | tr 'A-Z' 'a-z')
     out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" 2>&1) || fail=1
     echo "$out" | grep -q identical || echo "$out" | tail -6
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" --start 2>&1) || fail=1
+    echo "$out" | grep -q identical || echo "$out" | tail -6
     for d in "" --down; do
       out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objdraw.py "$m" 40 $d 2>&1) || fail=1
       echo "$out" | grep -q " 40/40 identical" || echo "$out" | tail -6
     done
   done
-  echo "[diff_objects, diff_objdraw] every mission done"
+  echo "[diff_objects (and --start), diff_objdraw] every mission done"
 fi
 exit $fail

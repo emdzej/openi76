@@ -1,7 +1,11 @@
 /* A text dump of the objects' state, for the diff harness (tools/emu/diff_objects.py prints the
    original's in the same form). Floats are their bits. */
 #include "collide.h"
+#include "ai.h"
+#include "effects.h"
 #include "entity.h"
+#include "weapons.h"
+#include "texanim.h"
 #include "exe.h"
 #include "lod.h"
 #include "objects.h"
@@ -47,10 +51,12 @@ static void frame(Out *o, const Frame *f)
 }
 
 static int budget;
+/* after Class_StartAll: the texture animations, and class 40's data (not cleared before its start) */
+int g_dump_texanims;
 
 /* the vehicle data's pointer words (vehicle.c, entity.c) */
 static const uint16_t veh_ptrs[] = {0x108, 0x398, 0x3a0, 0x3a4, 0x3a8, 0x3ac, 0x3b0, 0x3b4, 0x3b8, 0x3bc, 0x3c0,
-                                    0x3c4, 0x3c8, 0x3cc, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x408, 0x40c, 0x410,
+                                    0x3c4, 0x3c8, 0x3cc, 0x3d0, 0x3d4, 0x3d8, 0x3dc, 0x3e0, 0x3e4, 0x3e8, 0x3ec, 0x3f0, 0x3f4, 0x3f8, 0x3fc, 0x408, 0x40c, 0x410,
                                     0x414, 0x418, 0x41c, 0x440, 0x508};
 
 static void hex(Out *o, const uint8_t *p, int n)
@@ -78,11 +84,14 @@ static void class_data(Out *o, const Node *n)
         }
         return;
     }
-    static const struct { int cls, size; } small[] = {{30, 0x88}, {20, 8}, {21, 0x2c}, {22, 0x18}, {23, 0x20}, {24, 0x18}, {7, 0xa0}};
+    static const struct { int cls, size; } small[] = {{30, 0x88}, {20, 8}, {21, 0x2c}, {22, 0x18}, {23, 0x20}, {24, 0x18}, {7, 0xa0}, {41, 0x40}, {31, 8}, {35, 0x4c}, {36, 0x4c}, {40, 0xb8}};
     for (size_t i = 0; i < sizeof small / sizeof small[0]; i++)
-        if (c == small[i].cls) {
+        if (c == small[i].cls && (c != 40 || g_dump_texanims)) {   /* class 40's data is set at the start */
+            uint8_t b[0xb8];
+            memcpy(b, d, (size_t)small[i].size);
+            if (c == 41) memset(b + 0x24, 0, 4);   /* a frame's pad word (garbage in the original) */
             out(o, " d");
-            hex(o, d, small[i].size);
+            hex(o, b, small[i].size);
         }
 }
 
@@ -189,6 +198,101 @@ size_t Objects_Dump(char *buf, size_t cap)
             out(&o, "\n");
         }
     }
+    for (int b = 0; b < EFFECT_BUCKETS; b++)
+        for (const Effect *e = g_effects[b]; e; e = e->next) {
+            out(&o, "X%d ", b);
+            name8(&o, (const char *)e->key);
+            for (int k2 = 0; k2 < 4; k2++) out(&o, " %x", (uint32_t)e->w[k2]);
+            out(&o, "\n");
+            if (e->tree) node(&o, e->tree, 0);
+        }
+    for (const Muzzle *mz = g_muzzles; mz; mz = mz->next) {
+        out(&o, "MZ ");
+        name8(&o, (const char *)mz->name);
+        out(&o, " ");
+        name8(&o, mz->node->name);
+        out(&o, " %x %x %x %x", (uint32_t)mz->w6, (uint32_t)mz->f10, (uint32_t)mz->f14, (uint32_t)mz->w0);
+        hex(&o, (const uint8_t *)mz->tex, 16);
+        out(&o, "\n");
+    }
+    out(&o, "hardpoints %d\n", g_hardpoint_count);
+    for (int i = 0; i < g_hardpoint_count; i++) {
+        const HardPoints *h = &g_hardpoints[i];
+        out(&o, "HP ");
+        name8(&o, h->vehicle->name);
+        out(&o, " n%d fl%x %x %x", h->count, h->flags, (uint32_t)h->w8, (uint32_t)h->w9);
+        for (int k = 0; k < 7; k++) out(&o, " %x", (uint32_t)h->w1[k]);
+        for (int k = 0; k < 5; k++) out(&o, " %x %x", (uint32_t)h->wa[k], (uint32_t)h->wf[k]);
+        out(&o, "\n");
+        for (int k = 0; k < 7; k++) {
+            const HardSlot *sl = &h->slot[k];
+            out(&o, " HS %x %x %x %x %x", (uint32_t)sl->id, (uint32_t)sl->a1, (uint32_t)sl->side, (uint32_t)sl->type, (uint32_t)sl->inst);
+            frame(&o, &sl->frame);
+            out(&o, "\n");
+        }
+    }
+    out(&o, "defs %d\n", g_weapon_def_count);
+    for (int i = 0; i < 36; i++) {
+        const WeaponDef *d = &g_weapon_defs[i];
+        out(&o, "WD ");
+        hex(&o, (const uint8_t *)d->name, 0x50);
+        out(&o, " %x %x", (uint32_t)d->index, (uint32_t)d->kind);
+        for (int k = 0; k < 10; k++) out(&o, " %x", (uint32_t)d->v[k]);
+        out(&o, " ");
+        hex(&o, d->xdf, 8);
+        out(&o, "\n");
+    }
+    out(&o, "weapons %d\n", g_weapon_count);
+    for (int i = 0; i < g_weapon_count; i++) {
+        const WeaponInst *w = &g_weapons[i];
+        out(&o, "WI %d ", w->index);
+        name8(&o, w->muzzle ? w->muzzle->name : "--------");
+        out(&o, " ");
+        name8(&o, w->gun ? w->gun->name : "--------");
+        out(&o, " %x %d %d %x %x %x %x %d", (uint32_t)w->v0c, w->hp ? (int)(w->hp - g_hardpoints) : -1, w->slot, w->v18,
+            (uint32_t)w->v1c, (uint32_t)w->v20, (uint32_t)w->v24, w->def);
+        hex(&o, (const uint8_t *)w->sound, 16);
+        out(&o, " %x %x %x %x %x\n", (uint32_t)w->v3c, (uint32_t)w->v40, (uint32_t)w->v44, (uint32_t)w->v48, (uint32_t)w->kind);
+    }
+    out(&o, "ordnance %d\n", g_ordnance_count);
+    for (int i = 0; i < g_ordnance_count; i++) {
+        const Ordnance *r = &g_ordnance[i];
+        out(&o, "OR %x ", (uint32_t)r->type);
+        name8(&o, r->tree ? r->tree->name : "--------");
+        out(&o, " e%d", r->entity ? (int)(r->entity - g_entities) : -1);
+        out(&o, " %x %x %x %x %x %x %x %x %x %x %x %x %x %x ", (uint32_t)r->w4, (uint32_t)r->w5, (uint32_t)r->w7,
+            (uint32_t)r->w8, (uint32_t)r->w9, (uint32_t)r->w10, (uint32_t)r->w11, (uint32_t)r->w12, (uint32_t)r->w13,
+            (uint32_t)r->w14, (uint32_t)r->has_mesh, (uint32_t)r->w16, (uint32_t)r->has_tex, (uint32_t)r->w24);
+        hex(&o, (const uint8_t *)r->tex, 16);
+        out(&o, " ");
+        hex(&o, r->xdf0, 8);
+        for (int k = 0; k < 4; k++) {
+            out(&o, " ");
+            hex(&o, r->fx[k].xdf, 8);
+            hex(&o, (const uint8_t *)r->fx[k].sound, 16);
+        }
+        out(&o, "\n");
+        if (r->tree) node(&o, r->tree, 0);
+    }
+    out(&o, "teams");
+    for (int t = 0; t < AI_TEAMS; t++) {
+        out(&o, " %d:", g_team_count[t]);
+        for (int i = 0; i < g_team_count[t] && i < 0x40; i++)
+            out(&o, i ? ",%d" : "%d", (int)(g_teams[t][i] - g_entities));
+    }
+    out(&o, "\n");
+    if (g_dump_texanims)
+        for (const TexAnim *t = g_texanims; t; t = t->next) {
+            out(&o, "TA ");
+            name8(&o, t->node->name);
+            out(&o, " ");
+            for (int i = 0; i < 15 && t->name[i]; i++) out(&o, "%02x", (uint8_t)t->name[i]);
+            int size = t->fn_addr == 0x42feb0 ? 0x18 : t->fn_addr == 0x433d10 ? 0x1c : 0x10;
+            out(&o, " %x ", t->fn_addr);
+            if (t->arg) hex(&o, t->arg, size);
+            else out(&o, "-");
+            out(&o, "\n");
+        }
     out(&o, "lights %d\n", g_light_count);
     for (int i = 0; i < g_light_count; i++) {
         const Light *l = &g_lights[i];

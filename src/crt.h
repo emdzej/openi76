@@ -18,3 +18,5 @@ void *crt_bsearch(const void *key, const void *base, size_t n, size_t size, CrtC
 /* __strnicmp 0x496140 (the C locale): ASCII letters compared as lower case */
 int crt_strnicmp(const char *a, const char *b, size_t n);
 int crt_stricmp(const char *a, const char *b);
+/* _splitpath 0x495fe0, its file name: after the last \\, / or :, up to the last . */
+void crt_splitname(const char *path, char *out, size_t cap);

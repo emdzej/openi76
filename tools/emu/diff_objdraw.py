@@ -27,16 +27,10 @@ from unicorn import x86_const as X  # noqa: E402
 
 def load(name):
     exe, lib = mission.setup()
-    exe.stub(0x4863D0, lambda *a: 1, 2)   # as diff_objects.py: no weapons, AI, effects, LDEF or ADEF yet
-    exe.stub(0x408510, lambda *a: 0, 1)
-    exe.stub(0x484820, lambda *a: 1, 2)
+    # as diff_objects.py: no ADEF yet
 
-    def xdf(nm, out, kind):
-        exe.write(out, b"null\0\0\0\0")
-        return 1
-    exe.stub(0x493210, xdf, 3)
-    exe.stub(0x484640, lambda *a: 1, 3)
     exe.stub(0x484660, lambda *a: 1, 3)
+    exe.stub(0x484820, lambda *a: 1, 2)   # EXIT, as diff_objects.py
     for f in mission.INITS:
         exe.call(f, limit=200_000_000)
     exe.write(0x58DCD0, exe.read(0x4A8448, 12))
@@ -56,7 +50,7 @@ def main():
     count = int(rest[0]) if rest else 100
     rng = random.Random(int(rest[1]) if len(rest) > 1 else 76)
     exe, lib, ro, rp = load(name)
-    if ro != 1 or rp != 1:
+    if not ro or rp != 1:
         sys.exit(f"diff_objdraw {name}: the loads returned {ro}, {rp}")
     exe.call(0x4516F0)   # the inverse square root's table
     mode = ctypes.c_int.in_dll(lib, "g_fpu_round")

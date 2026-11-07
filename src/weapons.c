@@ -1,0 +1,608 @@
+/* The weapons' loading (weapons.h). In the current rounding mode (render/fpu.h). */
+#include "weapons.h"
+#include "chunks.h"
+#include "crt.h"
+#include "effects.h"
+#include "exe.h"
+#include "lod.h"
+#include "platform.h"
+#include "scene.h"
+#include "render/fpu.h"
+#include <stdio.h>
+#include <string.h>
+
+#define ADD fpu_add
+#define MUL fpu_mul
+#define F32 fpu_f32
+
+HardPoints g_hardpoints[50];
+int g_hardpoint_count;
+static HardPoints *s_current;   /* 0x570a68 */
+WeaponDef g_weapon_defs[36];
+int g_weapon_def_count;
+WeaponInst g_weapons[350];
+int g_weapon_count;
+Ordnance g_ordnance[20];
+int g_ordnance_count;
+
+static int32_t rd32(const uint8_t *p) { return (int32_t)((uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24); }
+static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
+static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
+static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
+static int below(double a, double b) { return a < b || a != a || b != b; }
+
+/* strcpy within a buffer that ends at end (the original's copies may run past a field into the next) */
+static void scpy(char *dst, const char *dst_end, const char *src)
+{
+    while (dst < dst_end && (*dst++ = *src++)) {}
+}
+
+static void identity(Frame *f) { memcpy(f, exe_data(0x4db298, sizeof *f), sizeof *f); }
+
+/* a frame from 9 floats and a float position (the word at +0x24 left 0) */
+static void frame_of(Frame *f, const uint8_t *m, const uint8_t *pos)
+{
+    memset(f, 0, sizeof *f);
+    memcpy(f->m, m, sizeof f->m);
+    for (int k = 0; k < 3; k++) f->pos[k] = rdf(pos + 4 * k);
+}
+
+/* ---- the tables ---- */
+
+void Weapons_Init(void)
+{
+    g_weapon_count = 0;
+    g_weapon_def_count = 0;
+    g_hardpoint_count = 0;
+    s_current = NULL;
+    memset(g_hardpoints, 0, sizeof g_hardpoints);
+    memset(g_weapons, 0, sizeof g_weapons);
+    memset(g_weapon_defs, 0, sizeof g_weapon_defs);
+    /* 0x4589a0: the ordnance kinds; the original clears some of each entry's words (its +0x38 to 1.0) and
+       the next mission's entries are written whole */
+    memset(g_ordnance, 0, sizeof g_ordnance);
+    g_ordnance_count = 0;
+    /* the rest of 0x454b50 (the firing's state, 0x45e460's projectiles and the random seed) comes with the
+       firing */
+}
+
+/* 0x457020: the slots by their (type, side) rank, then by id. The ranks are the function's own constants
+   (a local array of 7 types by 5 sides); outside it the original reads its stack. */
+static int slot_rank(const HardSlot *s)
+{
+    int i = s->type * 5 + s->side;
+    if (i < 0 || i >= 35) return 9;
+    switch (i) {
+    case 6: case 0x10: return 2;
+    case 0xb: case 0x1a: return 1;
+    case 0xc: case 0x1b: return 3;
+    case 0x16: return 4;
+    default: return 9;
+    }
+}
+
+static int slot_cmp(const void *a, const void *b)
+{
+    const HardSlot *p = a, *q = b;
+    int r1 = slot_rank(p), r2 = slot_rank(q);
+    int r = r1 < r2 ? -1 : r1 == r2 ? 0 : 1;
+    if (r1 == r2) {
+        if (p->id < q->id) return -1;
+        if (q->id < p->id) r = 1;
+    }
+    return r;
+}
+
+/* 0x454c20: a hard point (rec: the vehicle, id, side, type, frame) into the vehicle's entry, made if new */
+static void hardpoint_add(Node *vehicle, int32_t a1, int32_t side, int32_t type, int32_t id, const Frame *f)
+{
+    HardPoints *e = NULL;
+    for (int i = 0; i < g_hardpoint_count; i++)
+        if (g_hardpoints[i].vehicle == vehicle) {
+            e = &g_hardpoints[i];
+            break;
+        }
+    if (!e) {
+        if (g_hardpoint_count < 50) {
+            HardPoints *n = &g_hardpoints[g_hardpoint_count];
+            n->vehicle = vehicle;
+            n->count = 0;
+            n->w9 = -1;
+            for (int k = 0; k < 7; k++) {
+                n->w1[k] = -1;
+                n->slot[k].inst = -1;
+                n->slot[k].id = -1;
+            }
+            n->w8 = -1;
+            n->flags = 0;
+            for (int k = 0; k < 5; k++) {
+                n->wa[k] = 0;
+                n->wf[k] = -1;
+            }
+            g_hardpoint_count++;
+        } else {
+            plat_log("Hardpoint system cannot handle any more vehicles");   /* the original's fatal */
+            return;
+        }
+        e = &g_hardpoints[g_hardpoint_count - 1];
+    }
+    s_current = e;
+    int n = e->count;
+    if (n >= 7) return;
+    int at = id > 4 ? id : n;   /* ids 5 and 6 take their own slots, not counted */
+    if (at > 6) return;          /* the original writes past the entry */
+    HardSlot *s = &e->slot[at];
+    s->id = id;
+    s->a1 = a1;
+    s->side = side;
+    s->type = type;
+    s->frame = *f;
+    s->inst = -1;
+    if (id > 4) return;
+    if (n > 0) {
+        crt_qsort(e->slot, (size_t)n + 1, sizeof e->slot[0], slot_cmp);
+        for (int i = 0; i <= n; i++)
+            if (e->slot[i].inst != -1 && g_weapons[e->slot[i].inst].slot != i) g_weapons[e->slot[i].inst].slot = i;
+    }
+    e->count = n + 1;
+}
+
+/* the weapon's record WEPN builds (0xb0 bytes): the name (0x50), then words */
+enum {
+    W_KIND = 0x50, W_INDEX = 0x54, W_XDF = 0x80, W_SOUND = 0x88, W_ID = 0x98, W_SIZE = 0xb0,
+};
+typedef struct {
+    uint8_t b[W_SIZE];
+    Node *muzzle, *gun, *vehicle;   /* +0x9c, +0xa0, +0xa4 */
+} WeaponRec;
+
+/* 0x457160: a weapon instance for w's slot (def: its definition); returns its index (the count before) */
+static int instance_add(const WeaponRec *w, int def)
+{
+    int index = g_weapon_count;
+    if (g_weapon_count >= 350) {
+        plat_log("Maximum weapon instances reached");   /* the original's fatal */
+        return g_weapon_count++;
+    }
+    HardPoints *e = NULL;
+    for (int i = 0; i < g_hardpoint_count; i++)
+        if (g_hardpoints[i].vehicle == w->vehicle) {
+            e = &g_hardpoints[i];
+            break;
+        }
+    int k = -1;
+    if (e)
+        for (int i = 0; i < 7; i++)
+            if (e->slot[i].id == rd32(w->b + W_ID)) {
+                k = i;
+                break;
+            }
+    if (k == -1) return g_weapon_count++;
+    WeaponInst *in = &g_weapons[index];
+    in->muzzle = w->muzzle;
+    in->gun = w->gun;
+    in->v0c = g_weapon_defs[def].v[1];
+    uint32_t a = (uint32_t)rd32(w->b + 0x6c), b = (uint32_t)rd32(w->b + 0xa8);
+    in->v18 = a < b ? a : b;
+    in->v1c = in->v24 = in->v20 = 0;
+    in->def = def;
+    in->hp = e;
+    in->slot = k;
+    e->w1[0] = -1;
+    in->index = index;
+    in->v3c = 1;
+    in->v40 = 1;
+    in->v44 = 0;
+    in->v48 = 0;
+    scpy(in->sound, (const char *)(in + 1), (const char *)w->b + W_SOUND);
+    Node *g = in->muzzle;
+    HardSlot *s = &e->slot[k];
+    if (s->type == 2 && ((s->side == 1 && below(s->frame.pos[0], 0.0)) || (s->side == 2 && !(s->frame.pos[0] <= 0.0)))) {
+        /* a gun on the other side: the muzzle's frame mirrored (and its class data's copy) */
+        float *m = g->frame.m;
+        m[0] = -m[0], m[1] = -m[1], m[2] = -m[2], m[3] = -m[3], m[6] = -m[6], m[7] = -m[7];
+        if (g->data) memcpy(g->data, &g->frame, sizeof g->frame);   /* 0x4333b0 */
+    }
+    if (s->type == 3) {
+        /* a turret: a node put between the gun's second class 0x3f node and its parent */
+        e->flags |= 4;
+        in->kind = 4;
+        Node *n = in->gun;
+        int found = 0;
+        do {
+            Node *c = n->child;
+            if (!c) break;
+            if (c->cls == 0x3f) found++;
+            n = c;
+        } while (found < 2);
+        Node *t;
+        if (found > 1 && (t = Node_Create(NULL)) != NULL) {
+            Node *p = n->prev;
+            p->flags |= 0x200000;
+            t->cls = p->cls;
+            t->flags = p->flags;
+            t->frame = p->frame;
+            t->geom = NULL;
+            t->flags |= 1;
+            identity(&t->frame);
+            t->frame.pos[0] = n->frame.pos[0];
+            t->frame.pos[2] = n->frame.pos[2];
+            n->frame.pos[0] = 0;
+            n->frame.pos[2] = 0;
+            Node_Detach(n);
+            Node_Attach(t, p);
+            Node_Attach(n, t);
+            t->geom = NULL;
+        }
+        return g_weapon_count++;
+    }
+    if (!g) {
+        plat_log("Cannot register weapon with no Position");   /* the original's fatal */
+        return g_weapon_count++;
+    }
+    Frame fm, fv;
+    Node_FrameIn(&fm, g, NULL);
+    Node_FrameIn(&fv, w->vehicle, NULL);
+    if (s->type == 6) {
+        in->kind = s->side == 3 ? 8 : 0x10;
+    } else {
+        /* the muzzle's z axis against the vehicle's: backwards is a rear gun */
+        double d = ADD(ADD(MUL(fv.m[6], fm.m[6]), MUL(fv.m[8], fm.m[8])), MUL(fv.m[7], fm.m[7]));
+        in->kind = below(d, 0.0f) ? 2 : 1;   /* 0x4a61a0 */
+    }
+    e->flags |= (uint32_t)in->kind;
+    return g_weapon_count++;
+}
+
+/* 0x454e20: w's definition (by kind and slot index, made if new), then its instance on the current
+   vehicle's hard point */
+static void weapon_add(const WeaponRec *w)
+{
+    int32_t kind = rd32(w->b + W_KIND), index = rd32(w->b + W_INDEX);
+    int def = -1;
+    /* all 36 entries are searched, the empty ones too: kind and index 0 match the first empty one */
+    for (int i = 0; i < 36; i++)
+        if (g_weapon_defs[i].kind == kind && g_weapon_defs[i].index == index) {
+            def = i;
+            break;
+        }
+    if (def == -1) {
+        if (g_weapon_def_count < 0x24) {
+            WeaponDef *d = &g_weapon_defs[g_weapon_def_count];
+            scpy(d->name, (const char *)(d + 1), (const char *)w->b);
+            d->name[0x4f] = 0;
+            d->index = index;
+            d->kind = kind;
+            static const int at[10] = {0x58, 0x5c, 0x60, 0x64, 0x68, 0x74, 0x70, 0x6c, 0x78, 0x7c};
+            for (int k = 0; k < 10; k++) d->v[(at[k] - 0x58) / 4] = rd32(w->b + 0x58 + 4 * k);
+            memcpy(d->xdf, w->b + W_XDF, 8);
+        } else {
+            plat_log("Maximum weapon definitions reached");   /* the original's fatal */
+        }
+        def = g_weapon_def_count++;
+    }
+    int inst = instance_add(w, def);
+    for (int i = 0; i < 7; i++)
+        if (s_current->slot[i].id == rd32(w->b + W_ID)) {
+            s_current->slot[i].inst = inst;
+            return;
+        }
+    plat_log("Attempted to mount weapon on non-existent hardpoint");
+}
+
+/* the ordnance's record (0x80 bytes) */
+typedef struct {
+    int32_t type;      /* +0 */
+    Node *tree;        /* +4 */
+    int32_t w2, w3, w4;
+    int32_t pad;
+    uint8_t xdf0[8];   /* +0x18 */
+    struct {
+        uint8_t xdf[8];
+        char sound[16];
+    } fx[4];           /* +0x20 */
+    char end[16];
+} OrdRec;
+
+/* 0x45c920 */
+static int ordnance_find(int32_t type)
+{
+    for (int i = 0; i < 20; i++)
+        if (g_ordnance[i].type == type) return i;
+    return -1;
+}
+
+/* 0x458c50: a new ordnance kind */
+static void ordnance_add(const OrdRec *o)
+{
+    if (ordnance_find(o->type) != -1) return;
+    Ordnance *r = &g_ordnance[g_ordnance_count];
+    r->type = o->type;
+    r->tree = o->tree;
+    int ok = 0;
+    for (int lod = 0; o->tree && !ok && lod < 6; lod++) ok = Lod_Select(o->tree, lod);
+    r->has_mesh = ok;
+    Node *n = Node_Create(NULL);   /* "ordnc" */
+    n->cls = 0x33;
+    n->data = NULL;
+    n->next = NULL;
+    n->child = NULL;
+    n->flags = 0x101;
+    r->node = n;
+    r->w4 = r->w5 = 0;
+    r->entity = Entity_Add(n, NULL, NULL);
+    r->w7 = 0x32;
+    r->w8 = r->w9 = r->w10 = 0;
+    r->w11 = r->w12 = 0xa0;
+    /* "Ordinance %d" names the heap the original makes here */
+    r->heap = 0;
+    r->w13 = o->w2;
+    r->w14 = o->w3;
+    memcpy(r->xdf0, o->xdf0, 8);
+    r->has_tex = 0;
+    r->w24 = o->w4;
+    for (int k = 0; k < 4; k++) {
+        memcpy(r->fx[k].xdf, o->fx[k].xdf, 8);
+        scpy(r->fx[k].sound, r->fx[k].sound + 16, o->fx[k].sound);
+    }
+    if (r->type == 0x11 || r->type == 0xc || r->type == 0xd) {
+        const char *t = Node_FirstTexture(r->tree, 0);
+        memset(r->tex, 0, sizeof r->tex);
+        if (t && *t) {
+            strncpy(r->tex, t, 16);
+            r->has_tex = 1;
+        } else {
+            r->has_tex = 0;
+        }
+    }
+    r->w16 = 0;
+    switch (r->type) {
+    case 2: case 3: case 4: case 5: case 7: case 8: case 0x11: r->w16 = 1;
+    }
+    g_ordnance_count++;
+    r->entity->r = 1.0f;
+    r->entity->has_a = 3;
+}
+
+/* ---- the .gdf ---- */
+
+/* WEPN's context (0x5a words): the vehicle's, the file's name, the hard point's id, GDFC's 0x80 bytes at
+   0x14, ORDF's 0x85 at 0x94, the three nodes, GPOF's frame at 0x128 */
+enum { G_NAME = 8, G_ID = 0x10, G_GDFC = 0x14, G_SLOT = 0x28, G_MASS = 0x48, G_ORDF = 0x94, G_SIZE = 0x168 };
+typedef struct {
+    ObjCtx *x;
+    uint8_t b[G_SIZE + 16];
+    Node *gun;      /* 0x11c: GDFC's */
+    Node *ord;      /* 0x120: OGEO's */
+    Node *muzzle;   /* 0x124: GGEO's */
+    Frame pos;      /* 0x128: GPOF's */
+} GdfCtx;
+
+/* 0x487020: the hard point of that id among the .vdf's (the scratch's 0x378 + 0xfc i, counted by VDFC's
+   +0x44 at 0xa5c) */
+static const uint8_t *hardpoint(const uint8_t *vcf, int32_t id)
+{
+    const uint8_t *h = vcf + 0x378;
+    for (int i = 0; i < rd32(vcf + 0xa5c); i++, h += 0xfc)
+        if (rd32(h + 0xb0) == id) return h;
+    return NULL;
+}
+
+static int slot_type(const GdfCtx *g, const uint8_t *h)
+{
+    return rd32(g->b + G_SLOT) < 10 ? rd32(h + 0xb8) : 3;
+}
+
+/* GDFC 0x486ac0: the gun's node under the vehicle, named after the file, class 0x32 */
+static int gdfc(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    GdfCtx *g = arg;
+    g->gun = Node_New(g->x->node, (const char *)g->b + G_NAME);
+    if (!g->gun) return 0;
+    Class_Set(g->gun, 0x32);
+    memcpy(g->b + G_GDFC, c + 8, 0x80);
+    return 1;
+}
+
+/* GPOF 0x486b30: the muzzle's place for the hard point's type (types 1, 2, 3 and 5 in turn, 0x30 bytes
+   each; type 4 the identity) */
+static int gpof(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    GdfCtx *g = arg;
+    const uint8_t *h = hardpoint(g->x->vcf, rd32(g->b + G_ID));
+    if (!h) return 0;
+    int t = slot_type(g, h);
+    static const int at[6] = {-1, 8, 0x38, 0x68, -1, 0x98};
+    if (t == 4) {
+        identity(&g->pos);
+        return 1;
+    }
+    if (t < 1 || t > 5) return 0;
+    frame_of(&g->pos, c + at[t], c + at[t] + 0x24);
+    return 1;
+}
+
+/* GGEO 0x486db0: the muzzle's meshes (12 lists: types 1, 2, 3, 5 by 3 levels) under the gun, then its
+   node (class 0x29) under the gun's deepest first child, at GPOF's place taken back into that child */
+static int ggeo(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    GdfCtx *g = arg;
+    int32_t count = rd32(c + 8);
+    const uint8_t *lists[12];
+    Obj_Lists(lists, c + 0xc, 12, count);
+    const uint8_t *h = hardpoint(g->x->vcf, rd32(g->b + G_ID));
+    if (!h) return 0;
+    int t = slot_type(g, h);
+    static const int at[6] = {-1, 0, 3, 6, -1, 9};
+    if (t < 1 || t > 5) return 0;
+    if (t != 4 && !Obj_Tree100(lists + at[t], g->gun, 3, 1, count, NULL) && count != 0) return 0;
+    Node *n = g->gun;
+    while (n->child) n = n->child;
+    g->muzzle = Node_New(n, NULL);
+    if (!g->muzzle) return 0;
+    Class_Set(g->muzzle, 0x29);
+    g->muzzle->frame = g->pos;
+    Frame m, inv, out;
+    Node_FrameIn(&m, n, g->gun);
+    Frame_Invert(&inv, &m);
+    Frame_Mul(&out, &inv, &g->muzzle->frame);
+    g->muzzle->frame = out;
+    return 1;
+}
+
+/* ORDF 0x486f80 */
+static int ordf(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    memcpy(((GdfCtx *)arg)->b + G_ORDF, c + 8, 0x85);
+    return 1;
+}
+
+/* OGEO 0x486fb0: the ordnance's mesh, a tree of its own (class 0x33) */
+static int ogeo(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    GdfCtx *g = arg;
+    const uint8_t *lists[1];
+    Obj_Lists(lists, c + 0xc, 1, rd32(c + 8));
+    g->ord = Obj_Tree100(lists, NULL, 1, 1, rd32(c + 8), NULL);
+    if (!g->ord) return 0;
+    Class_Set(g->ord, 0x33);
+    return 1;
+}
+
+static ChunkDesc gdf_table[] = {   /* 0x4e9f38 */
+    {"GDFC", gdfc, 0x800}, {"GPOF", gpof, 0x800}, {"GGEO", ggeo, 0x800},
+    {"ORDF", ordf, 0x800}, {"OGEO", ogeo, 0x800}, {"EXIT", Objects_Exit, 0x1000},
+};
+
+/* 0x487550: a sound named "null" is none */
+static char *sound(uint8_t *s)
+{
+    if (crt_strnicmp((const char *)s, exe_str(0x4a90f4), 4) == 0) s[0] = 0;
+    return (char *)s;
+}
+
+int Weapons_Wepn(const uint8_t *c, ObjCtx *x)
+{
+    static GdfCtx g;   /* 0x168 bytes on the original's stack */
+    memset(&g, 0, sizeof g);
+    g.x = x;
+    put32(g.b + G_ID, rd32(c + 8));
+    const char *path = (const char *)c + 0xc;
+    char base[256];
+    crt_splitname(path, base, sizeof base);
+    strncpy((char *)g.b + G_NAME, base, 8);
+    if (!Bwd2_Read(path, gdf_table, 6, &g)) return 0;
+    const uint8_t *h = hardpoint(x->vcf, rd32(g.b + G_ID));
+    if (!h || !g.muzzle) {
+        Node_Free(g.gun);
+        return 0;
+    }
+    int32_t slot = rd32(g.b + G_SLOT), type, index;
+    if (slot < 10) {
+        type = rd32(h + 0xb8);
+        index = slot;
+    } else {
+        type = 3;
+        index = slot - 10;
+    }
+    /* the hard point (0x454c20), and the gun's frame onto it */
+    Frame hf, t;
+    frame_of(&hf, h + 0xbc, h + 0xe0);
+    hardpoint_add(x->node, 0, rd32(h + 0xb4), type, rd32(h + 0xb0), &hf);
+    Frame_Mul(&t, &g.gun->frame, &hf);
+    g.gun->frame = t;
+
+    /* the weapon (0x454e20) */
+    static WeaponRec w;
+    memset(&w, 0, sizeof w);
+    put32(w.b + W_INDEX, index);
+    put32(w.b + W_KIND, rd32(g.b + 0x24));
+    static const struct { int w, b; } words[] = {
+        {0x58, 0x40}, {0x5c, 0x44}, {0x60, 0x5a}, {0x64, 0x5e}, {0x68, 0x62}, {0x70, 0x66},
+        {0x6c, 0x72}, {0xa8, 0x72}, {0x74, 0x6a}, {0x78, 0x6e}, {0x7c, 0x76},
+    };
+    for (size_t k = 0; k < sizeof words / sizeof words[0]; k++) put32(w.b + words[k].w, rd32(g.b + words[k].b));
+    put32(w.b + W_ID, rd32(g.b + G_ID));
+    w.muzzle = g.muzzle;
+    w.gun = g.gun;
+    w.vehicle = x->node;
+    scpy((char *)w.b, (const char *)w.b + W_SIZE, (const char *)g.b + G_GDFC);
+    scpy((char *)w.b + W_SOUND, (const char *)w.b + W_SIZE, sound(g.b + 0x87));
+    Xdf_Load((const char *)g.b + 0x7a, w.b + W_XDF, g.muzzle);
+    weapon_add(&w);
+
+    /* the ordnance (0x458c50) */
+    static OrdRec o;
+    memset(&o, 0, sizeof o);
+    o.tree = g.ord;
+    o.type = rd32(g.b + G_ORDF);
+    o.w2 = rd32(g.b + 0x98);
+    o.w3 = rd32(g.b + 0x9c);
+    o.w4 = rd32(g.b + 0xa0);
+    char *o_end = (char *)(&o + 1);
+    scpy(o.fx[0].sound, o_end, sound(g.b + 0xbe));
+    scpy(o.fx[1].sound, o_end, sound(g.b + 0xd8));
+    scpy(o.fx[2].sound, o_end, sound(g.b + 0xf2));
+    scpy(o.fx[3].sound, o_end, sound(g.b + 0x10c));
+    Xdf_Load((const char *)g.b + 0xb1, o.fx[0].xdf, NULL);
+    Xdf_Load((const char *)g.b + 0xcb, o.fx[1].xdf, NULL);
+    Xdf_Load((const char *)g.b + 0xe5, o.fx[2].xdf, NULL);
+    Xdf_Load((const char *)g.b + 0xff, o.fx[3].xdf, NULL);
+    Xdf_Load2((const char *)g.b + 0xa4, o.xdf0, NULL);
+    ordnance_add(&o);
+
+    /* the gun's mass onto the vehicle's, and the gun into the first free of the data's weapon slots */
+    uint8_t *d = x->node->data;
+    putf(d + 0xa4, F32(ADD(rdf(d + 0xa4), rdf(g.b + G_MASS))));
+    for (int i = 10; i < 0x11; i++)
+        if (!*Data_Ptr(d, 0x3a8 + 4 * i)) {
+            *Data_Ptr(d, 0x3a8 + 4 * i) = g.gun;
+            break;
+        }
+    return 1;
+}
+
+/* 0x4551d0 (the part 0x456640 uses): the hard point's id of instance i's slot, and its +0xc and +0x18; 0
+   when the entry is not instance i's */
+static int weapon_slot_id(int i, int32_t *id)
+{
+    if (g_weapons[i].index != i) return 0;
+    *id = g_weapons[i].hp->slot[g_weapons[i].slot].id;
+    return 1;
+}
+
+void Weapons_Faster(Node *vehicle)
+{
+    HardPoints *hp = NULL;
+    for (int i = 0; i < g_hardpoint_count && !hp; i++)
+        if (g_hardpoints[i].vehicle == vehicle) hp = &g_hardpoints[i];
+    if (!hp) return;
+    int32_t list[7] = {0};
+    int n = 0;
+    for (int i = 0; i < hp->count; i++)
+        if (hp->slot[i].inst != -1) list[n++] = hp->slot[i].inst;
+    list[5] = hp->slot[5].inst;   /* ids 5 and 6 have their own slots, whatever the count */
+    list[6] = hp->slot[6].inst;
+    for (int i = 0; i < n; i++) {
+        int32_t id = 0, v0c = g_weapons[list[i]].v0c;
+        uint32_t v18 = g_weapons[list[i]].v18;
+        weapon_slot_id(list[i], &id);
+        /* the interval's product truncated (_ftol) */
+        int32_t rate = (int32_t)(int64_t)fpu_mul((double)v18, exe_f32(0x4a61f8));
+        int k = 0;
+        while (k < 7 && hp->slot[k].id != id) k++;
+        /* no slot of that id reads the word before the slots' (the count) as the instance */
+        int32_t w = k < 7 ? hp->slot[k].inst : hp->count;
+        if (w == -1) {
+            plat_log(exe_str(0x4dc348));
+            continue;
+        }
+        g_weapons[w].v0c = v0c;
+        if (rate != -1) g_weapons[w].v18 = (uint32_t)rate;
+    }
+}

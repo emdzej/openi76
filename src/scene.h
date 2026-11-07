@@ -47,9 +47,21 @@ void Node_Ref(Node *n);
 Node *Node_Parent(Node *n);
 /* Node_Free 0x41f4b0: unlinks the node and drops a reference (the parent's count); at none it is freed */
 void Node_Free(Node *n);
+/* Node_Unref 0x41f6f0: Node_Free at one reference; else one less on the node and all its descendants */
+void Node_Unref(Node *n);
+/* Node_Live 0x41f890: a node marked freed (+8 = 1) is released (Node_Unref) and NULL returned; any
+   other is returned as it is */
+Node *Node_Live(Node *n);
+/* Node_Detach 0x41fad0: n out of its parent's children; n and its descendants lose the parent's
+   references but one */
+void Node_Detach(Node *n);
+/* Node_Attach 0x41fa20: n the first child of p, taking p's state and its references but one */
+void Node_Attach(Node *n, Node *p);
 /* Node_FrameIn 0x42e6d0: the node's frame in the space of its ancestor upto (NULL: the world), up the
    previous-sibling links, multiplying at each parent */
 void Node_FrameIn(Frame *out, const Node *n, const Node *upto);
+/* Node_WorldPos 0x42e780: the node's position in the world (Node_FrameIn's), as floats; NULL: 0 */
+void Node_WorldPos(float out[3], const Node *n);
 /* Node_Find 0x484880: depth first from n, through its siblings, the node named name (8 bytes) */
 Node *Node_Find(Node *n, const char *name);
 /* Node_Bounds 0x42eb90: the box of the node's meshes and its siblings' (and their children's), in the

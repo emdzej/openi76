@@ -4,7 +4,7 @@
    definition (.vdf: the class, the parts' tree VGEO, locations VLOC, wheels' places WLOC, hard points HLOC,
    chunks VCHK, lights LOBJ, the collision record COLP, effect tables ETBL), the paint (.vtf: the texture
    slots), three wheel pairs (.wdf), the engine, brakes and suspension (compnent.cdf) and the armour; then
-   the specials (SPEC) and the weapons (WEPN, not ported yet). */
+   the specials (SPEC) and the weapons (WEPN, weapons.h). */
 #pragma once
 #include "objects.h"
 #include <stdbool.h>

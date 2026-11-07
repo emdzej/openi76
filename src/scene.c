@@ -5,6 +5,7 @@
 #include "lod.h"
 #include "platform.h"
 #include "render/fpu.h"
+#include "render/light.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -76,10 +77,43 @@ Node *Node_Parent(Node *n)
     return n->prev;
 }
 
+/* the end of a node whose references ran out (the tail of 0x41f4b0 and 0x41f5e0): out of its siblings'
+   chain, its children cut off, its class, meshes and light gone */
+static void destroy(Node *n)
+{
+    Node *q = n->prev;
+    if (q) {
+        if (q->child == n) q->child = n->next;
+        else q->next = n->next;
+    }
+    if (n->child) n->child->prev = NULL;
+    if (n->next) n->next->prev = n->prev;
+    Class_Free(n->cls, n->data);
+    n->cls = 0;
+    n->data = NULL;
+    Lod_Remove(n);
+    /* 0x47c030 (the textures' owner records) is not ported yet */
+    if (n->flags & 0x800) Light_Remove(n, &n->flags);
+    /* the original leaves the root 0x50a394 pointing at a freed node; the port clears it */
+    if (g_root == n) g_root = NULL;
+    free(n);
+}
+
+/* 0x41f5e0: n's children and (below the first level, always) its siblings, then n, each losing drop
+   references and marked freed */
+static void release(Node *n, int depth, uint16_t drop)
+{
+    if (n->child) release(n->child, depth + 1, drop);
+    if (n->next && depth > 1) release(n->next, depth + 1, drop);
+    n->state = 1;
+    n->refs -= drop;
+    if (n->refs == 0) destroy(n);
+}
+
 void Node_Free(Node *n)
 {
     if (!n) return;
-    int drop = 1;
+    uint16_t drop = 1;
     if (n->prev) {
         Node *p = Node_Parent(n);
         if (p) drop = (uint16_t)p->refs;
@@ -90,20 +124,82 @@ void Node_Free(Node *n)
     if (n->next) n->next->prev = n->prev;
     n->prev = NULL;
     n->next = NULL;
-    /* 0x41f5e0, the children's release, is not ported yet: every caller so far has none */
-    if (n->child) plat_log("Node_Free: children not released (0x41f5e0 not ported)");
+    if (n->child) release(n->child, 2, drop);
     n->state = 1;
     n->refs -= drop;
-    if (n->refs == 0) {
-        if (n->child) n->child->prev = NULL;
-        Class_Free(n->cls, n->data);
-        n->cls = 0;
-        n->data = NULL;
-        Lod_Remove(n);
-        /* 0x47c030 (the textures' owner records) and 0x43a400 (a light) are not ported yet */
-        /* the original leaves the root 0x50a394 pointing at a freed node; the port clears it */
-        if (g_root == n) g_root = NULL;
-        free(n);
+    if (n->refs == 0) destroy(n);
+}
+
+/* 0x41f860: one reference less on n, its siblings and their descendants */
+static void unref_list(Node *n)
+{
+    for (; n; n = n->next) {
+        n->refs--;
+        if (n->child) unref_list(n->child);
+    }
+}
+
+void Node_Unref(Node *n)
+{
+    if (!n) return;
+    if (n->refs < 2) {
+        Node_Free(n);
+        return;
+    }
+    n->refs--;
+    unref_list(n->child);
+}
+
+Node *Node_Live(Node *n)
+{
+    if (!n) return NULL;
+    if (n->state == 1) {
+        Node_Unref(n);
+        return NULL;
+    }
+    return n;
+}
+
+/* 0x41fa90: delta references on n and all its descendants */
+static void refs_add(Node *n, int32_t delta)
+{
+    if (!n) return;
+    n->refs += delta;
+    for (Node *c = n->child; c; c = c->next) refs_add(c, delta);
+}
+
+void Node_Detach(Node *n)
+{
+    Node *p = Node_Parent(n);
+    int32_t d = p ? p->refs - 1 : 0;
+    Node *q = n->prev;
+    if (q) {
+        if (q->child == n) q->child = n->next;
+        else q->next = n->next;
+    }
+    if (n->next) n->next->prev = n->prev;
+    n->refs -= d;
+    n->prev = NULL;
+    n->next = NULL;
+    for (Node *c = n->child; c; c = c->next) {
+        c->refs -= d;
+        for (Node *cc = c->child; cc; cc = cc->next) refs_add(cc, -d);
+    }
+}
+
+void Node_Attach(Node *n, Node *p)
+{
+    if (!p) return;
+    n->prev = p;
+    n->next = p->child;
+    if (p->child) p->child->prev = n;
+    p->child = n;
+    n->state = p->state;
+    int32_t d = p->refs - 1;
+    n->refs += d;
+    for (Node *c = n->child; c; c = c->next) {
+        c->refs += d;
+        for (Node *cc = c->child; cc; cc = cc->next) refs_add(cc, d);
     }
 }
 
@@ -124,6 +220,14 @@ void Node_FrameIn(Frame *out, const Node *n, const Node *upto)
         n = p;
     }
     *out = f;
+}
+
+void Node_WorldPos(float out[3], const Node *n)
+{
+    Frame f;
+    if (n) Node_FrameIn(&f, n, NULL);
+    else identity(&f);
+    for (int k = 0; k < 3; k++) out[k] = fpu_f32(f.pos[k]);
 }
 
 Node *Node_Find(Node *n, const char *name)
