@@ -423,3 +423,99 @@ has 9 floats, then a double position at +0x28. The routines are checked by `diff
 
   The port keeps the first three steps as Display_SetPalette; the shown palette is what goes to
   `plat_present`.
+
+## The render queue (ported, diffed)
+
+Port: `src/render/queue.c`; test `tools/emu/diff_queue.py` (random frames of every record type; the
+draw order and each insertion's result are identical).
+
+Everything in a frame goes through a queue sorted by depth (0x48d0c0-0x48e110), drawn far to near.
+
+- **Pools.** Queue_Init 0x48d710 allocates:
+  - a record pool of 370000 bytes (0x5f3190; the cursor is 0x5f31b8);
+  - a span pool of 8000 × 16 bytes (0x5f31b4);
+  - 4096 buckets of {head, tail, count} (0x5f31a8);
+  - 4096 span lists of the same shape (0x5f3180);
+  - 20 merges of 0x90 bytes (0x5f31ac).
+
+  None of them is bounds-checked.
+- **A record.** The header is 0x1c bytes:
+
+  | Offset | Field |
+  |---|---|
+  | +0 | n |
+  | +4 | colour or texture |
+  | +8 | DrawPoly's mode |
+  | +0xc | type |
+  | +0x10 | depth |
+  | +0x14 | next |
+  | +0x18 | prev |
+
+  Then come n vertices of 24 bytes, or, for n = 0, an object of its type. The object's size comes from
+  the table at 0x4eb048: 0, 0, 88, 88, 40, 40, 40, 40, 40, 40, 88, 88, 40. The object's dwords are:
+
+  | Offset | Field |
+  |---|---|
+  | +0x1c | the scene node |
+  | +0x20..0x28 | the camera-space centre |
+  | +0x2c | the radius |
+  | +0x30, +0x34 | two values for merges |
+  | +0x3c | type 6's merge |
+
+- **Who queues what.**
+  - Terrain (0x48f7b0, 0x48ffa0) queues type 0 polygons.
+  - Roads (0x491180, 0x491650) queue type 1, the occluding polygons.
+  - Objects (0x424b90) queue types 3, 5, 6, 7 and 0xb.
+  - The others: 0x42edc0 queues type 4, 0x46bdc0 type 2, 0x46c5e0 / 0x46c9b0 / 0x46d3d0 / 0x46ebb0
+    type 8, 0x46e650 type 9, 0x4919e0 type 10.
+- **Queue_Add 0x48db50(z).** It queues the cursor's record:
+  - Nothing is queued if zmin > z (a NaN depth goes on), if the bucket `rint(z − zmin)` (the 1.5·2^52
+    trick, in double) is above 0x1000, if n > 16, or for type 0xc.
+  - Type 1 adds spans (0x48d0c0); type 0xb adds them too (0x48d2a0).
+  - Any other type above 1 looks up the spans of its own bucket (0x48d670), with its x range: its
+    vertices', or centre ± radius. Each span is added from the record's depth to its far end (the
+    farthest vertex, or centre + radius), one per bucket, holding the occluder's x range and its bucket.
+  - 0x48d670 returns the least bucket (as unsigned, starting from 0x80000000) of the spans that the
+    object's min x or max x falls in (s.x0 ≤ x < s.x1), or −1 for an empty bucket. A result above 0
+    becomes the record's bucket: an object behind a road is drawn with the road.
+  - Types 5 and 6 whose node is a merge member update that member (+4, +8 from the record's +0x30,
+    +0x34) and are not queued.
+  - **Where it goes in the bucket:**
+    - first in an empty bucket;
+    - type 10: before the first record after the head with a type above 3;
+    - the others: before the first record (the head included) whose depth is below theirs (unordered
+      counts as below) with a type of 4-9;
+    - else at the end. The end path leaves +0x18 as it was.
+  - The cursor moves by n·24 + 0x1c, or the type's size + 0x1c. For type 10 inserted mid-list it is
+    always the type's size.
+- **Queue_Flush 0x48d820(view, end_merges).**
+  - zmax is clamped to 4096 when its bits, as a signed integer, exceed 4096.0's.
+  - The buckets are walked from `rint(zmax)` down to 0. The walk does not depend on zmin, so records
+    beyond rint(zmax) are dropped.
+  - A record with type ≥ 0xc or n ≥ 16 ends its bucket.
+  - Polygons go to DrawPoly(view, vertices, n, +4, +8).
+  - Objects go to their type's function (0x4eb010):
+
+    | Types | Function |
+    |---|---|
+    | 3, 11 | 0x48cd60 |
+    | 5 | 0x48cd20 |
+    | 6 | 0x48ccd0 |
+    | 7 | 0x48cef0 |
+    | 10 | 0x48cd80 |
+    | the rest | the no-op 0x48ccc0 |
+
+    The +0x3c of every object but type 6 is cleared first.
+  - A type 6 without a merge looks up its node among the merges and records the bucket. If its members'
+    least bucket differs, it is queued again in place at (least + rint(zmin)), which adds a bucket and a
+    depth. That value is at most one before the current bucket and at least zmin.
+  - Afterwards the tables are cleared, the cursor is reset and zmin/zmax become 1e6/−1e6.
+  - With end_merges the merges are dropped, after their nodes' "merge" property (0x41f890 / 0x41f6f0)
+    is cleared.
+- **Bucket 4096.** Queue_Add accepts bucket 4096 and the flush can start there, which is one past the
+  original's tables, in whatever memory follows. The port has a 4097th entry and clears it.
+- **Not reproduced.** Type 0 or 1 records without vertices are only a header in the original, and the
+  flush's clearing of their +0x3c writes into the records after them. The port's records have their own
+  sizes, so this aliasing doesn't happen. The game queues those types with vertices only.
+- **Not ported yet.** The merge entry points 0x48d450 and 0x48d530 (scene nodes), and the object types'
+  draw functions.

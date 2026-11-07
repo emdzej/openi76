@@ -158,3 +158,15 @@
 004929c0	Res_ScreenName
 004928f0	Res_LoadScreen
 0044f7f0	Map_Load
+0048d710	Queue_Init	render	high	the render queue's pools and buckets (docs/re/render.md, "The render queue")
+0048e0b0	Queue_Free	render	high	frees the queue's pools
+0048e060	Queue_New	render	high	the record at the cursor, n and next cleared
+0048e090	Queue_Skip	render	high	moves the cursor past an object record
+0048db50	Queue_Add	render	high	queues the cursor's record at a depth: bucket rint(z - zmin), spans, merges, order; ported, diffed
+0048d820	Queue_Flush	render	high	draws the buckets far to near (DrawPoly, the type table 0x4eb010), then empties; ported, diffed
+0048d0c0	Queue_SpansPoly	render	high	a type 1 polygon's spans: its x range from its depth to its farthest vertex
+0048d2a0	Queue_SpansObj	render	high	a type 0xb object's spans: centre +- radius, to the far side
+0048d670	Queue_SpanMin	render	high	the least occluder bucket whose span holds the x range's min or max; -1 if none
+0048d400	Queue_FindMember	render	high	the merge member of a node, its bucket set
+0048d450	Queue_MergeAdd	render	med	adds a node (its root) to the merges
+0048d530	Queue_Merge	render	med	merges two nodes (the "merge" property)
