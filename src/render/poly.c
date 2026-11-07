@@ -3,6 +3,7 @@
    tools/emu/diff_poly.py checks against the original machine code. */
 #include "render/poly.h"
 #include "render/fpu.h"
+#include <stdbool.h>
 #include <string.h>
 
 uint8_t g_rtab[RT_SIZE];
@@ -171,9 +172,9 @@ static const uint8_t *const *const tex_rows = tex_row_buf + 4;
 static const Texture *tex_rows_of;
 int g_poly_stale_row;
 
-static void tex_rows_build(const Texture *t, int last)
+static bool tex_rows_build(const Texture *t, int last)
 {
-    if (t == tex_rows_of) return;
+    if (t == tex_rows_of) return true;
     tex_rows_of = t;
     const uint8_t **rows = (const uint8_t **)tex_rows;
     for (int i = -4; i < 0; i++) rows[i] = t->pixels;
@@ -182,10 +183,12 @@ static void tex_rows_build(const Texture *t, int last)
     int i = 0;
     for (int c = t->h + 3; c >= 0; c -= 3, i += 3)
         for (int k = 0; k < 3; k++) rows[i + k] = t->pixels + (size_t)(i + k) * (size_t)t->w;
-    /* the copies go after row `last`, which is h but in the tiled affine filler (g_poly_stale_row); the port
-       skips them where the original would write outside its table */
-    if (last >= -3 && last + 3 < TEX_ROWS_MAX + 8)
-        for (int k = 0; k < 4; k++) rows[last + k] = rows[last - 1];
+    /* the copies go after row `last`, which is h but in the tiled affine filler (g_poly_stale_row). Far
+       outside the table the original faults on the first one, and DrawPoly's handler catches it: nothing
+       is drawn (the texture stays the cached one, its table whole but for the copies). */
+    if (last < -3 || last + 3 >= TEX_ROWS_MAX + 8) return false;
+    for (int k = 0; k < 4; k++) rows[last + k] = rows[last - 1];
+    return true;
 }
 
 /* rows[v][u], as the original reads it: u past a row's end reads into the next row, just before row 0 into
@@ -263,7 +266,7 @@ static void tex_affine(const Surface *s, ScreenVert *v, int n, const Texture *te
 {
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
-    tex_rows_build(tex, tiled ? g_poly_stale_row : tex->h);
+    if (!tex_rows_build(tex, tiled ? g_poly_stale_row : tex->h)) return;
     /* 0..1 to the texture's last texel (to its size, tiled) in 16.16 */
     double su = tiled ? MUL((double)tex->w, 65536.0) : MUL(SUB((double)tex->w, 1.0), 65536.0);
     double sv = tiled ? MUL((double)tex->h, 65536.0) : MUL(SUB((double)tex->h, 1.0), 65536.0);
@@ -362,7 +365,7 @@ static void tex_persp(const Surface *s, ScreenVert *v, int n, const Texture *tex
     int tiled = flags & TEX_MASK, shaded = flags & TEX_SHADED, full = flags & TEX_FULL;
     int next[64], prev[64];
     if (n < 1 || n > 64 || tex->h < 1 || tex->h > TEX_ROWS_MAX) return;
-    tex_rows_build(tex, tex->h);
+    if (!tex_rows_build(tex, tex->h)) return;
     /* here only times (size - 1), or the size: the 65536 comes in with the reciprocal of w */
     double sv = full ? (double)tex->h : SUB((double)tex->h, 1.0), su = full ? (double)tex->w : SUB((double)tex->w, 1.0);
     int top = 0, ymin = 100000;

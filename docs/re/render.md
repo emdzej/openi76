@@ -281,3 +281,22 @@ The view record holds `cx, cy, sx, sy` (+0..+0xc), the 2D rectangle as floats (+
   their bit patterns, in place. Negative values become 0 (-0.0 survives) and values above 1 become 1. When
   no z clipping was needed, "in place" is the caller's array. That path also rounds `1/z` to a float before
   using it. After the 2D clip, affine modes (bit 4 clear) multiply u and v back by `1/w`.
+
+## DrawPoly end to end (ported, diffed)
+
+`tools/emu/diff_draw.py` runs the original's DrawPoly 0x43d730 and the port's on random points, lines and
+polygons in all 512 modes, with textures, colour tables, a shadow mask and both screen heights. The
+pixels, the vertices, the tables and the mask all match. The port builds the two mode tables from the
+exe's at run time (`Draw_Init`) and maps each address to its routine.
+
+- **Points** (one vertex) are drawn only when the screen is taller than 480 rows (0x58d860), as 2x2 dots
+  with each pixel tested against the viewport. At 640x480 they are not drawn at all.
+- **Lines** (two vertices) copy the ends' x, y and z, clip them to near and far by the signs of the
+  distances (near's step from `near - z_a` unrounded, far's from the float `far - z_a`), round to nearest
+  and draw. Above 480 rows a second line is drawn beside the first: one row down when `dx > dy` (signed),
+  else one column right.
+- **The outline** fill entry rounds the vertices in DrawPoly's round-up mode.
+- **The SEH frame** around the fill catches a faulting filler. The one fault that matters is the tiled
+  affine filler's row-table copies landing far outside the table (its stale slot holding a pointer, say).
+  That faults before anything is drawn, so the polygon is skipped, and the port does the same.
+- The release build's debug print (0x402c80) is a bare `ret`, so the clip table's error entry is silent.

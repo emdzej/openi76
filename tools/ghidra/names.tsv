@@ -64,3 +64,8 @@
 0043fbf0	Clip_ScreenTex	render	high	the textured Clip_Screen (u, v interpolated too); ported, diffed
 004409c0	Clip_Camera	render	high	near/far z passes, projection, then Clip_Screen; ported, diffed
 00440d90	Clip_CameraTex	render	high	near/far, projection (untiled: u, v clamped to 0..1 in place), Clip_ScreenTex, affine fix-up; ported, diffed
+0043d730	DrawPoly	render	high	(view, verts, n, colour|texture, mode): point, line, or clip[mode] then fill[mode] with the FPU rounding up, inside an SEH frame; ported, diffed end to end
+0043d390	DrawPoint	render	high	a 2 x 2 dot, only when the screen is taller than 480 rows; ported, diffed
+00441440	Clip_Copy	render	high	clip-table entry: the input copied as it is
+00441470	Clip_Error	render	high	clip-table entry: "Error in clipping function" to the empty debug print, 0
+00402c80	Debug_Print	core	high	a bare ret: the release build's debug messages
