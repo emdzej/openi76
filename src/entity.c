@@ -8,6 +8,13 @@
 #include "platform.h"
 #include "render/fpu.h"
 #include "render/light.h"
+#include "collide.h"
+#include "math3d.h"
+#include "physics.h"
+#include "terrain.h"
+#include "classes.h"
+#include "lod.h"
+#include "objects.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -132,6 +139,7 @@ void Data_Free(uint8_t *d)
 static uint8_t *class_alloc(size_t n) { return Data_New(n); }
 static void put32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
 static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
+static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 static float getf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 
 /* structures 0x4306a0: 0x30 bytes, two words 400 (the strength, set from the record by 0x430e20) */
@@ -714,6 +722,133 @@ void Debris_First(Node *c)
         g_debris_oldest = c;
         debris_oldest_d = c->data;
     }
+}
+
+/* Debris_Frame 0x45bca0 (class 53's first per-frame handler): past its time, or off the grid, the piece is
+   gone. Otherwise its centre falls (-9.8) and it turns by its spin; on the ground it bounces: its upward
+   speed the mean of the step's two (gone when above 0), its velocity reflected off the ground's normal
+   and quartered, all of it and the spin stopped under 0.1 up or down; the frame put back round the centre
+   and the speed kept */
+void Debris_Frame(Node *n)
+{
+    uint8_t *d = n->data;
+    float dt = g_clock_step;   /* 0x450f30 */
+    if (g_clock_time > rdf(d + 0x3c)) {   /* test 0x41: only above */
+        Class_Unlist(n);
+        Node_Free(n);   /* tagged "chnkmgr" */
+        return;
+    }
+    float p[3], v[3];
+    Frame_Points((float (*)[3])p, (const float (*)[3])n->centre, 1, &n->frame);
+    for (int i = 0; i < 3; i++) v[i] = rdf(d + 0x18 + 4 * i);
+    float vy0 = v[1];
+    Ballistic(p, v, -9.8f, dt);   /* 0xc11ccccd */
+    if (!Terrain_Inside(p[0], p[2])) {
+        Class_Unlist(n);
+        Node_Free(n);
+        return;
+    }
+    Frame t;
+    Frame_Turn(&t, &n->frame, rdf(d + 0x24), rdf(d + 0x28), rdf(d + 0x2c), dt);
+    n->frame = t;
+    float h, nr[3];
+    Ground_Height(p[0], p[1], p[2], &h, nr);
+    if (!(p[1] > h)) {
+        v[1] = fpu_f32(fpu_mul(fpu_add(vy0, v[1]), exe_f32(0x4a6280)));
+        if (v[1] > exe_f32(0x4a6278)) {
+            Class_Unlist(n);
+            Node_Free(n);
+            return;
+        }
+        double k = fpu_mul(fpu_add(fpu_add(fpu_mul(nr[1], v[1]), fpu_mul(nr[2], v[2])), fpu_mul(nr[0], v[0])), exe_f32(0x4a6290));
+        p[1] = h;
+        float a[3] = {fpu_f32(fpu_add(fpu_mul(nr[0], k), v[0])), fpu_f32(fpu_add(fpu_mul(nr[1], k), v[1])),
+                      fpu_f32(fpu_add(fpu_mul(k, nr[2]), v[2]))};
+        for (int i = 0; i < 3; i++) v[i] = fpu_f32(fpu_mul(a[i], exe_f32(0x4a6294)));
+        double still = 0;   /* 0x4a6298 (a double) */
+        const uint8_t *q = exe_data(0x4a6298, 8);
+        if (q) memcpy(&still, q, 8);
+        if (fabs(v[1]) < still || v[1] != v[1]) {
+            v[0] = v[1] = v[2] = 0;
+            putf(d + 0x24, 0), putf(d + 0x28, 0), putf(d + 0x2c, 0);
+        }
+    }
+    const float *m = n->frame.m, *c = n->centre;
+    n->frame.pos[0] = fpu_sub(p[0], fpu_add(fpu_add(fpu_mul(m[6], c[2]), fpu_mul(m[3], c[1])), fpu_mul(m[0], c[0])));
+    n->frame.pos[1] = fpu_sub(p[1], fpu_add(fpu_add(fpu_mul(m[7], c[2]), fpu_mul(m[4], c[1])), fpu_mul(m[1], c[0])));
+    n->frame.pos[2] = fpu_sub(p[2], fpu_add(fpu_add(fpu_mul(m[2], c[0]), fpu_mul(m[8], c[2])), fpu_mul(m[5], c[1])));
+    for (int i = 0; i < 3; i++) putf(d + 0x18 + 4 * i, v[i]);
+    putf(d + 8, fpu_f32(fpu_sqrt(fpu_add(fpu_add(fpu_mul(v[1], v[1]), fpu_mul(v[2], v[2])), fpu_mul(v[0], v[0])))));
+}
+
+/* the particles' templates (0x45c190's table 0x573450, 13 buckets by the upper-cased name; the port keeps a
+   list, the lookups the same): CHUNK1, CHUNK2, CHUNK4, CHUNK3, each a node of its .geo, life 5 */
+typedef struct { uint8_t key[8]; Node *node; float life; } ParticleTpl;
+static ParticleTpl particle_tpl[4];
+static int particle_tpls;
+
+static void key_upper(uint8_t out[8], const uint8_t name[8])
+{
+    for (int i = 0; i < 8; i++) out[i] = (uint8_t)(name[i] >= 'a' && name[i] <= 'z' ? name[i] - 32 : name[i]);   /* 0x497870 */
+}
+
+static ParticleTpl *particle_find(const uint8_t name[8])
+{
+    uint8_t k[8];
+    key_upper(k, name);
+    for (int i = 0; i < particle_tpls; i++)
+        if (!memcmp(particle_tpl[i].key, k, 8)) return &particle_tpl[i];
+    return NULL;
+}
+
+void Particles_Init(void)
+{
+    static const uint32_t names[4] = {0x4d5394, 0x4d538c, 0x4d57c4, 0x4d5ce0};
+    particle_tpls = 0;
+    for (int i = 0; i < 4; i++) {
+        uint8_t name[8];
+        const uint8_t *p = exe_data(names[i], 8);
+        if (!p) continue;
+        memcpy(name, p, 8);
+        Node *n = Node_New(NULL, (const char *)name);   /* 0x484850 */
+        n->flags = 0;
+        n->radius = 1.0f;
+        n->geom = NULL;
+        Lod_Add(n, Obj_Name(name, exe_str(0x4dc458)), 0, 0);   /* ".geo" */
+        if (particle_find(name)) continue;   /* (the original's name already there: kept) */
+        ParticleTpl *t = &particle_tpl[particle_tpls++];
+        key_upper(t->key, name);
+        t->node = n;
+        t->life = 5.0f;
+    }
+}
+
+int Debris_Start(Node *n, const float *v, float life)
+{
+    if (!n) return 0;
+    Class_Set(n, 53);   /* 0x425700 */
+    if (!n->data) {
+        Node_Free(n);   /* tagged "chnkmgr" */
+        return 0;
+    }
+    Node_Attach(n, g_chunk_mgr);   /* 0x41fa20 */
+    Debris_First(n);
+    putf(n->data + 0x3c, fpu_f32(fpu_add(g_clock_time, life)));
+    if (v) Debris_Throw(n, v);
+    Class_StartAll();   /* 0x425920 */
+    return 1;
+}
+
+Node *Particle_New(const uint8_t name[8], float x, float y, float z, const float *v, float life)
+{
+    Node *n = Node_Create(NULL);   /* 0x41f320, tagged "chnkmgr" */
+    n->frame.pos[0] = x, n->frame.pos[1] = y, n->frame.pos[2] = z;
+    n->flags = 0;
+    n->geom = NULL;
+    ParticleTpl *t = particle_find(name);
+    if (t) Lod_Copy(t->node, n);   /* 0x47d850 */
+    Debris_Start(n, v, life);
+    return n;   /* (freed already when it got no data, as the original's) */
 }
 
 void Chunks_Init(void)

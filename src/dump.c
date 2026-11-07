@@ -345,6 +345,9 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "mirror.h"
 #include "smoke.h"
 #include "contrail.h"
+#include "skid.h"
+#include "flamer.h"
+#include "render/poly.h"
 #include "render/sky.h"
 #include "render/obj_draw.h"
 #include "render/queue.h"
@@ -1353,6 +1356,161 @@ int Dump_CallVehicles(int which, int upside)
                     Queue_Flush(&g_view, 1);
                     int c = Contrails_Dump(dump, 8);
                     uint32_t b[2] = {crc32(px, sizeof px), crc32(dump, (size_t)c * 0x3a0)};
+                    call_line(b, sizeof b);
+                }
+            }
+            n->frame = start;
+            break;
+        }
+        case 61: {   /* the skid marks (0x46bba0-0x46bdc0) with n for the owner: the ring (0x46bba0 with 16), the
+                        main view 20 m behind n and 6 up; 45 steps 0.1 s apart from n's place, a strip begun
+                        (0x46bc40) at the first and the 25th, otherwise on (0x46bcc0), moving 0.35 m (0.1 in
+                        steps 10-12) along z and 0.05 k along x; then 3 drawings, the clock 61 s on before the
+                        last; after each the screen's CRC-32 and the strips' records */
+            if (!g_user_entity || g_user_entity->node != n) break;
+            static int ready;
+            if (!ready) {
+                char err[200];
+                ready = Draw_Init(err, sizeof err) && Queue_Init();
+                if (!ready) break;
+            }
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            Skids_Init(16);
+            const uint32_t fov = 0x3fc90fda;
+            float fovf;
+            memcpy(&fovf, &fov, 4);
+            View_Create(&g_view, &sf, fovf, 1.0f, 150.0f, 1.0f);
+            Frame cam = n->frame;
+            for (int i = 0; i < 3; i++) cam.pos[i] = cam.pos[i] - 20.0 * (double)n->frame.m[6 + i] + (i == 1 ? 6.0 : 0.0);
+            View_SetCamera(&g_view, &cam);
+            static uint8_t dump[16 * 0x314];
+            float p[3] = {(float)n->frame.pos[0], (float)n->frame.pos[1], (float)n->frame.pos[2]};
+            float t = g_clock_time;
+            static uint8_t mask[84 * 481];   /* the shadow mask (0x58d8a0, its stride 0x58d890), as app.c's */
+            g_shadow_mask = mask;
+            g_shadow_stride = 84;
+            for (int k = 0; k < 48; k++) {
+                memset(mask, 0, sizeof mask);
+                t = (float)((double)t + (k == 47 ? 61.0 : 0.1));
+                g_clock_time = t;
+                g_fpu_round = FPU_DOWN;
+                if (k < 45) {
+                    p[0] = (float)((double)p[0] + 0.05 * k);
+                    p[2] = (float)((double)p[2] + (k >= 10 && k <= 12 ? 0.1 : 0.35));
+                    if (k == 0 || k == 24) Skid_New(p, n);
+                    else Skid_Add(p, n);
+                }
+                memset(px, 0x80, sizeof px);   /* a colour to darken */
+                g_q_zmin = -10.0f, g_q_zmax = 500.0f;
+                Skids_Draw(&g_view);
+                Queue_Flush(&g_view, 1);
+                int c = Skids_Dump(dump, 16);
+                uint32_t b[2] = {crc32(px, sizeof px), crc32(dump, (size_t)c * 0x314)};
+                call_line(b, sizeof b);
+            }
+            break;
+        }
+        case 62: {   /* the particles (0x45c780) and the debris' flight (0x45bca0) by the user's vehicle n: six
+                        particles (CHUNK1-4 in turn) round n's place, each thrown and with its life; 40 frames
+                        of 0.06 s, each live one's flight (while under the chunk manager); after each, for
+                        every particle, whether it lives, its frame and its data's speed, velocity, spin and
+                        end */
+            if (!g_user_entity || g_user_entity->node != n) break;
+            static const uint32_t names[4] = {0x4d5394, 0x4d538c, 0x4d57c4, 0x4d5ce0};
+            Node *pt[6];
+            for (int i = 0; i < 6; i++) {
+                const float v[3] = {(float)(1 + i), 4.0f, (float)(-2 + i)};
+                pt[i] = Particle_New(exe_data(names[i % 4], 8), (float)(n->frame.pos[0] + i),
+                                     (float)(n->frame.pos[1] + 2.0 + 0.5 * i), (float)(n->frame.pos[2] + 3.0), v,
+                                     (float)(0.5 + i));
+            }
+            float t = g_clock_time;
+            for (int k = 0; k < 40; k++) {
+                t = (float)((double)t + 0.06);
+                g_clock_time = t;
+                g_clock_step = 0.06f;
+                g_fpu_round = FPU_DOWN;
+                uint8_t b[6 * 0x6c];
+                memset(b, 0, sizeof b);
+                for (int i = 0; i < 6; i++) {
+                    int live = 0;
+                    for (Node *c = g_chunk_mgr->child; c; c = c->next)
+                        if (c == pt[i]) live = 1;
+                    if (live) Debris_Frame(pt[i]);
+                    live = 0;
+                    for (Node *c = g_chunk_mgr->child; c; c = c->next)
+                        if (c == pt[i]) live = 1;
+                    uint8_t *o = b + 0x6c * i;
+                    o[0] = (uint8_t)live;
+                    if (!live) continue;
+                    memcpy(o + 4, &pt[i]->frame, 0x40);
+                    memcpy(o + 0x44, pt[i]->data + 8, 4);
+                    memcpy(o + 0x48, pt[i]->data + 0x18, 0x18);
+                    memcpy(o + 0x60, pt[i]->data + 0x3c, 4);
+                }
+                for (int i = 0; i < 6; i++) memset(b + 0x6c * i + 4 + 0x24, 0, 4);   /* the frame's pad */
+                call_line(b, sizeof b);
+            }
+            break;
+        }
+        case 63: {   /* the flame throwers (0x46ce90-0x46df40) on the user's vehicle n as the muzzle: the ring
+                        (0x46ce90 with 16), the main view 20 m behind n and 6 up, the step 0.05 s; for kinds 0 and
+                        2 in turn 40 frames: in the first 25 the flame fired (0x46d090, 100 a second, the first
+                        flame thrower's explosion), n 0.5 m on along z and from the 10th to the 20th turned
+                        (the x and z rows mixed by 0.96875 and 0.25); each the fade (0x46d300), the drawing
+                        (0x46d3d0); after each the screen's CRC-32 and the records' */
+            if (!g_user_entity || g_user_entity->node != n) break;
+            static int ready;
+            if (!ready) {
+                char err[200];
+                ready = Draw_Init(err, sizeof err) && Queue_Init();
+                if (!ready) break;
+            }
+            static uint8_t px[640 * 480];
+            static Surface sf;
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            g_fpu_round = FPU_DOWN;
+            Flamers_Init(16);
+            const uint32_t fov = 0x3fc90fda;
+            float fovf;
+            memcpy(&fovf, &fov, 4);
+            View_Create(&g_view, &sf, fovf, 1.0f, 150.0f, 1.0f);
+            Frame cam = n->frame;
+            for (int i = 0; i < 3; i++) cam.pos[i] = cam.pos[i] - 20.0 * (double)n->frame.m[6 + i] + (i == 1 ? 6.0 : 0.0);
+            View_SetCamera(&g_view, &cam);
+            uint8_t name[8] = {0};
+            for (int i = 0; i < 20; i++)
+                if (g_ordnance[i].type >= 9 && g_ordnance[i].type <= 11) {
+                    memcpy(name, g_ordnance[i].fx[1].xdf, 8);
+                    break;
+                }
+            const Frame start = n->frame;
+            static uint8_t dump[16 * 0x360];
+            g_clock_step = 0.05f, g_clock_dt = 0.05f, g_clock_inv = 20.0f;
+            for (int pass = 0; pass < 2; pass++) {
+                n->frame = start;
+                for (int k = 0; k < 40; k++) {
+                    g_fpu_round = FPU_DOWN;
+                    if (k < 25) {
+                        if (k >= 10 && k < 20)
+                            for (int i = 0; i < 3; i++) {
+                                float x = n->frame.m[i], z = n->frame.m[6 + i];
+                                n->frame.m[i] = (float)(0.96875 * x - 0.25 * z);
+                                n->frame.m[6 + i] = (float)(0.25 * x + 0.96875 * z);
+                            }
+                        for (int i = 0; i < 3; i++) n->frame.pos[i] += 0.5 * (double)n->frame.m[6 + i];
+                        Flamer_Fire(n, pass * 2, 100, name);
+                    }
+                    Flamers_Fade();
+                    memset(px, 0, sizeof px);
+                    g_q_zmin = -10.0f, g_q_zmax = 500.0f;
+                    Flamers_Draw(&g_view);
+                    Queue_Flush(&g_view, 1);
+                    int c = Flamers_Dump(dump, 16);
+                    uint32_t b[2] = {crc32(px, sizeof px), crc32(dump, (size_t)c * 0x360)};
                     call_line(b, sizeof b);
                 }
             }

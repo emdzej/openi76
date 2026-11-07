@@ -287,8 +287,8 @@ The explosions, the sounds, the smokes and network play's messages (0x465520) ar
 
 Then the record is freed and the new classes start (0x425920). When the pool is empty, the oldest piece
 is freed to make room (0x45bc10). A freed piece's data goes back to the pool, and the next newer piece
-becomes the oldest (0x45bfd0). The pieces' flight (class 53's frame handler, 0x45bca0) is not ported
-yet.
+becomes the oldest (0x45bfd0). The pieces' flight is class 53's frame handler (0x45bca0,
+docs/re/effects.md "Debris and particles").
 
 **The noise (0x461750).** Chunks_Init fills a ring of 251 floats under `srand(0)`. Each is
 `(the sum of ten rand() / 32767) × 0.2 - 1`, so close to normal, between -1 and 1. They are read in turn

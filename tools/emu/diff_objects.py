@@ -786,8 +786,7 @@ def call_launch(exe, n, fpcw):
         return 1
 
     if not LAUNCH:
-        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
-                     (0x46D090, 5)):
+        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x459B50, fly, 2)
     LAUNCH["n"] = n
@@ -811,7 +810,7 @@ def call_fly(exe, n, fpcw):
     if not FLY:
         # the launch's effects as in call_launch and the hit's sound
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
-                     (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
+                     (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -935,7 +934,7 @@ def call_missile(exe, n, fpcw):
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
         for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
-                     (0x46D090, 5), (0x468640, 3), (0x46F170, 1)):
+                     (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1
     flags = u(n + 0x10)
@@ -1056,7 +1055,8 @@ def call_mirror(exe, n, fpcw):
     e = next((0x547E60 + i * 0x78 for i in range(0x100) if u(0x547E60 + i * 0x78) == n), 0)
     if not e or not u(0x4D3B64) or u(u(0x4D3B64)) != n:
         return
-    for a in (0x46E950, 0x46D3D0):   # the smoke's puffs and 0x46d3d0, not ported
+    # the smoke's puffs and the flames (no ring set up: the original's 0x46d3d0 reads through NULL)
+    for a in (0x46E950, 0x46D3D0):
         exe.stub(a, lambda *x: 0, 1)
     # WinMain's: the camera-space vertices and the drawers' pool (as diff_objdraw.py's)
     exe.write(0x58DCB0, struct.pack("<I", exe.put(bytes(0x40000))))
@@ -1290,6 +1290,159 @@ def call_contrail(exe, n, fpcw):
     exe.write(n + 0x18, start)
 
 
+def call_skid(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    exe.call(0x46BBA0, 16, limit=50_000_000, fpcw=rd)
+    make_view(exe, rd)
+    px = exe.put(bytes(640 * 480))
+    exe.write(0x58D860 + 0x10, struct.pack("<I", px))
+    exe.write(0x58D860 + 0x28, struct.pack("<I", 1))
+    exe.write(0x4A8488 + 0x38, struct.pack("<I", 0x58D860))
+    start = exe.read(n + 0x18, 0x40)
+    m = struct.unpack("<9f", start[:36])
+    pos = struct.unpack("<3d", start[0x28:])
+    cam = start[:0x28] + struct.pack("<3d", *[pos[i] - 20.0 * m[6 + i] + (6.0 if i == 1 else 0.0) for i in range(3)])
+    exe.call(0x43CF00, 0x4A8488, exe.put(cam), limit=50_000_000, fpcw=rd)
+    p = [f32(x) for x in pos]
+    t = struct.unpack("<f", exe.read(0x4DB140, 4))[0]
+    mask = exe.put(bytes(84 * 481))   # the shadow mask (0x58d8a0, its stride 0x58d890), as the port's app.c
+    exe.write(0x58D890, struct.pack("<I", 84))
+    exe.write(0x58D8A0, struct.pack("<I", mask))
+    for k in range(48):
+        exe.write(mask, bytes(84 * 481))
+        t = f32(t + (61.0 if k == 47 else 0.1))
+        exe.write(0x4DB140, struct.pack("<f", t))
+        if k < 45:
+            p[0] = f32(p[0] + 0.05 * k)
+            p[2] = f32(p[2] + (0.1 if 10 <= k <= 12 else 0.35))
+            exe.call(0x46BC40 if k in (0, 24) else 0x46BCC0, exe.put(struct.pack("<3f", *p)), n, limit=50_000_000, fpcw=rd)
+        exe.write(px, bytes([0x80]) * (640 * 480))   # a colour to darken
+        exe.write(0x5F31A4, struct.pack("<f", -10.0))
+        exe.write(0x5F319C, struct.pack("<f", 500.0))
+        exe.call(0x46BDC0, 0x4A8488, limit=500_000_000, fpcw=rd)
+        exe.call(0x48D820, 0x4A8488, 1, limit=500_000_000, fpcw=rd)
+        dump, c = b"", u(0x4DC920)
+        while True:
+            r = bytearray(exe.read(c, 0x314))
+            r[0:4] = bytes(4)
+            r[8:12] = bytes(4)
+            dump += bytes(r)
+            c = u(c)
+            if c == u(0x4DC920) or len(dump) >= 16 * 0x314:
+                break
+        CALL_OUT.append(struct.pack("<II", zlib.crc32(exe.read(px, 640 * 480)), zlib.crc32(dump)).hex())
+
+
+def call_debris(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    names = (0x4D5394, 0x4D538C, 0x4D57C4, 0x4D5CE0)
+    pos = struct.unpack("<3d", exe.read(n + 0x40, 24))
+    pt = []
+    for i in range(6):
+        lo, hi = u(names[i % 4]), u(names[i % 4] + 4)
+        v = exe.put(struct.pack("<3f", 1 + i, 4.0, -2 + i))
+        args = [struct.unpack("<I", struct.pack("<f", f32(x)))[0]
+                for x in (pos[0] + i, pos[1] + 2.0 + 0.5 * i, pos[2] + 3.0)]
+        life = struct.unpack("<I", struct.pack("<f", f32(0.5 + i)))[0]
+        pt.append(exe.call(0x45C780, lo, hi, *args, v, life, limit=500_000_000, fpcw=rd))
+    mgr = u(0x4DC428)
+
+    def live(p):
+        c = u(mgr + 0x64)
+        while c:
+            if c == p:
+                return True
+            c = u(c + 0x60)
+        return False
+    t = struct.unpack("<f", exe.read(0x4DB140, 4))[0]
+    for k in range(40):
+        t = f32(t + 0.06)
+        exe.write(0x4DB140, struct.pack("<f", t))
+        exe.write(0x4DB138, struct.pack("<f", 0.06))
+        b = bytearray(6 * 0x6C)
+        for i, p in enumerate(pt):
+            if live(p):
+                exe.call(0x45BCA0, p, limit=500_000_000, fpcw=rd)
+            if not live(p):
+                continue
+            o = 0x6C * i
+            b[o] = 1
+            b[o + 4:o + 0x44] = exe.read(p + 0x18, 0x40)
+            b[o + 4 + 0x24:o + 4 + 0x28] = bytes(4)
+            d = u(p + 0x70)
+            b[o + 0x44:o + 0x48] = exe.read(d + 8, 4)
+            b[o + 0x48:o + 0x60] = exe.read(d + 0x18, 0x18)
+            b[o + 0x60:o + 0x64] = exe.read(d + 0x3C, 4)
+        CALL_OUT.append(bytes(b).hex())
+
+
+def call_flamer(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    f32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]  # noqa: E731
+    exe.call(0x46CE90, 16, limit=50_000_000, fpcw=rd)
+    make_view(exe, rd)
+    px = exe.put(bytes(640 * 480))
+    exe.write(0x58D860 + 0x10, struct.pack("<I", px))
+    exe.write(0x58D860 + 0x28, struct.pack("<I", 1))
+    exe.write(0x4A8488 + 0x38, struct.pack("<I", 0x58D860))
+    start = exe.read(n + 0x18, 0x40)
+    m = struct.unpack("<9f", start[:36])
+    pos = struct.unpack("<3d", start[0x28:])
+    cam = start[:0x28] + struct.pack("<3d", *[pos[i] - 20.0 * m[6 + i] + (6.0 if i == 1 else 0.0) for i in range(3)])
+    exe.call(0x43CF00, 0x4A8488, exe.put(cam), limit=50_000_000, fpcw=rd)
+    name = (0, 0)
+    for i in range(20):
+        if 9 <= u(0x5E1A40 + 200 * i) <= 11:
+            name = (u(0x5E1A40 + 200 * i + 0x80), u(0x5E1A40 + 200 * i + 0x84))
+            break
+    exe.write(0x4DB138, struct.pack("<f", 0.05))
+    exe.write(0x4DB12C, struct.pack("<f", 0.05))
+    exe.write(0x4DB130, struct.pack("<f", 20.0))
+    for p in range(2):
+        exe.write(n + 0x18, start)
+        for k in range(40):
+            if k < 25:
+                fm = list(struct.unpack("<9f", exe.read(n + 0x18, 36)))
+                fp = list(struct.unpack("<3d", exe.read(n + 0x40, 24)))
+                if 10 <= k < 20:
+                    for i in range(3):
+                        x, z = fm[i], fm[6 + i]
+                        fm[i], fm[6 + i] = f32(0.96875 * x - 0.25 * z), f32(0.25 * x + 0.96875 * z)
+                for i in range(3):
+                    fp[i] += 0.5 * fm[6 + i]
+                exe.write(n + 0x18, struct.pack("<9f", *fm))
+                exe.write(n + 0x40, struct.pack("<3d", *fp))
+                exe.call(0x46D090, n, p * 2, 100, *name, limit=500_000_000, fpcw=rd)
+            exe.call(0x46D300, limit=50_000_000, fpcw=rd)
+            exe.write(px, bytes(640 * 480))
+            exe.write(0x5F31A4, struct.pack("<f", -10.0))
+            exe.write(0x5F319C, struct.pack("<f", 500.0))
+            exe.call(0x46D3D0, 0x4A8488, limit=500_000_000, fpcw=rd)
+            exe.call(0x48D820, 0x4A8488, 1, limit=500_000_000, fpcw=rd)
+            dump, c = b"", u(0x4DCDAC)
+            while True:
+                r = bytearray(exe.read(c, 0x360))
+                r[0:0x10] = bytes(0x10)
+                r[0x48 + 0x24:0x48 + 0x28] = bytes(4)
+                dump += bytes(r)
+                c = u(c)
+                if c == u(0x4DCDAC) or len(dump) >= 16 * 0x360:
+                    break
+            CALL_OUT.append(struct.pack("<II", zlib.crc32(exe.read(px, 640 * 480)), zlib.crc32(dump)).hex())
+    exe.write(n + 0x18, start)
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1364,7 +1517,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
@@ -1504,7 +1657,7 @@ def original():
         exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
         exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
-        for f, k in ((0x45C780, 7), (0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x46FDB0, 1),
+        for f, k in ((0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x46FDB0, 1),
                      (0x488950, 1), (0x455370, 1), (0x476440, 2),
                      # the wreck's (0x42c580): the sound's pitch, debris thrown, fires
                      (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):
@@ -1517,14 +1670,6 @@ def original():
         exe.stub(0x475EE0, lambda *a: 0, 3)   # the tyres' sounds and flats
         exe.stub_import("GetTickCount", lambda *a: 0, 0)
 
-        def skid(w, braking):   # 0x4301f0 as the port's stub: only the new mark's flag (+0x48)
-            wd = struct.unpack("<I", exe.read(w + 0x70, 4))[0]
-            if not braking or exe.read(wd + 0x40, 4) != bytes(4):
-                exe.write(wd + 0x48, bytes(4))
-            elif exe.read(wd + 0x48, 4) == bytes(4):
-                exe.write(wd + 0x48, struct.pack("<i", 1))
-            return 0
-        exe.stub(0x4301F0, skid, 2)
         # the view, as the port's Dump_CallVehicles makes it (a user's death sets the death camera on it)
         make_view(exe, exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
         c, k = struct.unpack("<I", exe.read(0x54F884, 4))[0], 0

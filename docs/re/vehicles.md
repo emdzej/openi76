@@ -238,7 +238,7 @@ results compared), or with `diff_phys.py` (direct calls on random inputs):
 | Vehicle_Upright 0x46fe20 | at rest on its back: the user's (or Taurus's) is turned back over, any other dies (0x42b790) |
 | Vehicle_Steer 0x475cb0 | the front wheels turned by the steering (+0xe0) × −π/4 |
 | Wheel_Contact 0x42ffb0 | the ground under the wheel plus an 8 × 8 bump table (0x4a5ba8) by the terrain's roughness; the spring's target through the wheel's filter; the travel within [+0x3c, +0x38] |
-| Vehicle_Brake 0x475c10 | +0x454 bit 2 while braking; the skid marks and dust (0x4301f0, rand) not yet |
+| Vehicle_Brake 0x475c10 | +0x454 bit 2 while braking; each rear wheel's skid mark and dust (0x4301f0; docs/re/effects.md "Skid marks") |
 | Vehicle_Air 0x474400 | falling (gravity 9.8), the nose easing down to −π/20, landing (sliding if sideways) |
 | Vehicle_Force 0x474bf0 | the drive (the engine's torque on the rear wheels' grip) or the brakes (on all four) |
 | Vehicle_Grip 0x4759b0 | the steering's yaw rate, limited by the wheels' loads (+0xc) and the terrain's grip; a slide past twice the limit |

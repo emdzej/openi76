@@ -2,6 +2,7 @@
    (render/fpu.h). */
 #include "ordnance.h"
 #include "contrail.h"
+#include "flamer.h"
 #include "clock.h"
 #include "avoid.h"
 #include "collide.h"
@@ -222,10 +223,11 @@ static void place(Node *s, const Launch *l)
 
 /* ---- the launch (0x458f40) ---- */
 
-/* the trail (0x46ef60, contrail.c); not ported yet, as the effects: 0x46d090 the types 9-11's (flares,
-   oil, caltrops: dropped per shot) */
+/* the trail (0x46ef60, contrail.c) */
 static void trail(Node *s, int k) { Contrail_Start(s, k); }
-static void dropped(Node *muzzle, int k, int32_t w, const Ordnance *o) { (void)muzzle, (void)k, (void)w, (void)o; }
+/* the flame throwers' (types 9-11, flamer.c): the damage a second the launch's +0x14, the explosion the
+   kind's second effect's (+0x80) */
+static void dropped(Node *muzzle, int k, int32_t w, const Ordnance *o) { Flamer_Fire(muzzle, k, w, o->fx[1].xdf); }
 
 /* the kind's pool: w7 (50) shots made at the first launch, each with its record (0x48 bytes) */
 static void fill_pool(int k)
@@ -278,9 +280,9 @@ Node *Shot_Launch(Launch *l, float late)
     switch (l->type) {
     case 9:
     case 10:
-    case 11:   /* each shot dropped by its own (0x46d090) */
+    case 11:   /* the flame throwers: each shot the flame once more (0x46d090) */
         while (l->n > 0) {
-            dropped(l->muzzle, l->type - 9, l->w14, &g_ordnance[k]);   /* with the kind's +0x80, +0x84 */
+            dropped(l->muzzle, l->type - 9, l->w14, &g_ordnance[k]);
             l->n--;
         }
         return NULL;

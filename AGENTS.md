@@ -39,8 +39,8 @@ trace=<frames>` logs the user's vehicle. The 3D and the flat cockpit with their 
 display, the HUD's target box and the rear-view mirror run (docs/re/cockpit.md). Not ported yet: the
 mission's script's movies and salvage (its machines, conditions, orders, objectives and the rest
 of its actions run: docs/re/fsm.md), the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
-splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke and the
-rockets' contrails run: docs/re/effects.md; the skid marks, the debris' flight, the dropped weapons and the
+splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke, the
+rockets' contrails, the flame throwers' flames, the skid marks and the debris run: docs/re/effects.md; the
 wrecks' other effects are not ported), the shell and audio. Read
 `docs/re/port-plan.md` (the order of work, each step with its check), `docs/re/inventory.md` (what is on
 the discs) and `docs/formats/`.

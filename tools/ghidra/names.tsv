@@ -433,7 +433,7 @@
 0048e360	Terrain_ClassInt	terrain	med	the terrain class record +0x10 as a float
 0042fea0	Wheel_SetX	physics	med	a wheel data +0x20
 00475c10	Vehicle_Brake	physics	high	flag 2 while braking, the rear wheels skids; ported (the skids stubbed)
-004301f0	Wheel_Skid	physics	high	skid marks 0x46bcc0/0x46bc40 and dust 0x45c780 (rand % 3)
+004301f0	Wheel_Skid	physics	high	skid marks 0x46bcc0/0x46bc40 and dust 0x45c780 (rand % 3); ported
 00451820	Frame_Yaw	math	high	the identity turned about y; ported, diffed
 00471860	Integrate	physics	high	position and velocity step under an acceleration; ported, diffed
 004719f0	Integrate_Turn	physics	high	the rotation step; ported, diffed
@@ -881,7 +881,7 @@
 00461750	Noise_Init	entity	high	the 251 noise floats under srand(0), then srand(time); ported
 0045bc10	Debris_New	entity	high	class 53's data from the pool; the oldest given up when empty; ported
 0045bfd0	Debris_Free	entity	high	class 53's data back to the pool; ported
-0045bca0	Debris_Frame	entity	med	class 53's per-frame: the debris' flight
+0045bca0	Debris_Frame	entity	med	class 53's per-frame: the debris' flight, bouncing on the ground; ported, diffed
 0045bba0	Chunks_Close	entity	high	the chunk table freed, the pool closed (0x570c70)
 0046b5a0	Nodes_Measure	collide	high	shown nodes' boxes, centres and radii from their vertices; ported
 0046b560	Meshes_Free	collide	high	the type 0x3000 meshes under a node freed; ported
@@ -1130,3 +1130,22 @@
 0046ef60	Contrail_Start	effects	high	the ring's next trail on a shot (kind < 7), a random roll, its first section; ported, diffed
 0046f170	Contrail_Step	effects	high	a shot's newest trail on to it: 2 m sections, straight or along a Hermite curve by forward differences; ported, diffed
 0046f960	Contrail_Section	effects	high	a section on at a frame, rolled (kinds 0-2), the end time 2 s on; ported, diffed
+0045ba80	Debris_Start	entity	high	a node made class 53 debris under the chunk manager, its life and throw; ported, diffed
+0045c190	Particles_Init	entity	high	the particles' templates CHUNK1-4 (nodes with their .geo); ported
+0045c780	Particle_New	entity	high	a piece of debris from a template by name at a place, thrown; ported, diffed
+0046bba0	Skids_Init	effects	high	the ring of n skid strips; ported, diffed
+0046bc00	Skids_Free	effects	high	frees the strips' ring; ported
+0046bc40	Skid_New	effects	high	the ring's next strip for a wheel, its first point; ported, diffed
+0046bcc0	Skid_Add	effects	high	the wheel's newest strip on by 0.2 m pairs, up to 31; ported, diffed
+0046bdc0	Skids_Draw	effects	high	the strips' facing quads nearer than 50 in colour 0xfe, mode 0xc0; ported, diffed
+0046ce90	Flamers_Init	effects	high	the three flame kinds' 13 frames (table 0x4dcb00), the ring of n flames, the slots' rings of 20; ported, diffed
+0046d050	Flamers_Free	effects	high	frees the flames' ring; ported
+0046d090	Flamer_Fire	effects	high	a muzzle's flame one triangle longer (up to 19), its light; ported, diffed
+0046d160	Flamer_New	effects	high	the ring's next flame for a muzzle (kinds 0-2), its lights and references; ported, diffed
+0046d300	Flamers_Fade	effects	high	flames not fired this frame two triangles shorter, ended at none; ported, diffed
+0046d3d0	Flamers_Draw	effects	high	each flame rebuilt from its muzzle (falling, widening, bent, flattened on a hit), swept and queued; ported, diffed
+0046df40	Flamer_End	effects	high	a flame's lights and references dropped, its record cleared; ported, diffed
+0046a6d0	Flame_Sweep	effects	high	a flame's point against the collision lists but the owner, the packet on each met; ported, diffed
+0045db40	Packet_Damage	damage	high	a packet through the class's damage handler, the vehicle hit told the attacker (0x40fc80); ported
+0046b1e0	Coll_First	collide	high	the collision lists' walk: the moving list's first, else the static's
+0046b230	Coll_Next	collide	high	the walk's next, from the moving list on to the static

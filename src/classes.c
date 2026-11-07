@@ -408,7 +408,7 @@ static const struct {
     {31, start_class31, {NULL, later}},     /* 0x4342f0; 0x4343c0 */
     {32, Window_Start, {NULL, NULL}},       /* 0x433810 */
     {33, Window_Start, {NULL, NULL}},
-    {53, no_start, {later, NULL}},          /* 0x45bc90; 0x45bca0 */
+    {53, no_start, {Debris_Frame, NULL}},   /* 0x45bc90; 0x45bca0 */
     {5, start_scrounge, {NULL, NULL}},      /* 0x42ed80 */
     {41, start_class41, {NULL, NULL}},      /* 0x433370 */
     {40, start_class40, {NULL, later}},     /* 0x433180; 0x433330 */

@@ -217,7 +217,7 @@ The pool is made at the kind's first launch: +0x1c (50) shots. Each gets the tre
 0x47d850) when the kind has one, and its texture (0x47bb20) for kinds with one.
 
 **The launch.**
-1. Types 9-11 are dropped one by one (0x46d090, not ported yet), and type 0xd does nothing.
+1. Types 9-11, the flame throwers, feed the flame once a shot (0x46d090; effects.md "Flames"), and type 0xd does nothing.
 2. Otherwise the record's +0x10 takes the kind's speed (+0x34).
 3. Past the kind's limit (+0x24 above +0x2c, 160), the oldest shot of list 0 moves to list 1.
 4. The new shot comes off the pool's front onto list 0. Kinds without a mesh use list 1, and so do types

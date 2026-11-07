@@ -564,10 +564,10 @@ Render_World draws a frame in this order:
 6. Queue_Flush(view, 1).
 7. 0x4279c0 (when 0x4a847c is 1), 0x427db0(view, 0), and the hook at 0x58dc58.
 
-Ported: the terrain, the roads, the objects (0x424b90), the contrails (0x46ebb0) and the smoke (0x46e360;
+Ported: the terrain, the roads, the objects (0x424b90), the flames' fade and drawing (0x46d300,
+0x46d3d0), the skid marks (0x46bdc0), the contrails (0x46ebb0) and the smoke (0x46e360; all in
 docs/re/effects.md), the tracers (0x46c9b0), the sky, the flush and, after it, the cockpit's 3D branch
-(0x4279c0), and the mirror 0x471390 (docs/re/cockpit.md). Not yet: 0x46d300, 0x46bdc0, 0x46d3d0, 0x42edc0,
-the hooks. The HUD 0x427db0 is ported (docs/re/cockpit.md).
+(0x4279c0), and the mirror 0x471390 (docs/re/cockpit.md). Not yet: 0x42edc0 and the hooks. The HUD 0x427db0 is ported (docs/re/cockpit.md).
 
 ## The sky (ported, diffed)
 

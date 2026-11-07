@@ -108,6 +108,17 @@ void Debris_First(Node *c);
 /* Debris_Throw 0x4617e0: a piece's velocity v plus noise x 10 (data +0x18), its speed (+8) and a spin of
    noise x 20 (+0x24) */
 void Debris_Throw(Node *c, const float v[3]);
+/* Particles_Init 0x45c190 (WinMain's, after Chunks_Init): the particles' templates CHUNK1-4, nodes of their
+   .geo meshes */
+void Particles_Init(void);
+/* Particle_New 0x45c780: a piece of debris by a template's name (8 bytes) at (x, y, z), thrown at v (if
+   given, with noise) and gone after life seconds */
+Node *Particle_New(const uint8_t name[8], float x, float y, float z, const float *v, float life);
+/* Debris_Start 0x45ba80: n made class 53 debris under the chunk manager, gone after life s, thrown at v if
+   given; then the classes' start. 0 (and n freed) when the pool gave no data */
+int Debris_Start(Node *n, const float *v, float life);
+/* Debris_Frame 0x45bca0: class 53's per-frame handler, the piece's flight and bounce */
+void Debris_Frame(Node *n);
 /* the node's chunk record freed (0x45b0a0's end) */
 void Chunk_Drop(const Node *n);
 /* Chunk_Add 0x45ae40: a destruction chunk of node: at most 10 a node, in the hash 0x570aa8 (0x71 buckets

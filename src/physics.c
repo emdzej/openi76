@@ -12,6 +12,8 @@
 #include "terrain.h"
 #include "weapons.h"
 #include "world.h"
+#include "crt.h"
+#include "skid.h"
 #include "render/fpu.h"
 #include <math.h>
 #include <string.h>
@@ -202,13 +204,35 @@ void Wheel_Contact(Node *w, int hold, float force, int tclass)
     w->frame.pos[1] = ADD(rdf(d + 0x28), t);
 }
 
-/* 0x4301f0: a braking wheel on the ground lays a skid mark (0x46bcc0, a new one 0x46bc40 with +0x48 = 1)
-   and, two times in three (rand), a puff of dust (0x45c780) behind it; +0x48 = 0 otherwise. Not ported
-   yet (the marks and the particles): only +0x48 is kept */
+/* 0x4301f0: a braking wheel on the ground (+0x40 clear) lays a skid mark at its point, less its radius
+   (+0x1c) and at the height +0x2c: a new mark (0x46bc40) sets +0x48, else the mark goes on (0x46bcc0) and,
+   two times in three (rand), a puff of dust (CHUNK3, 1 s) is thrown back along the vehicle and up at 0.75;
+   +0x48 = 0 otherwise */
 static void wheel_skid(Node *w, int braking)
 {
-    if (!braking || rd32(w->data + 0x40)) put32(w->data + 0x48, 0);
-    else if (!rd32(w->data + 0x48)) put32(w->data + 0x48, 1);   /* a new mark */
+    uint8_t *d = w->data;
+    if (!braking || rd32(d + 0x40)) {
+        put32(d + 0x48, 0);
+        return;
+    }
+    float p[3];
+    Node_WorldPos(p, w);   /* 0x42e780 */
+    p[1] = F32(SUB(p[1], rdf(d + 0x1c)));
+    float q[3] = {p[0], rdf(d + 0x2c), p[2]};
+    if (!rd32(d + 0x48)) {
+        Skid_New(q, w);
+        put32(d + 0x48, 1);
+        return;
+    }
+    Skid_Add(q, w);
+    const Node *root = Node_Root(w);   /* 0x42e6b0 */
+    const float k = exe_f32(0x4a5cf0);
+    float b[3] = {-root->frame.m[6], -root->frame.m[7], -root->frame.m[8]};   /* backwards */
+    for (int i = 0; i < 3; i++) b[i] = F32(MUL(b[i], k));
+    float v[3] = {b[0], F32(ADD(b[1], k)), b[2]};
+    if (crt_rand() % 3 == 0) return;
+    const uint8_t *name = exe_data(0x4d5ce0, 8);   /* "CHUNK3" */
+    if (name) Particle_New(name, q[0], q[1], q[2], v, 1.0f);   /* 0x45c780 */
 }
 
 void Vehicle_Brake(Node *n, uint32_t flags, int braking)

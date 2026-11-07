@@ -13,6 +13,8 @@
 #include "mirror.h"
 #include "smoke.h"
 #include "contrail.h"
+#include "skid.h"
+#include "flamer.h"
 #include "radar.h"
 #include "classes.h"
 #include "clock.h"
@@ -140,13 +142,14 @@ static bool viewer_init(const char *mission)
 /* Render_World 0x407550, its ported parts */
 static void viewer_frame(void)
 {
-    /* 0x46d300 is not ported yet */
+    Flamers_Fade();   /* 0x46d300 */
     if (g_cockpit == 1) Mirror_Draw();   /* 0x471390 */
     if (g_detail.b[DET_SHADOWS]) memset(g_shadow_mask, 0, sizeof shadow_mask);   /* Surface_Fill(0x58d890, 0) */
     Render_SetHeading(&view);
     Terrain_Draw(&view);
     Roads_Draw(&view);
-    /* 0x46bdc0 and 0x46d3d0 are not ported yet */
+    Skids_Draw(&view);   /* 0x46bdc0 */
+    Flamers_Draw(&view);   /* 0x46d3d0 */
     Objects_Draw(&view);
     Contrails_Draw(&view);   /* 0x46ebb0 */
     Tracers_Draw(&view);   /* 0x46c9b0 */
@@ -180,8 +183,9 @@ static bool play_init(void)
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
-    Contrails_Init(8);   /* 0x46e980, with WinMain's inits after the classes' start (0x46bba0 before it and
-                            0x46ce90 after are not ported yet) */
+    Skids_Init(16);      /* 0x46bba0, with WinMain's inits after the classes' start */
+    Contrails_Init(8);   /* 0x46e980 */
+    Flamers_Init(16);    /* 0x46ce90 */
     Tracers_Init(100);   /* 0x46c0e0 */
     Noise_Init();        /* 0x451510 */
     Smoke_Init();        /* 0x46dfb0 */

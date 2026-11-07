@@ -555,5 +555,6 @@ void Objects_Init(void)
     Muzzles_Init();
     Collide_Init();
     Chunks_Init();
+    Particles_Init();   /* 0x45c190 */
     g_spawn_count[0] = g_spawn_count[1] = 0;   /* 0x461??? at the mission's end */
 }

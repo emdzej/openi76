@@ -510,10 +510,14 @@ static void explosion(const char name[8], Node *n, const float at[3])
     Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], NULL);
 }
 
-/* not ported yet, as the sounds and the effects: 0x4683c0 the sound by number 7, 0x468580 a sound by
-   name, 0x45c780 a smoke (0x4d538c or 0x4d5394) */
+/* not ported yet, as the sounds: 0x4683c0 the sound by number 7, 0x468580 a sound by name */
 static void sound_named(const char *name, Node *n) { (void)name, (void)n; }
-static void smoke_puff(int second, const float at[3], const float v[3], float k) { (void)second, (void)at, (void)v, (void)k; }
+/* 0x431320's: a puff of smoke, CHUNK1 (0x4d5394) or else CHUNK2 (0x4d538c), at at thrown at v, for life s */
+static void smoke_puff(int first, const float at[3], const float v[3], float life)
+{
+    const uint8_t *name = exe_data(first ? 0x4d5394 : 0x4d538c, 8);
+    if (name) Particle_New(name, at[0], at[1], at[2], v, life);   /* 0x45c780 */
+}
 
 static int is_none(const char *s, int n) { return crt_strnicmp(s, exe_str(0x4a90f4), (size_t)n) == 0; }   /* "null" */
 
@@ -1109,9 +1113,15 @@ float Side_Whole(const uint8_t *d, uint32_t side)
     return b > a ? a : b;
 }
 
-/* not ported yet: the sparks (0x45c780, "CHUNK4" at the point), the death's other steps (0x46fdb0, the
-   AI's death 0x488950, the guns' 0x455370, the engine's sound 0x476440) */
-static void sparks(const float at[3]) { (void)at; }
+/* the sparks: CHUNK4 (0x4d57c4) at the point, thrown up at 5, for 2.5 s (0x45c780) */
+static void sparks(const float at[3])
+{
+    const uint8_t *name = exe_data(0x4d57c4, 8);
+    const float up[3] = {0, 5.0f, 0};
+    if (name) Particle_New(name, at[0], at[1], at[2], up, 2.5f);
+}
+/* not ported yet: the death's other steps (0x46fdb0, the AI's death 0x488950, the guns' 0x455370, the
+   engine's sound 0x476440) */
 static void death_steps(Node *n, int user) { (void)n, (void)user; }
 
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
@@ -1326,9 +1336,21 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
     return live != NULL;
 }
 
+/* 0x45db40 (the flamer's hits): the packet through the class's handler; a vehicle hit is told who did it
+   (0x40fc80 with 0x10). 0x4dc464, which would spare the user, is never set */
+void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at)
+{
+    if (!n) return;   /* (the original would crash) */
+    Node_Ref(n);
+    Class_Damage(n, p, at);   /* 0x425df0 */
+    Node *live = Node_Live(n);   /* the port frees the dead: the original reads them on */
+    if (live) Node_Unref(live);
+    if (by && live && is_vehicle(live)) ai_struck(by, 0x10, live, NULL);
+}
+
 /* the wreck's effects, not ported yet: the sound's pitch (0x476170), a wheel or a body piece thrown off (0x45b760; a piece as a
-   "v_chnk" object taking the part's class 0x3f children), the fires on the children (0x45b3f0) and the
-   smoke (0x45c780, 0x4d538c or 0x4d5394), the 0x46fdb0 list */
+   "v_chnk" object taking the part's class 0x3f children), the fires on the children (0x45b3f0), the
+   0x46fdb0 list (the smoke is: smoke_puff) */
 static void wreck_fx(Node *n, int what, int a) { (void)n, (void)what, (void)a; }
 
 /* the next part from a random start among count slots from first that is there and not hidden (bit 1);
@@ -1436,9 +1458,11 @@ void Vehicle_Wreck(Node *n, int start)
         for (Node *c = n->child; c; c = c->next)
             if (crt_rand() & 1) wreck_fx(n, 7, 0);
         return;
-    case 4: case 5:   /* smoke of one of two kinds */
-        wreck_fx(n, 8, crt_rand() & 1);
+    case 4: case 5: {   /* a puff of smoke (CHUNK1 on an odd rand, else CHUNK2) at the vehicle, up at 15 for 15 s */
+        const float up[3] = {0, 15.0f, 0};
+        smoke_puff(crt_rand() & 1, at, up, 15.0f);
         return;
+    }
     case 6: case 7: {   /* an explosion near: within the radius's scale, a quarter of it upwards */
         Entity *e = Entity_OfNode(n);
         float r = e ? e->r : 0;   /* the original reads a null entity */

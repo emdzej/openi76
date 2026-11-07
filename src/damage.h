@@ -70,6 +70,9 @@ float Side_Whole(const uint8_t *d, uint32_t side);
    the front, the look and the body's textures by the side's health, the smoke; and once dead (+0x454 bit
    0x20) the death: with 0x4000 the wreck's ten seconds (0x80008000), else the wreck (0x42c580). 1 dead */
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at);
+/* Packet_Damage 0x45db40: the packet p (+0: by, kept apart here) on n at the point at (n's frame) through
+   Class_Damage; a vehicle hit remembers by (0x40fc80, kind 0x10) */
+void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at);
 /* Impact_Damage 0x45d7c0: an impact on n by src (NULL: the ground) at the velocity v against the normal
    nv: a packet for the armour (+0x14) of ftol(mass x (v . -nv)^2 x k), the mass src's for a moving source
    (k 6.67e-5) else n's (1e-4), through Class_Damage at the point at. 1 while n lives on. A shot's (0x33)

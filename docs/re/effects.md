@@ -3,8 +3,8 @@
 `src/effects.c`, with the node release in `src/scene.c` and the class unlisting in `src/entity.c`.
 Checked by `tools/emu/diff_objects.py`, which dumps the registered effects (0x55f7f8) with their node
 trees. They are identical to the original's in every mission (confirmed). Of the effects' running, the
-explosions, the smoke and the contrails are ported; the skid marks (0x46bba0-0x46bdc0), the dropped
-weapons (0x46ce90-0x46df40) and the debris chunks (0x45c780) are not yet.
+explosions, the smoke, the contrails, the skid marks and the debris' and particles' flight are ported;
+the dropped weapons (0x46ce90-0x46df40) are not yet.
 
 ## The file (.xdf, Xdf_Load 0x493210)
 
@@ -303,3 +303,197 @@ as the shot's target and its data's +0x456 lacks bit 4) is not ported.
 whose node stands for the shot. For kinds 1 and 4 it starts a trail, then makes 30 steps 0.1 s apart:
 moves of 1.5 m, then 9 m, then 9 m turning. Then come 25 drawings 0.2 s apart. After each, the check
 compares the screen's CRC-32 and the trails' records.
+
+## Debris and particles (0x45ba80-0x45c880; ported)
+
+The pieces a structure throws (0x45b0a0, docs/re/objects.md) and the particles (the dust, the sparks,
+the smoke of a destroyed structure) are all class 53 debris under the chunk manager. They share the pool
+of 150 data blocks.
+
+**The particles' templates (0x45c190, WinMain's per-mission set-up after the chunks').** These are four
+nodes, CHUNK1, CHUNK2, CHUNK4 and CHUNK3 (the names at 0x4d5394, 0x4d538c, 0x4d57c4 and 0x4d5ce0). Each
+has:
+- the identity frame, flags 0 and a radius of 1;
+- its `.geo` mesh as level 0 of state 0.
+
+They go in a table of 13 buckets (0x573450, by the upper-cased name as the effects' table hashes it, 0x18
+bytes a record: the name, the node, a life of 5 and the next). No other code adds to it. 0x45c880 frees
+it at the mission's end.
+
+**A particle (0x45c780)** is a new node without a parent (tagged "chnkmgr") at a point, with flags 0 and
+no mesh. When its name is in the table, it gets the template's record (Lod_Copy 0x47d850). Then it
+starts as debris (0x45ba80):
+1. It becomes class 53. Without data from the pool, the node is freed and the start returns 0. The
+   particle's node is returned all the same.
+2. It goes under the chunk manager, and becomes the oldest piece when there is none.
+3. Its end time (+0x3c) is the clock plus its life.
+4. Given a velocity, it is thrown (0x4617e0: the velocity plus noise × 10, a spin of noise × 20).
+5. The new classes start.
+
+Its makers:
+- **The dust behind a braking wheel** (0x4301f0, below): CHUNK3 for 1 s.
+- **The sparks of a hit on a vehicle** (0x429eb0, given a point): CHUNK4 at its world point, thrown up at
+  5, for 2.5 s.
+- **A structure's destruction** (0x431320): eight puffs at the box's floor's centre, thrown up at 15 for
+  15 s. Each is CHUNK1 when rand() % 2 is non-zero, else CHUNK2.
+- **The wreck** (0x42c580): the smoke of its thrown parts, CHUNK1 or CHUNK2. That one is not ported, with
+  the rest of the wreck's effects.
+
+**The flight (0x45bca0, class 53's first frame handler).**
+1. Past its end time (only above), or once its centre leaves the terrain's grid (0x48e210), the piece is
+   unlisted and freed.
+2. Otherwise its centre (the box's, +0x84, in the world) moves ballistically under -9.8 (0x4719a0). Its
+   frame turns by the spin (+0x24) over the step (0x471d40).
+3. **The ground** (0x477290, its height and normal at the centre). At or under it:
+   - the upward speed is the mean of the step's two. Above 0 the piece is gone;
+   - otherwise the velocity is reflected: twice its normal component taken off, along the normal;
+   - then it is quartered and the centre put on the ground;
+   - under 0.1 up or down (|vy| below 0.1, or unordered), the velocity and the spin stop.
+4. The frame's position is put back round the new centre (the centre less its turned offset). The
+   velocity and the speed (+8) are kept.
+
+**0x45bb10** frees every piece within a sphere of the chunk manager's children (a point and a radius,
+each piece's radius added). It is not called by the ported code yet.
+
+## Skid marks (0x46bba0-0x46bdc0; ported)
+
+`src/skid.c`. The rear wheels lay them (0x4301f0, from Vehicle_Brake 0x475c10) while braking on the
+ground (the wheel's +0x40 clear):
+- The point is the wheel's world position at the height +0x2c. The y less the radius (+0x1c) is
+  computed and unused.
+- Without a mark under way (+0x48 clear), a new strip starts there (0x46bc40) and +0x48 is set.
+- Otherwise the strip goes on (0x46bcc0). Two times in three (`rand() % 3`, taken every such frame), a
+  CHUNK3 particle is thrown at 0.75 times the vehicle's backward axis, plus 0.75 up, for 1 s.
+- Not braking, or off the ground, clears +0x48.
+
+**The strips** are a ring of 16 (WinMain's 0x46bba0 with 16, after the classes' start; 0x314 bytes each):
+
+| Offset | Field |
+|---|---|
+| +0 | next |
+| +4 | a serial (0x577188) |
+| +8 | the owner, the wheel's node |
+| +0xc | the end time, the start + 60 s |
+| +0x10 | the pairs |
+| +0x14 | up to 31 pairs of points |
+
+- **A new strip (0x46bc40)** is the ring's next: one pair, its first point at the wheel's.
+- **The strip's step (0x46bcc0)** takes the owner's newest strip (the highest serial). Below 31 pairs,
+  it adds one when the point is 0.2 m or more (in x and z) from the last pair's first point:
+  - the pair's first point is the wheel's, the second 0.2 m to its side, (+dz, -dx) times 0.2 over the
+    distance;
+  - the second pair also sets the first pair's side point the same way.
+  - The strip's end time does not move: a strip lasts 60 s from its start.
+
+**The drawing (0x46bdc0, Render_World's, after the roads)**, each strip round the ring:
+1. Past its end time it is emptied.
+2. With two pairs or more, its points go into camera space. Each pair and the next make a quad from the
+   points (1, 0, 2, 3) of the four (0x4dc928).
+3. It is drawn when the middle of its first and third points is nearer than 50 (the unrounded depth). The
+   sphere there of radius 10 must not be wholly outside the frustum.
+4. It must face the camera: the first point · ((third - first) × (second - first)) not below 0. The
+   cross product's z and its second edge's z stay unrounded.
+5. It goes in as a type 2 polygon in mode 0xc0, colour 0xfe, q 0. u and v are not written and keep
+   what the queue's pool held.
+6. Its depth is the nearest corner's.
+
+## Flames (0x46ce90-0x46df40; ported, diffed)
+
+`src/flamer.c`. The flame throwers (the ordnance types 9-11, flame kinds 0-2) fire no shots. Each shot
+of the launch (0x458f40) calls 0x46d090 with the muzzle, the kind, the launch's damage word (+0x14, the
+weapon's +0x58: the damage a second) and the kind's second effect's name (+0x80, the vehicle-hit one).
+A flame is a chain of triangles out of the muzzle, rebuilt every frame.
+
+**The kinds** (the table 0x4dcb00, 0xe4 bytes a kind, three kinds: xfl1, xfm1, xfh1) each have thirteen
+frame names of 13 bytes: four for the flame's far end, four for the middle, four for the segment at the
+muzzle and one for the caps. The set-up writes their pointers after the names (+0x34, +0x78, +0xbc,
++0xdc). +0xe0 is the mode, 'T' (0x54), or 0xe3 when a frame is missing ("Flamer start frame (%s)
+missing" and the like).
+
+**The set-up (0x46ce90, WinMain's after the contrails, with 16)** allocates the flames (0x360 bytes),
+each pushed at the head; the first made closes the ring (0x4dcdac). The slots' rings are 20 entries:
+0x5771f8 each the next (the last 0), 0x5771a8 each the previous (the first 19).
+
+**A flame** (0x360 bytes):
+
+| Offset | Field |
+|---|---|
+| +0 | the ring's next |
+| +4 | the muzzle (referenced) |
+| +8 | the muzzle's root, the vehicle (referenced); the sweep spares it |
+| +0xc | a node of its own carrying a light, as long as the flame |
+| +0x10 | fired this frame |
+| +0x14 | the triangles, n |
+| +0x18, +0x1c | the first and the last slot. The first is set to 0 and never moves, so the slots are 0 to n-1 |
+| +0x24 | the kind |
+| +0x28-+0x34 | the frames' counters (far end, middle, muzzle, cap) |
+| +0x38 | the explosion's name (8 bytes) |
+| +0x40 | the damage a second |
+| +0x48 | a frame (0x40 bytes): the muzzle's orientation at the flame's far end, the frame before |
+| +0x88 | drawn once |
+| +0x8c | 20 slots of three points (world) |
+
+**Firing (0x46d090).** The flame is the last one in the ring with this muzzle. Without one, the ring's
+next record is taken (0x46d160), whatever it held: a flame still burning there is dropped without its
+references released.
+- A new flame keeps the muzzle and its root, both referenced. It lights the muzzle (type 1, range 5) and
+  makes the light's node at the muzzle's local frame (range 2). It takes the kind, the damage and the
+  name, one triangle, the muzzle's frame as the last one, and clears the drawn flag. Kinds above 2 make
+  nothing.
+- Below 19 triangles, the last slot moves on and the count grows. The light's node is made if there is
+  none, else its light is taken off. Its light is put back at the count + 1 (Light_Add takes at least
+  20).
+- Either way the flame is marked fired.
+
+**The fade (0x46d300, Render_World's first)**, for each flame with a muzzle not fired this frame:
+1. The last slot steps back twice while it is not the first, the count with it.
+2. The light's node loses its light. Under two slots past the first it is freed; else its light comes
+   back at the count + 1.
+3. With no slot left the flame ends (0x46df40). That takes the muzzle's light off, frees the light's
+   node, drops both references and clears the record.
+
+Every flame's fired flag is then cleared.
+
+**The drawing (0x46d3d0, Render_World's after the skid marks; the mirror's in both its modes).** A flame
+whose muzzle or root is marked freed (+8) ends first. One with a muzzle and more than one slot is then
+rebuilt:
+1. The frame is the muzzle's in the world, its z axis f. The packet is cleared. dt is the step
+   (0x450f30). The growth per triangle is ds = 0.05 n 2.3 / n, unrounded between.
+2. From the muzzle, for each of the n triangles in turn (j from 1), with a time t from 0 and a scale s
+   from 1:
+   - The triangle's three points are the template, through the frame at the current point. The first
+     uses the template 0x4dca38 itself; each next is the template times s. Once the flame has met
+     something, the template is 0x4dca60, flat.
+   - The step is f with its y replaced by f.y - 9.8 · 0.65 t². t grows by dt / n, s by ds.
+   - From the second triangle on, the point sweeps for hits (below). The packet is mask 4 with
+     ftol(damage · dt), at least 1, the owner the root.
+   - From the second triangle on, and only from the flame's second drawing:
+     - **Met** (this one or an earlier one): the first slot met is kept. The growth becomes
+       ds (1 - (n - slot) / (n - first slot met)) 1.5, with the slot index, not the count (a quirk). The
+       step becomes (f.x/8, 0.01, f.z/8).
+     - Each such triangle explodes (0x4540d0) the flame's effect at the point, on what was last met. The
+       owner credited is the root of the ring's next record, not this flame's (a quirk).
+     - **Not met:** the step bends toward the last frame's position (the flame's far end the frame
+       before) by 0.85 dt (j / (n + 1))², from the point plus f (its y the falling one).
+   - The point moves by the step; the frame's position follows.
+3. The light's node takes the frame, now at the flame's far end, and the record keeps it as the last one.
+4. The n slots go into camera space. The four counters are taken, then the first three advance mod 4 and
+   the cap's is cleared.
+5. Each slot and the next make a segment. Its frame is the far end's for the last, the muzzle's for the
+   first, else the middle's. A segment is drawn when the sphere of radius 10 round the middle of the
+   slot's first point and the next one's third is not wholly outside. It is drawn as three quads (the
+   point pairs 0x4dca88: 0-1, 1-2, 2-0) and a cap triangle on the next slot. All are type 8 in the
+   kind's mode, at the nearest corner's depth.
+
+**The sweep (0x46a6d0)** takes the point a (radius 1) and the flame's first point b. It moves from a
+along a - b, over the frame's inverse step (a quirk: from the far point onward). It walks the
+collision lists, moving first (0x46b1e0, 0x46b230), skipping the owner:
+- An entity is tried when a is strictly within its world sphere plus 1. Its sweep (0x476610, no radius,
+  faces) must meet the segment.
+- The point met is a + v t. A helicopter (class 8) is hit as itself. The point goes into the frame of
+  what was met, or 0 with nothing.
+- The packet goes on it (0x45db40, Packet_Damage). That runs the class's damage handler. A vehicle is
+  told who attacked it (0x40fc80, kind 0x10).
+- Every entity met takes the damage, not only the first; the result is 1 if any was met.
+- For an entity of collision kind 2 the sweep leaves its time alone. The point then uses whatever the
+  stack slot held; the port keeps the last time.
