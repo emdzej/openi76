@@ -58,3 +58,37 @@ The game writes into its install directory; the port's data is read-only (a disc
 assets). `Files_Write` keeps each written file in the file layer's overlay (`vfs_put`), where it is read
 before the data by the same path. It also stores the file in the platform's user files (gasm storage),
 and the app puts those back over the data at start-up. The native build keeps them for the run only.
+
+## The garage's .vcf reader (0x485210) — confirmed, tested
+
+The shell does not load a car to show it in the garage: it asks the exe for the figures of the car's
+.vcf, read by a set of handlers of their own (tables 0x4e9c68, 0x4e9d78, 0x4e9f08, 0x4ea118, 0x4e9f98)
+into a scratch of 0xaa8 bytes:
+
+| Offset | From |
+|---|---|
+| +0x50 | VCFC +8, the car's name ("Stock (Orange)") |
+| +0xa0 | VDFC +8, the body's name ("Picard Piranha") |
+| +0xf0, +0xfd | VCFC +0x18 and +0x25, the .vdf and .vtf |
+| +0x10a | VSHL's 0x2d bytes |
+| +0x137, +0x147, +0x157 | the engine's, brakes' and suspension's names from compnent.cdf's NTBL, BTBL and STBL, by the VCFC's numbers (+0x32, +0x3a, +0x36) |
+| +0x168 | the six WLOCs (0x38 each) |
+| +0x2b8, +0x2f8, +0x338 | the three wheel pairs (0x40 each): +8 the .wdf's name to its dot, +0x18 WDFC's name, +0x28 its +0x30, +0x2c its mesh, +0x3c its weight × 0x4a7484 |
+| +0x378 + 0xfc i | the HLOCs (at most 7): +0 the name, +0x50 the gun's name (its .gdf's GDFC +8), +0xb0 the id, +0xb4, +0xb8, +0xec |
+| +0xa5c | VDFC +0x44, the body's hard points (WEPN looks among these) |
+| +0xa60 | the HLOCs read |
+| +0xa64 | SPCS's three words |
+| +0xa70 | the three specials (SPEC +8) |
+| +0xa7c | VCFC +0x65-0x88, the armour |
+| +0xaa0 | the weight: VDFC +0x38, plus the wheels', the components' and the guns' (GDFC +0x3c) |
+| +0xaa4 | VDFC +0x38 |
+
+A WEPN on a hard point the body does not have fails the read. The components' handler keeps the
+record whose number the walk has reached, counting each ENGN, BRAK or SUSP.
+
+The .vsf reader (0x485250, table 0x4e9e48) fills a scratch of 0xc0: VCST at +0, WLST at +0x4c, the WPSTs
+at +0x64 (their count at +0xbc), and hands each SALV to the function at +0xb8. 0x48b420, the shell's
++0x18, turns it into a state of 0x4e dwords: the engine's, brakes' and suspension's conditions, the
+six wheels', each gun's hard point and count, the three specials' bytes and the VCST's words from +0xd.
+
+`tests/shellcar_test.c` reads the training car (vppa01.vcf) and a .vsf written through the file layer.

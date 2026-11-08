@@ -1344,3 +1344,27 @@
 00495b70	Wild_Match	crt	high	a name against a pattern, no leading wildcard on a dot name; ported (Res_Match)
 00495bb0	Wild_Step	crt	high	the pattern matcher: 1, 0, or -1 the name ended first; ported
 00495d00	Wild_Star	crt	high	a star: the rest tried at each place, -1 counted as found by the caller; ported
+00485210	ShellCar_ReadVcf	carfile	high	a .vcf read for the shell's garage into its 0xaa8 scratch (table 0x4e9c68); ported (src/shellcar.c)
+00485250	ShellCar_ReadVsf	carfile	high	a .vsf read (table 0x4e9e48); ported
+00485400	ShellCar_Vcfc	carfile	high	VCFC for the shell: names, armour, the .vdf, wheels and components, the weight; ported
+004855c0	ShellCar_ReadVdf	carfile	high	the .vdf for the shell (table 0x4e9d78); ported
+00485670	ShellCar_Spec	carfile	high	SPEC: the first free of three; ported
+00485740	ShellCar_Vdfc	carfile	high	VDFC: the body's name, hard points, mass; ported
+004857a0	ShellCar_Vshl	carfile	high	VSHL: 0x2d bytes at +0x10a; ported
+00485db0	ShellCar_Wloc	carfile	high	WLOC: six of 0x38; ported
+00485fd0	ShellCar_Wheels	carfile	high	a wheel pair's .wdf (table 0x4e9f08) into its 0x40 record; ported
+00486170	ShellCar_Wdfc	carfile	high	WDFC: name, +0x30, the mesh name, the weight scaled; ported
+004862e0	ShellCar_Hloc	carfile	high	HLOC: a hard point, at most 7; ported
+004863a0	ShellCar_Spcs	carfile	high	SPCS: three words; ported
+004869b0	ShellCar_Wepn	carfile	high	WEPN: the gun's .gdf (table 0x4e9f98) named on its hard point, its weight; -1 fails; ported
+00486b10	ShellCar_Gdfc	carfile	high	GDFC: 0x80 bytes; ported
+00487710	ShellCar_Vcst	carfile	high	VCST: 0x4c bytes; ported
+004877e0	ShellCar_Wlst	carfile	high	WLST: 0x18 bytes at +0x4c; ported
+00487840	ShellCar_Wpst	carfile	high	WPST: 0xc bytes at +0x64 + 0xc n, n at +0xbc; ported
+00487880	ShellCar_Salv	carfile	high	SALV: the reader's function at +0xb8 with name, condition, flag; ported
+00487f90	ShellCar_Component	carfile	high	ENGN, BRAK, SUSP: the record whose number is reached kept; ported
+004881f0	ShellCar_Components	carfile	high	compnent.cdf (table 0x4ea118): the three names and weights; ported
+00488050	ShellCar_Ntbl	carfile	high	NTBL: the engine's name by its number; ported
+00488090	ShellCar_Btbl	carfile	high	BTBL: the brakes' name by number; ported
+004880d0	ShellCar_Stbl	carfile	high	STBL: the suspension's name by number; ported
+0048b420	ShellCar_State	carfile	high	the table's +0x18: a .vsf as the shell's 0x4e-dword state; ported
