@@ -84,7 +84,8 @@ Each click is played and waited out (0x100336d0). The port holds the shell's pas
 ACCEPT SALVAGE stops 0x49's wave. On trip 1 with nothing moved, it asks "Leave without taking
 salvage?" (0x1000fe00: entry 0x24's frame 0xb at 115, 130 with a 0x0f shadow; Yes 0x1005f8e0, No
 0x1005f8f4). No stays on the screen. Yes, or no question, goes on:
-- On trip 2 after a win it shows hint 0x20 once (0x1000fb10, not ported).
+- On trip 2 after a win it shows note 0x20 once (0x1000fb10, ported in src/shell/shell.c: "Remember, use
+  the SAVE BOOKMARK button").
 - It clears 0x1006b050, sets the set-up's functions and posts 0xc00f.
 
 SAVE BOOKMARK sets 0x1005c7b8 and opens pop-up 1 (not ported). Opening on trip 4 after a win shows hint

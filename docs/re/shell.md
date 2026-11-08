@@ -97,7 +97,9 @@ The menus' and screens' meanings are to be found as each is ported.
   - the screen function with 0xc004;
   - the present.
 
-  Pop-ups 8 (the end) and 10 (back to the main menu) are ported. A pop-up opens when a message arrives;
+  Pop-ups 8 (the end) and 10 (back to the main menu) are ported, and the boxes that wait: the yes/no
+  question and the note (0x1000fb10: frame k of set 0x24 at 0xb3, 0xc2, until a press in its OK; messages
+  queue behind both, then the screen's redraw 0x10063790). A pop-up opens when a message arrives;
   Windows always has one, so the port checks each pass.
 - **The main menu** (`mainmenu.c`; 0x100236d0-0x10025320): background entry 26, frame set 0x3e, and
   the click (entry 0x51) played through the exe's 0x467390 and waited out. The port waits across passes
@@ -170,7 +172,8 @@ shell runs, in order:
    BOOKMARK opens pop-up 1.
 6. **0xc00f (0x10003fe0; screen 0x100043d0, 5.8 KB)**: the car's set-up (paint, the guns on their hard
    points), then the car written (+0xc, +0x1c) and the mission (0xc010). Ported in part
-   (src/shell/setup.c, docs/re/setup.md): the boxes shown and DONE's writes; the edits not yet.
+   (src/shell/setup.c, docs/re/setup.md): the boxes, their edits, the repairs, the armour and DONE's
+   writes; the paint and the car's picture not yet.
 7. **0xc015 (0x10033c60)**: the salvage screen.
 8. **The car written (0x1001d6a0 .vcf, 0x1001de30 .vsf; ported, src/shell/carwrite.c)**, also by NEW
    TRIP and TRAINING. Confirmed from the disassembly (the decompiler drops the wheels' branches).

@@ -1163,7 +1163,7 @@ static int car_ok(void)
     static const uint32_t null_at[3] = {0x1005d128, 0x1005d130, 0x1005d138};
     for (int i = 0; i < 3; i++)
         if (!c[i] || !crt_stricmp((const char *)c[i]->part + 0x2e, dll_str(null_at[i]))) {
-            Shell_Hint(need[i]);
+            Shell_Note(need[i], 0x77, 0x3d, 0x2a, 0x10);
             return 0;
         }
     for (int pair = 0; pair < 2; pair++) {
@@ -1172,11 +1172,11 @@ static int car_ok(void)
         if (c[a] && c[a]->part) snprintf(ref, sizeof ref, "%s", pfile(c[a]));
         for (int i = a; i < a + 2; i++) {
             if (!c[i] || !crt_stricmp(pfile(c[i]), dll_str(pair ? 0x1005d148 : 0x1005d140))) {
-                Shell_Hint(0x18);
+                Shell_Note(0x18, 0x77, 0x3d, 0x2a, 0x10);
                 return 0;
             }
             if (crt_stricmp(pfile(c[i]), ref)) {
-                Shell_Hint(0x1b);
+                Shell_Note(0x1b, 0x77, 0x3d, 0x2a, 0x10);
                 return 0;
             }
         }
@@ -1186,12 +1186,12 @@ static int car_ok(void)
         ShPart *p = guns->items[i];
         if (!p || rd32(p->part + 0x22) != 0xb) continue;
         if (turret) {
-            Shell_Hint(0x1a);
+            Shell_Note(0x1a, 0x77, 0x3d, 0x2a, 0x10);
             return 0;
         }
         turret = 1;
         if (rd32(rec() + 0x868 + 0xc * order[i] + 8) != 1) {   /* the record's hard point by the id as an index */
-            Shell_Hint(0x1c);
+            Shell_Note(0x1c, 0x77, 0x3d, 0x2a, 0x10);
             return 0;
         }
     }

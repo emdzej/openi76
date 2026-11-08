@@ -174,10 +174,41 @@ void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes))
     box_open = true;
 }
 
+/* 0x1000fb10: a note, frame k of set 0x24 at 0xb3, 0xc2 with its shadows, waited on until a press
+   inside its OK (x, y, w, h relative to it, exclusive), then the screen's redraw */
+static int note_rect[4] = {-1, 0, 0, 0};
+
+void Shell_Note(int k, int x, int y, int w, int h)
+{
+    Scr_Frame(Shell_Set24(), k, 0xb3, 0xc2, 0x11a, 0x5d);
+    Scr_Shadow(0xb9, 0x11e, 0x11a, 6);
+    Scr_Shadow(0x1cd, 200, 6, 0x5c);
+    Scr_Present();
+    note_rect[0] = x, note_rect[1] = y, note_rect[2] = w, note_rect[3] = h;
+    box_open = true;
+}
+
+static void note_pass(void)
+{
+    mouse_update(&g_sh_mouse);
+    if (g_sh_mouse.click != 1) return;
+    int x = g_sh_mouse.x - 0xb3, y = g_sh_mouse.y - 0xc2;
+    if (x <= note_rect[0] || note_rect[2] + note_rect[0] <= x || y <= note_rect[1] || note_rect[3] + note_rect[1] <= y)
+        return;
+    note_rect[0] = -1;
+    Scr_Restore(0xb3, 0xc2, 0x122, 0x6e);
+    box_open = false;
+    if (g_sh_redraw) g_sh_redraw();
+}
+
 /* a pass of the box's loop: the mouse, the exe's frame (done by the pass), a press on Yes (0x1005f8e0) or
    No (0x1005f8f4), relative to the box */
 static void box_pass(void)
 {
+    if (note_rect[0] >= 0) {
+        note_pass();
+        return;
+    }
     mouse_update(&g_sh_mouse);
     if (g_sh_mouse.click != 1) return;
     int x = g_sh_mouse.x - 0x73, y = g_sh_mouse.y - 0x82, yes;
@@ -374,7 +405,7 @@ bool Shell_Start(int prev_state)
     Scr_Init();
     fonts_load();
     Garage_Reset();        /* 0x10034df0 */
-    nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL;
+    nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL, note_rect[0] = -1;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;
     quit = false, result = -1, q_count = 0;

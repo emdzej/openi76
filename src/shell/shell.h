@@ -67,7 +67,8 @@ extern void (*g_sh_redraw)(void);   /* 0x10063790 */
 extern void (*g_sh_modal)(void);    /* 0x1006378c: a pop-up's pass, run in the screen's place */
 void Scr_Shadow(int x, int y, int w, int h);   /* i76shell 0x1003d7c0 with a block of 0x0f */
 const uint8_t *Shell_Set24(void);   /* entry 0x24, the boxes' frames (0x1005fae0) */
-void Shell_Hint(int text);          /* i76shell 0x1000fb10 (garage.c), not ported: logged */
+/* i76shell 0x1000fb10: note k (frame k of set 0x24), waited on until a press in its OK (x, y, w, h) */
+void Shell_Note(int k, int x, int y, int w, int h);
 int Rect_Hit(int x, int y, const void *rect);   /* i76shell 0x10034d20 */
 void Shell_SetScreen(ShScreenFn fn);              /* i76shell 0x10026ef0 */
 void Shell_UnsetScreen(ShScreenFn fn);            /* i76shell 0x10026f00 */

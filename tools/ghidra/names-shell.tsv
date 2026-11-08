@@ -81,7 +81,7 @@
 1001d240	Stock_Delete	garage	high	user.rpr deleted
 1000fe00	Shell_YesNo	shell	high	the yes/no box (entry 0x24 frame 0xb), waited on; ported
 10035830	Garage_AskText	garage	high	"Leave without taking salvage?"; ported
-1000fb10	Shell_Hint	shell	medium	the trip's hints; not ported
+1000fb10	Shell_Note	shell	high	a note (frame k of set 0x24) waited on until its OK; ported
 10003fe0	Setup_Open	setup	high	the car's set-up (0xc00f): the paint, the gun count, the bars, the waves; ported (src/shell/setup.c), the trip's path
 100043d0	Setup_Screen	setup	high	the set-up's clicks: back, DONE, the bookmark; the boxes' edits not ported
 10005b10	Setup_AskText	setup	high	DONE's question on the trip's first mission; ported

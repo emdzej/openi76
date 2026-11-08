@@ -2,7 +2,7 @@
 
 **Port status** (`src/shell/setup.c`): the trip's path opens, fills its boxes from the car's record, draws
 the labels, the parts with their damage bars, the car's name and its weight, and DONE runs its check
-(the notes are logged, 0x1000fb10 is not ported), asks its question on the trip's first mission, writes the
+(its notes through 0x1000fb10), asks its question on the trip's first mission, writes the
 record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf` and `.vsf`, `user.rpr`,
 and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
 with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's

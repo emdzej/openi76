@@ -34,13 +34,6 @@ static uint8_t *w_click, *w_done, *w_yard, *w_ask, *w_yes, *w_no;
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 
-void Shell_Hint(int text)   /* 0x1000fb10: the trip's hints and notes, not ported */
-{
-    char m[64];
-    snprintf(m, sizeof m, "OpenI76: the shell's hint 0x%x is not ported yet", text);
-    plat_log(m);
-}
-
 void Garage_Reset(void)   /* i76shell 0x10034df0 (then 0x10010d20 and 0x10003c80) */
 {
     moved = hinted = 0;
@@ -372,7 +365,7 @@ static void done(uint8_t *wav)
     Shell_Click(wav);
     if (g_sh_rec.trip == 2 && g_sh_prev == 1 && !hinted) {
         hinted = 1;
-        Shell_Hint(0x20);
+        Shell_Note(0x20, 0x77, 0x3d, 0x2a, 0x10);
     }
     g_sh_from_map = 0;
     Setup_UseTrip();
@@ -468,5 +461,5 @@ void Garage_Open(void)   /* i76shell 0x10034eb0 */
     boxes_make();
     redraw();
     Shell_SetScreen(screen);
-    if (g_sh_rec.trip == 4 && first && g_sh_prev == 1) Shell_Hint(0x21);
+    if (g_sh_rec.trip == 4 && first && g_sh_prev == 1) Shell_Note(0x21, 0x77, 0x3d, 0x2a, 0x10);
 }
