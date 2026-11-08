@@ -52,7 +52,6 @@
 1003e200	Scr_Text	font	high	a string on the display through a map (the default 0x1009b0a8), the rectangle marked; ported
 10020d30	Trip_Next	trip	high	0xc01e: the car (vehscn.vcf), its state and salvage (vehscn.vsf), then the garage 0xc017, the salvage screen 0xc015 or the end 0xc00d; ported (reconfig.spc not read)
 10034eb0	Garage_Open	garage	high	0xc017, the salvage's choice: its waves, damage bars, background, boxes; ported (src/shell/garage.c)
-10033c60	Salvage_Open	garage	medium	0xc015: the salvage screen (EMPTY slots); not ported
 1001fdf0	Salv_Add	trip	high	a .vsf's SALV into the parts ring (0x1001fe10 with 4); ported (src/shell/trip.c)
 1001fe10	Parts_Add	trip	high	a part into the ring: kind 4 by file (its condition by chance for -1), 2 by name; ported
 100206a0	Garage_Load	trip	high	a record's slots and armour into the garage, each slot's part on the car; ported
