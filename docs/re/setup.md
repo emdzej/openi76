@@ -8,9 +8,9 @@ and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DON
 with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's
 name puts EMPTY in its place; the repair order, SELECT REPAIRS, the armour's and chassis' buttons and
 BALANCE run, and the car's picture (0x100114d0, below) shows each part. The melee's path from the map
-runs too ("From the map" below). Not ported yet: the paint (box 10, 0x10007bc0: only the map's box list
-has box 0x1005cb80, so a trip's set-up has no paint to choose) and PARTS CATALOG (box 7 from the map,
-0xc01f, 0x10041170).
+runs too ("From the map" below), with its paint (box 10, 0x10007bc0: only the map's box list has box
+0x1005cb80, so a trip's set-up has no paint to choose). Not ported yet: PARTS CATALOG (box 7 from the
+map, 0xc01f, 0x10041170).
 
 ## From the map (0x1006b050 set)
 
@@ -28,6 +28,10 @@ a second time. The redraw draws entry 0x3d's frame of the type's picture at 0x1c
 make at 0x69, 2 and the variant at 0x52, 0x11; each refresh (0x10005ba0) remakes the hard points' labels
 and the gun boxes' heights.
 
+- **Box 10, the paint:** the scrolling picker (0x1000f370, frame 0xf, its record 0x1005ccd8 centred on
+  the screen, rows from 0x12, 0x30, the rects 0x1005cc88) over the catalogue's paints (kind 0xe) whose
+  file starts as the car's .vtf (its first 4 characters, case kept). The one picked becomes the record's
+  .vtf (+0x82d) and the name on the PAINT SCHEME line (0x6c, 0x14c), and the car changed.
 - **Box 8:** the variant's name edited (0x10038d60 at 0x52, 0x11, 15 characters, 0xa0 wide); a change
   marks the car renamed (0x1006b054).
 - **Box 4, CANCEL:** the name and paint back, then the map (0xc024 for a scenario, 0xc021 the instant

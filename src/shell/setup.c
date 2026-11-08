@@ -2,8 +2,7 @@
    components, guns, droppers and specials in boxes beside its picture, the repairs, and DONE: the
    record written back from the boxes (0x10018840), the car as addon\vehscn.vcf and .vsf, user.rpr, then
    the mission. From the melee's map (0x1006b050 set) the boxes take the map's car, CANCEL (box 4) puts
-   its name and paint back, and DONE goes back to the map; saving a changed car as an addon variant is not
-   ported yet. */
+   its name and paint back, and DONE saves a changed car as an addon variant and goes back to the map. */
 #include "shell/trip.h"
 #include "crt.h"
 #include "exe.h"
@@ -522,6 +521,11 @@ static void gun_labels(const SBox *b)
         }
     Scr_Text(x, 0xff, &g_sh_font47, dll_str(dll_u32(0x1005c9f8)), NULL);
     Scr_Text(0x6c, 0xfb, &g_sh_font45, dll_str(dll_u32(0x1005c9fc)), NULL);
+    if (g_sh_from_map) {   /* the paint scheme's line */
+        tick(0xfe, 0x14c);
+        Scr_Restore(0x69, 0x14b, 0x82, 0x11);
+        Scr_Text(0x6c, 0x14c, &g_sh_font45, paint, NULL);
+    }
 }
 
 /* 0x100064a0: the repair order from its first row, ten rows under its heading, and the repair time's
@@ -1455,6 +1459,43 @@ static void map_done(void)
     Shell_YesNo(save_at == -1 ? new_text : over_text, saved);
 }
 
+/* ---- the paint (0x10007bc0, its rows 0x10007b50, its done 0x10007a50) ---- */
+
+static ShList *paints;   /* 0x1005cd10: the catalogue's paints (kind 0xe) of the car's .vtf's first 4 */
+
+static void paints_draw(int x, int y, int first, int rows)
+{
+    for (int i = first; i < paints->count && i < first + rows; i++, y += row_h) Scr_Text(x, y, &g_sh_font45, (const char *)paints->items[i], NULL);
+}
+
+static void paints_done(void)
+{
+    if (pk.picked != -1) {
+        const uint8_t *e = paints->items[pk.picked];
+        snprintf((char *)rec() + 0x82d, 13, "%s", (const char *)e + 0x3b);
+        snprintf(paint, sizeof paint, "%s", (const char *)e);
+        changed = 1;
+    }
+    ShList_Free(paints), paints = NULL;
+    redraw();
+}
+
+static void pick_paint(void)
+{
+    char pre[4];
+    memcpy(pre, rec() + 0x82d, 4);
+    paints = ShList_New(0x20);
+    for (int i = 0; i < g_sh_ncat; i++) {
+        uint8_t *e = g_sh_cat + i * SHELL_PART;
+        if (rd32(e + 0x1e) == 0xe && !strncmp(pre, (const char *)e + 0x3b, 4)) ShList_Add(paints, e, NULL);
+    }
+    pk.w = (int32_t)dll_u32(0x1005cce0), pk.h = (int32_t)dll_u32(0x1005cce4);
+    pk.x = 0x140 - pk.w / 2, pk.y = 0xf0 - pk.h / 2;
+    pk.lx = 0x12, pk.ly = 0x30, pk.rows = (int32_t)dll_u32(0x1005ccf0);
+    pk.count = paints->count, pk.draw = paints_draw, pk.done = paints_done, pk.rects = 0x1005cc88, pk.row_h = row_h;
+    Picker_OpenTop(&pk, 0xf);   /* 0x1000f370 */
+}
+
 static int box_at(int x, int y)   /* 0x10034cc0 */
 {
     for (int i = 0; i < sb_list->count; i++) {
@@ -1563,9 +1604,9 @@ static void screen(uint32_t msg)
         Edit_Begin(&g_sh_font45, 0x52, 0x11, (char *)rec() + 0x14, 0xf, 0xa0);
         editing = 1;
         return;
-    case 10:   /* the paint (0x10007bc0) */
+    case 10:
         Shell_Click(w_click);
-        unported(id);
+        pick_paint();
         return;
     }
 }

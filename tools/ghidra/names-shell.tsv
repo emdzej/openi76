@@ -267,3 +267,4 @@
 10017e10	Map_VariantFileAt	melee	high	variant i's file name (from 0: quirk); ported
 100194b0	Map_SavedCar	melee	high	the instant melee's player given the saved car; ported
 100257c0	CarTypes_Write	melee	high	i76car.def written; ported
+10007bc0	Paint_Open	setup	high	the paint picker over the catalogue's paints of the car's .vtf; ported
