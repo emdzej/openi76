@@ -226,3 +226,15 @@
 100394c0	Item_ChannelTick	menu	high	a tick's click: the channels
 10039a60	Audio_Choice	options	high	Done or Cancel's choice
 10039d20	Record_Set	menu	high	a menu record's words filled
+1003e7c0	Detail_Open	options	high	pop-up 5, the graphic detail; ported (src/shell/escmenu.c)
+1003eef0	Detail_Pass	options	high	the detail's values, Reset, Done and Cancel; ported
+1003e6e0	Item_ModeName	menu	high	the screen mode's name in font 0x44
+1003e710	Item_NextMode	menu	high	a click: the next screen mode the display has
+10039390	Item_Brightness	menu	high	the brightness's value "%d.00"
+1003e740	Item_Step10	menu	high	a click stepping a byte past 10 to 0
+1003e6b0	Item_ValueName	menu	high	a value's name from its table in font 0x46
+1003e760	Item_Step1	menu	high	a click toggling a byte 0-1
+1003e780	Item_Step2	menu	high	a click stepping a byte past 2 to 0
+1003eee0	Detail_Choice	options	high	Reset, Done or Cancel's choice
+1003f120	Detail_Ask	options	high	the question on exceeding the recommended detail
+1003f180	Record_Fill	menu	high	a menu record's words filled (another form)

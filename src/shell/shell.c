@@ -337,6 +337,10 @@ static bool popup(void)
         PlayOptions_Open();
         g_sh_popup_up = 1;
         return true;
+    case 5:   /* the graphic detail (0x1003e7c0) */
+        Detail_Open();
+        g_sh_popup_up = 1;
+        return true;
     case 6:   /* the audio (0x10039a90) */
         Audio_Open();
         g_sh_popup_up = 1;

@@ -40,7 +40,12 @@ typedef struct {
 static uint32_t *word_at(uint32_t va) { return va == 0x10068fe0 ? &g_game_options : NULL; }
 /* its audio's bytes 0x10068fd8-0x10068fdb: the music's, the effects' and the speech's levels and the
    channels (the exe's 0x5e14de-0x5e14e1, g_sound_set) */
-static uint8_t *byte_at(uint32_t va) { return va >= 0x10068fd8 && va < 0x10068fdc ? &g_sound_set[va - 0x10068fd8] : NULL; }
+static uint8_t *byte_at(uint32_t va)
+{
+    if (va >= 0x10068fd8 && va < 0x10068fdc) return &g_sound_set[va - 0x10068fd8];
+    if (va >= 0x10068fc8 && va < 0x10068fd6) return &g_detail.b[va - 0x10068fc8];   /* the detail, 0x5e14d0 */
+    return NULL;
+}
 
 /* an item's piece, by its function: text in font 46 (0x10008730, and 0x10021810 when it has a text) or
    47 (0x100086a0), a play option's box (0x100217d0: "x" (0x10061ba4) with its bit set, else
@@ -63,6 +68,17 @@ static void item_make(Menu *m, MItem *it)
         else snprintf(t, sizeof t, dll_str(0x100673a8), *b);
         s = t;
         it->font = &g_sh_font46;
+    } else if (it->create == 0x10039390) {   /* the brightness: "%d.00" in font 0x46 */
+        const uint8_t *b = byte_at(it->text);
+        static char t[8];
+        snprintf(t, sizeof t, dll_str(0x1006739c), b ? *b : 0);
+        s = t;
+        it->font = &g_sh_font46;
+    } else if (it->create == 0x1003e6e0 || it->create == 0x1003e6b0) {   /* a value's name from the table at
+                                                                             +0x24 by the byte at +0x28 */
+        const uint8_t *b = byte_at((uint32_t)it->id);
+        s = dll_str(dll_u32(it->text + 4u * (b ? *b : 0)));
+        it->font = it->create == 0x1003e6e0 ? &g_sh_font44 : &g_sh_font46;
     } else if (it->create == 0x10039480) {   /* a level's tick: "x" (0x100673b0) up to the level, else empty */
         const uint8_t *b = byte_at(it->text);
         s = dll_str(b && *b < (uint8_t)it->id ? 0x100673b4 : 0x100673b0);
@@ -527,4 +543,113 @@ void Audio_Open(void)   /* 0x10039a90 */
     Shell_KbFlush();
     paud_make();   /* 0x10039530's records laid out and made (0x10008430) */
     Shell_SetMenu(paud_menu);
+}
+
+/* ---- pop-up 5, the graphic detail (0x1003e7c0, its pass 0x1003eef0) ---- */
+
+static Menu pdet;
+static uint8_t pdet_bak[14];       /* 0x1009bab8: the detail as it was */
+static int pdet_choice;            /* 0x1009b1a8: 1 Reset, 2 Done, 3 Cancel */
+static uint8_t pdet_pal[768];      /* 0x1009b1b0 */
+static void pdet_menu(int on);
+
+/* the screen modes the display has (0x10110e94, from the exe, by +0x1c records): the port's 640 x 480
+   (mode 5) alone */
+static int mode_there(int m) { return m == 5; }
+
+/* 0x1003e7c0's records: a label (font 0x46) at 200 and its value at 0x18d per row, the value's name from
+   a table by its byte (the screen mode's in font 0x44), the brightness as "%d.00"; Reset, Done, Cancel */
+static void pdet_make(void)
+{
+    static const struct { int32_t y; uint32_t label, create, click, names, at; } row[10] = {
+        {0x76, 0x100679a0, 0x1003e6e0, 0x1003e710, 0x10067aa8, 0x10068fc8},    /* Screen Resolution */
+        {0x8d, 0x100679b4, 0x10039390, 0x1003e740, 0x10068fd4, 0x10068fd4},    /* Monitor Brightness, 0-10 */
+        {0xbb, 0x100679c8, 0x1003e6b0, 0x1003e780, 0x10067ac8, 0x10068fd2},    /* Visibility Range, 0-2 */
+        {0xd2, 0x100679dc, 0x1003e6b0, 0x1003e760, 0x10067ad8, 0x10068fc9},    /* Clouds, 0-1 */
+        {0x100, 0x100679f0, 0x1003e6b0, 0x1003e760, 0x10067ae0, 0x10068fd3},   /* Terrain Textures */
+        {0x117, 0x10067a04, 0x1003e6b0, 0x1003e780, 0x10067ae8, 0x10068fcf},   /* Terrain Resolution */
+        {0x145, 0x10067a18, 0x1003e6b0, 0x1003e760, 0x10067af8, 0x10068fca},   /* Terrain Detail */
+        {0x15c, 0x10067a2c, 0x1003e6b0, 0x1003e760, 0x10067b00, 0x10068fd1},   /* Object Detail */
+        {0x173, 0x10067a40, 0x1003e6b0, 0x1003e780, 0x10067b08, 0x10068fce},   /* Shadow Detail */
+        {0x1a1, 0x10067a54, 0x1003e6b0, 0x1003e780, 0x10067b20, 0x10068fd5},   /* Rear Mirror */
+    };
+    pdet.n = 0;
+    int ly = 0, lh = 0;
+    for (int r = 0; r < 10; r++) {
+        int32_t lab[11] = {200, row[r].y, -1, -1, 0, 1, 0, 0x10008730, 0, (int32_t)row[r].label, 0};
+        int32_t val[11] = {0x18d, row[r].y, -1, -1, 0, 1, 0, (int32_t)row[r].create, (int32_t)row[r].click,
+                           (int32_t)row[r].names, (int32_t)row[r].at};
+        menu_lay(&pdet, lab, &ly, &lh);
+        menu_lay(&pdet, val, &ly, &lh);
+    }
+    static const int32_t bx[3] = {0x120, 0x15e, 0x192};
+    static const uint32_t bt[3] = {0x10067a68, 0x10067a7c, 0x10067a90};   /* Reset, Done, Cancel */
+    for (int i = 0; i < 3; i++) {
+        int32_t b[11] = {bx[i], 0x1b6, -1, -1, 0, 1, 0, 0x100086a0, 0x1003eee0, (int32_t)bt[i], i + 1};
+        menu_lay(&pdet, b, &ly, &lh);
+    }
+}
+
+/* a click: a value stepped (0x1003e710 the next mode the display has, past 7 to 1; 0x1003e740 past 10 to
+   0; 0x1003e760 past 1, 0x1003e780 past 2 to 0), the pieces made again; Reset puts the machine's preset
+   in (the exe's +0x48, 0x44e260) and opens the pop-up again; Done asks the exe (+0x4c, 0x44de10: always
+   0, so never the question 0x1003f120) and writes the player's file; Cancel puts the detail back; Done,
+   Cancel and Esc go back to the menu */
+static void pdet_menu(int on)
+{
+    if (on) {
+        if (g_sh_mouse.click == 1) {
+            const MItem *it = menu_hit(&pdet, g_sh_mouse.x, g_sh_mouse.y);
+            if (!it) return;
+            uint8_t *b = byte_at((uint32_t)it->id);
+            if (it->click == 0x1003e710 && b) {
+                for (int i = 0; i < 8; i++) {   /* the original loops until one is there */
+                    if (++*b > 7) *b = 1;
+                    if (mode_there(*b)) break;
+                }
+            } else if (it->click == 0x1003e740 && b) {
+                if (++*b > 10) *b = 0;
+            } else if (it->click == 0x1003e760 && b) {
+                if (++*b > 1) *b = 0;
+            } else if (it->click == 0x1003e780 && b) {
+                if (++*b > 2) *b = 0;
+            } else if (it->click == 0x1003eee0)
+                pdet_choice = it->id;
+            menu_remake(&pdet);
+            if (pdet_choice == 1) {
+                Settings_Defaults(3);
+                g_sh_popup = 1, g_sh_popup_item = 5;
+            } else if (pdet_choice == 2) {
+                Settings_Save();   /* 0x10039f30 */
+                g_sh_popup = 1, g_sh_popup_item = 0;
+            } else if (pdet_choice == 3) {
+                memcpy(g_detail.b, pdet_bak, sizeof pdet_bak);
+                g_sh_popup = 1, g_sh_popup_item = 0;
+            }
+            return;
+        }
+        if (Shell_KbRead() == 3) g_sh_popup = 1, g_sh_popup_item = 0;
+        return;
+    }
+    Shell_UnsetMenu(pdet_menu);
+    g_sh_popup_up = 0;
+    menu_free(&pdet);
+    g_shs.fill = -1;
+    Scr_Restore(0, 0, 0x280, 0x1e0);
+    memcpy(g_shs.pal, pdet_pal, sizeof pdet_pal);
+    g_shs.pal_new = 1, g_shs.fade = 1;
+}
+
+void Detail_Open(void)   /* 0x1003e7c0 */
+{
+    pdet_choice = 0;
+    memcpy(pdet_pal, g_shs.pal, sizeof pdet_pal);
+    g_shs.fill = 0x10;
+    Scr_Restore(0x177, 0x7c, 0x102, 0x160);
+    Scr_Overlay(g_sh_db, 9);
+    memcpy(pdet_bak, g_detail.b, sizeof pdet_bak);
+    map_make(&pdet);
+    Shell_KbFlush();
+    pdet_make();   /* 0x10008430 */
+    Shell_SetMenu(pdet_menu);
 }

@@ -342,6 +342,17 @@ shell runs, in order:
   as read); Cancel puts back the four levels and the two bytes after and sets the music's volume alone
   again (the effects' and speech's stay as heard, quirk kept). Checked: the sixth music tick and Done
   write 6.
-- Not ported yet: pop-ups 3 (modem), 5 (graphic detail, 0x1003e7c0), 7 (controls, 0x100093a0).
+- **Pop-up 5, the graphic detail** (0x1003e7c0, its pass 0x1003eef0): records made in code, a label
+  (font 0x46) at 200 and a value at 0x18d per row over the detail bytes 0x10068fc8-0x10068fd5 (the exe's
+  0x5e14d0): Screen Resolution (+0, its name in font 0x44 from 0x10067aa8; a click goes to the next mode
+  past 7 to 1 that the display has, 0x10110e94's records: the port's 640 x 480, mode 5, alone), Monitor
+  Brightness (+0xc, "%d.00", past 10 to 0), Visibility Range (+0xa), Clouds (+1), Terrain Textures
+  (+0xb), Terrain Resolution (+7), Terrain Detail (+2), Object Detail (+9), Shadow Detail (+6), Rear
+  Mirror (+0xd), each named from a table (Off/On, Low/High, Near/Medium/Far, Off/Low/High...) and stepped
+  past its last to 0. Reset puts the machine's preset in (the exe's +0x48, 0x44e260) and opens the pop-up
+  again (its copy taken again, so Cancel keeps the preset); Done asks the exe whether the detail is too
+  much (+0x4c, 0x44de10, which always says no, so the question 0x1003f120 is never seen) and writes the
+  player's file; Cancel puts the 14 bytes back. Checked: Clouds turned off and Done write +0x41 = 0.
+- Not ported yet: pop-ups 3 (modem, network play's) and 7 (controls, 0x100093a0).
 
 Other screens: the melee's, network play.
