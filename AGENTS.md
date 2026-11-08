@@ -44,8 +44,9 @@ pause (2) holding them; the mission's script's machines, conditions, orders, obj
 its actions run (docs/re/fsm.md). Not ported yet: the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke, the
 rockets' contrails, the flame throwers' flames, the skid marks and the debris run: docs/re/effects.md, with the wrecks' kicks,
-thrown parts and chunks) and most of the shell (its main menu, training's and a new trip's start and the
-way back from a mission run: docs/re/shell.md). The music plays disc 2's audio tracks from its BIN and CUE
+thrown parts and chunks) and parts of the shell (ported: the main menu, training, the trip with its garage,
+set-up, bookmarks and pop-ups, AUTO MELEE's scenarios on their map, docs/re/map.md; not yet: the instant
+melee, the set-up from the map, the controls' pop-up and network play: docs/re/shell.md). The music plays disc 2's audio tracks from its BIN and CUE
 (`--asset cd2=I76_CD2.BIN --asset cd2cue=I76_CD2.CUE`; docs/re/audio.md "The music"). The sound manager runs, with the engines,
 horns, siren, tyres, the cockpit's, weapons' and radar's sounds and the CB radio's queue (docs/re/audio.md:
 every sound's record, its admission by priority and voices, its 3D place, through the port's DirectSound
