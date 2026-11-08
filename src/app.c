@@ -390,6 +390,10 @@ static bool shell_open(void)
     if (plat_param("shell", v, sizeof v) && !atoi(v)) return false;   /* the port's: the loading screen instead */
     if (!dll_loaded()) return false;
     int prev = g_game_state;
+    if (plat_param("trip", v, sizeof v) && atoi(v) > 0) {   /* the port's, for tests */
+        Shell_TestWon(atoi(v));
+        prev = 1;
+    }
     Sound_FreeParked();   /* 0x468340 */
     Sound_Enable(1);      /* 0x466dd0 */
     g_game_state = 6;

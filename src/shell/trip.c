@@ -19,6 +19,8 @@ ShSlot g_sh_slots[64];
 int g_sh_nslots;
 int g_sh_rec_at;
 int32_t g_sh_armour[9];
+int g_sh_bookmark;
+int g_sh_trip_screen;
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 
@@ -74,7 +76,8 @@ void Parts_Add(int kind, const char *name, int32_t count, int32_t flag)
             break;
         }
     }
-    if (kind == 2) p->where = 2;
+    if (kind == 4) p->where = 4;   /* the salvage's: in the yard */
+    else if (kind == 2) p->where = 2;
 }
 
 /* 0x1001fdf0: a .vsf's SALV */

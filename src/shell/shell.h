@@ -2,6 +2,7 @@
    runs them: ShellMain's set-up once, then a pass of its loop each frame; the window's messages through a
    queue of the port's (PostMessage, PostQuitMessage). docs/re/shell.md */
 #pragma once
+#include "shell/font.h"
 #include "shell/mw2.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,11 +22,15 @@ typedef struct {               /* the mouse (i76shell 0x1001f1c0, the object at 
     int on;                    /* +0x40: read from the pointer */
 } ShMouse;
 
+/* the fonts (ShellMain's, by entry; 0x10068c08, 0x10068c0c, 0x10068c10, 0x10068c14, 0x10068c00) */
+extern ShFont g_sh_font44, g_sh_font42, g_sh_font45, g_sh_font46, g_sh_font47;
 extern Mw2 *g_sh_db;           /* 0x10068c20 */
 extern ShMouse g_sh_mouse;
 extern int g_sh_popup;         /* 0x10063794: the menu's pop-up to open at the next message */
 extern int g_sh_popup_item;    /* 0x1008ea10 */
+extern int g_sh_menu_from;     /* 0x1005c7b8: the pop-up opened from a trip's screen */
 extern uint32_t g_sh_screen_msg; /* 0x1008e9e8: the message that opened the screen */
+extern int g_sh_prev;          /* ShellMain's argument 11: the exe's state before the shell (1 a mission won) */
 extern int g_sh_mode;          /* 0x1008e9fc: the melee's or trip's kind the screens pass on */
 
 /* the exe's records ShellMain is given (its arguments 7, 10, 12): the trip's mission number
@@ -41,6 +46,7 @@ extern ShellRecords g_sh_rec;
 
 void Training_Start(void);       /* i76shell 0x10001680 */
 void Trip_Start(void);           /* i76shell 0x100017b0 (0xc022) */
+void Shell_TestWon(int trip);    /* the port's: as after trip mission trip won (--param trip=n) */
 
 /* ShellMain's set-up: prev_state the exe's state (0x4a80f4; 5 after the intro); false if the database
    cannot be opened */
@@ -52,6 +58,13 @@ void Shell_End(void);            /* ShellMain's frees */
 
 void Shell_Post(uint32_t msg, uint32_t wparam);   /* PostMessage to the shell's window */
 void Shell_Quit(uint32_t code);                   /* PostQuitMessage */
+/* i76shell 0x100336d0, Click_Play: a wave played and waited out (the passes held meanwhile) */
+void Shell_Click(const uint8_t *wav);
+/* i76shell 0x1000fe00: the box asking yes or no (entry 0x24's frame 0xb at 115, 130, text drawing what it
+   asks), waited on; then the screen's redraw (g_sh_redraw) and done with the answer */
+void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes));
+extern void (*g_sh_redraw)(void);   /* 0x10063790 */
+int Rect_Hit(int x, int y, const void *rect);   /* i76shell 0x10034d20 */
 void Shell_SetScreen(ShScreenFn fn);              /* i76shell 0x10026ef0 */
 void Shell_UnsetScreen(ShScreenFn fn);            /* i76shell 0x10026f00 */
 

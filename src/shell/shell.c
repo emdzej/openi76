@@ -3,11 +3,15 @@
 #include "crt.h"
 #include "exe.h"
 #include "shell/screen.h"
+#include "shell/font.h"
 #include "platform.h"
 #include "sound.h"
 #include "cd.h"
 #include "music.h"
 #include "shell/trip.h"
+#include "res.h"
+#include "salvage.h"
+#include "carfile.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +19,7 @@
 
 Mw2 *g_sh_db;
 ShMouse g_sh_mouse;
+int g_sh_menu_from;
 int g_sh_popup;
 int g_sh_popup_item;
 uint32_t g_sh_screen_msg;
@@ -92,6 +97,101 @@ static void mouse_update(ShMouse *m)
     }
 }
 
+/* ---- the fonts (ShellMain's: entries 0x44, 0x42, 0x45, 0x46, 0x47) ---- */
+
+ShFont g_sh_font44, g_sh_font42, g_sh_font45, g_sh_font46, g_sh_font47;
+static uint8_t *font_data[5];
+
+static void fonts_load(void)
+{
+    static const int entry[5] = {0x44, 0x42, 0x45, 0x46, 0x47};
+    ShFont *f[5] = {&g_sh_font44, &g_sh_font42, &g_sh_font45, &g_sh_font46, &g_sh_font47};
+    for (int i = 0; i < 5; i++) {
+        uint32_t n;
+        free(font_data[i]);
+        font_data[i] = Mw2_Raw(g_sh_db, entry[i], &n);
+        Font_Init(f[i], font_data[i]);
+    }
+}
+
+/* ---- the waits (0x100336d0) and the boxes waited on (0x1000fe00) ---- */
+
+/* Click_Play plays a wave through the exe (+0x2c) and runs the exe's frame (+0x28) until it ends: no
+   message, mouse, screen or present meanwhile. The port queues the waves and holds the passes so */
+static const uint8_t *waits[4];
+static int nwaits;
+
+void Shell_Click(const uint8_t *wav)
+{
+    if (!wav) return;
+    if (!nwaits) Sound_PlayData(wav, 100, 0, -1);
+    if (nwaits < 4) waits[nwaits++] = wav;
+}
+
+static bool waiting(void)
+{
+    while (nwaits) {
+        if (Sound_DataPlaying(waits[0])) return true;
+        memmove(waits, waits + 1, sizeof waits[0] * (size_t)--nwaits);
+        if (nwaits) Sound_PlayData(waits[0], 100, 0, -1);
+    }
+    return false;
+}
+
+void (*g_sh_redraw)(void);   /* 0x10063790: the screen's redraw after a box */
+
+static const uint8_t *box_set;          /* 0x1005fae0: entry 0x24 */
+static void (*box_done)(int yes);
+static bool box_open;
+
+static void box_shadow(int x, int y, int w, int h)   /* 0x1003d7c0 with a block of 0x0f */
+{
+    for (int r = 0; r < h; r++)
+        for (int c = 0; c < w; c++)
+            if (x + c >= 0 && x + c < 640 && y + r >= 0 && y + r < 480) g_shs.px[(y + r) * 640 + x + c] = 0x0f;
+    Scr_Dirty(x, y, x - 1 + w, y - 1 + h);
+}
+
+void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes))
+{
+    if (!box_set) {   /* the menus' load (0x10010fb0) takes it */
+        uint32_t n;
+        box_set = Mw2_Raw(g_sh_db, 0x24, &n);
+    }
+    Scr_Frame(box_set, 0xb, 0x73, 0x82, 0x19a, 0xdc);
+    if (text) text(0x73, 0x82);
+    box_shadow(0x79, 0x15e, 0x19a, 6);
+    box_shadow(0x20d, 0x88, 6, 0xdc);
+    Scr_Present();
+    box_done = done;
+    box_open = true;
+}
+
+/* a pass of the box's loop: the mouse, the exe's frame (done by the pass), a press on Yes (0x1005f8e0) or
+   No (0x1005f8f4), relative to the box */
+static void box_pass(void)
+{
+    mouse_update(&g_sh_mouse);
+    if (g_sh_mouse.click != 1) return;
+    int x = g_sh_mouse.x - 0x73, y = g_sh_mouse.y - 0x82, yes;
+    const uint8_t *r;
+    if (r = dll_data(0x1005f8e0, 20), Rect_Hit(x, y, r)) yes = 1;
+    else if (r = dll_data(0x1005f8f4, 20), Rect_Hit(x, y, r)) yes = 0;
+    else return;
+    Scr_Restore(0x73, 0x82, 0x1ac, 0xee);
+    if (g_sh_redraw) g_sh_redraw();
+    box_open = false;
+    if (box_done) box_done(yes);
+}
+
+/* 0x10034d20: strictly inside a rectangle record's x0, x1, y0, y1 (+4-+0x10) */
+int Rect_Hit(int x, int y, const void *rect)
+{
+    int32_t r[5];
+    memcpy(r, rect, sizeof r);
+    return r[1] < x && x < r[2] && r[3] < y && y < r[4];
+}
+
 /* ---- the window's procedure (0x10025bf0) ---- */
 
 static void unported(const char *what, uint32_t id)
@@ -144,13 +244,48 @@ static void new_car(uint32_t file, uint32_t vcf, uint32_t vsf)
     Parts_ListsFree();
 }
 
+/* The port's way in for tests (--param trip=n): as after trip mission n won, with the trip's first car
+   whole and the mission's .fsi names (picked as at its end, 0x489000) as the salvage in its .vsf */
+void Shell_TestWon(int trip)
+{
+    g_sh_rec.trip = trip;
+    g_sh_rec.kind = 2;
+    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, dll_str(0x10063828), trip);
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c48c));
+    Garage_Reset();
+    new_car(0x1005c458, 0x1005c464, 0x1005c478);
+    uint8_t v[SHELL_VSF] = {0};
+    if (!ShellCar_ReadVsf(dll_str(0x1006182c), v, NULL)) return;
+    Salvage_Free();
+    Salvage_ReadFile(g_sh_rec.mission);
+    Salvage_Pick();
+    Bwd2Out f;
+    if (!Bwd2_Create(&f, dll_str(0x1005c478), 2)) return;
+    int ok = Bwd2_Chunk(&f, 0x56435354, v, 0x4c) && Bwd2_Chunk(&f, 0x574c5354, v + 0x4c, 0x18);
+    int32_t guns;
+    memcpy(&guns, v + 0xbc, 4);
+    for (int i = 0; ok && i < guns && i < 7; i++) ok = Bwd2_Chunk(&f, 0x57505354, v + 0x64 + i * 0xc, 0xc);
+    for (SalvGroup *g = Salvage_List(); ok && g; g = g->next)
+        for (SalvItem *it = g->items; ok && it; it = it->next) {
+            uint8_t rec[0x18] = {0};
+            memcpy(rec, it->name, 16);
+            memcpy(rec + 0x10, &it->count, 4);
+            memcpy(rec + 0x14, &it->flag, 4);
+            ok = Bwd2_Chunk(&f, 0x53414c56, rec, sizeof rec);
+        }
+    Bwd2_Close(&f, ok);
+    Res_AddPath(dll_str(0x1006182c), dll_str(0x1006159c));
+}
+
 /* i76shell 0x10001680, TRAINING: the trip's record new (the mission 1 of a trip, none played), the
    training's car vppa01.vcf (0x1005c410) written as the user's, the mission a01.msn (0x1005c444), the
    game record from the trip's with vehscn.vcf (0x1005c44c) as the user's vehicle */
 void Training_Start(void)
 {
+    Garage_Reset();   /* 0x10034df0 */
     g_sh_rec.trip = 1;
     new_car(0x1005c410, 0x1005c41c, 0x1005c430);
+    g_sh_prev = 5;
     snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", dll_str(0x1005c444));   /* a01.msn */
     g_sh_rec.kind = 0;
     snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c44c));
@@ -164,11 +299,13 @@ void Trip_Start(void)
     g_sh_rec.trip = 1;
     g_sh_rec.kind = 2;
     new_car(0x1005c458, 0x1005c464, 0x1005c478);
+    g_sh_prev = 5;
     snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c48c));
     Shell_Post(0xc010, 0);
 }
 
-static int prev;   /* ShellMain's argument 11: the exe's state before the shell */
+int g_sh_prev;   /* ShellMain's argument 11 (0x1008e9e4 points at it): the exe's state before the shell */
+#define prev g_sh_prev
 
 static void message(uint32_t msg, uint32_t wparam)
 {
@@ -197,7 +334,10 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc01e:   /* the trip's next mission (0x10020d30): the car, its state and the salvage */
         Trip_Next(prev);
         return;
-    case 0xc017: case 0xc00f:   /* the garage and the car's set-up: not ported yet, straight to the mission */
+    case 0xc017:   /* the salvage's choice */
+        Garage_Open();
+        return;
+    case 0xc00f:   /* the car's set-up: not ported yet, straight to the mission */
         unported("screen (the garage's, straight to the mission)", msg);
         Shell_Post(0xc010, 0);
         return;
@@ -226,6 +366,9 @@ bool Shell_Start(int prev_state)
         return false;
     }
     Scr_Init();
+    fonts_load();
+    Garage_Reset();        /* 0x10034df0 */
+    nwaits = 0, box_open = false, g_sh_redraw = NULL;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;
     quit = false, result = -1, q_count = 0;
@@ -263,6 +406,11 @@ bool Shell_Pass(void)
 {
     if (result >= 0) return false;
     Sound_Frame(0);
+    if (waiting()) return true;
+    if (box_open) {
+        box_pass();
+        return true;
+    }
     if (quit) {
         /* ShellMain's end: 0xc001 a mission to play (3; a trip's next t%02d.msn, the game's kind 0 or 1
            made 2), else 0xff (0x1002a6d0) */
@@ -295,6 +443,9 @@ int Shell_Result(void) { return result; }
 
 void Shell_End(void)
 {
+    Garage_FreeStock();   /* 0x1001d210 */
+    for (int i = 0; i < 5; i++) free(font_data[i]), font_data[i] = NULL;
+    free((void *)box_set), box_set = NULL;
     Mw2_Close(g_sh_db);
     g_sh_db = NULL;
     screen_fn = NULL;

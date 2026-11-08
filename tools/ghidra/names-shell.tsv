@@ -51,7 +51,7 @@
 10031797	Gfx_Text	font	high	a string's glyphs one after the other; ported (in Scr_Text)
 1003e200	Scr_Text	font	high	a string on the display through a map (the default 0x1009b0a8), the rectangle marked; ported
 10020d30	Trip_Next	trip	high	0xc01e: the car (vehscn.vcf), its state and salvage (vehscn.vsf), then the garage 0xc017, the salvage screen 0xc015 or the end 0xc00d; ported (reconfig.spc not read)
-10034eb0	Garage_Open	garage	medium	0xc017: the garage screen's sounds (entries 0x49-0x52), frame sets 0x21-0x23, background, screen function 0x100352c0; not ported
+10034eb0	Garage_Open	garage	high	0xc017, the salvage's choice: its waves, damage bars, background, boxes; ported (src/shell/garage.c)
 10033c60	Salvage_Open	garage	medium	0xc015: the salvage screen (EMPTY slots); not ported
 1001fdf0	Salv_Add	trip	high	a .vsf's SALV into the parts ring (0x1001fe10 with 4); ported (src/shell/trip.c)
 1001fe10	Parts_Add	trip	high	a part into the ring: kind 4 by file (its condition by chance for -1), 2 by name; ported
@@ -66,3 +66,19 @@
 1001c2d0	Car_CollectWheels	trip	high	as 0x1001be10, the wheels matched by the car's .wdf's 7 characters; ported
 1001c660	Kind_IsGun	trip	high	kinds 6, 7, 8, 0xb; ported
 10034bf0	ShList_IndexOf	list	high	an item's index or -1; ported
+100352c0	Garage_Screen	garage	high	the salvage's choice: a click moves a part across its pair, ACCEPT SALVAGE, SAVE BOOKMARK; ported
+10036100	Garage_Boxes	garage	high	the twelve boxes' lists made and filled (once per reset); ported
+10035d70	Garage_SortRing	garage	high	the ring's parts into the car's or the field's boxes; ported
+1001cc10	Garage_ReadStock	garage	high	user.rpr's parts into the boxes; ported
+100366d0	Garage_DrawBox	garage	high	a box's rows: damage bars and names, the car's marked C/V/R; ported
+10036950	Garage_Redraw	garage	high	the twelve boxes drawn; ported
+10036980	Garage_Row	garage	high	the row under the mouse, the field's arrows scrolling; ported
+10036a60	Garage_Move	garage	high	a part across its pair, marked 2 or 4; ported
+10034cc0	Box_At	garage	high	the box strictly under the mouse or -1; ported
+10034d20	Rect_Hit	shell	high	strictly inside a rectangle record; ported
+10034df0	Garage_Reset	garage	high	the garage's state dropped (each ShellMain, a new trip, a bookmark); ported
+1001d210	Garage_FreeStock	garage	high	user.rpr's nodes and parts freed; ported
+1001d240	Stock_Delete	garage	high	user.rpr deleted
+1000fe00	Shell_YesNo	shell	high	the yes/no box (entry 0x24 frame 0xb), waited on; ported
+10035830	Garage_AskText	garage	high	"Leave without taking salvage?"; ported
+1000fb10	Shell_Hint	shell	medium	the trip's hints; not ported

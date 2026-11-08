@@ -12,8 +12,14 @@ char g_sh_player_dir[16];
 
 static uint8_t empty_entry[SHELL_PART];   /* 0x1006b250 */
 
-/* the lists by kind (0x100614b8 every part, then 0x10066d20-0x10066d34) */
-static ShList *l_all, *l_eng, *l_susp, *l_brake, *l_wheel, *l_gun, *l_spec;
+ShList *g_sh_allparts, *g_sh_engines, *g_sh_susps, *g_sh_brakes, *g_sh_wheels, *g_sh_guns, *g_sh_specials;
+#define l_all g_sh_allparts
+#define l_eng g_sh_engines
+#define l_susp g_sh_susps
+#define l_brake g_sh_brakes
+#define l_wheel g_sh_wheels
+#define l_gun g_sh_guns
+#define l_spec g_sh_specials
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }

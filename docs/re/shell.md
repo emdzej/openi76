@@ -159,16 +159,15 @@ shell runs, in order:
      the salvage list), 0x100206a0, 0x10020fb0, then 0xc017.
 2. **0x1001fe10(kind, name, count, flag)** adds a salvage node. Kind 4 (a SALV) finds the part by its
    file (+0x3b). A count of -1 (a file's or the script's) with the flag 1 becomes the part's +0x4c, ×3/4,
-   /4 or /2 by `rand() % 100` (below 5, 30, 50, else); with flag 0 the +0x4c itself. Kind 2 finds it by
-   its name and marks the node's +0x10 with 2.
+   /4 or /2 by `rand() % 100` (below 5, 30, 50, else); with flag 0 the +0x4c itself. Kind 4 marks the
+   node's +0x10 with 4 (the field's salvage), kind 2 finds it by its name and marks it 2 (the van).
 3. **0x100206a0** copies the current record's slots (+0x38 the count, +0x40 the slots) into the
    garage's tables (0x1008bbb0, 0x1008ba50-0x1008ba74, 0x1008bf70).
 4. **0x10020fb0** puts the state's conditions (0x101098e0-) into the slots' parts.
-5. **The garage (0xc017, 0x10034eb0; screen 0x100352c0)**: twelve lists (0x10066e98-0x10067038 in
-   pairs, the car's and the salvage's) of engines, suspensions, brakes, wheels, guns and specials; a click
-   moves a part between a pair (0x10036a60); button 0xc (Done) goes on to 0xc00f (in trip 1 after a
-   confirmation, 0x1000fe00), 0xd opens pop-up 1. Background entry 3 (0x1e in trip 5); sounds entries
-   0x49-0x4d, 0x52; the damage marks entries 0x21-0x23.
+5. **The salvage's choice (0xc017, 0x10034eb0; screen 0x100352c0; ported, docs/re/garage.md)**: "CAR /
+   VAN INVENTORY" over "FIELD SALVAGE", six pairs of boxes; a click moves a part across its pair. ACCEPT
+   SALVAGE goes on to 0xc00f (on trip 1 with nothing moved after "Leave without taking salvage?"), SAVE
+   BOOKMARK opens pop-up 1.
 6. **0xc00f (0x10003fe0; screen 0x100043d0, 5.8 KB)**: the car's set-up (paint, the guns on their hard
    points), then the car written (+0xc, +0x1c) and the mission (0xc010).
 7. **0xc015 (0x10033c60)**: the salvage screen.
