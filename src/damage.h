@@ -100,3 +100,8 @@ void Structure_Destroy(Node *n);
 /* 0x4821e0, the user's controls': each of the three specials (+0x3ec-+0x3f4) whose key is down used by its
    kind: 1 the radar jammer (0x421f30), 2 the nitro (0x475d50), 4 the blower (+0xf4 = 1) */
 void Specials_Use(Node *n, const int keys[3]);
+
+/* network play's car state (0x60 bytes, an ST message's after its head): Vehicle_Pack 0x42a8b0 the user's
+   car's, Vehicle_Unpack 0x42ac90 another player's car set from it (its death and the kill's credit too) */
+void Vehicle_Pack(Node *n, uint8_t *s);
+void Vehicle_Unpack(Node *n, const uint8_t *s);

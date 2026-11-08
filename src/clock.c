@@ -1,9 +1,10 @@
-/* The game's clock (clock.h). Network play's branches of the tick (0x461900) are not ported. */
+/* The game's clock (clock.h), with network play's branches of the tick (0x461900). */
 #include "clock.h"
 #include "render/fpu.h"
 #include <string.h>
 
 #include "platform.h"
+#include "net/netgame.h"
 
 float g_clock_time;
 float g_clock_dt = 0.06f;     /* 0x3d75c28f, as 0x450e90 sets them */
@@ -16,6 +17,17 @@ static float last;                    /* 0x55f738: the previous tick, in seconds
 float g_clock_total;                  /* 0x55f73c: the steps summed after the first three (0x450e80) */
 static int32_t warm;                  /* 0x55f740 */
 static int32_t frames;                /* 0x55f744 */
+static float sync_at, sync_by;        /* 0x4db144, 0x4db148: the keeper's game time to take, and its jump */
+static int sync_due;                  /* 0x4db14c */
+
+void Clock_Sync(float t, int reset)
+{
+    float lat = NetPl_Clock(NetPl_Keeper());
+    sync_at = fpu_f32((double)lat + t);
+    sync_by = fpu_f32(fpu_sub(fpu_add(lat, t), g_clock_game));
+    if (reset) sync_by = 0;
+    sync_due = 1;
+}
 
 /* GetTickCount in seconds (fild of the unsigned count, times 0.001 at 0x4a605c) */
 double g_clock_fake_ms = -1;
@@ -77,7 +89,8 @@ void Clock_Tick(void)
 {
     frames++;
     float now = now_s();
-    if (g_play_state & 0x3e) {   /* paused (and not in a network game): no time passes */
+    int net = Net_On();
+    if ((g_play_state & 0x3e) && !net) {   /* paused (and not in a network game): no time passes */
         g_clock_dt = g_clock_step = 0;
         last = now;
         inv_step = g_clock_inv = from(0x7149f2ca);
@@ -86,15 +99,37 @@ void Clock_Tick(void)
     g_clock_step = fpu_f32(fpu_sub(now, last));
     if (warm < 3) warm++;   /* 0x4a6058 */
     else g_clock_total = fpu_f32(fpu_add(g_clock_step, g_clock_total));
-    if (bits(g_clock_step) < 0x3a83126f) g_clock_step = from(0x3a83126f);        /* 0.001 */
-    else if (bits(g_clock_step) > 0x3e4ccccd) g_clock_step = from(0x3e4ccccd);   /* 0.2 */
+    if (!net) {   /* a network game's step is not bounded */
+        if (bits(g_clock_step) < 0x3a83126f) g_clock_step = from(0x3a83126f);        /* 0.001 */
+        else if (bits(g_clock_step) > 0x3e4ccccd) g_clock_step = from(0x3e4ccccd);   /* 0.2 */
+    }
     g_clock_time = fpu_f32(fpu_add(g_clock_step, g_clock_time));
-    last = now;
     uint32_t u = (uint32_t)bits(g_clock_step);
     if (u < 0xb8d1b717u && (int32_t)u < 0x38d1b717) inv_step = from(0x7149f2ca);   /* within 1e-4 of 0 */
     else inv_step = fpu_f32(fpu_div(1.0f, g_clock_step));
-    g_clock_game = fpu_f32(fpu_add(g_clock_game, g_clock_step));
-    g_clock_dt = g_clock_step;
-    g_clock_inv = inv_step;
+    last = now;
+    if (!net || NetPl_AmKeeper()) {
+        g_clock_game = fpu_f32(fpu_add(g_clock_game, g_clock_step));
+        g_clock_dt = g_clock_step;
+        g_clock_inv = inv_step;
+    } else {   /* the others keep the keeper's game time (XX, Clock_Sync): a jump back is held at 0 */
+        float game;
+        if (!sync_due) {
+            g_clock_dt = g_clock_step;
+            game = fpu_f32(fpu_add(g_clock_game, g_clock_step));
+        } else {
+            g_clock_dt = fpu_f32(fpu_add(g_clock_step, sync_by));
+            sync_due = 0;
+            game = fpu_f32(fpu_add(g_clock_step, sync_at));
+            if (g_clock_dt < 0.0f) {   /* 0x4a6060 */
+                game = fpu_f32(fpu_add(fpu_add(g_clock_step, sync_at), g_clock_step));
+                g_clock_dt = g_clock_game <= game ? fpu_f32(fpu_sub(game, g_clock_game)) : 0.0f;
+            }
+        }
+        g_clock_game = game;
+        uint32_t v = (uint32_t)bits(g_clock_dt);
+        if (v < 0xb8d1b717u && (int32_t)v < 0x38d1b717) g_clock_inv = from(0x7149f2ca);
+        else g_clock_inv = fpu_f32(fpu_div(1.0f, g_clock_dt));
+    }
     if (bits(g_clock_dt) > 0x3f800000) g_clock_dt = g_clock_inv = 1.0f;
 }

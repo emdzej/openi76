@@ -30,5 +30,12 @@ void Melee_Score(int32_t *points, int16_t *kills);   /* 0x407340 */
 void Scores_Init(void);
 void Scores_Fill(void);
 void Scores_Toggle(void);
+void Scores_Show(int on);   /* 0x463590 */
+/* network play's cars (0x462930), moves (0x462d30), the spawn points cleared (0x463130), and the regen
+   points' frame (0x462dd0, the melee's and network play's) */
+Node *Net_SpawnCar(uint16_t id, int at, int kind, const uint8_t *data, int len);
+void Spawn_Move(Node *n, int at);
+void Spawn_Clear(void);
+int Regen_Frame(void);
 struct Entity;
 void Vehicle_TakeOut(struct Entity *e);

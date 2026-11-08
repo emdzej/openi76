@@ -29,6 +29,12 @@
 #include "tex.h"
 #include "effects.h"
 #include "clock.h"
+#include "terrain.h"
+#include "radar.h"
+#include "engine.h"
+#include "net/netgame.h"
+#include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -36,6 +42,7 @@ static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
 static void putf(uint8_t *p, float v) { memcpy(p, &v, 4); }
 static Node *slot(uint8_t *d, uint32_t off) { return *Data_Ptr(d, off); }
+static uint16_t rd16(const uint8_t *p) { uint16_t v; memcpy(&v, p, 2); return v; }
 static void smoke_stop(uint8_t *d);
 
 /* 0x42e250 and 0x42e290: the node, everything after it and everything under it */
@@ -1792,4 +1799,226 @@ void Splash(float x, float z, float radius, int32_t force, Node *src, Node *exce
             for (int i = 0; i < 3; i++) at[i] = fpu_f32(fpu_mul(cr, -dir[i]));
             Impact_Damage(e->node, src, v, dir, at);   /* 0x45d7c0 */
         }
+}
+
+/* ---- network play's car state (0x42a8b0, 0x42ac90; docs/re/network.md "ST") ---- */
+
+#define ADD fpu_add
+#define SUB fpu_sub
+#define MUL fpu_mul
+#define DIV fpu_div
+#define F32 fpu_f32
+
+static void wheel_points(Node *w, int32_t *a, int32_t *b)   /* 0x42fd90 */
+{
+    if (!w) return;
+    if (w->data) *a = rd32(w->data + 4), *b = rd32(w->data + 8);
+    else *a = *b = 300;
+}
+
+static int level_of(float v)   /* > 0.75: 0, > 0.5: 1, > 0.25: 2, else 3 */
+{
+    return v > exe_f32(0x4a5a10) ? 0 : fb(v) > 0x3f000000 ? 1 : fb(v) > 0x3e800000 ? 2 : 3;
+}
+
+void Vehicle_Pack(Node *n, uint8_t *s)
+{
+    uint8_t *d = n->data;
+    putf(s, g_clock_game);
+    /* 0x465440: the frame's second and third rows (up, forward) first as forward, up, then the place */
+    const Frame *f = &n->frame;
+    const float r[9] = {f->m[6], f->m[7], f->m[8], f->m[3], f->m[4], f->m[5], (float)f->pos[0], (float)f->pos[1], (float)f->pos[2]};
+    memcpy(s + 4, r, sizeof r);
+    memcpy(s + 0x28, d + 0xbc, 12);   /* the velocity */
+    memcpy(s + 0x34, d + 0xc8, 12);   /* the turn */
+    memcpy(s + 0x40, d + 0xe4, 4);    /* the throttle */
+    memcpy(s + 0x44, d + 0xe0, 4);    /* the steering */
+    uint32_t fl = 0, k = (uint32_t)rd32(d + 0x454);
+    if ((uint32_t)rd32(d + 0xe8) == 0xbf800000u) fl = 4;   /* in reverse */
+    if (rd32(d + 0xf0)) fl |= 2;
+    if (k & 0x20) fl |= 8;
+    if (k & 0x40) fl |= 0x10;
+    if (k & 2) fl |= 1;
+    if (k & 1) fl |= 0x20;
+    if (k & 0x4000) fl |= 0x80;
+    if (!(k & 0x8000)) fl |= 0x200;
+    int32_t gear = rd32(d + 0x104);
+    if (gear == 0 || gear == 2) fl |= 0x100;
+    if ((k & 0x40000) && Radar_Hidden(n)) fl |= 0x400;
+    double h = Vehicle_Health(n);
+    float hf = (float)h;
+    if (h > exe_f32(0x4a5a20)) fl |= 0xc0000000u;   /* 66.67 */
+    else fl |= fb(hf) > 0x42055555 ? 0x80000000u : 0x40000000u;   /* 33.33 */
+    Node *t = Radar_Current(n);   /* 0x421ba0 */
+    uint16_t tid = 0;
+    if (t) {
+        if (is_vehicle(t)) memcpy(&tid, t->data + 0x480, 2);
+        else tid = (uint16_t)(rd32(t->data + 8) + 1), fl |= 0x40;
+    }
+    put32(s + 0x48, (int32_t)fl);
+    memcpy(s + 0x54, &tid, 2);
+    if (k & 0x20) memcpy(s + 0x58, d + 0x482, 2);   /* dead: its killer */
+    else {
+        uint32_t lv = 0;
+        for (uint32_t i = 0; i < 5; i++) lv |= (uint32_t)level_of(Side_Whole(d, i)) << (2 * i);
+        put32(s + 0x58, (int32_t)lv);
+    }
+    s[0x5d] = 0;
+    for (int i = 0; i < 6; i++) {
+        Node *w = slot(d, 0x3a8 + 4 * (uint32_t)i);
+        if (!w) continue;
+        int32_t a = 0, b = 0;
+        wheel_points(w, &a, &b);
+        if ((double)a / (double)b <= exe_f32(0x4a5a14)) s[0x5d] |= (uint8_t)(1 << i);   /* a flat tyre */
+    }
+    s[0x5c] = (uint8_t)(int64_t)fpu_mul(Vehicle_Health(n), exe_f32(0x4a5a28));   /* 2.55 */
+    int32_t pts;
+    int16_t kills, deaths;
+    NetPl_Score((dpid_t)rd16(d + 0x480), &pts, &kills, &deaths);
+    put32(s + 0x4c, pts);
+    memcpy(s + 0x50, &kills, 2);
+    memcpy(s + 0x52, &deaths, 2);
+}
+
+void Vehicle_Unpack(Node *n, const uint8_t *s)
+{
+    uint8_t *d = n->data;
+    float r[9];
+    memcpy(r, s + 4, sizeof r);
+    /* 0x465340: the first row the second's cross the third, normalized (0x4529a0) */
+    Frame *f = &n->frame;
+    float c0 = F32(SUB(MUL(r[4], r[2]), MUL(r[5], r[1])));
+    float c1 = F32(SUB(MUL(r[5], r[0]), MUL(r[3], r[2])));
+    float c2 = F32(SUB(MUL(r[3], r[1]), MUL(r[4], r[0])));
+    double inv = Fast_InvSqrt(ADD(ADD(MUL(c0, c0), MUL(c2, c2)), MUL(c1, c1)));
+    f->m[0] = F32(MUL(c0, inv)), f->m[1] = F32(MUL(c1, inv)), f->m[2] = F32(MUL(inv, c2));
+    f->m[3] = r[3], f->m[4] = r[4], f->m[5] = r[5];
+    f->m[6] = r[0], f->m[7] = r[1], f->m[8] = r[2];
+    f->pos[0] = r[6], f->pos[1] = r[7], f->pos[2] = r[8];
+    memcpy(d + 0xbc, s + 0x28, 12);
+    memcpy(d + 0xc8, s + 0x34, 12);
+    Node *w3a8 = slot(d, 0x3a8), *w3ac = slot(d, 0x3ac), *w3b0 = slot(d, 0x3b0), *w3b4 = slot(d, 0x3b4);
+    Node *w3b8 = slot(d, 0x3b8), *w3bc = slot(d, 0x3bc);
+    float v0 = rdf(s + 0x28), v1 = rdf(s + 0x2c), v2 = rdf(s + 0x30);
+    putf(d + 0xac, F32(fpu_sqrt(ADD(MUL(v2, v2), ADD(MUL(v1, v1), MUL(v0, v0))))));
+    if (rd32(d + 0xac) > 0x38d1b717) putf(d + 0xb0, F32(DIV(1.0f, rdf(d + 0xac))));
+    else put32(d + 0xb0, 0x7149f2ca);   /* 1e30 */
+    uint32_t old = (uint32_t)rd32(d + 0x454), fl = (uint32_t)rd32(s + 0x48);
+    put32(d + 0x454, 0);
+    put32(d + 0xe8, (int32_t)0xbf800000u);
+    if (!(fl & 4)) putf(d + 0xe8, 1.0f);
+    uint32_t was_dead = old & 0x20;
+    put32(d + 0xf0, (int32_t)((fl & 2) >> 1));
+    if (!was_dead) {
+        if (fl & 0x10) put32(d + 0x454, rd32(d + 0x454) | 0x40);
+        Vehicle_Lights(n, (int)(((uint32_t)rd32(d + 0x454) & 0x40) ^ old));
+    }
+    if (fl & 1) put32(d + 0x454, rd32(d + 0x454) | 2);
+    Vehicle_Brake(n, old, rd32(d + 0x454) & 2);
+    if (fl & 0x20) put32(d + 0x454, rd32(d + 0x454) | 1);
+    if (fl & 0x400) put32(d + 0x454, rd32(d + 0x454) | 0x40000);
+    if (is_vehicle(n)) {   /* the health's third (+0x484, a dead car's in network play) */
+        uint32_t hb = (fl & 0xc0000000u) == 0xc0000000u ? 0x42c80000u : (fl & 0xc0000000u) == 0x80000000u ? 0x42855555u : 0x42055555u;
+        put32(d + 0x484, (int32_t)hb);
+    }
+    uint32_t k = (old & 0x8000c120u) | (uint32_t)rd32(d + 0x454);
+    put32(d + 0x454, (int32_t)k);
+    if ((fl & 8) && !was_dead) {   /* killed */
+        k |= 0x20;
+        put32(d + 0x454, (int32_t)k);
+        if (fl & 0x80) {   /* blown up */
+            put32(d + 0x454, (int32_t)(k | 0x4000));
+            putf(d + 0x450, 10.0f);
+            put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x80008000u));
+            Radio_Drop(n);
+            /* the original asks Node_IsUser (0x42e620) of the state, not the node: the bit 0x10 of its +0x10
+               (the forward row's y) */
+            if (!(rd32(s + 0x10) & 0x10)) Salvage_Vehicle(n);
+            Weapons_Unarm(n);
+            AI_Rethink();
+            sound(2, n);
+            Horn(n, 1);
+            Node_SetFlags(n, 0x200);
+            if (g_user_entity && g_user_entity->node == n) {
+                g_input_menu = 0;   /* 0x480680 */
+                Camera_SetMode(g_user_entity, 0xfefe);
+                Dash_Off();
+                int32_t eight = 8;
+                memcpy(INPUT_AT(0x4def9c), &eight, 4);
+                if (Net_On()) Net_Died();   /* 0x462d50 */
+            }
+        } else
+            Vehicle_Wreck(n, 1);
+        dpid_t me = NetPl_Me(), victim = (dpid_t)rd16(d + 0x480), by = (dpid_t)rd16(s + 0x58);
+        if (me == by) {   /* killed by this player: a kill, unless of its own team */
+            uint32_t a = 0, b = 0;
+            NetPl_Flags(me, &a);
+            NetPl_Flags(victim, &b);
+            if ((a ^ b) & 0x70000) Net_Kill(victim);
+        }
+        if (!(fl & 0x200)) {
+            char vn[24] = {0}, kn[24] = {0}, line[80];
+            NetPl_Name(victim, vn);
+            if (by) {
+                NetPl_Name(by, kn);
+                snprintf(line, sizeof line, exe_str(0x4d57ac), vn, kn);   /* "*** %s was killed by %s" */
+            } else
+                snprintf(line, sizeof line, exe_str(0x4d5794), vn);   /* "*** %s has been killed" */
+            Net_Message(0, line);
+        }
+    }
+    if (n->cls == 1) put32(d + 0x104, (fl & 0x100) ? 2 : 3);
+    float speed = rd32(d + 0xe8) > 0 ? rdf(d + 0xac) : -rdf(d + 0xac);
+    Node *eng = slot(d, 0x3c4);
+    if (eng) Engine_Step(eng->data, rdf(d + 0xe4), speed, (uint32_t)rd32(d + 0x454), (uint32_t)rd32(d + 0xe8) > 0x80000000u,
+                         rd32(d + 0x104));   /* 0x42f640 */
+    Node *spin[6] = {w3ac, w3a8, w3bc, w3b8, w3b4, w3b0};   /* 0x42fea0: each wheel's +0x20 the speed */
+    for (int i = 0; i < 6; i++)
+        if (spin[i] && spin[i]->data) putf(spin[i]->data + 0x20, speed);
+    memcpy(d + 0xe4, s + 0x40, 4);
+    memcpy(d + 0xe0, s + 0x44, 4);
+    Vehicle_Steer(n);   /* 0x475cb0 */
+    uint16_t tid = rd16(s + 0x54);
+    if (!tid) {
+        Radar_Choose(n, NULL);
+        Weapons_TurretSlot(n, 0);   /* 0x456920 */
+    } else {
+        Radar_Choose(n, (fl & 0x40) ? Net_Object(tid - 1) : NetPl_Node(tid));
+        Weapons_TurretSlot(n, 1);
+    }
+    if (!(rd32(d + 0x454) & 0x20)) {
+        uint32_t lv = (uint32_t)rd32(s + 0x58);
+        static const int frame[4] = {0, 1, 1, 2};   /* 0x42b760 */
+        for (uint32_t i = 0; i < 5; i++) {
+            put32(d + 0x158 + 4 * i, 100);
+            put32(d + 0x168 + 4 * i, 100);
+            put32(d + 0x178 + 4 * i, 100);
+            put32(d + 0x18c + 4 * i, (int32_t)((4 - ((lv >> (2 * i)) & 3)) * 25));
+            int level = level_of(Side_Whole(d, i));
+            Damage_Look(d, i, (uint32_t)level);
+            Node *part = slot(d, 0x408 + exe_u32(0x4d5428 + 4 * i) * 4);
+            int count = (int32_t)exe_u32(0x4d5458 + 4 * i);
+            for (int j = 0; j < count; j++)
+                Tex_SetFrame((uintptr_t)part, exe_str(0x4d5470 + (i * 10 + (uint32_t)j) * 13), 0, frame[level], true);
+        }
+        for (uint32_t i = 0; i < 6; i++) {   /* the tyres: 25 of 100 when flat (0x42fdd0) */
+            Node *w = slot(d, 0x3a8 + 4 * i);
+            if (!w) continue;
+            if (w->cls == 0x1e && w->data) {
+                put32(w->data + 4, (s[0x5d] & (1u << i)) ? 0x19 : 0x64);
+                put32(w->data + 8, 100);
+            }
+            int32_t a = 0, b = 0;
+            wheel_points(w, &a, &b);
+            float ratio = b ? F32(DIV((double)a, (double)b)) : 0.0f;
+            int level = fb(ratio) > 0x3f400000 ? 0 : fb(ratio) > 0x3f000000 ? 1 : fb(ratio) > 0x3e800000 ? 2 : 3;
+            Damage_Look(d, i + 5, (uint32_t)level);
+        }
+        float h = F32(MUL((double)s[0x5c], exe_f32(0x4a5a34)));   /* 1 / 255 */
+        if (h < 1.0f) Vehicle_Smoke(d, h);
+    }
+    int32_t tc = Terrain_Class(n->frame.pos[0], n->frame.pos[2]);
+    put32(d + 0x45c, tc);
+    Tyre_Step(n, (uint32_t)rd32(d + 0x454), tc);
+    NetPl_SetScore((dpid_t)rd16(d + 0x480), rd32(s + 0x4c), (int16_t)rd16(s + 0x50), (int16_t)rd16(s + 0x52));
 }

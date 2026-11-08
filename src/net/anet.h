@@ -44,7 +44,7 @@ enum {
 #define dp_PACKET_ADDTOGROUP 0x3564u     /* "d5" */
 
 enum { dp_SNAMELEN = 32, dp_PNAMELEN = 24, dp_PASSWORDLEN = 10, dp_PLAYERS = 16, dp_GROUPS = 8, dp_SESSIONS = 8,
-       dp_KEYS = 8, dp_DATA = 256 };
+       dp_KEYS = 8, dp_DATA = 0x200 };   /* the game reads a car's file (key 0) into 0x200 bytes */
 
 typedef struct {
     uint32_t flags;

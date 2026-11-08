@@ -25,3 +25,6 @@ float Timer_Next(float t[3]);
 /* Clock_Tick 0x450fa0 (each frame): the step since the last tick (GetTickCount, here plat_ms), within
    [0.001, 0.2], added to the times; the frame's step is it, at most 1 */
 void Clock_Tick(void);
+/* Clock_Sync 0x450f50: in network play the keeper's game time t (its XX) plus the latency to it, taken at
+   the next tick by the others; reset: no jump (the first, or a new keeper's) */
+void Clock_Sync(float t, int reset);

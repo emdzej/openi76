@@ -1,5 +1,6 @@
 /* melee.h */
 #include "melee.h"
+#include "net/netgame.h"
 #include "ai.h"
 #include "classes.h"
 #include "clock.h"
@@ -30,6 +31,8 @@ int g_melee;                    /* 0x4a8760 */
 static Entity *vehicles[0x32];  /* 0x5748b0: the vehicles (class 1) in the world, for the spawn points */
 static int nvehicles;           /* 0x574978 */
 static float spawn_time;        /* 0x574984: the user's car's, by the clock */
+static int regen_away = 1;      /* 0x575994: the user's car off every regen point since the last */
+static int teams_shown = 1;     /* 0x575998: the teams' lines (not the players') with teams */
 static int waves_on;            /* 0x4ed938 */
 static uint32_t opp_left, opp_count;   /* 0x4ed930, 0x4ed934 */
 static uint8_t opp_name[16][8];        /* 0x4ed948: the opponents' names (nvcl<n>) */
@@ -137,9 +140,124 @@ Node *Spawn_Vehicle(int at, int kind, const uint8_t name8[8], int user)
     if (user) {
         g_input_menu = 1;   /* 0x480690 */
         spawn_time = g_clock_time;
+        regen_away = 0;
         if (n->cls == 1) Vehicle_Near(n);   /* 0x475b40 */
     }
     return n;
+}
+
+/* 0x462930: player id's car at spawn point at of kind (0, 1; else where the node is made), from its known
+   name or else its file (data, len) written as an nvcl<n>.vcf; its old car taken out. This player's has
+   the node flag 0x10, the others' 0x20; both the team's bits */
+Node *Net_SpawnCar(dpid_t id, int at, int kind, const uint8_t *data, int len)
+{
+    uint8_t name[8] = {0};
+    if (!NetPl_Car(id, (char *)name)) {
+        if (!len) {
+            char m[48];
+            snprintf(m, sizeof m, exe_str(0x4dc5c8), id);   /* "No vehicle sent for player %d\n" */
+            plat_log(m);
+        } else
+            Net_CarFile(data, (uint32_t)len, name);
+    }
+    Node *old = NetPl_Node(id);
+    if (old) {
+        NetPl_SetCar(id, (const char *)name, NULL);
+        Entity *e = Entity_OfNode(old);   /* 0x424060 */
+        if (e) Vehicle_TakeOut(e);        /* 0x42b7d0 */
+    }
+    Node *n = Node_New(NULL, exe_str(0x4dc5c0));   /* "netwrk" */
+    if (!n) return NULL;
+    ObjCtx x;
+    memset(&x, 0, sizeof x);
+    x.node = n;
+    memcpy(n->name, name, 8);
+    if ((kind == 0 || kind == 1) && at >= 0 && at < 64) n->frame = g_spawn[kind][at];
+    n->flags = id == NetPl_Me() ? 0x10 : 0x20;
+    uint32_t f = 0;
+    NetPl_Flags(id, &f);
+    n->flags |= ((f & 0x70000) >> 16) << 16;
+    const char *path = Obj_Name(name, exe_str(0x4a8100));   /* ".vcf" */
+    if (!path || !Vehicle_Load(&x, path)) {
+        char m[80];
+        snprintf(m, sizeof m, "Interstate '76 cannot load vehicle %.8s", (const char *)name);
+        plat_log(m);
+        return NULL;
+    }
+    if (!Entity_Add(n, x.has_x ? Obj_ColpRecord(x.x) : NULL, x.has_b ? x.b : NULL)) {
+        plat_log("Interstate '76 cannot create entity - The world is full!");
+        return NULL;
+    }
+    NetPl_SetCar(id, (const char *)name, n);
+    Class_StartAll();   /* 0x425920 */
+    if (id == NetPl_Me()) {
+        g_input_menu = 1;   /* 0x480690 */
+        spawn_time = g_clock_time;
+        regen_away = 0;
+        if (n->cls == 1) Vehicle_Near(n);   /* 0x475b40 */
+    }
+    Net_SpawnDone();   /* 0x57598c = 0 */
+    return n;
+}
+
+/* 0x462d30: a car moved to spawn point at (its frame) */
+void Spawn_Move(Node *n, int at)
+{
+    if (at >= 0 && at < 64) n->frame = g_spawn[0][at];
+}
+
+void Spawn_Clear(void) { g_spawn_count[0] = 0; }   /* 0x463130 */
+
+/* 0x462dd0, each frame in a melee or network play: the user's car on a regen point (kind 1, within 10 m:
+   0x4a63f0's 100 squared) after 30 s from its spawn (0x4a63f8), having left them all since, is replaced:
+   400 points more (the melee's or the player's), the sound 3, a new car at a spawn point clear of the
+   others (network play: one asked of the keeper as a regen's) */
+int Regen_Frame(void)
+{
+    Entity *u = g_user_entity;
+    if (!u) return 0;
+    Node *un = u->node;
+    double x = (float)un->frame.pos[0], y = (float)un->frame.pos[1], z = (float)un->frame.pos[2];
+    int n = g_spawn_count[1], i;
+    if (n) {
+        for (i = 0; i < n; i++) {
+            const double *p = g_spawn[1][i].pos;
+            if ((z - p[2]) * (z - p[2]) + (y - p[1]) * (y - p[1]) + (x - p[0]) * (x - p[0]) - 100.0 < 0) break;
+        }
+        if (i != n) {
+            if (fpu_f32((double)g_clock_time - spawn_time) < 30.0f) {
+                if (!regen_away) spawn_time = g_clock_time;
+                return 0;
+            }
+            spawn_time = g_clock_time;
+            regen_away = 0;
+            if (!Net_On()) {
+                int32_t pts;
+                int16_t k;
+                Melee_Score(&pts, &k);
+                points = pts + 400, kills = k;   /* 0x407320 */
+            } else {
+                int32_t pts;
+                int16_t k, dd;
+                NetPl_Score(NetPl_Me(), &pts, &k, &dd);
+                NetPl_SetScore(NetPl_Me(), pts + 400, k, dd);
+            }
+            Sound_Event(3, NULL, NULL);   /* 0x4683c0 */
+            if (!Net_On()) {
+                uint8_t name[8] = {0};
+                const char *base = g_user_vcf;
+                for (const char *q = g_user_vcf; *q; q++)
+                    if (*q == '\\' || *q == '/' || *q == ':') base = q + 1;
+                size_t len = strcspn(base, ".");
+                memcpy(name, base, len < 8 ? len : 8);
+                Spawn_Vehicle(SpawnLoc_Get(), 0, name, 1);
+            } else
+                Net_AskRegen();
+            return 1;
+        }
+    }
+    regen_away = 1;
+    return 0;
 }
 
 /* setAllAggresion 0x408f70: every team's vehicles but the user's, at the level (1-5): their skills
@@ -324,15 +442,63 @@ void Melee_Kill(Node *victim)
 
 
 /* 0x463350: the box's lines again. In the melee one: the user's name (the mission record's, 0x403130), its
-   points and kills (0x407340) and 0 deaths, "%s:\t%d\t%d\t%d"; sorted by the points (0x463ba0, one line
-   here). Network play's players and teams are not ported */
+   points and kills (0x407340) and 0 deaths. In network play every player's, or with teams (unless the
+   players' are asked for, 0x575998) every team's with players, summed. "%s:\t%d\t%d\t%d", sorted by the
+   points, then the names (0x463ba0) */
+typedef struct { char name[0x18]; int16_t kills, deaths; int32_t points; } ScoreLine;   /* 0x5759a0, 0x24 bytes */
+static int score_cmp(const void *a, const void *b)   /* 0x463ba0 */
+{
+    const ScoreLine *x = a, *y = b;
+    if (y->points != x->points) return y->points - x->points;
+    return crt_stricmp(x->name, y->name);
+}
+
 void Scores_Fill(void)
 {
+    static ScoreLine lines[16];
+    int n = 0;
     Region_Clear(score_box);   /* 0x44ff10 */
-    if (!g_melee) return;
-    char line[80];
-    snprintf(line, sizeof line, exe_str(0x4dc62c), g_sh_rec.player, points, (unsigned)(uint16_t)kills, 0u);
-    Region_Add(score_box, line);   /* 0x44ff70 */
+    if (g_melee) {
+        snprintf(lines[0].name, sizeof lines[0].name, "%s", g_sh_rec.player);
+        Melee_Score(&lines[0].points, &lines[0].kills);
+        lines[0].deaths = 0;
+        n = 1;
+    } else if (!Net_Teams() || !teams_shown) {
+        int count = NetPl_Count();
+        for (int i = 0; i < 16 && n < 16; i++) {
+            dpid_t id = NetPl_At(i, lines[n].name);
+            if (!id) continue;
+            NetPl_Score(id, &lines[n].points, &lines[n].kills, &lines[n].deaths);
+            if (++n >= count) break;
+        }
+    } else
+        for (uint32_t t = 0; t < 8; t++) {
+            ScoreLine *l = &lines[n];
+            int32_t sum = 0;
+            int any = 0;
+            l->kills = l->deaths = 0;
+            for (int i = 0; i < 16; i++) {
+                dpid_t id = NetPl_At(i, NULL);
+                uint32_t f;
+                if (!id || (NetPl_Flags(id, &f), (f & 0x70000) >> 16 != t)) continue;
+                int32_t s;
+                int16_t k, d;
+                NetPl_Score(id, &s, &k, &d);
+                sum += s, l->kills += k, l->deaths += d;
+                any = 1;
+            }
+            if (!any) continue;
+            snprintf(l->name, sizeof l->name, "%s", exe_str(exe_u32(0x4a80b8 + 4 * t)));   /* "Grey Hounds", ... */
+            l->points = sum;
+            n++;
+        }
+    qsort(lines, (size_t)n, sizeof lines[0], score_cmp);
+    for (int i = 0; i < n; i++) {
+        char line[80];
+        snprintf(line, sizeof line, exe_str(0x4dc62c), lines[i].name, lines[i].points, (unsigned)(uint16_t)lines[i].kills,
+                 (unsigned)(uint16_t)lines[i].deaths);
+        Region_Add(score_box, line);   /* 0x44ff70 */
+    }
 }
 
 /* 0x4632c0: the box at (50, 150), 540 x 180, red (0xff), fixed lines (8), its tab stops 250, 330 and 410
@@ -344,14 +510,37 @@ void Scores_Init(void)
     score_box = Region_New(0x32, 0x96, 0x21c, 0xb4, 0xff, 0, 8);
     Region_Tabs(score_box, 3, t);   /* 0x44fea0 */
     score_shown = 0;
+    teams_shown = 1;
     Scores_Fill();
 }
 
-/* 0x4635d0 (SCORE_TOGGLE): outside network play the box shown or hidden (0x44fed0) */
+/* 0x463590: the box shown or hidden (network play's messages hidden under it, 0x463e50) */
+void Scores_Show(int on)
+{
+    if (on && Net_On()) Net_ChatShow(0);
+    Region_Show(score_box, on);
+    score_shown = on;
+}
+
+/* 0x4635d0 (SCORE_TOGGLE): the box shown or hidden; with teams the presses go the teams' lines, the
+   players', hidden */
 void Scores_Toggle(void)
 {
-    score_shown = !score_shown;
-    Region_Show(score_box, score_shown);
+    int on;
+    if (!Net_Teams()) on = !score_shown;
+    else if (score_shown && teams_shown) {
+        teams_shown = 0;
+        Scores_Fill();
+        on = score_shown;
+    } else if (score_shown) {
+        teams_shown = 1;
+        on = 0;
+    } else {
+        score_shown = teams_shown = 1;
+        Scores_Fill();
+        on = score_shown;
+    }
+    Scores_Show(on);
 }
 
 void Melee_Score(int32_t *p, int16_t *k)

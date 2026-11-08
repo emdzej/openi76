@@ -66,6 +66,9 @@
 #include "render/surface.h"
 #include "render/terrain_draw.h"
 #include "render/view.h"
+#include "net/netgame.h"
+#include "render/fpu.h"
+#include "shell/shnet.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -114,6 +117,7 @@ static bool viewer_init(const char *mission)
     if (!g_game_font) g_game_font = BFont_Load(exe_str(0x4a8124));
     Regions_Init();
     Autopilot_Reset();
+    if (Net_On()) Net_Init(g_net_shell_id);   /* 0x461920, with the shell's Activenet player */
     if (g_melee) SpawnLoc_Init();   /* 0x4626a0 */
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
@@ -219,6 +223,20 @@ static bool play_init(void)
     g_screen = &surf;
     Cockpit_Init();     /* 0x426070 */
     Class_StartAll();
+    if (Net_On()) {   /* WinMain's clock runs from before the load (0x450e90); the join's needs it */
+        Clock_Init();
+        Net_Start();   /* 0x461a10; then the join (0x461b00) a frame at a time */
+    }
+    return true;
+}
+
+static float net_score_time;   /* 0x4ed868: the scores' box filled again each second */
+dpid_t g_net_shell_id;          /* the shell's record's +0xc: this player's Activenet id */
+
+/* after the classes' start (and in network play the join) */
+static bool play_init2(void)
+{
+    if (Net_On()) net_score_time = g_clock_time;
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
     Objects_Detail();     /* 0x424320 */
@@ -229,15 +247,94 @@ static bool play_init(void)
     Noise_Init();        /* 0x451510 */
     Smoke_Init();        /* 0x46dfb0 */
     Poetry_Init(mission_name);   /* 0x451320, and 0x4513a0 by the mission */
-    Clock_Init();
+    if (!Net_On()) Clock_Init();
     if (!Input_Init()) {
         plat_log("OpenI76: the input's tables are missing");
         return false;
     }
     User_ControlsReset();
     View_Init(1, &surf);
-    if (!g_user_entity) plat_log("OpenI76: the mission has no user vehicle");
+    if (!g_user_entity && !Net_On()) plat_log("OpenI76: the mission has no user vehicle");
     return true;
+}
+
+/* network play's part of WinMain's frame after the collisions and the controls: the messages (0x461f20),
+   the scores' box each second (0x463350), and the game's end: a winner (0x462690) or the keeper gone
+   (0x461a00) shown, a car given to a player without one so the world goes on, and ten seconds after
+   (0x4a5018) the state 3 */
+static float net_end = -1.0f;   /* WinMain's local: the end's time */
+
+static void net_dead_view(void)
+{
+    g_input_menu = 0;   /* 0x480680 */
+    Camera_SetMode(g_user_entity, 0xfefe);   /* 0x407010 */
+    Dash_Off();   /* 0x428890 */
+    int32_t eight = 8;
+    memcpy(INPUT_AT(0x4def9c), &eight, 4);
+}
+
+static void net_car_if_none(void)
+{
+    int at;
+    if (!g_user_entity && (at = SpawnLoc_Get()) != -1) {
+        Node *n = Net_SpawnCar(NetPl_Me(), at, 0, NULL, 0);
+        if (n) Chunks_Clear(n, 20.0f);
+    }
+}
+
+static void net_frame(void)
+{
+    char m[100], name[24];
+    Net_Frame();
+    if (1.0f <= fpu_f32((double)g_clock_time - net_score_time)) {   /* 0x4a5010 */
+        Scores_Fill();
+        net_score_time = g_clock_time;
+    }
+    dpid_t w = Net_Winner();
+    if (!w || net_end != -1.0f) {
+        if (!Net_Dropped()) {
+            if (net_end == -1.0f) return;
+        } else if (net_end == -1.0f) {
+            net_end = g_clock_time;
+            Net_ChatClear();
+            Net_ChatShow(1);
+            snprintf(m, sizeof m, "%s", exe_str(0x4a8208));   /* "*** Error: Host has disconnected" */
+            g_input_menu = 0;
+            net_car_if_none();
+            net_dead_view();
+            Net_Message(0, m);
+            return;
+        }
+        if (10.0f <= fpu_f32((double)g_clock_time - net_end)) g_game_state = 3;   /* 0x4a5018 */
+        return;
+    }
+    net_end = g_clock_time;
+    Net_ChatClear();
+    Net_ChatShow(1);
+    net_car_if_none();
+    if (!Net_Teams()) {
+        if (NetPl_Me() == w) {
+            snprintf(m, sizeof m, "%s", exe_str(0x4a82d4));   /* "*** You have reached the maximum score!" */
+            net_dead_view();
+        } else {
+            NetPl_Name(w, name);
+            snprintf(m, sizeof m, exe_str(0x4a829c), name);   /* "*** %s has reached the maximum score!" */
+            if (g_user_entity) Vehicle_Kill(g_user_entity->node);   /* 0x42b790 */
+        }
+    } else {
+        uint32_t mine = 0, theirs = 0;
+        NetPl_Flags(NetPl_Me(), &mine);
+        NetPl_Flags(w, &theirs);
+        const char *team = exe_str(exe_u32(0x4a80b8 + 4 * ((theirs & 0x70000) >> 16)));
+        if ((mine & 0x70000) != (theirs & 0x70000)) {
+            snprintf(m, sizeof m, exe_str(0x4a822c), team);   /* "*** Team %s has reached the maximum score!" */
+            if (g_user_entity) Vehicle_Kill(g_user_entity->node);
+        } else {
+            snprintf(m, sizeof m, exe_str(0x4a8268), team);
+            net_dead_view();
+        }
+    }
+    Net_Message(0, m);
 }
 
 static void play_frame(void)
@@ -247,7 +344,7 @@ static void play_frame(void)
     Input_Mouse();
     Clock_Tick();
     Input_Update();
-    if (g_play_state & 0x3e) {   /* WinMain's loop with the play stopped: 0x44fab0, then a movie's frame */
+    if ((g_play_state & 0x3e) && !Net_On()) {   /* WinMain's loop with the play stopped (network play's goes on): 0x44fab0, then a movie's frame */
         if (g_play_state == 0x10) Menu_Keys();     /* 0x44fab0's menu */
         int16_t typed;
         memcpy(&typed, INPUT_AT(INPUT_TYPED), 2);
@@ -267,8 +364,10 @@ static void play_frame(void)
     {
         Collide_Frame();   /* 0x469db0 */
         Input_Poll();
+        if (Net_On()) net_frame();
         Autopilot_Keys();   /* the port's, with --param autopilot */
         Class_Frame(0);
+        if (g_melee || Net_On()) Regen_Frame();   /* 0x462dd0 */
         Class_Frame(1);
         AI_Frame();
         Autopilot_Frame();   /* the port's, --param autopilot (off by default) */
@@ -276,7 +375,8 @@ static void play_frame(void)
         Shots_Frame();     /* 0x4597a0 */
         Weapons_Frame();   /* 0x455d90 */
         TexAnim_Run();     /* 0x47e9a0 */
-        if (g_camera_fn) g_camera_fn();
+        int draw = !Net_On() || g_user_entity;   /* network play without a car draws nothing */
+        if (g_camera_fn && draw) g_camera_fn();
         static int frames, trace = -1;
         if (trace < 0) {
             char v[16];
@@ -334,6 +434,7 @@ static void play_frame(void)
                 plat_log(m);
             }
         /* 0x404170 (the objects' detail by distance) is not ported yet */
+        if (draw) {
         Sound_Frame(1);    /* 0x466b70 */
         Sound_Enable(1);   /* 0x466dd0 */
         if (!(g_play_state & 0xc)) {
@@ -342,6 +443,7 @@ static void play_frame(void)
             if (g_play_state == 1) Regions_Draw(&surf);   /* 0x450040; 0x450ae0 (network play's chat line) is not ported */
         }
         show_frame();
+        }
         Rel_Clear();   /* 0x421fc0 after the frame's drawing */
     }
 }
@@ -373,6 +475,9 @@ static bool intro_frame(void)
 }
 
 static bool mission_start(const char *name);
+static bool mission_go(void);
+
+
 
 bool app_init(void)
 {
@@ -406,7 +511,7 @@ bool app_init(void)
     /* WinMain before the shell: the sound (0x466ab0), the movies' (0x44e6b0), then introf01 and credf01, each
        to its end or Esc. --param intro=0 (the port's) leaves them out */
     Input_Tables();
-    if (!plat_param("intro", v, sizeof v) || atoi(v)) {
+    if ((!plat_param("intro", v, sizeof v) || atoi(v)) && !plat_param("net", v, sizeof v)) {   /* the net aid: none */
         intro[0] = exe_str(0x4a8364), intro[1] = exe_str(0x4a8358);
         movie_screen = calloc(640 * 480, 1);
         Movie_SetScreen(movie_screen, 640);
@@ -422,7 +527,7 @@ bool app_init(void)
 
 /* ---- WinMain's loop (0x401290): the shell, a mission, its end, and again ---- */
 
-static enum { S_NONE, S_SHELL, S_MOVIE_IN, S_PLAY, S_END_MENU, S_MOVIE_OUT, S_OVER } phase;
+static enum { S_NONE, S_SHELL, S_JOIN, S_MOVIE_IN, S_PLAY, S_END_MENU, S_MOVIE_OUT, S_OVER } phase;
 static char mission_name[64];   /* WinMain's mission record's +0x5d (and 0x4ed830) */
 static int shell_result = -1;
 
@@ -447,6 +552,68 @@ static bool shell_open(void)
 
 static bool mission_start(const char *name);
 
+/* Shell_Load's kind 5: network play on (0x461910), the session's description (0x461990), the user's car
+   the record's +0x4e with .vcf (0x4a80f8, 0x4a8100), the level's name (+0x70, 0x4ed848) and +0x6c */
+static void net_take_record(void)
+{
+    const ShNetRecord *r = &g_shnet_rec;
+    uint32_t desc[0x26] = {0};
+    desc[0] = r->flags;
+    desc[0x24] = (uint32_t)r->most;
+    desc[0x25] = (uint32_t)r->limit;
+    Net_SetOn(1);
+    Net_Session(desc);
+    snprintf(g_user_vcf, sizeof g_user_vcf, "%s%s", r->car_file, exe_str(0x4a8100));
+    snprintf(g_net_mission, sizeof g_net_mission, "%s", r->level);
+    g_net_mission_arg = r->addon;
+    g_net_shell_id = r->id;
+    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", r->mission);
+    snprintf(g_net_msn, sizeof g_net_msn, "%s", r->mission);
+}
+
+/* the port's test aid, --param net=host|join (with --param relay= and room=): the shell's host (mode 2,
+   the level of --param netlevel=<n>, 0 The Crater) or join (mode 6, the first game listed), its player
+   --param netname= with the car --param netcar= (pick1), then the mission, without the map's screen */
+static int net_aid = -1;
+static bool net_aid_frame(void)
+{
+    static int step;
+    char v[32];
+    ShNetConfig c;
+    memset(&c, 0, sizeof c);
+    snprintf(c.player, sizeof c.player, "%s", plat_param("netname", v, sizeof v) ? v : (net_aid == 1 ? "Groove" : "Taurus"));
+    snprintf(c.car_file, sizeof c.car_file, "%s", plat_param("netcar", v, sizeof v) ? v : exe_str(0x4a8448));
+    snprintf(c.car_name, sizeof c.car_name, "%s", c.car_file);
+    snprintf(c.session, sizeof c.session, "%s", c.player);
+    c.most = 8;
+    c.limit = 20000;
+    if (step == 0) {
+        g_sh_mode = net_aid == 1 ? 2 : 6;
+        if (!Shnet_Open()) return false;
+        step = 1;
+    }
+    if (net_aid == 1 && step == 1) {
+        int at = plat_param("netlevel", v, sizeof v) ? atoi(v) : 0;
+        ShLevel lv = {dll_str(0x100605e8 + 0x2d * (uint32_t)at), dll_str(0x100605e8 + 0x2d * (uint32_t)at + 0x20)};
+        if (!Shnet_Start(&c, NULL, &lv)) return false;
+        step = 2;
+    } else if (net_aid == 2 && step == 1) {
+        Shnet_Browse();
+        if (g_shnet_ngames && Shnet_Start(&c, &g_shnet_games[0], NULL)) step = 2;
+    } else if (step == 2)
+        Shnet_Browse();
+    if (step == 2 && g_shnet_state == 3) {
+        char m[120];
+        snprintf(m, sizeof m, "OpenI76: net: in a session as %s (id %d), %s", c.player, g_shnet_rec.id, g_shnet_rec.mission);
+        plat_log(m);
+        g_sh_rec.kind = 5;
+        net_take_record();
+        net_aid = 0;
+        if (!mission_start(g_sh_rec.mission)) phase = S_OVER;
+    }
+    return true;
+}
+
 static void shell_frame(void)
 {
     Input_Keys();
@@ -462,6 +629,7 @@ static void shell_frame(void)
        network play's, is not ported); the sounds stopped and parked, the sound off */
     if (shell_result != 0xff && g_sh_rec.kind >= 2 && g_sh_rec.kind <= 4)
         snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
+    if (shell_result != 0xff && g_sh_rec.kind == 5) net_take_record();
     Melee_Set(shell_result != 0xff && g_sh_rec.kind == 3);   /* 0x4072d0: the game's kind 3 */
     Sound_StopPlaying();   /* 0x468380 */
     Sound_FreeParked();
@@ -492,6 +660,18 @@ static bool mission_start(const char *name)
     if (name != mission_name) snprintf(mission_name, sizeof mission_name, "%s", name);
     if (!(viewer = viewer_init(mission_name))) return false;
     if (!(play = play_init())) return false;
+    net_end = -1.0f;
+    if (Net_On()) {
+        phase = S_JOIN;   /* WinMain's do { 0x450fa0; } while (!0x461b00()) */
+        return true;
+    }
+    return mission_go();
+}
+
+/* the mission's start after the join */
+static bool mission_go(void)
+{
+    if (!(play = play_init2())) return false;
     char m[200];
     snprintf(m, sizeof m, "OpenI76: loaded: entities %d, classes %d %d, AI %d %d %d %d, weapons %d %d %d %d, zones %d, lights %d",
              g_entity_count, g_class_count[0], g_class_count[1], g_team_count[0], g_team_count[1], g_team_count[2],
@@ -529,6 +709,10 @@ static void mission_end(void)
     /* 0x428660: the links' heap (the port's links are freed with their nodes) */
     Class_EndAll();        /* 0x425580 */
     if (g_melee) Melee_Results(g_sh_rec.player, g_sh_rec.car);   /* 0x463670 */
+    if (Net_On() && (!Net_Winner() || g_net_ended)) {   /* the state's end in network play: the results */
+        g_net_ended = 0;
+        Melee_Results(g_sh_rec.player, g_sh_rec.car);
+    }
     if (g_melee) Melee_End();   /* 0x4072b0 (and 0x463130) */
     if (g_game_state == 1 && g_cheater) g_game_state = 0xb;
     if (g_game_state == 1) {   /* won: the salvage (but in t04), and the mission's last movie */
@@ -594,6 +778,10 @@ static void mission_finish(void)
     /* 0x47deb0, 0x47d2b0 (the levels of detail), 0x41fca0 (the radar's mask), 0x47c550 (the textures), 0x48e0b0: */
     Queue_Free();
     Regions_Free();   /* 0x4503a0 */
+    if (Net_On()) {   /* 0x462460, 0x461910(0) */
+        Net_End();
+        Net_SetOn(0);
+    }
     /* 0x41f2f0, 0x450e30, 0x450d30, 0x4503a0 (the heaps of the panels), 0x41e850 (the objectives),
        0x44e350, 0x44e320. The port's set-up empties its own tables as the next mission loads */
     viewer = play = false;
@@ -610,6 +798,15 @@ static void mission_finish(void)
 
 bool app_frame(void)
 {
+    if (net_aid < 0) {
+        char v[16];
+        net_aid = !plat_param("net", v, sizeof v) ? 0 : !strcmp(v, "host") ? 1 : !strcmp(v, "join") ? 2 : 0;
+        if (net_aid) g_no_shell = 1;
+    }
+    if (net_aid > 0) {
+        if (!net_aid_frame()) phase = S_OVER;
+        return phase != S_OVER;
+    }
     if (intro_frame()) return true;
     if (phase == S_NONE && !viewer && !play) {   /* after the start-up's movies: the shell, or the loading screen */
         if (!shell_open()) {
@@ -619,6 +816,12 @@ bool app_frame(void)
     }
     switch (phase) {
     case S_SHELL: shell_frame(); return phase != S_OVER;
+    case S_JOIN:
+        if (tick_ms >= 0) g_clock_fake_ms += tick_ms;
+        Input_Keys();
+        Clock_Tick();   /* 0x450fa0 */
+        if (Net_Join() && !mission_go()) phase = S_OVER;
+        return phase != S_OVER;
     case S_MOVIE_IN:
         if (!movie_frame()) after_movie();
         return true;

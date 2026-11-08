@@ -23,6 +23,8 @@ void Steering_Frame(Node *n);
 void Class31_Anim(Node *n, const char *name, void *arg);
 /* Classes_Free 0x425660: both lists emptied, the nodes' references let go */
 void Classes_Free(void);
+/* Tyre_Sounds 0x475ee0: the tyres' sounds on terrain class tclass (classes.c) */
+void Tyre_Step(Node *n, uint32_t flags, int32_t tclass);
 /* the entity of n's root (0x424060), NULL if none */
 struct Entity *Entity_OfNode(Node *n);
 /* 0x5ad1a0: the artillery's contact, its node the user's (0x428910) */

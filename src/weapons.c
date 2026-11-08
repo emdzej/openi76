@@ -1740,3 +1740,33 @@ void Weapons_Frame(void)
     Weapons_Tick();
     if (hp) Weapons_DisplayFrame(hp);
 }
+
+void Weapon_Trigger(int32_t inst)
+{
+    if (inst >= 0 && inst < 350) g_weapons[inst].v44 = 1;
+}
+
+int Weapon_Triggered(int32_t inst)
+{
+    return inst >= 0 && inst < 350 && g_weapons[inst].index == inst && g_weapons[inst].v44 != 0;
+}
+
+/* 0x456920: a vehicle's hard points' aimed slot (+4): with on the first of the five with a turret (type 3)
+   and a weapon, else -1. A vehicle without hard points writes before the table in the original */
+void Weapons_TurretSlot(Node *n, int on)
+{
+    HardPoints *h = NULL;
+    for (int i = 0; i < g_hardpoint_count; i++)
+        if (g_hardpoints[i].vehicle == n) {
+            h = &g_hardpoints[i];
+            break;
+        }
+    if (!h) return;
+    if (!on) {
+        h->w1[0] = -1;
+        return;
+    }
+    int i = 0;
+    while (i < 5 && h->slot[i].type != 3) i++;
+    h->w1[0] = (i == 5 || h->slot[i].inst == -1) ? -1 : i;
+}

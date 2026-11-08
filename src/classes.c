@@ -391,7 +391,7 @@ static void no_start(Node *n) { (void)n; }
    sound each), held while asked: not in the air (+0x454 bit 4), the skid while sliding (2); above 7 m/s
    the turn's (0x2000) or else the surface's when no skid, tflat.wav with a wheel's +0x44 set (the rear
    ones first), fdmg1.wav braking (+0xe4 below -0.5, by its bits) on brakes worn under half (+0x10 of +0xc) */
-static void tyre_step(Node *n, uint32_t flags, int32_t tclass)
+void Tyre_Step(Node *n, uint32_t flags, int32_t tclass)
 {
     uint8_t *d = n->data;
     if (!(n->flags & 0x10) || (flags & 4)) return;   /* 0x42e620 */
@@ -442,7 +442,7 @@ void Vehicle_Frame(Node *n)
             if (n->state) return;
         }
     }
-    tyre_step(n, (uint32_t)rd32(d + 0x454), rd32(d + 0x45c));
+    Tyre_Step(n, (uint32_t)rd32(d + 0x454), rd32(d + 0x45c));
 }
 
 /* 0x432c70 (class 7's frame, a gate): while not arrived (+0x90 0; triggerGate clears it) the place (+0x84)

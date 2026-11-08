@@ -195,5 +195,11 @@ bool Weapons_UseNode(const Node *n);
    arrays, the rest moved down and their indices and hard point pointers put right; then the guns' weapons
    looked up again (0x428e70) and every AI told to choose again */
 void Weapons_Unarm(Node *n);
+/* 0x455350: a weapon instance's trigger (+0x44) pulled; Weapon_Triggered its trigger as 0x4551d0 copies it
+   (+0x4c of the copy; 0 for a freed instance, whose copy the original leaves unset) */
+void Weapon_Trigger(int32_t inst);
+int Weapon_Triggered(int32_t inst);
+/* 0x456920 */
+void Weapons_TurretSlot(Node *n, int on);
 /* Artillery_Dirty 0x428e70 */
 void Artillery_Dirty(void);
