@@ -2,6 +2,7 @@
 #include "shell/shell.h"
 #include "crt.h"
 #include "exe.h"
+#include "input.h"
 #include "shell/screen.h"
 #include "shell/font.h"
 #include "platform.h"
@@ -12,6 +13,7 @@
 #include "res.h"
 #include "salvage.h"
 #include "carfile.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +52,81 @@ void Shell_Quit(uint32_t code)
 }
 
 void Shell_SetScreen(ShScreenFn fn) { screen_fn = fn; }
+
+/* 0x10063788: a pop-up's function, run with 1 each pass in the screen's place, with 0 when another
+   pop-up opens (0x10026f80 sets it, 0x10026f90 clears it) */
+static void (*menu_fn)(int on);
+void Shell_SetMenu(void (*fn)(int on)) { menu_fn = fn; }
+void Shell_UnsetMenu(void (*fn)(int on)) { if (menu_fn == fn) menu_fn = NULL; }
+int g_sh_popup_up;               /* 0x1005c8f4: a pop-up is up (no Esc menu; a text entry ends) */
+uint32_t g_sh_next_msg = 0xc004; /* 0x10063798: the screen function's next message */
+
+/* ---- the keyboard: the window's key messages (0x10021fd0, 0x100223b0) into a ring of 64 typed codes:
+   the shell's table by virtual key (0x10061fe8), else the key's character in lower case; Control
+   0x100, Alt 0x400, Shift 0x200 when down. A full ring drops its oldest but at the wrap. ---- */
+static uint16_t kq[0x40];        /* 0x10111370 */
+static int kq_r, kq_w;           /* 0x1008e388, 0x1008e38c */
+static uint8_t kq_keys[256];
+
+static void kq_push(int vk)
+{
+    const uint8_t *t = dll_data(0x10061fe8, 0x200);
+    uint16_t k = 0;
+    if (t) memcpy(&k, t + 2 * (vk & 0xff), 2);
+    if (!k) {
+        k = (uint16_t)tolower((int)(signed char)Input_VkChar(vk));
+        if (!k) return;
+    }
+    if (kq_keys[0x1d] || kq_keys[0x9d]) k |= 0x100;
+    if (kq_keys[0x38] || kq_keys[0xb8]) k |= 0x400;
+    if (kq_keys[0x2a] || kq_keys[0x36]) k |= 0x200;
+    kq[kq_w] = k;
+    if (++kq_w == 0x40) {
+        kq_w = 0;
+        return;
+    }
+    if (kq_w == kq_r && ++kq_r == 0x40) kq_r = 0;
+}
+
+int Shell_Key(void)   /* 0x100223b0 */
+{
+    if (kq_r == kq_w) return 0;
+    int k = (int16_t)kq[kq_r];
+    if (++kq_r == 0x40) kq_r = 0;
+    return k;
+}
+
+int g_sh_kb_key;   /* the keyboard object's (0x10068bf0) +0 */
+
+int Shell_KbRead(void)   /* 0x10038640 */
+{
+    int k = Shell_Key();
+    g_sh_kb_key = k;
+    if (!k) return 0;
+    g_sh_kb_key = k & ~0x100;
+    if (k & 0x200) g_sh_kb_key = toupper(k & ~0x300);
+    return g_sh_kb_key == 0x1b ? 3 : 1;
+}
+
+void Shell_KbFlush(void) { kq_r = kq_w = 0; }   /* 0x10038590 through 0x10021e10 */
+
+/* the pass's key messages: each press queued, and unless a pop-up is up or a modal pass runs, read
+   back at once by the window's procedure: Esc opens the menu (pop-up 0) */
+static void keys_pass(void)
+{
+    static uint8_t before[256];
+    uint8_t press[64], pressed[256] = {0};
+    if (!plat_keys(kq_keys)) memset(kq_keys, 0, sizeof kq_keys);
+    int n = plat_key_presses(press, 64), downs[320], nd = 0;
+    for (int i = 0; i < n; i++) pressed[press[i]] = 1, downs[nd++] = press[i];
+    for (int c = 1; c < 256; c++)
+        if (kq_keys[c] && !before[c] && !pressed[c]) downs[nd++] = c;
+    memcpy(before, kq_keys, sizeof before);
+    for (int i = 0; i < nd; i++) {
+        kq_push(Input_DikVk(downs[i]));
+        if (!g_sh_editing && !g_sh_popup_up && Shell_KbRead() == 3 && !g_sh_modal) g_sh_popup = 1, g_sh_popup_item = 0;
+    }
+}
 
 /* 0x10026f00: the function cleared whatever it is ("UnregisterScreenFunction: pointer mismatch" when it
    is NULL) */
@@ -244,9 +321,17 @@ static void unported(const char *what, uint32_t id)
 static bool popup(void)
 {
     if (!g_sh_popup) return false;
-    /* the menu function 0x10063788 (0) first: none is registered by the screens ported */
+    if (menu_fn) menu_fn(0);
     g_sh_popup = 0;
     switch (g_sh_popup_item) {
+    case 1:   /* the bookmark's save (0x1001ad30) */
+        g_sh_popup_up = 1;
+        Bookmark_Save();
+        return true;
+    case 11:   /* the bookmarks' load (0x100029c0) */
+        Bookmark_Load();
+        g_sh_popup_up = 1;
+        return true;
     case 8:
     case 10:
         Gfx_Fill(&g_shs.scr, 0);   /* 0x1003e590 */
@@ -378,7 +463,10 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc00f:   /* the car's set-up */
         Setup_Open();
         return;
-    case 0xc008: case 0xc00d: case 0xc015: case 0xc01c: case 0xc01d:
+    case 0xc01d:   /* a bookmark's trip back (0x10002d80) */
+        Bookmark_Restore();
+        return;
+    case 0xc008: case 0xc00d: case 0xc015: case 0xc01c:
     case 0xc01f: case 0xc020: case 0xc021: case 0xc024: case 0xc025: case 0xc026:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
@@ -406,6 +494,7 @@ bool Shell_Start(int prev_state)
     fonts_load();
     Garage_Reset();        /* 0x10034df0 */
     nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL, note_rect[0] = -1;
+    menu_fn = NULL, g_sh_popup_up = 0, g_sh_editing = 0, g_sh_next_msg = 0xc004, kq_r = kq_w = 0;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;
     quit = false, result = -1, q_count = 0;
@@ -462,6 +551,7 @@ bool Shell_Pass(void)
             result = 0xff;
         return false;
     }
+    keys_pass();
     if (q_count) {
         Msg m = queue[q_head];
         q_head = (q_head + 1) % 64, q_count--;
@@ -471,7 +561,12 @@ bool Shell_Pass(void)
     if (active) {
         mouse_update(&g_sh_mouse);
         if (g_sh_modal) g_sh_modal();
-        else if (screen_fn) screen_fn(0xc004);
+        else if (menu_fn) menu_fn(1);
+        else if (screen_fn) {
+            uint32_t m = g_sh_next_msg;
+            g_sh_next_msg = 0xc004;
+            screen_fn(m);
+        }
         if (!g_sh_popup) Scr_Present();
     }
     return true;

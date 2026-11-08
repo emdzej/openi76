@@ -850,7 +850,7 @@ static void write_stock(ShList *rep, ShList *c, ShList *g, ShList *d, ShList *s)
 
 /* 0x1002bc70: a Reconfigure's file: the record, the ring's parts but EMPTY with the all-parts list's
    (their count, then each), the repairs */
-static void write_spc(const char *path)
+void Spc_Write(const char *path)
 {
     uint8_t *b = NULL;
     size_t n = 0, cap = 0;
@@ -1202,8 +1202,8 @@ static void go(void)   /* DONE's writes, then the mission */
 {
     Shell_Click(w_done);
     lists_to_record();
-    write_spc(dll_str(0x1005d058));                        /* reconfig.spc */
-    if (g_sh_rec.trip == 3) write_spc(dll_str(0x1005d068));  /* trip4.spc */
+    Spc_Write(dll_str(0x1005d058));                        /* reconfig.spc */
+    if (g_sh_rec.trip == 3) Spc_Write(dll_str(0x1005d068));  /* trip4.spc */
     float w = (float)weight;
     memcpy(rec() + 0x8bc, &w, 4);
     Car_WriteVcf(dll_str(0x1005d074), NULL);
@@ -1361,6 +1361,11 @@ void Setup_Open(void)
     }
     build();
     Shell_SetScreen(screen);
+}
+
+void Setup_ListsBack(void)   /* 0x10007d40 */
+{
+    if (sb_list) lists_to_record();
 }
 
 void Setup_Reset(void)   /* of 0x10003c80: the repair order's first row (and the screen's lists) */

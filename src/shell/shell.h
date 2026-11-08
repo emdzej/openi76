@@ -66,7 +66,25 @@ void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes));
 extern void (*g_sh_redraw)(void);   /* 0x10063790 */
 extern void (*g_sh_modal)(void);    /* 0x1006378c: a pop-up's pass, run in the screen's place */
 void Scr_Shadow(int x, int y, int w, int h);   /* i76shell 0x1003d7c0 with a block of 0x0f */
-const uint8_t *Shell_Set24(void);   /* entry 0x24, the boxes' frames (0x1005fae0) */
+const uint8_t *Shell_Set24(void);
+void Shell_SetMenu(void (*fn)(int on));     /* i76shell 0x10026f80 */
+void Shell_UnsetMenu(void (*fn)(int on));   /* i76shell 0x10026f90 */
+extern int g_sh_popup_up;                   /* 0x1005c8f4 */
+extern uint32_t g_sh_next_msg;              /* 0x10063798 */
+int Shell_Key(void);                        /* i76shell 0x100223b0: the next typed code, 0 none */
+extern int g_sh_kb_key;                     /* the keyboard object's key (0x10068bf0 +0) */
+int Shell_KbRead(void);                     /* i76shell 0x10038640: 0 none, 1 a key, 3 Esc */
+void Shell_KbFlush(void);                   /* i76shell 0x10038590 */
+/* i76shell 0x10038d60: a line's edit at x, y in font f, buf its text (to max characters and max_w
+   pixels); per pass: -2 still editing, then -1 a click (g_sh_edit_x, g_sh_edit_y), 0 Esc or a pop-up's
+   end, 1 Enter or Tab */
+void Edit_Begin(const ShFont *f, int x, int y, char *buf, int max, int max_w);
+int Edit_Pass(void);
+extern int g_sh_edit_x, g_sh_edit_y;        /* 0x10092b10, 0x10092b14 */
+extern int g_sh_editing;                    /* an edit runs: the keys are its own */
+void Bookmark_Save(void);                   /* i76shell 0x1001ad30, pop-up 1 */
+void Bookmark_Load(void);                   /* i76shell 0x100029c0, pop-up 11 */
+void Bookmark_Restore(void);                /* i76shell 0x10002d80 (0xc01d) */   /* entry 0x24, the boxes' frames (0x1005fae0) */
 /* i76shell 0x1000fb10: note k (frame k of set 0x24), waited on until a press in its OK (x, y, w, h) */
 void Shell_Note(int k, int x, int y, int w, int h);
 int Rect_Hit(int x, int y, const void *rect);   /* i76shell 0x10034d20 */

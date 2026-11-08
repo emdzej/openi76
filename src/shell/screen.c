@@ -54,6 +54,18 @@ void Scr_Background(Mw2 *db, int entry)
     free(d);
 }
 
+void Scr_Overlay(Mw2 *db, int entry)
+{
+    uint32_t n;
+    uint8_t *d = Mw2_Unpack(db, entry, &n);
+    if (!d) return;
+    if (n >= 768) memcpy(g_shs.pal, d + n - 768, 768);   /* full screen: as they are */
+    Gfx_Pcx(&g_shs.scr, d, n);
+    Scr_Dirty(g_shs.scr.x0, g_shs.scr.y0, g_shs.scr.x1, g_shs.scr.y1);
+    g_shs.pal_new = 1, g_shs.fade = 1, g_shs.black_first = 1;
+    free(d);
+}
+
 void Scr_Frame(const uint8_t *set, int k, int x, int y, int w, int h)
 {
     Gfx_Frame(&g_shs.scr, set, k, x, y);

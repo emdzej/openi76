@@ -239,4 +239,44 @@ shell runs, in order:
      and the lists. They write addon\vehscn.vcf and .vsf with no lists given, free the lists, and name
      vehscn.vcf as the user's vehicle.
 
-Other screens: the melee's, the options, the bookmarks, network play.
+## The keyboard, the text entry and the bookmarks (ported: shell.c, edit.c, bookmark.c)
+
+- **The keyboard** (0x10021fd0, 0x100223b0): each key message's typed code into a ring of 64: the shell's
+  table by virtual key (0x10061fe8: Backspace 8, Tab 9, Enter 0xd, Esc 0x1b, the arrows 0xc6-0xc9,
+  Insert/Delete/Home/End/PgUp/PgDn 0xc0-0xc5, F1-F12 0xb1-0xbc, Pause 0x1ff, the keypad's), else the
+  key's character in lower case; Control 0x100, Alt 0x400, Shift 0x200. 0x10038640 reads one, drops
+  Control, makes a shifted one upper case, and answers 3 for Esc. The window's procedure reads each key
+  back at once: Esc, with no pop-up up (0x1005c8f4) and no modal pass (0x1006378c), opens pop-up 0, the
+  menu. A line's edit (0x10038d60) takes the key messages itself (PeekMessage), so none reach it then.
+- **The pop-ups' functions** (0x10063788, set by 0x10026f80): run with 1 each pass in the screen's place
+  (after a modal pass, before the screen), with 0 when another pop-up opens. The screen function's
+  message is 0x10063798 once (a pop-up sets 0xc01d to have the screen leave with it), else 0xc004.
+- **A line's edit (0x10038d60)**: the text with "_" after it, drawn as a piece over the screen; a
+  character from 0x20 to 0x7f but '~', in the font, while the text stays under max characters and its
+  width under max pixels; Backspace; Enter or Tab end it with 1, Esc with 0, a click with -1 (its place
+  kept at 0x10092b10), and a pop-up's coming up (0x1005c8f4) with 0.
+- **savegame.dir**: a count, then 0x3c-byte records: +0 the trip's mission, +4 the name (0x20), +0x24
+  the file `save%03d` (+0x28 its number), +0x34 the exe's state before the shell (1 a mission won: the
+  scene shown is the next), +0x38 "No Salv. Manag.". The list (0x1002c2c0) keeps those whose `.cmp` is
+  there; the write (0x1002c220) puts the whole list back and the trip as `save%03d.cmp` (0x1002bc70).
+- **Pop-up 1, the save (0x1001ad30)**: the palette kept, the restore's fill 0x10, picture 0xb over the
+  screen (0x1003de70), SAVE and CANCEL after their texts (their rects' x set from the widths), the list
+  (ten rows 0x18 high from y 0xb8, the font's height and 8), then at once the name's edit (0x1001aea0) at
+  0x113, 0x84 under "Scene %d.". A click while editing: the arrows scroll, a row picks that bookmark (its
+  name edited again, its file overwritten), elsewhere ends the edit. A new name gets the next number
+  after the highest. Enter (or SAVE, 0x1001b390) saves; a name the same as one of the trip's mission asks
+  "Overwrite an existing bookmark?" first (No: the pop-up drawn again and a new edit). The end
+  (0x1001b390 with 0): the palette back, then the menu again after CANCEL when the pop-up came from it,
+  else the screen's redraw. The set-up's boxes go into the record first (0x10007d40).
+- **Pop-up 11, the load (0x100029c0, 0x10002a40)**: picture 0xc, LOAD and CANCEL, the list or "No
+  Games available"; a row shows itself in the header, LOAD copies its record (0x1006aea8) and has the
+  screen leave with 0xc01d.
+- **0xc01d (0x10002d80)**: the trip back from the bookmark: user.rpr removed, the stock freed, the
+  garage reset, its `.cmp` read (0x1002bf00), the trip's mission and the state from the record, the
+  game's kind 2, 0x1008e9f4 set (from a bookmark: no first-mission questions); then 0xc00d after the
+  last mission won, 0xc015 on mission 12, else the salvage's choice (0xc017); with "No Salv. Manag."
+  the car written from the record and 0xc015. Not ported: the player's file (0x10039f30).
+- **Checked:** `--storage-dir`, SAVE BOOKMARK in the garage, "test" typed and Enter: savegame.dir and
+  save000.cmp; a second run's TRIP, LOAD BOOKMARK, the row and LOAD give the same garage.
+
+Other screens: the melee's, the options, network play.

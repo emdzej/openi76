@@ -46,6 +46,8 @@ void Parts_Free(void);
    current record, the ring (from trip4.spc without the field's salvage and with the repaired whole), the
    repairs' list; false without the file */
 bool Spc_Read(const char *path);
+void Spc_Write(const char *path);   /* i76shell 0x1002bc70 (setup.c) */
+void Setup_ListsBack(void);         /* i76shell 0x10007d40: the set-up's boxes into the record, when open */
 /* 0x100206a0: the record g_sh_rec_at's slots into the garage, each with its part on the car */
 void Garage_Load(void);
 /* 0x10020fb0: the state's conditions onto the slots' parts */

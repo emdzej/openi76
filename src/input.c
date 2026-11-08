@@ -192,7 +192,7 @@ static void kb_message(uint32_t lparam, int down)
 }
 
 /* MapVirtualKey(vk, MAPVK_VK_TO_CHAR) for the US layout's keys the exe's table leaves out */
-static int vk_char(int vk)
+int Input_VkChar(int vk)
 {
     switch (vk) {
     case 0xba: return ';';
@@ -219,7 +219,7 @@ static void kb_typed(int vk)
 {
     uint16_t k = kb_vk[vk & 0xff];
     if (!k) {
-        k = (uint16_t)tolower((int)(signed char)vk_char(vk));
+        k = (uint16_t)tolower((int)(signed char)Input_VkChar(vk));
         if (!k) return;
     }
     if (keys_now[0x1d] || keys_now[0x9d]) k |= 0x100;
@@ -234,7 +234,7 @@ static void kb_typed(int vk)
 }
 
 /* a DIK code's Windows virtual key (MapVirtualKey(scan, MAPVK_VSC_TO_VK_EX), the US layout, NumLock on) */
-static int dik_vk(int c)
+int Input_DikVk(int c)
 {
     static const char row1[] = "1234567890", rq[] = "QWERTYUIOP", ra[] = "ASDFGHJKL", rz[] = "ZXCVBNM";
     if (c >= 0x02 && c <= 0x0b) return row1[c - 0x02];
@@ -374,10 +374,10 @@ void Input_Keys(void)
     int n = plat_key_presses(press, 64);
     for (int i = 0; i < n; i++) {
         pressed[press[i]] = 1;
-        key_down(dik_vk(press[i]), dik_lparam(press[i]));
+        key_down(Input_DikVk(press[i]), dik_lparam(press[i]));
     }
     for (int c = 1; c < KEY_COUNT; c++)
-        if (keys_now[c] && !before[c] && !pressed[c]) key_down(dik_vk(c), dik_lparam(c));
+        if (keys_now[c] && !before[c] && !pressed[c]) key_down(Input_DikVk(c), dik_lparam(c));
     for (int c = 1; c < KEY_COUNT; c++)
         if (!keys_now[c] && (before[c] || pressed[c])) key_up(dik_lparam(c));
     memcpy(before, keys_now, sizeof before);

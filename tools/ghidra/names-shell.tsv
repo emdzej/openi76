@@ -150,3 +150,28 @@
 1002bf00	Spc_Read	trip	high	reconfig.spc, trip4.spc or a bookmark's .cmp read back; ported (src/shell/trip.c)
 1001f8b0	Parts_FreeRing	trip	high	the salvage ring freed; ported (Parts_Free)
 1001d240	Stock_Remove	trip	high	user.rpr removed; ported
+10021fd0	Kb_Message	shell	high	a key message's typed code into the ring; ported
+100223b0	Kb_Next	shell	high	the next typed code (the ring, then the key messages); ported
+10038640	Kb_Read	shell	high	a typed code read: 0 none, 1 a key, 3 Esc; ported
+10038590	Kb_Flush	shell	high	the key ring emptied; ported
+10021e10	Kb_Drain	shell	high	the key messages drained, the ring emptied; ported
+10026f80	Shell_SetMenu	shell	high	a pop-up's function (0x10063788); ported
+10026f90	Shell_UnsetMenu	shell	high	a pop-up's function cleared; ported
+10038d60	Edit_Line	shell	high	a line's edit; ported (src/shell/edit.c)
+1003de70	Scr_Overlay	shell	high	a picture on the screen only, with its palette; ported
+1003d0e0	Scr_KeepPalette	shell	high	the palette copied out; ported
+1003d100	Scr_SetPalette	shell	high	the palette put back, set at the present; ported
+1001ad30	Bookmark_Save	shell	high	pop-up 1, the save; ported (src/shell/bookmark.c)
+1001aea0	Bookmark_Edit	shell	high	the save's name edit; ported
+1001b390	Bookmark_SaveMenu	shell	high	the save's pass; ported
+1001b360	Bookmark_AskText	shell	high	"Overwrite an existing bookmark?"; ported
+1001b770	Bookmark_SaveList	shell	high	the save's list; ported
+1002c2c0	Bookmark_Read	shell	high	savegame.dir's bookmarks with their .cmp; ported
+1002c220	Bookmark_Write	shell	high	savegame.dir and save%03d.cmp written; ported
+100029c0	Bookmark_Load	shell	high	pop-up 11, the load; ported
+100031c0	Bookmark_LoadOpen	shell	high	the load's rects, texts and list; ported
+10002a40	Bookmark_LoadMenu	shell	high	the load's pass; ported
+10003070	Bookmark_LoadList	shell	high	the load's list or "No Games available"; ported
+10002d80	Bookmark_Restore	shell	high	0xc01d: the trip back from a bookmark; ported
+1000fe00	Shell_Ask	shell	high	the yes/no box waited on (with a text function); ported (Shell_YesNo)
+10007d40	Setup_ListsBack	setup	high	the set-up's boxes into the record when open; ported

@@ -28,6 +28,10 @@ void Scr_Init(void);                                     /* i76shell 0x1003c670 
 /* i76shell 0x1003d3b0: the database's PCX entry as the screen's background and on the screen; with a
    palette of its own, that set at the present (the screen cleared first) */
 void Scr_Background(Mw2 *db, int entry);
+/* i76shell 0x1003de70: the entry's picture on the screen only (the background kept) and its palette, set
+   at the present with the screen as it is: a pop-up's; the present after its palette is put back
+   (0x1003d100 with 1) shows the background again */
+void Scr_Overlay(Mw2 *db, int entry);
 /* i76shell 0x1003dfe0: a frame set's frame k at x, y (w x h the rectangle it marks drawn) */
 void Scr_Frame(const uint8_t *set, int k, int x, int y, int w, int h);
 void Scr_Restore(int x, int y, int w, int h);           /* i76shell 0x1003dc50: the background back */
