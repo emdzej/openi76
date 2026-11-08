@@ -82,6 +82,8 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
 void Vehicle_Wreck(Node *n, int start);
 /* Chunk_Spawn 0x45b0a0: the node's destruction chunks thrown as debris; 0 without a record */
 int Chunk_Spawn(Node *n);
+/* Chunk_SpawnOne 0x45b3f0: one of them at random, then out of the record */
+int Chunk_SpawnOne(Node *n);
 /* Splash 0x46a3e0: explosion src's damage (Impact_Damage, at rest, against the direction to it) on each
    collision entity but except whose sphere reaches within radius of (x, z) seen from above */
 void Splash(float x, float z, float radius, int32_t force, Node *src, Node *except);

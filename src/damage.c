@@ -622,6 +622,48 @@ int Chunk_Spawn(Node *n)
     return 1;
 }
 
+/* 0x45b3f0 (the wreck's): one of the node's chunks at random thrown as Chunk_Spawn's are, then taken out of
+   its record (the record gone with the last); 0 without a record */
+int Chunk_SpawnOne(Node *n)
+{
+    int count;
+    const Chunk *ch = Chunk_List(n, &count);
+    if (!ch) return 0;
+    int i = crt_rand() % count;
+    const Chunk *k = &ch[i];
+    uint8_t name[8];
+    memcpy(name, &k->a, 4);
+    memcpy(name + 4, &k->b, 4);
+    Node *c = Node_New(NULL, (const char *)name);   /* the original's would crash on none */
+    if (c) {
+        Frame w;
+        Node_FrameIn(&w, n, NULL);
+        Frame_Mul(&c->frame, &w, &k->frame);   /* 0x4527c0 */
+        memcpy(c->centre, k->p, 12);
+        memcpy(&c->radius, &k->p[3], 4);
+        memcpy(c->bmin, k->box, 12);
+        memcpy(c->bmax, k->box + 3, 12);
+        c->flags = 0;
+        Class_Set(c, 53);
+        if (!c->data)
+            Node_Free(c);
+        else {
+            Lod_Add(c, Obj_Name(name, exe_str(0x4dc458)), 0, 0);   /* ".geo" */
+            if (Chunk_Name(n, 0)) {
+                Lod_Select(c, 0);
+                if (c->geom) chunk_skin(c, n, c->geom->faces);
+            }
+            Node_Attach(c, g_chunk_mgr);
+            Debris_First(c);
+            float up[3] = {0, 10.0f, 0};
+            Debris_Throw(c, up);
+        }
+    }
+    Chunk_Remove(n, i);
+    Class_StartAll();   /* 0x425920 */
+    return 1;
+}
+
 /* the node's own wreck: a structure with a mesh whose state is still 1 explodes at the centre of its box's
    floor by its flags (0x400000 "x1_bldx1", 0x800000 "x1_cars1"), throws its debris (0x45b0a0) and
    eight smokes up at 15 m/s; the sum orders of the floor's corners are the two functions' own */
@@ -747,8 +789,6 @@ static int damage_structure(Node *n, uint8_t *p)
     return 0;
 }
 
-/* not ported yet: 0x45b760 a part thrown off (as a "v_chnk" object with a velocity, spinning) */
-static void throw_off(Node *n, const float v[3], int spin, Entity *e) { (void)n, (void)v, (void)spin, (void)e; }
 
 /* 0x434950, class 4's damage (the signs, posts and the like): a packet of the second or fourth kind
    knocks its root away, whatever the amount: its points to 0, thrown with a random velocity (x and z
@@ -766,7 +806,7 @@ static int damage_4(Node *n, uint8_t *p)
     v[0] = fpu_f32(fpu_mul(fpu_sub(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e38)), exe_f32(0x4a5e3c)));
     v[1] = fpu_f32(fpu_mul(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e40)));
     v[2] = fpu_f32(fpu_mul(fpu_sub(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e38)), exe_f32(0x4a5e3c)));
-    throw_off(root, v, 1, e);   /* 0x45b760 */
+    if (e) Part_Throw(root, v, 1, e->c);   /* 0x45b760, with the entity's centre and radius */
     if (e) Entity_Remove(e);    /* 0x423eb0; the original's would crash without one */
     return 1;
 }
@@ -1331,9 +1371,8 @@ void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at)
     if (by && live && is_vehicle(live)) ai_struck(by, 0x10, live, NULL);
 }
 
-/* the wreck's effects: 0 its CB messages dropped (0x46fdb0); not ported yet: 2 a kick (0x476170: 0x476020 by
-   a random quarter), a wheel or a body piece thrown off (0x45b760; a piece as a "v_chnk" object taking the
-   part's class 0x3f children), the fires on the children (0x45b3f0) (the smoke is: smoke_puff) */
+/* the wreck's other steps: 0 its CB messages dropped (0x46fdb0); not ported yet: 3 the AI's death
+   (0x488950), 4 the guns' (0x455370) */
 static void wreck_fx(Node *n, int what, int a)
 {
     (void)a;
@@ -1342,6 +1381,24 @@ static void wreck_fx(Node *n, int what, int a)
 
 /* the next part from a random start among count slots from first that is there and not hidden (bit 1);
    -1 after a full turn */
+/* a part's throw (the wreck's): away from n's middle through the part's place p (in n's space), flat (2 m/s up)
+   at 0x4a5a40's speed, or with all three at 0x4a5a44's; turned into the world by n's rotation */
+static void throw_dir(float out[3], const Node *n, const Node *part, int flat)
+{
+    Frame f;
+    Node_FrameIn(&f, part, n);   /* 0x42e850 */
+    float p[3] = {fpu_f32(f.pos[0]), flat ? 0.0f : fpu_f32(f.pos[1]), fpu_f32(f.pos[2])};
+    double s = flat ? Fast_InvSqrt(fpu_add(fpu_mul(p[0], p[0]), fpu_mul(p[2], p[2])))
+                    : Fast_InvSqrt(fpu_add(fpu_add(fpu_mul(p[0], p[0]), fpu_mul(p[2], p[2])), fpu_mul(p[1], p[1])));
+    float dn[3] = {fpu_f32(fpu_mul(p[0], s)), fpu_f32(fpu_mul(p[1], s)), fpu_f32(fpu_mul(s, p[2]))};
+    float k = exe_f32(flat ? 0x4a5a40 : 0x4a5a44);
+    float v[3] = {fpu_f32(fpu_mul(dn[0], k)), flat ? 2.0f : fpu_f32(fpu_mul(dn[1], k)), fpu_f32(fpu_mul(dn[2], k))};
+    Frame r;
+    Node_FrameIn(&r, n, NULL);   /* 0x42e6d0, its place dropped */
+    r.pos[0] = r.pos[1] = r.pos[2] = 0;
+    Frame_Points((float (*)[3])out, (const float (*)[3])v, 1, &r);   /* 0x452740 */
+}
+
 static int wreck_part(uint8_t *d, int first, int count)
 {
     int start = crt_rand() % count, i = start;
@@ -1372,11 +1429,10 @@ void Vehicle_Wreck(Node *n, int start)
         strncpy(name, exe_str(0x4d57e0), 8);   /* x1_carx1 */
         Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], n);   /* 0x4540d0 */
         int r1 = crt_rand();
-        float pitch = fpu_f32(fpu_add(fpu_mul(fpu_mul((double)r1, exe_f32(0x4a5a3c)), exe_f32(0x4a59ac)), exe_f32(0x4a59ac)));
+        float spin = fpu_f32(fpu_add(fpu_mul(fpu_mul((double)r1, exe_f32(0x4a5a3c)), exe_f32(0x4a59ac)), exe_f32(0x4a59ac)));
         int r2 = crt_rand();
         float k = fpu_f32(fpu_add(fpu_mul((double)r2, exe_f32(0x4a5a3c)), 1.0f));
-        (void)pitch, (void)k;
-        wreck_fx(n, 2, 0);       /* 0x476170 with both */
+        Vehicle_KickRandom(n, spin, k);   /* 0x476170 */
         /* every part at its worst look; the body's textures at frame 3 */
         for (uint32_t i = 0; i < 11; i++) {
             Damage_Look(d, i, 4);
@@ -1418,14 +1474,21 @@ void Vehicle_Wreck(Node *n, int start)
     case 0: {   /* a wheel (0-4) thrown off */
         int i = wreck_part(d, 0, 5);
         if (i < 0) return;
-        wreck_fx(n, 5, i);
-        slot(d, 0x3a8 + (uint32_t)i * 4)->flags |= 1;
+        Node *w = slot(d, 0x3a8 + (uint32_t)i * 4);
+        if (w->child) {   /* the original reads a null one */
+            float v[3];
+            throw_dir(v, n, w->child, 1);
+            Part_Throw(w->child, v, 0, NULL);   /* 0x45b760: the wheel's mesh node */
+        }
+        w->flags |= 1;
         return;
     }
     case 1: {   /* a body piece (10-15) as a "v_chnk" node at the part's place, with its 0x3f children */
         int i = wreck_part(d, 10, 6);
         if (i < 0) return;
         Node *part = slot(d, 0x3a8 + (uint32_t)i * 4);
+        float v[3];
+        throw_dir(v, n, part, 0);
         Node *chunk = Node_Create(NULL);   /* 0x41f320, tagged "v_chnk" (0x4d57cc) */
         Node_FrameIn(&chunk->frame, part, NULL);
         chunk->flags = 0;
@@ -1437,13 +1500,13 @@ void Vehicle_Wreck(Node *n, int start)
                 Node_Attach(c, chunk);
             }
         }
-        wreck_fx(chunk, 6, i);   /* thrown off along the part's direction x 15 */
+        Part_Throw(chunk, v, 0, NULL);   /* 0x45b760 */
         part->flags |= 1;
         return;
     }
-    case 2: case 3:   /* fire on each child at one in two */
+    case 2: case 3:   /* a chunk off each child at one in two */
         for (Node *c = n->child; c; c = c->next)
-            if (crt_rand() & 1) wreck_fx(n, 7, 0);
+            if (crt_rand() & 1) Chunk_SpawnOne(c);   /* 0x45b3f0 */
         return;
     case 4: case 5: {   /* a puff of smoke (CHUNK1 on an odd rand, else CHUNK2) at the vehicle, up at 15 for 15 s */
         const float up[3] = {0, 15.0f, 0};

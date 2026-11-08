@@ -180,3 +180,6 @@ const int32_t *Weapons_DisplayWords(void);
 int Nodes_AxesAlike(Node *a, Node *b);
 /* Muzzle_Pick 0x45d420: the nearest moving entity but vehicle's within 650 m ahead of muzzle, in its cone */
 Node *Muzzle_Pick(Node *muzzle, Node *vehicle);
+/* the port's: a weapon instance still points at n (its muzzle or gun): a freed one's memory is kept, as the
+   original's reads it on (a wreck's thrown parts) */
+bool Weapons_UseNode(const Node *n);

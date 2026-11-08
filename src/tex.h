@@ -38,6 +38,9 @@ uintptr_t Tex_Open(const char *name);
 /* Tex_Close 0x47c030: every texture of the owner released (its pixels, its material when no one else
    uses it); false when it has none */
 bool Tex_Close(uintptr_t owner);
+/* Tex_CopyOwner 0x47bf10: every texture of from given to to as well, at the same frame (the pixels counted
+   again; a private copy is not copied); false when from has none */
+bool Tex_CopyOwner(uintptr_t from, uintptr_t to);
 /* Tex_Refresh 0x47c1b0: the owner's textures fetch their pixels again */
 bool Tex_Refresh(uintptr_t owner);
 /* Tex_Pixels 0x47dfc0: a frame's pixels by name, counted (Tex_PixelsRelease 0x47e4e0 drops the count) */

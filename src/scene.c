@@ -1,5 +1,6 @@
 /* The scene graph (scene.h). In the current rounding mode (render/fpu.h). */
 #include "scene.h"
+#include "weapons.h"
 #include "entity.h"
 #include "exe.h"
 #include "lod.h"
@@ -99,6 +100,7 @@ static void destroy(Node *n)
     if (n->flags & 0x800) Light_Remove(n, &n->flags);
     /* the original leaves the root 0x50a394 pointing at a freed node; the port clears it */
     if (g_root == n) g_root = NULL;
+    if (Weapons_UseNode(n)) return;   /* kept: a weapon instance reads it on, as the original's freed memory */
     free(n);
 }
 

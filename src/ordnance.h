@@ -30,3 +30,7 @@ int Shot_Fly(Node *s, float t);
 /* Shots_Frame 0x4597a0: every live shot of every kind (its node's children, then its second list) flown
    for the frame's step; the spent back to their pool */
 void Shots_Frame(void);
+/* Vehicle_Kick 0x476020: n kicked, spun by the quarter q's turn rates times spin, its velocity times damp
+   when above 2 m/s, then up by up (at most 20 m/s); Vehicle_KickRandom 0x476170: a random quarter, up x 6 */
+void Vehicle_Kick(Node *n, int q, float spin, float up, float damp);
+void Vehicle_KickRandom(Node *n, float spin, float up);

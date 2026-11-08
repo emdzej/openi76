@@ -117,6 +117,11 @@ Node *Particle_New(const uint8_t name[8], float x, float y, float z, const float
 /* Debris_Start 0x45ba80: n made class 53 debris under the chunk manager, gone after life s, thrown at v if
    given; then the classes' start. 0 (and n freed) when the pool gave no data */
 int Debris_Start(Node *n, const float *v, float life);
+/* Part_Throw 0x45b760: n (a part, or a node of parts) taken off and made class 53 debris, thrown at v if
+   given: copied (with its children, levels of detail and textures) under a node at its place whose centre
+   and radius come from the meshes, or with own_box copied itself with box's centre and radius (4 floats);
+   0 (and freed) when the radius is about 0 or the pool gave no data. No life is set */
+int Part_Throw(Node *n, const float *v, int own_box, const float *box);
 /* Debris_Frame 0x45bca0: class 53's per-frame handler, the piece's flight and bounce */
 void Debris_Frame(Node *n);
 /* the node's chunk record freed (0x45b0a0's end) */
@@ -135,3 +140,5 @@ bool Chunk_Add(Node *n, int32_t a, int32_t b, const Frame *f, const int32_t p[4]
 bool Chunk_SetNames(const Node *n, const char *names);
 const char *Chunk_Name(const Node *n, int i);
 const Chunk *Chunk_List(const Node *n, int *count);
+/* chunk i taken out of n's record (the rest moved down); the record freed at none (0x45b3f0's end) */
+void Chunk_Remove(const Node *n, int i);

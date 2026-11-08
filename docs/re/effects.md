@@ -80,7 +80,7 @@ the dropped weapons (0x46ce90-0x46df40) are not yet.
 
 ## Explosions (0x4540d0)
 
-An effect's explosion is made by name, for a hit (0x45c950) or a wreck (not ported yet). The arguments
+An effect's explosion is made by name, for a hit (0x45c950) or a wreck (0x42c580). The arguments
 are an owner, a place and the node it is on. An empty name, or one not in the table, gives nothing.
 
 **The node.**
@@ -336,8 +336,8 @@ Its makers:
   5, for 2.5 s.
 - **A structure's destruction** (0x431320): eight puffs at the box's floor's centre, thrown up at 15 for
   15 s. Each is CHUNK1 when rand() % 2 is non-zero, else CHUNK2.
-- **The wreck** (0x42c580): the smoke of its thrown parts, CHUNK1 or CHUNK2. That one is not ported, with
-  the rest of the wreck's effects.
+- **The wreck** (0x42c580): a puff at the car in four of sixteen steps, CHUNK1 or CHUNK2, up at 15 for
+  15 s. Its thrown wheels and body pieces and its chunks are debris too (vehicles.md "The wreck").
 
 **The flight (0x45bca0, class 53's first frame handler).**
 1. Past its end time (only above), or once its centre leaves the terrain's grid (0x48e210), the piece is

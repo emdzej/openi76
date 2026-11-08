@@ -14,6 +14,7 @@
 #include "terrain.h"
 #include "classes.h"
 #include "lod.h"
+#include "tex.h"
 #include "objects.h"
 #include <math.h>
 #include <stdlib.h>
@@ -839,6 +840,71 @@ int Debris_Start(Node *n, const float *v, float life)
     return 1;
 }
 
+/* Node_CopyTree 0x45c100: n copied under parent (NULL: none; tagged "chnkmgr"): its frame, its hidden bit,
+   no mesh, class or data; its levels of detail and textures; its children likewise; n freed */
+static Node *copy_tree(Node *n, Node *parent)
+{
+    if (!n) return NULL;
+    Node *c = Node_Create(parent);
+    c->frame = n->frame;
+    c->flags = n->flags & 1;
+    c->geom = NULL;
+    c->cls = 0;
+    c->data = NULL;
+    Lod_Copy(n, c);                               /* 0x47d850 */
+    Tex_CopyOwner((uintptr_t)n, (uintptr_t)c);    /* 0x47bf10 */
+    for (Node *k = n->child, *next; k; k = next) {
+        next = k->next;
+        copy_tree(k, c);
+    }
+    Node_Free(n);
+    return c;
+}
+
+int Part_Throw(Node *n, const float *v, int own_box, const float *box)
+{
+    if (!n) return 0;
+    Node *t;
+    if (!own_box) {   /* under a node at its place, its centre and radius from the meshes */
+        t = Node_Create(NULL);
+        Node_FrameIn(&t->frame, n, NULL);
+        t->flags = n->flags & 1;
+        t->geom = NULL;
+        Node_Detach(n);
+        memcpy(&n->frame, exe_data(0x4db298, sizeof n->frame), sizeof n->frame);
+        copy_tree(n, t);
+        float lo[3], hi[3];
+        Node_Bounds(t->child, lo, hi);
+        for (int i = 0; i < 3; i++) t->centre[i] = fpu_f32(fpu_mul(fpu_add(hi[i], lo[i]), exe_f32(0x4a6280)));
+        t->radius = Node_Radius(t->child, t->centre[0], t->centre[1], t->centre[2]);
+    } else {   /* itself at its place, with the box given (an entity's centre and radius) */
+        Frame f;
+        Node_FrameIn(&f, n, NULL);
+        n->frame = f;
+        Node_Detach(n);
+        t = copy_tree(n, NULL);
+        if (!t) return 0;
+        memcpy(t->centre, box, 12);
+        t->radius = box[3];
+    }
+    int32_t rb;
+    memcpy(&rb, &t->radius, 4);
+    if (rb < 0x38d1b717) {   /* about 1e-4 */
+        Node_Free(t);
+        return 0;
+    }
+    Class_Set(t, 0x35);   /* 0x425700 */
+    if (!t->data) {
+        Node_Free(t);
+        return 0;
+    }
+    Node_Attach(t, g_chunk_mgr);
+    Debris_First(t);
+    if (v) Debris_Throw(t, v);
+    Class_StartAll();   /* 0x425920 */
+    return 1;
+}
+
 Node *Particle_New(const uint8_t name[8], float x, float y, float z, const float *v, float life)
 {
     Node *n = Node_Create(NULL);   /* 0x41f320, tagged "chnkmgr" */
@@ -935,6 +1001,14 @@ void Chunk_Drop(const Node *n)
             free(r);
             return;
         }
+}
+
+void Chunk_Remove(const Node *n, int i)
+{
+    ChunkRec *r = chunk_find(n);
+    if (!r || i < 0 || i >= r->count) return;
+    memmove(&r->chunk[i], &r->chunk[i + 1], (size_t)(r->count - i - 1) * sizeof r->chunk[0]);
+    if (--r->count == 0) Chunk_Drop(n);
 }
 
 const Chunk *Chunk_List(const Node *n, int *count)

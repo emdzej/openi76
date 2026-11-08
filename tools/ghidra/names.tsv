@@ -977,7 +977,6 @@
 0045e720	Shot_FlyRolling	weapons	high	types 0xe-0x10, 0x13: mines and blox bounce off the ground (0x45f390), roll and rest; distance counted twice
 0045f390	Shot_GroundContact	weapons	high	a shot's corners marched in 5 m steps along their velocity; the first below the ground
 00475db0	Vehicle_KickAt	vehicles	high	a car kicked from a world point: its quarter's turn rates, up times 4
-00476020	Vehicle_Kick	vehicles	high	turn rates from the quarter's table, velocity damped above 2 m/s, up to 20 m/s, airborne
 00428db0	Artillery_Lookup	weapons	high	each gun's carrier list (0x454f80) and weapon facts (0x455080) into its +0x508 block
 00428d00	Artillery_Remove	weapons	high	the removal callback: a gun off the list; any vehicle flags a look-up
 00428e70	Artillery_Dirty	weapons	high	0x550964 = 1: the guns' weapons looked up again
@@ -1220,3 +1219,10 @@
 0046fd50	Radio_Free	sound	high	a CB record freed with its sound; the next; ported
 0046fda0	Radio_Empty	sound	high	the CB queue empty; ported
 0046fdb0	Radio_Drop	sound	high	a dead speaker's messages dropped, the playing one cut by cmike.wav; ported
+00476020	Vehicle_Kick	vehicles	high	a vehicle spun by a quarter's turn rates and lifted; ported
+00476170	Vehicle_KickRandom	vehicles	high	the wreck's kick: a random quarter, the lift x 6; ported
+0045b760	Part_Throw	effects	high	a part detached, copied and made class 53 debris, thrown; ported
+0045c100	Node_CopyTree	effects	high	a node and its children copied (levels, textures), the node freed; ported
+0047bf10	Tex_CopyOwner	tex	high	an owner's textures given to another at their frames; ported (no timers)
+0045b3f0	Chunk_SpawnOne	effects	high	one random destruction chunk thrown, taken out of the record; ported
+0042e850	Node_PosIn	scene	high	a node's position in an ancestor's space, as floats; ported (Node_FrameIn)

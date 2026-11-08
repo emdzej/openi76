@@ -143,6 +143,26 @@ bool Tex_Bind(uintptr_t owner, const char *name, const char *material)
     return true;
 }
 
+bool Tex_CopyOwner(uintptr_t from, uintptr_t to)
+{
+    bool any = false;
+    for (TexUse *u = uses; u; u = u->next)
+        if (u->owner == from) any = true;
+    if (!any) return false;   /* 0x47cc00: no record of the owner */
+    TexUse *list = uses;   /* the new uses go in front: the walk sees only the old ones */
+    for (TexUse *u = list; u; u = u->next) {
+        if (u->owner != from) continue;
+        u->mat->users++;
+        TexUse *c = use_new(to, u->name, u->mat);
+        /* an animated material's timer (0x47eac0 / 0x47eb50): not yet ported */
+        memcpy(c->count, u->count, sizeof c->count);
+        memcpy(c->frame, u->frame, sizeof c->frame);
+        c->flags = u->flags & ~1u;
+        c->pixels = (u->flags & 2) ? NULL : Tex_Pixels(c->frame);
+    }
+    return true;
+}
+
 const Texture *Tex_Get(uintptr_t owner, const char *name)
 {
     if (!owner || !name) return NULL;

@@ -330,7 +330,7 @@ The vehicle data's fields the step uses:
 `Vehicle_State` 0x42b830 (`src/damage.c`) runs before each physics sub-step (and once a frame for a far
 vehicle), with the sub-step's time. It works from the flags +0x454 as they are on entry:
 
-- With 0x8000 (dying) but not 0x4000, the wreck begins (0x42c580, not ported).
+- With 0x8000 (dying) but not 0x4000, the wreck begins (0x42c580).
 - Dead (0x20): a running engine stops (bit 1 cleared, sound 2), and the copy loses bits 1 and 8.
 - Otherwise:
   - The lights' key (+0x100) goes to `Vehicle_Lights` 0x42d660 and is cleared.
@@ -611,12 +611,13 @@ entity's cached sphere (0x4286c0).
 
 **The start:**
 
-1. The timer +0x450 becomes 10 and the flags get 0x80008000. Then 0x46fdb0 runs (a list at 0x4dd904) and
-   the smoke stops (0x46e220). Bit 0x100 stays set.
+1. The timer +0x450 becomes 10 and the flags get 0x80008000. Then its CB messages are dropped (0x46fdb0,
+   audio.md) and the smoke stops (0x46e220). Bit 0x100 stays set.
 2. The lights go out: bit 0x40 is cleared, then `Vehicle_Lights(n, 0)`, and `Light_Remove` when the node
    has a light (0x800). The brake lamps' node (+0x3a4) is hidden (flag 1).
-3. The explosion "x1_carx1" goes off at the vehicle (0x4540d0). Two rands give the sound's pitch (0x476170):
-   `r × 2⁻¹⁵ × 2 + 2` and `r × 2⁻¹⁵ + 1`.
+3. The explosion "x1_carx1" goes off at the vehicle (0x4540d0). Two rands give a kick (0x476170): the spin
+   `r × 2⁻¹⁵ × 2 + 2` and the lift `r × 2⁻¹⁵ + 1`. The kick (0x476020) spins the car by a random quarter's
+   turn rates (0x4a66b8) times the spin. It then lifts it by the lift × 6, at most to 20 m/s up.
 4. Parts 0-10 get `Damage_Look` at level 4. The five body sides get texture frame 3 (as in the damage).
 5. `Node_SetFlags(n, 0x200)`, then the sounds 2 and 7.
 6. **For the user's vehicle:** only the menu keys, the death camera (0x407010 with 0xfefe), the
@@ -629,17 +630,31 @@ entity's cached sphere (0x4286c0).
 
 | Case | Effect |
 |---|---|
-| 0 | A wheel thrown off. From `rand % 5`, the next of parts 0-4 that is there and not hidden is thrown (0x45b760), and then hidden. Part 5 is never one. |
-| 1 | A body piece. The same over parts 10-15 (`rand % 6`). A node tagged "v_chnk" (0x41f320, no parent) takes the part's world frame, flags 0 and no mesh. The part's class 0x3f children move into it. It is thrown along the part's direction × 15, and the part is hidden. |
-| 2, 3 | Fire (0x45b3f0) on each child of the vehicle, at one rand in two. |
+| 0 | A wheel thrown off. From `rand % 5`, the next of parts 0-4 that is there and not hidden. Its mesh node (the part's first child) is thrown (0x45b760), and the part is hidden. Part 5 is never one. The throw goes away from the car's middle through the wheel's place (0x42e850), flat, at 0x4a5a40's speed, and 2 m/s up, turned by the car's rotation. |
+| 1 | A body piece. The same over parts 10-15 (`rand % 6`). A node tagged "v_chnk" (0x41f320, no parent) takes the part's world frame, flags 0 and no mesh. The part's class 0x3f children move into it. It is thrown along the part's direction (all three axes) at 0x4a5a44's speed, and the part is hidden. |
+| 2, 3 | One destruction chunk (0x45b3f0) off each child of the vehicle, at one rand in two. A random one of the child's chunks (Chunk_Add's, the SCHK records) is thrown up at 10 m/s as `Chunk_Spawn`'s are, then taken out of the record. |
 | 4, 5 | Smoke (0x45c780) at the vehicle, 15 up: 0x4d5394 on an odd rand, else 0x4d538c. |
 | 6, 7 | An explosion "x1_cars1" near: three rands, `(r - 0x7fff) >> 1`, scaled by the entity's +0x10 and 6.1e-5 (y 1.5e-5). |
 | 8-15 | Nothing. |
 
 Both explosions are ported (effects.md "Explosions"). Each is owned by the vehicle and sits on it, and the
-"x1_cars1" offsets are added to the vehicle's place. The other effects (the thrown debris, fires, smoke,
-sounds) are not ported yet. Every rand is taken, so the sequence stays the original's.
+"x1_cars1" offsets are added to the vehicle's place. Every rand is taken, so the sequence stays the
+original's.
+
+**A thrown part (0x45b760, also class 4's knocked-off signs, 0x434950)** becomes class 53 debris under the
+chunk manager, thrown with the velocity given (0x4617e0: plus noise, a spin). No life is set. The part is
+detached. A copy of it is made, with its frame, hidden bit, levels of detail (0x47d850) and textures at
+their frames (0x47bf10), and its children likewise (0x45c100). Then the part is freed. The copy's centre
+and radius come from one of two places:
+- the wreck's: a new node at the part's world place holds the copy at the identity, the centre the middle
+  of the meshes' box (0x42eb90) and the radius the farthest vertex from it (0x42e9f0);
+- the sign's: the copy itself at the world place, with the entity's centre and radius.
+
+It is dropped when the radius is about 0 (below 1e-4) or the debris pool is out.
+
+A wrecked car's weapons still point at its thrown muzzle nodes, which the original reads on as freed
+memory. The port keeps the memory of a node a weapon instance points to.
 
 Checked: `diff_objects.py --call wreck` (the start, then forty steps per vehicle: the timer, the flags,
-every part's flags, children and state) is identical on t01, s04, t15, s01, a01, t10 and t05, and upside
-down on s04.
+every part's flags, children and state, the kicks and throws) is identical on t01, s04, t15, s01, a01,
+t10 and t05, and upside down on t01 and s04.

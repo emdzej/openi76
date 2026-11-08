@@ -899,8 +899,8 @@ static int ground_contact(Node *s, Contact3 *r, float t, const float (*pts)[3], 
 /* 0x476020: vehicle n kicked: spun by the quarter q's turn rates (0x4a66b8: about +-22.5 and +-11.25
    degrees a second about x and z) times spin, its velocity times damp when above 2 m/s, then up by up
    (to at most 20 m/s), its speed and that speed's inverse (1e30 when about 0) anew, and in the air
-   (+0x454 bit 4). Also called by 0x476170 */
-static void vehicle_kick(Node *n, int q, float spin, float up, float damp)
+   (+0x454 bit 4). Also called by Vehicle_KickRandom 0x476170 */
+void Vehicle_Kick(Node *n, int q, float spin, float up, float damp)
 {
     uint8_t *d = n->data;
     for (int i = 0; i < 3; i++) wr_f(d + 0xc8 + 4 * i, F32(MUL(exe_f32(0x4a66b8 + 12 * (uint32_t)q + 4 * (uint32_t)i), spin)));
@@ -919,6 +919,13 @@ static void vehicle_kick(Node *n, int q, float spin, float up, float damp)
     memcpy(d + 0x454, &f, 4);
 }
 
+/* Vehicle_KickRandom 0x476170 (the wreck's): by a random quarter (rand's sign kept, as C's %), up times 6 */
+void Vehicle_KickRandom(Node *n, float spin, float up)
+{
+    float u = fpu_f32(fpu_mul(up, exe_f32(0x4a6814)));
+    Vehicle_Kick(n, crt_rand() % 4, spin, u, 1.0f);
+}
+
 /* 0x475db0: n kicked from the world point at: the quarter of n it lies in (by the signs of its x and z in
    n's frame: 0 left behind, 1 right ahead... x > 0 gives 1 or 3, z > 0 gives 0 or 1), up times 4 */
 static void vehicle_kick_at(Node *n, const float at[3], float spin, float up, float damp)
@@ -928,7 +935,7 @@ static void vehicle_kick_at(Node *n, const float at[3], float spin, float up, fl
     float l[3];
     Frame_Points((float(*)[3])l, (const float(*)[3])at, 1, &inv);   /* 0x452740 */
     int q = fbits(l[0]) > 0 ? (fbits(l[2]) > 0 ? 1 : 3) : (fbits(l[2]) > 0 ? 0 : 2);
-    vehicle_kick(n, q, spin, F32(MUL(up, 4.0f)), damp);   /* 0x4a679c */
+    Vehicle_Kick(n, q, spin, F32(MUL(up, 4.0f)), damp);   /* 0x4a679c */
 }
 
 /* 0x468580: a sound by name, at the user's */

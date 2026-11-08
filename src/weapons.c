@@ -843,6 +843,13 @@ int32_t g_net_game;       /* 0x4dc4e4: a network game (0x461900) */
 void (*g_weapon_fire)(WeaponInst *w, const WeaponDef *d, int n, float late);   /* 0x458710 */
 void (*g_weapon_click)(void);   /* the checks' log of the empty click, instead of its sound */
 
+bool Weapons_UseNode(const Node *n)
+{
+    for (int i = 0; i < g_weapon_count; i++)
+        if (g_weapons[i].muzzle == n || g_weapons[i].gun == n) return true;
+    return false;
+}
+
 static float getf(const void *p) { float f; memcpy(&f, p, 4); return f; }
 static void setf(void *p, float f) { memcpy(p, &f, 4); }
 static int32_t fbits(float f) { int32_t v; memcpy(&v, &f, 4); return v; }
