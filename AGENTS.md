@@ -49,8 +49,7 @@ splash; the turrets turn and the artillery fires (docs/re/weapons.md); the damag
 rockets' contrails, the flame throwers' flames, the skid marks and the debris (docs/re/effects.md), with the wrecks' kicks,
 thrown parts and chunks; the helicopters fly and crash (docs/re/vehicles.md). The shell runs: the main menu, training, the trip with its garage,
 set-up, bookmarks and pop-ups, AUTO MELEE's scenarios and instant melee on their map, with the melee's
-spawns, waves and standings (docs/re/map.md). The melee's score box shows with Ctrl+S (docs/re/map.md). Not ported yet: the controls' pop-up, the set-up's paint and
-car picture, and network play (docs/re/shell.md). The music plays disc 2's audio tracks from its BIN and CUE
+spawns, waves and standings (docs/re/map.md). The melee's score box shows with Ctrl+S (docs/re/map.md). Not ported yet: the controls' pop-up and network play (docs/re/shell.md). The music plays disc 2's audio tracks from its BIN and CUE
 (`--asset cd2=I76_CD2.BIN --asset cd2cue=I76_CD2.CUE`; docs/re/audio.md "The music"). The sound manager runs, with the engines,
 horns, siren, tyres, the cockpit's, weapons' and radar's sounds and the CB radio's queue (docs/re/audio.md:
 every sound's record, its admission by priority and voices, its 3D place, through the port's DirectSound

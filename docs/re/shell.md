@@ -185,8 +185,8 @@ shell runs, in order:
    BOOKMARK opens pop-up 1.
 6. **0xc00f (0x10003fe0; screen 0x100043d0, 5.8 KB)**: the car's set-up (paint, the guns on their hard
    points), then the car written (+0xc, +0x1c) and the mission (0xc010). Ported in part
-   (src/shell/setup.c, docs/re/setup.md): the boxes, their edits, the repairs, the armour and DONE's
-   writes; the paint and the car's picture not yet.
+   (src/shell/setup.c, docs/re/setup.md): the boxes, their edits, the repairs, the armour, DONE's
+   writes, the car's picture (0x100114d0) and, from the melee's map, the paint (0x10007bc0).
 7. **0xc015 (0x10033c60; screen 0x10034460; ported, src/shell/tripend.c)**: after mission 12 (trip
    0xc), picture 0x1f, "You are unconscious": the car's first slot gets the catalogue's first engine
    (kind 2) whose +0x32 is '4'; the ring's parts but EMPTY sorted into the lists (on the car made whole,
