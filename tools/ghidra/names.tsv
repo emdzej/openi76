@@ -1432,3 +1432,8 @@
 00452ab0	Shake_On	camera	med	0x4db32c
 00433240	Eye_Knock	camera	med	the blow into the eye's data +0x2c (unread); ported (src/damage.c knock)
 00468a70	ForceFeedback_Slot	input	med	a force-feedback effect's slot when the driver (0x4dc8ac) is loaded
+004289f0	Damage_Artillery	damage	high	class 8's damage: the 0x508 block's points; dead, exploded, parts' state 3, gun hidden, chunks, ten smokes; ported, diffed
+00428990	Gun_Hide	damage	high	the first class 0x32 node along the list, depth first, flagged 1
+00431c60	Damage_Heli	damage	high	class 9's damage: the 0x508 block's points; falling (0x10), the controls set, x1_bldx1; ported, diffed
+00432ed0	Damage_Gate	damage	high	class 7's damage (+0x98): state 1, 0x200, exploded; re-entered by its own splash (stack overflow); ported, diffed
+004346b0	Damage_Class10	damage	high	class 0xa's damage (+0xc): as class 7's; ported, diffed

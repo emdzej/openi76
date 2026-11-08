@@ -62,6 +62,11 @@ if [ -z "$1" ]; then
       done
     done
   done
+  # the guns', helicopters', gates' and class 0xa's destruction where they stand (t12: all but 0xa; t05: 0xa)
+  for m in t12.msn t05.msn; do
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" --call kill 2>&1) || fail=1
+    echo "$out" | grep -q identical || { echo "[--call kill $m]"; echo "$out" | tail -4; }
+  done
   # the shots' flights, the radar and the turrets where rockets and missiles fly (s01: types 2, 3, 5, 8)
   for c in fly radar aim turret; do
     out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py s01.msn --call $c 2>&1) || fail=1

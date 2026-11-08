@@ -865,6 +865,150 @@ static int damage_4(Node *n, uint8_t *p)
     return 1;
 }
 
+static bool state_tree(Node *n, int state);
+
+/* 0x428990: the first gun (class 0x32) along the list from n, depth first, gets 1 (not drawn) on its tree */
+static int gun_hide(Node *n)
+{
+    for (; n; n = n->next) {
+        if (n->cls == 0x32) {
+            Node_SetFlags(n, 1);
+            return 1;
+        }
+        if (n->child && gun_hide(n->child) == 1) return 1;
+    }
+    return 0;
+}
+
+static void at_node(float at[3], const Node *n)
+{
+    for (int i = 0; i < 3; i++) at[i] = fpu_f32(n->frame.pos[i]);
+}
+
+/* 0x4289f0, class 8's (the artillery): the root's points (its 0x508 block's first word) against each kind;
+   none while it is dead (+0x454 0x20). The lethal one: the points 0, 0x200 on the tree, dead, the root
+   marked and the collision refitted, x1_bldx1 at its place on itself with sound 7; each of the five parts
+   of the table 0x4d5378 (the data's +0x408 slots) put in state 3 drops the entity's sphere; the first gun
+   is hidden, but only when one is found before the end of the root's own list (the walk starts at the
+   root, a quirk kept); the root's children throw their chunks and ten smokes stand at the place */
+static int damage_8(Node *n, uint8_t *p)
+{
+    Node *root = Node_Root(n);   /* 0x42e6b0 */
+    uint8_t *d = root->data;
+    uint8_t *hp = *Data_Ptr(d, 0x508);
+    if (!p || (rdu(d + 0x454) & 0x20)) return 0;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i);
+        if (rd32(hp) >= a) {
+            put32(hp, rd32(hp) - a);
+            continue;
+        }
+        put32(hp, 0);
+        Node_SetFlags(root, 0x200);
+        put32(d + 0x454, (int32_t)(rdu(d + 0x454) | 0x20));
+        flag_root(root);     /* 0x42e920 */
+        Collide_Refit(root);  /* 0x46b280 */
+        float at[3];
+        at_node(at, root);
+        char name[8] = {0};
+        strncpy(name, exe_str(0x4d539c), 8);   /* x1_bldx1 */
+        Explosion_Spawn((const uint8_t *)name, root, at[0], at[1], at[2], root);
+        sound(7, root);   /* 0x4683c0 */
+        for (int k = 0; k < 5; k++) {
+            Node *part = slot(d, 0x408 + 4 * exe_u32(0x4d5378 + 4u * k));
+            if (part && Lod_SetState(part, 3) == 1) sphere_drop((Entity *)slot(d, 0));   /* 0x4286c0 */
+        }
+        Node_SetFlags(root, 0x200);
+        gun_hide(root);
+        for (Node *c = root->child; c; c = c->next) Chunk_Spawn(c);   /* 0x45b0a0 */
+        float still[3] = {0, 0, 0};
+        for (int k = 0; k < 10; k++) smoke_puff(crt_rand() % 2 != 0, at, still, 15.0f);
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x431c60, class 9's (the helicopters): as the artillery's on the 0x508 block's points, none while it
+   falls or is dead (+0x454 0x30). The lethal one sets falling (0x10) and the controls +0xc8 0.2, +0xcc 0,
+   +0xd0 -0.5, with x1_bldx1 at the node's place on nothing; the crash itself comes later */
+static int damage_9(Node *n, uint8_t *p)
+{
+    uint8_t *d = n->data;
+    uint8_t *hp = *Data_Ptr(d, 0x508);
+    if (!p || (rdu(d + 0x454) & 0x30)) return 0;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i);
+        if (rd32(hp) >= a) {
+            put32(hp, rd32(hp) - a);
+            continue;
+        }
+        put32(hp, 0);
+        put32(d + 0x454, (int32_t)(rdu(d + 0x454) | 0x10));
+        put32(d + 0xc8, 0x3e4ccccd);
+        put32(d + 0xcc, 0);
+        put32(d + 0xd0, (int32_t)0xbf000000u);
+        float at[3];
+        at_node(at, n);
+        char name[8] = {0};
+        strncpy(name, exe_str(0x4d539c), 8);
+        Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], NULL);
+        return 1;
+    }
+    return 0;
+}
+
+/* 0x432ed0 (class 7, a turret's base, from the data's +0x98) and 0x4346b0 (class 0xa, from +0xc): the
+   lethal kind puts the tree in state 1 (0x482f20), 0x200 on it, the root marked, the collision refitted,
+   x1_bldx1 at the node on itself and sound 7. Class 7's packet is not checked for NULL (kept: the callers
+   always give one); a part without data takes its root's when that is a class 7.
+   Neither checks that the node is already destroyed, and the explosion's splash (x1_bldx1's: 15 of the
+   second kind) reaches the node itself: in the original it comes back here with the points at 0, destroys
+   it again and explodes again, until the stack overflows (a gate, t12's bcaikgat, in the emulator). The
+   port's one deviation: a call on the node while its explosion is being spawned does nothing */
+static Node *s_dying;
+
+static int damage_points(Node *n, uint8_t *p, uint32_t off)
+{
+    uint8_t *d = n->data;
+    if (!d && off == 0x98) {
+        n = Node_Root(n);
+        if (!n || n->cls != 7 || !(d = n->data)) return 0;
+    }
+    if (n == s_dying) return 0;
+    uint16_t m;
+    memcpy(&m, p + 4, 2);
+    for (int i = 0; i < 4; i++) {
+        if (!(m & (1u << i))) continue;
+        int32_t a = rd32(p + 8 + 4 * i);
+        if (rd32(d + off) >= a) {
+            put32(d + off, rd32(d + off) - a);
+            continue;
+        }
+        put32(d + off, 0);
+        state_tree(n, 1);
+        Node_SetFlags(n, 0x200);
+        flag_root(n);
+        Collide_Refit(n);
+        float at[3];
+        at_node(at, n);
+        char name[8] = {0};
+        strncpy(name, exe_str(0x4d539c), 8);
+        Node *was = s_dying;
+        s_dying = n;
+        Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], n);
+        s_dying = was;
+        sound(7, n);
+        return 1;
+    }
+    return 0;
+}
+
 int Class_Damage(Node *n, uint8_t *p, const float *at)
 {
     int cls = n->cls;
@@ -880,8 +1024,10 @@ int Class_Damage(Node *n, uint8_t *p, const float *at)
     case 1: return Vehicle_Damage(n, p, at);
     case 2: return damage_structure(n, p);
     case 4: return damage_4(n, p);
-    /* not ported yet: 9 0x431c60,
-       8 0x4289f0, 7 0x432ed0, 0xa 0x4346b0 */
+    case 8: return damage_8(n, p);
+    case 9: return damage_9(n, p);
+    case 7: return damage_points(n, p, 0x98);
+    case 0xa: return damage_points(n, p, 0xc);
     default: return 0;
     }
 }

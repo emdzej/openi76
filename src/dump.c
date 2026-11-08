@@ -1650,6 +1650,63 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 69: {   /* a gun's, a helicopter's, a turret's destruction (0x4289f0, 0x431c60, 0x432ed0, 0x4346b0
+                        through Class_Damage): the nearest intact node of class 7, 8, 9 or 0xa (the entities'
+                        trees, depth first) hit by 100000 of the first kind; the result, the rand seed, its
+                        class and flags, its points' words, its children's flags, its entity's sphere, then
+                        each piece of debris as for 35 */
+            Node *best = NULL;
+            double bd = 0;
+            for (int i = 0; i < MAX_ENTITIES; i++) {
+                Node *st[64];
+                int sp = 0;
+                if (g_entities[i].node) st[sp++] = g_entities[i].node;
+                while (sp) {
+                    Node *s = st[--sp];
+                    if (s->next && sp < 64) st[sp++] = s->next;
+                    if (s->child && sp < 64) st[sp++] = s->child;
+                    if ((s->cls != 7 && s->cls != 8 && s->cls != 9 && s->cls != 0xa) || (s->flags & 0x200) || !s->data)
+                        continue;
+                    if (s != g_entities[i].node && s->cls != 7 && s->cls != 0xa) continue;
+                    double dx = s->frame.pos[0] - n->frame.pos[0], dy = s->frame.pos[1] - n->frame.pos[1],
+                           dz = s->frame.pos[2] - n->frame.pos[2], d = dx * dx + dy * dy + dz * dz;
+                    if (!best || d < bd) best = s, bd = d;
+                }
+            }
+            if (!best) break;
+            uint8_t pk[0x1c] = {0};
+            uint16_t m = 1;
+            uint32_t a = 100000;
+            memcpy(pk + 4, &m, 2);
+            memcpy(pk + 8, &a, 4);
+            float at[3] = {0, 0, 0};
+            g_fpu_round = FPU_DOWN;
+            int32_t r = Class_Damage(best, pk, at);
+            uint32_t b[16 + 16] = {0};
+            b[0] = (uint32_t)r, b[1] = crt_seed(), b[2] = (uint32_t)best->cls, b[3] = best->flags;
+            uint8_t *d = best->data;
+            if (best->cls == 8 || best->cls == 9) {
+                memcpy(&b[4], d + 0x454, 4);
+                memcpy(&b[5], *Data_Ptr(d, 0x508), 4);
+                memcpy(&b[6], d + 0xc8, 12);
+            } else
+                memcpy(&b[4], d + (best->cls == 7 ? 0x98 : 0xc), 4);
+            int k = 9;
+            for (Node *c = best->child; c && k < 16; c = c->next) b[k++] = c->flags;
+            Entity *e = Entity_OfNode(best);
+            if (e) memcpy(&b[16], e->c, 16);
+            call_line(b, sizeof b);
+            for (Node *c = g_chunk_mgr->child; c; c = c->next) {
+                uint8_t q[0x24 + 24 + 0x28 + 0x44];
+                memcpy(q, c->frame.m, 0x24);
+                memcpy(q + 0x24, c->frame.pos, 24);
+                memcpy(q + 0x3c, c->centre, 0x28);
+                memcpy(q + 0x64, c->data, 0x40);
+                memset(q + 0xa4, 0, 4);
+                call_line(q, sizeof q);
+            }
+            break;
+        }
         case 68: {   /* the wreck hidden (0x42b830's time-up branch): the wreck started and stepped forty
                         times, then its time run out; the flags, the moving and static lists' lengths and,
                         for n and each child, its flags and whether it has a mesh */

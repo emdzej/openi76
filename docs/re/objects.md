@@ -310,6 +310,43 @@ fourth kind (mask 0xa) knocks the object's root away:
 
 Network play's message (0x465520) is skipped. The handler returns 1.
 
+## The guns', helicopters' and gates' damage
+
+`Class_Damage` 0x425df0 sends classes 7, 8, 9 and 0xa to their own handlers. Each goes through the
+packet's four kinds in order, as a structure's does: an amount larger than the points left destroys, a
+smaller one is taken off. All four spawn `x1_bldx1` (0x4d539c) at the node's place when destroyed.
+
+- **Class 8, an artillery gun (0x4289f0).** Its points are the first word of the data's 0x508 block. It
+  takes nothing while dead (+0x454 0x20). When it dies:
+  1. the points go to 0, the tree gets 0x200, the data's +0x454 gets 0x20;
+  2. the root is marked (0x42e920) and the collision refitted (0x46b280);
+  3. the explosion sits on the root, with sound 7;
+  4. the five parts of the table 0x4d5378 (the data's +0x408 slots: 0, 1, 1, 2, 3) go to state 3, and each
+     that changes drops the entity's cached sphere (0x4286c0);
+  5. 0x200 again, then the first gun (class 0x32) is hidden (flag 1, 0x428990). The search starts at the
+     root and walks its own list, depth first;
+  6. each of the root's children throws its chunks (0x45b0a0);
+  7. ten smokes (CHUNK1 or CHUNK2 by a rand's parity) stand at the place for 15 s.
+- **Class 9, a helicopter (0x431c60).** The same points. It takes nothing while falling or dead (+0x454
+  0x30). The lethal kind sets falling (0x10) and its controls: +0xc8 0.2, +0xcc 0, +0xd0 -0.5. The
+  explosion sits on nothing, with no sound. The crash comes later.
+- **Class 7, a gate or a turret's base (0x432ed0), points at +0x98; class 0xa (0x4346b0), at +0xc.** A
+  class 7 node without data takes its root's when the root is a class 7. When destroyed:
+  1. the tree goes to state 1 (0x482f20), with 0x200;
+  2. the root is marked and the collision refitted;
+  3. the explosion sits on the node, with sound 7.
+
+  Neither handler checks that the node is already destroyed. The explosion's splash (15 of the second
+  kind) reaches the node itself, so the original comes back in with the points at 0. It destroys the node
+  again and spawns another explosion, until the stack overflows. In the emulator this happens to t12's
+  gate `bcaikgat`. The port's deviation: while the node's explosion is being spawned, a call on that node
+  does nothing.
+
+Checked: `diff_objects --call kill` on t12 (an artillery gun, the helicopters, a gate) and t05 (a class
+0xa), with the same guard in the emulator. For each vehicle, the nearest intact one takes 100000 of the
+first kind. It compares the result, the seed, the flags, the points' words, the children's flags, the
+sphere and every piece of debris.
+
 ## An entity's removal (0x423eb0)
 
 The removal callbacks run first; they are registered with 0x423d10, up to 0x38 of them at 0x54f6d8. Then:
