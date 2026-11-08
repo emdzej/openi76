@@ -191,7 +191,8 @@ The actions go into the user's vehicle's data:
 - `show_notepad` toggles the notepad (docs/re/fsm.md "The notepad"), after the specials and before the horn.
 - `show_map` shows the mission's map (docs/re/fsm.md "The map"), before the notepad.
 - `poetry` asks Taurus for a poem (docs/re/audio.md "The poetry").
-- **Not ported yet:** the combat view.
+- `toggle_cmbt_view` (0x4deffa, 0x480940): the cockpit (mode 0xd) when the last view was another, else back to
+  the last other preset.
 
 The shipped `input.map` drives with the keypad's arrows (scan codes 0x48, 0x50, 0x4b, 0x4d: `UpArrow` and
 the others are the keypad's). The grey arrows and the grey Page Up and Page Down move the pilot's glance

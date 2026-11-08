@@ -1423,3 +1423,4 @@
 004513a0	Poetry_Decline	radio	med	the missions where Taurus declines (1) or is absent (2)
 004513c0	Poetry_Ask	radio	med	the poetry key: the asking, Taurus's poem, the answer on the CB; ported
 004512f0	Poetry_ShuffleCmp	radio	med	qsort's random comparison
+00480940	View_Combat	input	med	toggle_cmbt_view: the cockpit or the last other preset; ported (src/input.c)

@@ -1183,7 +1183,15 @@ void User_Controls(void)
     }
     if (*INPUT_AT(0x4deff7)) Radar_ChooseKind(n, 1);   /* frontal_target, 0x421760: the one ahead */
     if (*INPUT_AT(0x4deff8)) Radar_Clear(n);   /* reset_target */
-    /* not ported yet: the combat view (0x480940) */
+    if (*INPUT_AT(0x4deffa)) {   /* the combat view (0x480940): the cockpit's, or back to the last other preset */
+        if (!g_view_cockpit) {
+            Camera_SetMode(g_user_entity, 0xd);
+            g_view_cockpit = 1;
+        } else {
+            Camera_SetMode(g_user_entity, g_view_preset);
+            g_view_cockpit = 0;
+        }
+    }
 }
 
 /* ---- set-up ---- */
