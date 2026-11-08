@@ -365,6 +365,15 @@ Node *Fsm_Named(const char *name)
     return NULL;
 }
 
+/* the port's (the traces'): the script's name of a node, or NULL */
+const char *Fsm_NameOf(const Node *n)
+{
+    if (!g_fsm_loaded || !n) return NULL;
+    for (int32_t i = 0; i < g_fsm.n_entities && i < ent_cap; i++)
+        if (Fsm_Entity(i) == n) return (const char *)at(g_fsm.entities + (uint32_t)i * 0x60);
+    return NULL;
+}
+
 /* the port's (the autopilot's): the user's car sent along the path named name (the first of that name), as
    the script's goto at speed; 1 when n stands within r of its first point (its last with last), -1 when
    there is no such path */
@@ -1006,10 +1015,26 @@ static void destroy(Node *n)
         Structure_Destroy(n);
 }
 
+/* the port's (the autopilot's apkill test aid): the script's destroy */
+void Fsm_Destroy(Node *n) { if (n) destroy(n); }
+
 static void action(uint32_t m, int32_t index)
 {
     int32_t code = W(g_fsm.actions + (uint32_t)index * 0x54 + 0x50);
     Node *a, *b;
+    static int trace = -1;   /* the port's: --param fsmtrace=1 logs the script's writes and CB lines */
+    if (trace < 0) {
+        char v[8];
+        trace = plat_param("fsmtrace", v, sizeof v) && atoi(v);
+    }
+    if (trace && (code == 7 || code == 8 || code == 47 || code == 20 || code == 19)) {
+        char t[120];
+        int ip = (int)((W(m + M_IP) - W(m + M_CODE)) / 8);
+        if (code == 20 || code == 19) snprintf(t, sizeof t, "OpenI76: fsm ip %d at %.1f s: cb %s", ip, g_clock_total, cb_name(m));
+        else snprintf(t, sizeof t, "OpenI76: fsm ip %d at %.1f s: [%u] %d -> %d", ip, g_clock_total,
+                      (unsigned)A(m, 0), (int)I(m, 0), code == 8 ? (int)I(m, 0) + 1 : (int)I(m, 1));
+        plat_log(t);
+    }
     switch (code) {
     case 0: break;   /* null */
     case 1: E(m, 0); break;   /* behave 0x40a550: "not implemented" */
@@ -1072,7 +1097,16 @@ static void action(uint32_t m, int32_t index)
     case 28: SET(m + M_FLAG, I(m, 1) < I(m, 0)); break;    /* isGreater */
     case 29: SET(m + M_FLAG, I(m, 0) < I(m, 1)); break;    /* isLesser */
     case 30: E(m, 0); SET(m + M_FLAG, 0); break;   /* test 0x40a970: "not implemented" */
-    case 31: b = E(m, 1); a = E(m, 0); SET(m + M_FLAG, is_within(a, b, I(m, 2))); break;   /* isWithin */
+    case 31:   /* isWithin */
+        b = E(m, 1); a = E(m, 0);
+        SET(m + M_FLAG, is_within(a, b, I(m, 2)));
+        if (trace > 1 && W(m + M_FLAG)) {
+            char t[140];
+            snprintf(t, sizeof t, "OpenI76: fsm ip %d isWithin %s %s %d", (int)((W(m + M_IP) - W(m + M_CODE)) / 8),
+                     a ? (Fsm_NameOf(a) ? Fsm_NameOf(a) : a->name) : "-", b ? (Fsm_NameOf(b) ? Fsm_NameOf(b) : b->name) : "-", (int)I(m, 2));
+            plat_log(t);
+        }
+        break;
     case 32: SET(m + M_FLAG, stamped(E(m, 0), 0xa6d4)); break;   /* isShot 0x40aaa0 */
     case 33: a = E(m, 0); SET(m + M_FLAG, a && Vehicle_Health(a) < (double)I(m, 2));   /* NULL: the original would crash */ break;   /* hpLesser 0x40af00 */
     case 34: a = E(m, 0); SET(m + M_FLAG, ammo_lesser(a, I(m, 1), I(m, 2))); break;   /* ammoLesser */
@@ -1109,7 +1143,15 @@ static void action(uint32_t m, int32_t index)
         break;
     }
     case 49: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), 0, 0); break;   /* teleport */
-    case 50: destroy(E(m, 0)); break;  /* destroy */
+    case 50:   /* destroy */
+        a = E(m, 0);
+        if (trace && a) {
+            char t[120];
+            snprintf(t, sizeof t, "OpenI76: fsm destroy %s at %.0f %.0f", Fsm_NameOf(a) ? Fsm_NameOf(a) : a->name, a->frame.pos[0], a->frame.pos[2]);
+            plat_log(t);
+        }
+        destroy(a);
+        break;
     case 51: Movie_Play(cb_name(m)); break;   /* playMovie: a name of the sounds' table */
     case 52:   /* pushCam; with the dashboard swapped (0x428880) first the preset view 0xc again, which swaps it
                   back (0x480990, 0x4809a0, Camera_SetMode) */

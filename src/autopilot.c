@@ -23,6 +23,11 @@
      (+0x9d14) as the script has the leader avoid.
    "name:spareN" leaves a vehicle alone once its health is under N (t09: Calisto disabled, not killed), and
    follows it as the leader while it is 250 m off or more (the attack's path search loses a fast car).
+   "stay[R]" leaves the fights while the leader is R m (200) off or more, to catch it up (s05's bus).
+   "name/a/b" hunts name before anything nearer once the script's a and b are dead (s05: Plato, who
+   blows the bridge, once the bus's ambushers are dealt with).
+   --param apkill=name@s,... destroys the script's named entity at s seconds of the script's clock, a test
+   aid to run a script's later branches apart from the fights (as apinvincible and apstrong are).
    "best" fights at the AI's best skill (5) from the first attack, "skip" skips the script's cameras as Esc
    does. Whatever it attacks, a person's trigger is pulled while the target is straight ahead. The engine is
    started, the gear put in drive and (--param apskill) the skill set once. Off by default: the play is
@@ -31,6 +36,7 @@
 #include "damage.h"
 #include "input.h"
 #include "camera.h"
+#include "clock.h"
 #include "ai.h"
 #include "entity.h"
 #include "fsm.h"
@@ -45,12 +51,14 @@
 
 static int on = -1, started, skilled;
 int g_ap_invincible;
+int g_ap_strong;
 static Node *focus;   /* the guarded target's attacker taken on */
 static char names[24][32];
 static int gate[24], gate_done[24], until[24], guard[24], lead[24], reached[24], spare[24];   /* guard: name:guard, the guard order (0x20) before any
                                                      attack; lead: name:lead, the leader once shown */
 static int gate_ok(int k);   /* a target's objective (name@k): attacked once that one is shown, -1 always */
 static int nnames;
+static char after[24][64];   /* name/a/b: the cars that must be dead first */
 
 /* "name:spareN": the vehicle left alone once its health is under N (t09's Calisto, to be disabled, not
    killed: the script's hpLesser 32) */
@@ -152,6 +160,9 @@ void Autopilot_Frame(void)
             char *l = strstr(p, ":lead");
             lead[nnames] = l != NULL;
             if (l) memmove(l, l + 5, strlen(l + 5) + 1);
+            char *sl = strchr(p, '/');
+            snprintf(after[nnames], sizeof after[0], "%s", sl ? sl + 1 : "");
+            if (sl) *sl = 0;
             char *sp = strstr(p, ":spare");
             spare[nnames] = sp ? atoi(sp + 6) : 0;
             if (sp) *sp = 0;
@@ -163,6 +174,29 @@ void Autopilot_Frame(void)
             snprintf(names[nnames++], sizeof names[0], "%s", p);
         }
     }
+    static int kills = -1;   /* --param apkill=name@s,...: the script's destroy on name at s seconds (a test aid) */
+    static char kname[16][32];
+    static float kat[16];
+    if (kills < 0) {
+        char v[512];
+        kills = 0;
+        if (plat_param("apkill", v, sizeof v))
+            for (char *p = strtok(v, ","); p && kills < 16; p = strtok(NULL, ",")) {
+                char *at = strchr(p, '@');
+                kat[kills] = at ? (float)atof(at + 1) : 0.0f;
+                if (at) *at = 0;
+                snprintf(kname[kills++], sizeof kname[0], "%s", p);
+            }
+    }
+    for (int k = 0; k < kills; k++)
+        if (kname[k][0] && g_clock_total >= kat[k]) {
+            Node *o = Fsm_Named(kname[k]);
+            char m[80];
+            snprintf(m, sizeof m, "OpenI76: apkill %s at %.1f s", kname[k], g_clock_total);
+            plat_log(m);
+            Fsm_Destroy(o);
+            kname[k][0] = 0;
+        }
     if (!on || !g_user_entity || !g_user_entity->node) return;
     Node *u = g_user_entity->node;
     if (dead(u)) return;
@@ -170,6 +204,7 @@ void Autopilot_Frame(void)
         started = 1;
         char iv[8];
         g_ap_invincible = plat_param("apinvincible", iv, sizeof iv) && atoi(iv);
+        g_ap_strong = plat_param("apstrong", iv, sizeof iv) ? atoi(iv) : 0;
         Engine_Start(u);
         Vehicle_SetMode(u, 3);
         char v[16];
@@ -180,6 +215,12 @@ void Autopilot_Frame(void)
     int hold = 0;
     for (int k = 1; k < nnames; k++)
         if ((!strcmp(names[k], "hold") && !gate_ok(k)) || (!strcmp(names[k], "flee") && gate_ok(k))) hold = 1;
+    for (int k = 1; !hold && k < nnames; k++)   /* "stay[R]": no fight R m (200) from the leader */
+        if (!strncmp(names[k], "stay", 4) && strcmp(names[0], "none")) {
+            Node *ld = Fsm_Named(names[0]);
+            double r = atoi(names[k] + 4) > 0 ? atoi(names[k] + 4) : 200.0;
+            if (ld && !dead(ld) && dist2(ld, u) > r * r) goto follow;
+        }
     if (hold) {   /* "navsN": while holding, nav1 .. navN driven in turn (t04's laps), each passed within 25 m */
         static int nav = 1;
         for (int k = 1; k < nnames; k++) {
@@ -201,6 +242,23 @@ void Autopilot_Frame(void)
         focus = near;
         AI_Order(u, near ? near : o, near ? 0 : 0x20, 0);
         if (near) trigger(u, near);
+        return;
+    }
+    for (int k = 1; k < nnames; k++) {   /* "name/a/b": name hunted before anything nearer, once a and b are dead */
+        if (!after[k][0] || !gate_ok(k)) continue;
+        Node *o = Fsm_Named(names[k]);
+        if (!o || dead(o)) continue;
+        int ready = 1;
+        char list[64];
+        snprintf(list, sizeof list, "%s", after[k]);
+        for (char *t = strtok(list, "/"); t && ready; t = strtok(NULL, "/")) {
+            Node *b = Fsm_Named(t);
+            if (b && !dead(b)) ready = 0;
+        }
+        if (!ready) continue;
+        prey = NULL;
+        AI_Order(u, o, 0, 0);
+        trigger(u, o);
         return;
     }
     if (prey && (dead(prey) || spared(prey) || dist2(prey, u) >= 300.0 * 300.0)) prey = NULL;
@@ -249,6 +307,10 @@ follow:;
     for (int k = 1; k < nnames; k++)
         if (lead[k] && gate_ok(k)) ln = names[k];   /* name@k:lead: the leader from objective k */
     Node *lead = ln ? Fsm_Named(ln) : NULL;
+    if (lead && !dead(lead) && dist2(lead, u) > 300.0 * 300.0 &&   /* far: to its place by the path search (the
+                                                                     formation drives straight at it) */
+        Fsm_GotoPoint(u, (float)lead->frame.pos[0], (float)lead->frame.pos[2], 60.0f, 60) >= 0)
+        return;
     if (lead && !dead(lead)) {
         uint8_t *ai = *Data_Ptr(u->data, 0x108);
         *(Node **)Data_Ptr(ai, 0xa990) = lead;

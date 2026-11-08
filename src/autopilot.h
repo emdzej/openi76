@@ -8,3 +8,4 @@ void Autopilot_Keys(void);    /* after the input, before the script: a script ca
    a flip), so a run tests the mission's script rather than the autopilot's driving; read by Vehicle_Damage
    and Vehicle_Kill */
 extern int g_ap_invincible;
+extern int g_ap_strong;   /* --param apstrong=N: the user's hits do N times their damage (a test aid, off by default) */

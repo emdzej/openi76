@@ -44,6 +44,8 @@ uint32_t Fsm_Window(uint8_t *p, uint32_t size);
 Node *Fsm_Entity(int32_t i);
 /* the port's: the node of the script's entity of that name (the autopilot's targets) */
 Node *Fsm_Named(const char *name);
+const char *Fsm_NameOf(const Node *n);
+void Fsm_Destroy(Node *n);
 /* the port's (the autopilot's): n sent along the path named name at speed (the goto order); 1 once within r
    of its first point (its last with last), -1 without such a path */
 int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r, int last);

@@ -434,9 +434,9 @@ static void play_frame(void)
                 memcpy(&th, v->data + 0xe4, 4);
                 memcpy(&vf, v->data + 0x454, 4);
                 char m[200];
-                snprintf(m, sizeof m, "OpenI76: frame %d vehicle %d %.8s at %.1f %.1f %.1f speed %.2f throttle %.2f health %.0f team %u%s",
+                snprintf(m, sizeof m, "OpenI76: frame %d vehicle %d %.8s at %.1f %.1f %.1f speed %.2f throttle %.2f health %.0f team %u%s %s",
                          frames, i, v->name, v->frame.pos[0], v->frame.pos[1], v->frame.pos[2], sp, th,
-                         Vehicle_Health(v), (unsigned)((v->flags >> 16) & 7), (vf & 0x20) ? " dead" : "");
+                         Vehicle_Health(v), (unsigned)((v->flags >> 16) & 7), (vf & 0x20) ? " dead" : "", Fsm_NameOf(v) ? Fsm_NameOf(v) : "");
                 plat_log(m);
             }
         /* 0x404170 (the objects' detail by distance) is not ported yet */
