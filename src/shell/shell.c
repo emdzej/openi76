@@ -3,6 +3,7 @@
 #include "crt.h"
 #include "exe.h"
 #include "files.h"
+#include "physics.h"
 #include "input.h"
 #include "shell/screen.h"
 #include "shell/font.h"
@@ -550,8 +551,19 @@ bool Shell_Start(int prev_state)
             if (g_sh_rec.trip == 0x11) {
                 g_sh_screen_msg = 0xc01e;
                 Shell_Post(0xc008, 0xc01e);
-            } else if (g_sh_rec.trip == 4) {   /* trip4.spc, "You must play trip 3 before trip 4": not ported */
-                Shell_Post(0xc017, 0xc01e);
+            } else if (g_sh_rec.trip == 4 && !(g_game_options & 2)) {
+                /* the fourth part: the car of the third's end back from trip4.spc, user.rpr removed
+                   (0x1001d240), the stock freed (0x1001d210) and the garage reset (0x10034df0) */
+                Files_Remove(dll_str(0x100614f0));
+                Garage_FreeStock();
+                Garage_Reset();
+                if (!Spc_Read(dll_str(0x100637f0))) {   /* 0x1002bf00 */
+                    char m[160];
+                    snprintf(m, sizeof m, "OpenI76: %s: %s", dll_str(0x100637fc), dll_str(0x10063804));
+                    plat_log(m);   /* MessageBoxA, then PostQuitMessage(0) */
+                    Shell_Quit(0);
+                } else
+                    Shell_Post(0xc017, 0xc01e);
             } else
                 Shell_Post(0xc01e, 0xc01e);
         }

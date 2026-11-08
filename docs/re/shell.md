@@ -29,8 +29,12 @@ It imports WINMM, KERNEL32, USER32, GDI32, ADVAPI32 and anetdll (network play).
      bytes each).
 3. **The first screen** comes from how the shell was entered:
    - after a01 or mode 5, message 0xc00e;
-   - in the trip, by its state: 0xc01e or 0xc008. A trip's fourth part needs `trip4.spc`, "You must play
-     trip 3 before trip 4".
+   - in the trip, by its state: 0xc01e or 0xc008. After trip 4 is won, unless No Salv. Manag. is on, the
+     car of trip 3's end comes back: user.rpr removed (0x1001d240), the stock freed and the garage reset
+     (0x1001d210, 0x10034df0), `trip4.spc` read (0x1002bf00; written by trip 3's set-up DONE) and the
+     garage opened (0xc017), where hint 0x21 says there is no salvage from the dream. Without the file a
+     message box says "You must play trip 3 before trip 4" and the shell quits (PostQuitMessage). Ported;
+     checked with `--param trip=3`'s DONE, then `--param trip=4`, and without the file.
 4. **The loop:**
    - the exe's function +0x28;
    - PeekMessage, ending on WM_QUIT;
