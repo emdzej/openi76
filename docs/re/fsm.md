@@ -221,7 +221,9 @@ polls `isKeypress` the typed keys go to the menus' poll, not to `Game_Command`.
 
 **Not ported yet** (the port answers 0):
 
-- playMovie 0x44e6e0, and salvage 0x40b720 (the shell's salvage list, 0x488a40).
+- playMovie 0x44e6e0.
+
+salvage 0x40b720 adds a sound's name to the salvage list (salvage.md).
 
 After the action, ip moves to the next pair and the arguments' pointer goes back to 0x1000.
 

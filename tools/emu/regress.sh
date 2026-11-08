@@ -55,7 +55,7 @@ if [ -z "$1" ]; then
   echo "[diff_fsm] every mission done"
   # the vehicles' physics, called on every vehicle of two missions (the m missions have none at the load), upright and on their backs
   for m in t01.msn s04.msn; do
-    for c in upright steer wheels brake grip force air drag drive corners collide ground settle physics frame sway state side parts wear hit impact wreck search avoid way stuck roadwar tactics see fire trigger shot launch fly raze radar aim turret camera track overview chase14 chase15 mount12 mount13 target toward hood pilot missile orbit dash cockpit hud mirror wdash flat rdisp smoke contrail skid debris flamer sound engine radio; do
+    for c in upright steer wheels brake grip force air drag drive corners collide ground settle physics frame sway state side parts wear hit impact wreck search avoid way stuck roadwar tactics see fire trigger shot launch fly raze radar aim turret camera track overview chase14 chase15 mount12 mount13 target toward hood pilot missile orbit dash cockpit hud mirror wdash flat rdisp smoke contrail skid debris flamer sound engine radio salvage; do
       for u in "" --upside; do
         out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" --call $c $u 2>&1) || fail=1
         echo "$out" | grep -q identical || { echo "[--call $c $u $m]"; echo "$out" | tail -4; }

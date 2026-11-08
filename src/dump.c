@@ -349,6 +349,8 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "flamer.h"
 #include "sound.h"
 #include "radio.h"
+#include "salvage.h"
+#include "mission.h"
 #include "dsound.h"
 #include "render/poly.h"
 #include "render/sky.h"
@@ -426,6 +428,19 @@ static void log_click(void)
 {
     int32_t v = -1;
     call_line(&v, sizeof v);
+}
+
+/* the salvage list as a call line: each group's kind, then each item's 0x18 bytes */
+static void salvage_line(void)
+{
+    static uint8_t b[0x4000];
+    size_t k = 0;
+    for (const SalvGroup *g = Salvage_List(); g && k + 8 < sizeof b; g = g->next) {
+        memcpy(b + k, &g->kind, 4), k += 4;
+        for (const SalvItem *it = g->items; it && k + 0x1c < sizeof b; it = it->next) memcpy(b + k, it->name, 0x18), k += 0x18;
+        memset(b + k, 0xff, 4), k += 4;
+    }
+    call_line(b, k);
 }
 
 int Dump_CallVehicles(int which, int upside)
@@ -1604,6 +1619,35 @@ int Dump_CallVehicles(int which, int upside)
             v[1]->frame.pos[0] = far0;
             memcpy(eng + 0x1c, rpm0, 4);
             g_clock_fake_ms = fake0;
+            break;
+        }
+        case 67: {   /* the salvage (0x488320-0x489250): names added (0x488a40) as the mission's kind and number
+                        set below, the other cars' parts (0x488950, in entity order), t01's and t05's .fsi
+                        (0x488e60); the list after each stage, then the pick (0x489000) and the list */
+            if (!g_user_entity || g_user_entity->node != n) break;
+            static const char *const names[] = {"gmheavy.gdf", "gchades.gdf", "tmlight.gdf", "wauto_1d.wdf", "eng03",
+                                                "sus04", "bra02", "spc07", "spc07", "xyz.foo", "zzz", "gmheavy.gdf",
+                                                "gclight.gdf", "eng04", "w1_fl.wdf", "gdumb.gdf"};
+            static const int kinds[4][2] = {{3, 1}, {2, 5}, {3, 9}, {1, 3}};
+            const int k0 = g_mission_kind, n0 = g_mission_number;
+            for (int s = 0; s < 4; s++) {
+                g_mission_kind = kinds[s][0], g_mission_number = kinds[s][1];
+                for (int i = 0; i < 16; i++) Salvage_Add(names[i], i * 7 - 3, i & 1);
+                salvage_line();
+            }
+            g_mission_kind = 3, g_mission_number = 4;
+            for (int i = 0; i < g_entity_count; i++) {
+                Node *e = g_entities[i].node;
+                if (e && e->cls == 1 && e != n) Salvage_Vehicle(e);
+            }
+            salvage_line();
+            Salvage_ReadFile("t01.msn");
+            Salvage_ReadFile("t05.msn");
+            salvage_line();
+            Salvage_Pick();
+            salvage_line();
+            Salvage_Free();
+            g_mission_kind = k0, g_mission_number = n0;
             break;
         }
         case 63: {   /* the flame throwers (0x46ce90-0x46df40) on the user's vehicle n as the muzzle: the ring

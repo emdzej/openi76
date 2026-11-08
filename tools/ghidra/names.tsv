@@ -210,7 +210,6 @@
 00492f20	Roads_First	roads	high	the pieces' list 0x4eb6f8
 004909e0	Roads_Setup	roads	high	names, textures, the pieces on the ground and their spheres
 00490de0	Roads_Names	roads	high	the 30 road texture names: defaults, then <mission>.rtm
-00453a70	Buf_ReadLine	misc	high	a line of a buffer, past an end of line and the white space after it; ported
 00491180	Roads_Draw	roads	high	the road quads into the queue as occluders; ported, diffed
 00491650	Roads_DrawObjects	roads	med	the objects' road faces into the queue
 0041f2c0	Node_InitHeaps	scene	high	the node and class-data heaps
@@ -1226,3 +1225,13 @@
 0047bf10	Tex_CopyOwner	tex	high	an owner's textures given to another at their frames; ported (no timers)
 0045b3f0	Chunk_SpawnOne	effects	high	one random destruction chunk thrown, taken out of the record; ported
 0042e850	Node_PosIn	scene	high	a node's position in an ancestor's space, as floats; ported (Node_FrameIn)
+00488950	Salvage_Vehicle	salvage	high	an AI car's death: its parts salvaged; ported
+004883f0	Salvage_Parts	salvage	high	a car's 96 part records (condition, name); ported (records 0-63)
+00488a40	Salvage_Add	salvage	high	a name at its tier into its group; ported
+00489120	Salvage_Tier	salvage	high	a name brought down to the tier the mission allows; ported
+00488d60	Salvage_Free	salvage	high	the list freed; ported
+00488e60	Salvage_ReadFile	salvage	high	the mission's .fsi names added; ported
+00489000	Salvage_Pick	salvage	high	a few of each group kept at random (the shell's); ported
+00488db0	Salvage_Save	salvage	med	the list as SALV chunks (the shell's save); not ported
+0040b720	Fsm_Salvage	fsm	high	the script's salvage: a sound's name added; ported
+00453a70	Buf_ReadLine	text	high	a line of a buffer, past an end of line and the white space after it; ported

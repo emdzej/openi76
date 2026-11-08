@@ -1780,6 +1780,61 @@ def call_radio(exe, n, fpcw):
     call_sound(exe, n, fpcw, radio=True)
 
 
+def call_salvage(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    c = lambda f, *a: exe.call(f, *a, limit=500_000_000, fpcw=rd)  # noqa: E731
+    nm = lambda t: exe.put(t.encode() + b"\0")  # noqa: E731
+
+    def line():
+        b, g = b"", u(0x4E9C24)
+        while g:
+            b += exe.read(g + 8, 4)
+            it = u(g + 4)
+            while it:
+                b += exe.read(it + 4, 0x18)
+                it = u(it)
+            b += b"\xff" * 4
+            g = u(g)
+        if b:   # as the port's call_line, which drops an empty line
+            CALL_OUT.append(b.hex())
+        if os.environ.get("CALL_TEXT"):
+            out, k = [], 0
+            while k < len(b):
+                kind = struct.unpack_from("<i", b, k)[0]
+                k += 4
+                items = []
+                while b[k:k + 4] != b"\xff" * 4:
+                    items.append(f"{b[k:k + 16].split(bytes(1))[0].decode()}:{struct.unpack_from('<i', b, k + 16)[0]}")
+                    k += 0x18
+                k += 4
+                out.append(f"{kind}[{' '.join(items)}]")
+            print("salvage", " ".join(out))
+    names = ["gmheavy.gdf", "gchades.gdf", "tmlight.gdf", "wauto_1d.wdf", "eng03", "sus04", "bra02", "spc07", "spc07",
+             "xyz.foo", "zzz", "gmheavy.gdf", "gclight.gdf", "eng04", "w1_fl.wdf", "gdumb.gdf"]
+    k0 = exe.read(0x606E20, 8)
+    for kind, num in ((3, 1), (2, 5), (3, 9), (1, 3)):
+        exe.write(0x606E20, struct.pack("<ii", num, kind))
+        for i, t in enumerate(names):
+            c(0x488A40, nm(t), (i * 7 - 3) & 0xFFFFFFFF, i & 1)
+        line()
+    exe.write(0x606E20, struct.pack("<ii", 4, 3))
+    for i in range(u(0x4D3B5C)):
+        e = u(0x547E60 + i * 0x78)
+        if e and u(e + 0x6C) == 1 and e != n:
+            c(0x488950, e)
+    line()
+    c(0x488E60, nm("t01.msn"))
+    c(0x488E60, nm("t05.msn"))
+    line()
+    c(0x489000)
+    line()
+    c(0x488D60)
+    exe.write(0x606E20, k0)
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1854,7 +1909,7 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
@@ -1996,7 +2051,7 @@ def original():
             exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
         for f, k in ((0x433240, 3), (0x452CD0, 0), (0x468A70, 0),
-                     (0x488950, 1), (0x455370, 1)):
+                     (0x455370, 1)) + (() if CALL == "salvage" else ((0x488950, 1),)):
             exe.stub(f, lambda *a: 0, k)
         if CALL != "radio":   # a death's CB messages dropped
             exe.stub(0x46FDB0, lambda *a: 0, 1)

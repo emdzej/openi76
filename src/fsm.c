@@ -2,6 +2,7 @@
 #include "fsm.h"
 #include "sound.h"
 #include "radio.h"
+#include "salvage.h"
 #include "avoid.h"
 #include "ai.h"
 #include "classes.h"
@@ -1005,7 +1006,7 @@ static void action(uint32_t m, int32_t index)
     case 78: set_user_radar(I(m, 0)); break;   /* setUserRadar */
     case 79: b = E(m, 1); Radio_Say(cb_name(m), b, 3); break;   /* cbFrom 0x40b6a0 */
     case 80: Radio_Clear(0); break;            /* killCB 0x46fd20 */
-    case 81: later(0x40b720); break;           /* salvage */
+    case 81: Salvage_Add(cb_name(m), -1, 1); break;   /* salvage 0x40b720: a sound's name */
     case 82: a = E(m, 0); Siren(a, I(m, 1)); break;   /* setSiren 0x40b740: aps2.wav on or off (0x4763e0) */
     case 83: a = E(m, 0); set_ai_word(a, 0x9d14, I(m, 1)); break;  /* setAvoid 0x40b760 */
     case 84: a = E(m, 0); set_ai_word(a, 0xa948, I(m, 1)); break;  /* setMaxAttackers 0x40b780 */
