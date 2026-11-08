@@ -21,11 +21,14 @@
    - else the leader (a script entity: taurus; name@k:lead, from objective k) followed in formation (order 0x1e), 15 m behind (20 m ahead
      with "ahead[@k]" written, to win a race), avoiding
      (+0x9d14) as the script has the leader avoid.
+   "name:spareN" leaves a vehicle alone once its health is under N (t09: Calisto disabled, not killed), and
+   follows it as the leader while it is 250 m off or more (the attack's path search loses a fast car).
    "best" fights at the AI's best skill (5) from the first attack, "skip" skips the script's cameras as Esc
    does. Whatever it attacks, a person's trigger is pulled while the target is straight ahead. The engine is
    started, the gear put in drive and (--param apskill) the skill set once. Off by default: the play is
    the user's */
 #include "autopilot.h"
+#include "damage.h"
 #include "input.h"
 #include "camera.h"
 #include "ai.h"
@@ -44,10 +47,19 @@ static int on = -1, started, skilled;
 int g_ap_invincible;
 static Node *focus;   /* the guarded target's attacker taken on */
 static char names[24][32];
-static int gate[24], gate_done[24], until[24], guard[24], lead[24], reached[24];   /* guard: name:guard, the guard order (0x20) before any
+static int gate[24], gate_done[24], until[24], guard[24], lead[24], reached[24], spare[24];   /* guard: name:guard, the guard order (0x20) before any
                                                      attack; lead: name:lead, the leader once shown */
 static int gate_ok(int k);   /* a target's objective (name@k): attacked once that one is shown, -1 always */
 static int nnames;
+
+/* "name:spareN": the vehicle left alone once its health is under N (t09's Calisto, to be disabled, not
+   killed: the script's hpLesser 32) */
+static int spared(const Node *o)
+{
+    for (int k = 0; k < nnames; k++)
+        if (spare[k] && Fsm_Named(names[k]) == o && Vehicle_Health((Node *)o) < (double)spare[k]) return 1;
+    return 0;
+}
 
 static double dist2(const Node *a, const Node *b)
 {
@@ -110,7 +122,7 @@ static Node *enemy_near(const Node *at, int team, double r)
         if (t == team) continue;
         for (int i = 0; i < g_team_count[t]; i++) {
             Node *o = g_teams[t][i]->node;
-            if (dead(o)) continue;
+            if (dead(o) || spared(o)) continue;
             double d = dist2(o, at);
             if (d < bd) bd = d, best = o;
         }
@@ -140,6 +152,9 @@ void Autopilot_Frame(void)
             char *l = strstr(p, ":lead");
             lead[nnames] = l != NULL;
             if (l) memmove(l, l + 5, strlen(l + 5) + 1);
+            char *sp = strstr(p, ":spare");
+            spare[nnames] = sp ? atoi(sp + 6) : 0;
+            if (sp) *sp = 0;
             char *at = strchr(p, '@');
             gate[nnames] = at ? (*at = 0, atoi(at + 1)) : -1;
             gate_done[nnames] = at && strchr(at + 1, '!') != NULL;   /* "@k!": once objective k is done */
@@ -188,7 +203,7 @@ void Autopilot_Frame(void)
         if (near) trigger(u, near);
         return;
     }
-    if (prey && (dead(prey) || dist2(prey, u) >= 300.0 * 300.0)) prey = NULL;
+    if (prey && (dead(prey) || spared(prey) || dist2(prey, u) >= 300.0 * 300.0)) prey = NULL;
     Node *best = prey ? prey : enemy_near(u, team, 300.0);
     if (best) {
         prey = best;
@@ -200,7 +215,8 @@ void Autopilot_Frame(void)
     for (int k = 1; k < nnames; k++) {
         Node *o = Fsm_Named(names[k]);
         if (guard[k] || lead[k] || !gate_ok(k)) continue;
-        if (o && !dead(o)) {   /* at any range (t03's Bar-D, 1.1 km off once its defenders are dead) */
+        if (o && spare[k] && dist2(o, u) >= 250.0 * 250.0) continue;   /* a spared one far off: followed (the leader) */
+        if (o && !dead(o) && !spared(o)) {   /* at any range (t03's Bar-D, 1.1 km off once its defenders are dead) */
             AI_Order(u, o, 0, 0);
             trigger(u, o);
             return;
