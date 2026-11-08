@@ -13,6 +13,14 @@ void Class_StartAll(void);
 void Class_Frame(int which);
 /* Class_EndAll 0x425580 (the mission's end): every listed node's end handler (class 1's, Mirror_End) */
 void Class_EndAll(void);
+/* Gate_Frame 0x432c70 (class 7's frame): a triggered gate moved toward its target, swapped on arrival */
+void Gate_Frame(Node *n);
+/* Spin_Frame 0x434650 (class 10's frame): turned by its angular velocity */
+void Spin_Frame(Node *n);
+/* Steering_Frame 0x4343c0 (class 31, the steering wheel): its target frame from the steering */
+void Steering_Frame(Node *n);
+/* Class31_Anim 0x434430: the wheel's frame eased to its target, shown on the user's vehicle */
+void Class31_Anim(Node *n, const char *name, void *arg);
 /* Classes_Free 0x425660: both lists emptied, the nodes' references let go */
 void Classes_Free(void);
 /* the entity of n's root (0x424060), NULL if none */

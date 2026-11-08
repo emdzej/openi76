@@ -48,13 +48,38 @@ turret's aim (class 7) would come out one step off.
 | 9 | 0x4313f0 | its entity in the first word. The 0x508 block's two words from the armour (+0x138). The engine's sound (0x4761b0). Raised to the terrain's height. The user's set-up as for class 1 |
 | 21 | 0x42f460 | an engine |
 | 30 | 0x42fbc0 | a wheel: its tread's texture animation (0x42feb0, a 0x18 byte argument), the data's +0x84 |
-| 31 | 0x4342f0 | a texture animation (0x434430) with the argument {0x24, 9, 9, 9} |
+| 31 | 0x4342f0 | the steering wheel: a texture animation (0x434430) with the argument {0x24, 9, 9, 9} |
 | 35, 36 | 0x4263b0 | the dashboard's needles |
 | 40 | 0x433180 | three filters (Filter_Init 0.5, 4) |
 | 41 | 0x433370 | a muzzle: its frame into the data (the frame's pad word comes from the stack: garbage, masked in the harness), then 0, 0 and its root |
 | 10, 20, 22, 23, 52, 53 | – | nothing to do |
 | 32, 33 | 0x433810 | the windows ([weapons.md](weapons.md)) |
 | 34 | 0x41fff0 | the radar: the vehicle's +0x434, the user's display animation ([weapons.md](weapons.md) "The radar") |
+
+## The per-frame handlers of the objects
+
+- **Class 7, a gate (0x432c70; ported, diffed).** It does nothing once arrived (+0x90 set), until
+  `triggerGate` clears the flag (docs/re/fsm.md). Each frame, with k = the clamped step (0x450f30) × the
+  rate (+0x94), its place (+0x84) moves toward its target (+0x78) by k of the way on each axis. It jumps
+  to the target instead when k is negative, k is above 0.95 (its bits), or the axis is within 0.005.
+  - The first axis tests "negative" as a float compare, the other two by k's bits above −0's.
+  - Within 0.2 of the target on every axis (the differences' bits), it arrives. The place takes the target,
+    the start (+0x6c) and the target swap, so the next trigger moves it back, and +0x90 = 1.
+  - The node's position takes the place.
+- **Class 10 (0x434650; ported, diffed).** The node's frame is turned by its data's angular velocity
+  (+0, +4, +8) over the step (Frame_Turn 0x471d40).
+- **Class 31, the steering wheel (0x4343c0; ported, diffed).** Its record is {last frame 36, shown, target,
+  centre 9}. The target is the centre plus the negated steering (+0xe0 of the vehicle) times the frames
+  to the left end (36 − 9) for a negative steering, or times the centre otherwise, truncated. Its texture
+  animation (0x434430), on the user's vehicle only, eases the shown frame to the target. It moves by
+  twice the clamped step of the way, truncated. It jumps when that share is below 0 or above 0.95, or
+  within 0.005. The frame is then shown. On another vehicle the shown frame takes the target, unshown.
+- **Class 8 (0x428950)** returns at once. Class 40's per-frame entry (0x433330) does nothing.
+- **Class 9, a helicopter (0x4314a0):** see vehicles.md.
+
+Checked: `diff_objects --call wheel31` on t01 and s04 (five steerings, three frames each). `--call gate`
+on t12, t05 and s04. Every gate is triggered and every class 10 node
+stepped, 40 frames at 0.05 s. It compares their frames and the gates' data.
 
 ## Texture animations (0x47e890-0x47ebe0)
 

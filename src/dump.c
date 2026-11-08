@@ -1650,6 +1650,60 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 74: {   /* the steering wheel (class 31: 0x4343c0, then 0x434430 with its first texture) on n's tree,
+                        for the steerings -0.8, -0.3, 0, 0.5 and 1 at the step 0.05, three frames each; its
+                        record after each */
+            Node *w = Node_FindClass(n, 31);
+            if (!w || !w->data || !*Data_Ptr(w->data, 0)) break;
+            int32_t *r = *(int32_t **)Data_Ptr(w->data, 0);
+            const char *t = Node_FirstTexture(w, 0);
+            static const float st[5] = {-0.8f, -0.3f, 0, 0.5f, 1};
+            float was = g_clock_step, e0;
+            memcpy(&e0, n->data + 0xe0, 4);
+            g_clock_step = 0.05f;
+            for (int k = 0; k < 15; k++) {
+                memcpy(n->data + 0xe0, &st[k / 3], 4);
+                g_fpu_round = FPU_DOWN;
+                Steering_Frame(w);
+                if (t) Class31_Anim(w, t, r);
+                call_line(r, 16);
+            }
+            memcpy(n->data + 0xe0, &e0, 4);
+            g_clock_step = was;
+            break;
+        }
+        case 73: {   /* the gates and spinners (0x432c70, 0x434650), once: every class 7 entity (with data) triggered
+                        (+0x90 = 0) and every class 10, then 40 frames at the step 0.05; after every 10th, each
+                        one's place (and a gate's data +0x6c-+0x93) */
+            static int done;
+            if (done++) break;
+            float was = g_clock_step;
+            g_clock_step = 0.05f;
+            for (int f = 1; f <= 40; f++) {
+                for (int i = 0; i < g_entity_count; i++) {
+                    Node *e = g_entities[i].node;
+                    if (!e || !e->data) continue;
+                    if (e->cls == 7) {
+                        if (f == 1) memset(e->data + 0x90, 0, 4);
+                        g_fpu_round = FPU_DOWN;
+                        Gate_Frame(e);
+                    } else if (e->cls == 10) {
+                        g_fpu_round = FPU_DOWN;
+                        Spin_Frame(e);
+                    } else
+                        continue;
+                    if (f % 10) continue;
+                    uint8_t b[0x24 + 24 + 0x28];
+                    memcpy(b, e->frame.m, 0x24);
+                    memcpy(b + 0x24, e->frame.pos, 24);
+                    memset(b + 0x3c, 0, 0x28);
+                    if (e->cls == 7) memcpy(b + 0x3c, e->data + 0x6c, 0x28);
+                    call_line(b, sizeof b);
+                }
+            }
+            g_clock_step = was;
+            break;
+        }
         case 72: {   /* the mortar's elevation (0x45ddb0, 0x433730) from n's first weapon's muzzle at 60 m/s: the
                         angle for each of the first three other vehicles (and at 250 m/s), then the muzzle's frame pitched for the
                         first (and for none) */

@@ -1458,3 +1458,7 @@
 0045ddb0	Mortar_Angle	weapons	high	the elevation landing nearest the target: 45 degrees beyond reach, else the best of 120; ported, diffed
 0045dbc0	Mortar_Fall	weapons	high	a shot flown by the frame's step under -39.2 until the ground; its time and place; ported
 0045e350	Mortar_Turn	weapons	high	a vector turned about an axis by about an angle (b = a angle / 2, a Cayley rotation); ported
+00432c70	Gate_Frame	classes	high	class 7's frame: a triggered gate moved toward its target, start and target swapped on arrival; ported, diffed
+00434650	Spin_Frame	classes	high	class 10's frame: turned by its angular velocity; ported, diffed
+004343c0	Steering_Frame	classes	high	class 31: the steering wheel's target frame from the steering; ported, diffed
+00434430	Class31_Anim	classes	high	the steering wheel's frame eased to its target on the user's vehicle; ported, diffed

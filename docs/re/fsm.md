@@ -152,7 +152,8 @@ isEqualId, isArrived, isKeypress, teleport and teleportOffset.
 - `setHeliHeight` (0x40b340): a helicopter's block (+0x508) +0x14 gets the height as a float. The original
   passes it as an int, and above 0 it clears +0x454 bit 0x80.
 - `setLights` (0x40b7c0): the lights toggled when +0x454 bit 0x40 differs from `*a1`.
-- `triggerGate` (0x40b600): the tree's first class 7 node's data +0x90 cleared.
+- `triggerGate` (0x40b600): the tree's first class 7 node's data +0x90 cleared: the gate moves to its
+  other place (0x432c70, docs/re/classes.md "The per-frame handlers of the objects").
 - `setArtillery`, `setArtilleryRate` (0x429080, 0x4290a0): the artillery block's +0x4c and +0x50.
 - `setUserRadar` (0x40b670): the user's radar toggled (0x4214c0) when `*a0` differs from the last value
   (0x4a89a8, which is never reset between missions).

@@ -7,6 +7,7 @@
 #include "radar.h"
 #include "damage.h"
 #include "clock.h"
+#include "tex.h"
 #include "crt.h"
 #include "effects.h"
 #include "entity.h"
@@ -18,6 +19,7 @@
 #include "exe.h"
 #include "render/fpu.h"
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 
 #define ADD fpu_add
@@ -166,8 +168,46 @@ static void start_wheel(Node *n)
     *Data_Ptr(d, 0x84) = rec;
 }
 
-/* 0x434430: class 31's frames (not ported yet) */
-static void class31_anim(Node *n, const char *name, void *arg) { (void)n, (void)name, (void)arg; }
+/* 0x434430 (class 31, the steering wheel's texture): on the user's vehicle the frame shown (+4) eases to
+   the target (+8) by twice the clamped step of the way (to it at once when that share is below 0 or above
+   0.95, or within 0.005), truncated, and is shown; on another the target is taken as it is, unshown */
+void Class31_Anim(Node *n, const char *name, void *arg)
+{
+    int32_t *r = arg;
+    float step = g_clock_step;   /* 0x450f30 */
+    if (!g_user_entity || g_user_entity->node != Node_Root(n)) {   /* 0x423fc0 */
+        r[1] = r[2];
+        return;
+    }
+    float k = F32(MUL(step, 2.0f)), x;   /* 0x4a5e14 */
+    uint32_t kb;
+    memcpy(&kb, &k, 4);
+    if (k < 0.0f || (int32_t)kb > 0x3f733333)   /* 0x4a5e10 */
+        x = (float)r[2];
+    else {
+        float to = (float)r[2], cur = (float)r[1];
+        double dd = SUB(to, cur);
+        float df = F32(dd);
+        x = fabs(dd) < 0.005 ? to : F32(ADD(MUL(MUL(df, step), 2.0f), cur));   /* 0x4a5e20, a double */
+    }
+    r[1] = (int32_t)(int64_t)x;   /* 0x496690 */
+    Tex_SetFrame((uintptr_t)n, name, 0, r[1], 1);   /* 0x47c200 */
+}
+
+/* 0x4343c0 (class 31's second frame): the wheel's target frame from the vehicle's steering (+0xe0): the
+   centre (+0xc) plus the steering's negation times the frames to the left end (+0 less the centre) for a
+   negative steering, times the centre itself otherwise, truncated */
+void Steering_Frame(Node *n)
+{
+    int32_t *r = *(int32_t **)Data_Ptr(n->data, 0);
+    Node *root = Node_Root(n);   /* 0x42e6b0 */
+    float st = rdf(root->data + 0xe0);
+    uint32_t sb;
+    memcpy(&sb, &st, 4);
+    int32_t c = r[3];
+    double k = sb > 0x80000000u ? MUL(-st, (double)(r[0] - c)) : MUL((double)c, -st);
+    r[2] = (int32_t)(int64_t)k + c;
+}
 
 /* 0x4342f0 (class 31): a record {0x24, 9, 9, 9} (the game heap) at the data's first word, animated on
    the user's vehicle */
@@ -180,7 +220,7 @@ static void start_class31(Node *n)
     put32(rec + 8, 9);
     if (g_user_entity && g_user_entity->node == Node_Root(n)) {
         const char *t = Node_FirstTexture(n, 0);
-        if (t && *t) TexAnim_Add(n, t, class31_anim, 0x434430, rec);
+        if (t && *t) TexAnim_Add(n, t, Class31_Anim, 0x434430, rec);
     }
     *Data_Ptr(d, 0) = rec;
     put32(rec + 8, 9);
@@ -404,6 +444,58 @@ void Vehicle_Frame(Node *n)
     tyre_step(n, (uint32_t)rd32(d + 0x454), rd32(d + 0x45c));
 }
 
+/* 0x432c70 (class 7's frame, a gate): while not arrived (+0x90 0; triggerGate clears it) the place (+0x84)
+   moves toward the target (+0x78) by k = step x rate (+0x94) of the way on each axis, or jumps to it when
+   k is negative or above 0.95 or the axis is within 0.005. Within 0.2 of it on every axis, it arrives: the
+   place takes the target, the start (+0x6c) and the target swap, and +0x90 = 1. The node takes the place */
+void Gate_Frame(Node *n)
+{
+    uint8_t *d = n->data;
+    if (!d || rd32(d + 0x90)) return;
+    float k = F32(MUL(g_clock_step, rdf(d + 0x94)));   /* 0x450f30 */
+    uint32_t kb;
+    memcpy(&kb, &k, 4);
+    float to[3] = {rdf(d + 0x78), rdf(d + 0x7c), rdf(d + 0x80)}, at[3] = {rdf(d + 0x84), rdf(d + 0x88), rdf(d + 0x8c)};
+    float nw[3];
+    for (int i = 0; i < 3; i++) {
+        /* the first axis tests k below 0 as a float, the others its bits above -0's */
+        int ok = i == 0 ? !(k < 0.0f) && (int32_t)kb <= 0x3f733333 : kb <= 0x80000000u && (int32_t)kb <= 0x3f733333;
+        nw[i] = to[i];
+        if (ok) {
+            double dd = SUB(to[i], at[i]);
+            float df = F32(dd);
+            if (!(fabs(dd) < 0.005)) nw[i] = F32(ADD(MUL(k, df), at[i]));   /* 0x4a5d78, a double */
+        }
+    }
+    for (int i = 0; i < 3; i++) putf(d + 0x84 + 4 * i, nw[i]);
+    int near = 1;
+    for (int i = 0; i < 3; i++) {
+        float e = F32(SUB(to[i], nw[i]));
+        uint32_t eb;
+        memcpy(&eb, &e, 4);
+        if (!(eb < 0xbe4ccccdu && (int32_t)eb < 0x3e4ccccd)) near = 0;   /* within +-0.2 by the bits */
+    }
+    if (near) {
+        uint8_t a[12];
+        memcpy(a, d + 0x6c, 12);
+        memcpy(d + 0x84, d + 0x78, 12);
+        memcpy(d + 0x6c, d + 0x84, 12);
+        memcpy(d + 0x78, a, 12);
+        put32(d + 0x90, 1);
+    }
+    for (int i = 0; i < 3; i++) n->frame.pos[i] = rdf(d + 0x84 + 4 * i);
+}
+
+/* 0x434650 (class 10's frame): the node's frame turned by its data's angular velocity (+0, +4, +8) for the
+   step (Frame_Turn 0x471d40) */
+void Spin_Frame(Node *n)
+{
+    uint8_t *d = n->data;
+    Frame f;
+    Frame_Turn(&f, &n->frame, rdf(d), rdf(d + 4), rdf(d + 8), g_clock_step);
+    n->frame = f;
+}
+
 /* a per-frame handler not ported yet: present so that the class keeps its nodes listed */
 static void later(Node *n) { (void)n; }
 
@@ -424,8 +516,8 @@ static const struct {
     {1, start_vehicle, {Vehicle_Frame, vehicle_frame2}},   /* 0x4294e0; 0x429c70, 0x429d70 */
     {9, start_class9, {later, NULL}},       /* 0x4313f0; 0x4314a0 */
     {8, start_artillery, {later, NULL}},    /* 0x428910; 0x428950 */
-    {7, start_class7, {later, NULL}},       /* 0x432b90; 0x432c70 */
-    {10, no_start, {later, NULL}},          /* 0x434640; 0x434650 */
+    {7, start_class7, {Gate_Frame, NULL}},  /* 0x432b90; 0x432c70 */
+    {10, no_start, {Spin_Frame, NULL}},     /* 0x434640; 0x434650 */
     {21, start_class21, {NULL, NULL}},      /* 0x42f460 */
     {22, no_start, {NULL, NULL}},           /* 0x4303e0 */
     {30, start_wheel, {NULL, NULL}},        /* 0x42fbc0 */
@@ -435,7 +527,7 @@ static const struct {
     {36, start_needle, {NULL, NULL}},
     {34, Radar_Start, {NULL, Radar_Frame}}, /* 0x41fff0; 0x4202d0 */
     {52, no_start, {NULL, NULL}},           /* 0x454810 */
-    {31, start_class31, {NULL, later}},     /* 0x4342f0; 0x4343c0 */
+    {31, start_class31, {NULL, Steering_Frame}},   /* 0x4342f0; 0x4343c0 */
     {32, Window_Start, {NULL, NULL}},       /* 0x433810 */
     {33, Window_Start, {NULL, NULL}},
     {53, no_start, {Debris_Frame, NULL}},   /* 0x45bc90; 0x45bca0 */
