@@ -17,6 +17,8 @@
 #include "res.h"
 #include "shellcar.h"
 #include "sound.h"
+#include "textregion.h"
+#include "shell/shell.h"
 #include "vehicle.h"
 #include "vfs.h"
 #include "weapons.h"
@@ -34,6 +36,8 @@ static uint8_t opp_name[16][8];        /* 0x4ed948: the opponents' names (nvcl<n
 static int32_t aggression = 3, attackers = 8;   /* 0x4ed9c8, 0x4ed9cc */
 static int32_t points;          /* 0x4ed93c */
 static int16_t kills;           /* 0x4ed940 */
+static Region *score_box;       /* 0x5e29e8: the scores' box */
+static int score_shown;         /* 0x575be0 */
 
 void Melee_Set(int on) { g_melee = on; }
 
@@ -190,7 +194,7 @@ static void opponent_out(Entity *e)
    point */
 static void opponents_load(void)
 {
-    /* 0x4632c0: the scores' display (not ported yet) */
+    Scores_Init();   /* 0x4632c0 */
     kills = 0, waves_on = 1, g_melee = 1, points = 0, aggression = 3, attackers = 8;
     Entity_OnRemove(opponent_out);
     const char *dir = exe_str(0x4a87e4);
@@ -297,12 +301,13 @@ void Melee_Results(const char *name, const char *car)
 
 void Melee_End(void)   /* 0x4072b0: and 0x463aa0, the scores' display freed, and NVCL*.vcf removed */
 {
+    score_box = NULL;   /* freed with the regions (0x4503a0) */
     g_melee = 0;
     waves_on = 0;
 }
 
 /* 0x4072e0, a kill by the user (Vehicle_Damage's in the melee): one more, and as points the user's car's
-   +0xa8 times the victim's +0xa4 times 0x4a50f0; then the scores' display (0x463350, not ported) */
+   +0xa8 times the victim's +0xa4 times 0x4a50f0; then the scores' display (0x463350) */
 void Melee_Kill(Node *victim)
 {
     kills++;
@@ -312,6 +317,41 @@ void Melee_Kill(Node *victim)
     memcpy(&a, u->node->data + 0xa8, 4);
     memcpy(&b, victim->data + 0xa4, 4);
     points += (int32_t)(int64_t)fpu_mul(fpu_mul(a, b), exe_f32(0x4a50f0));   /* ftol 0x496690 chops */
+    Scores_Fill();
+}
+
+/* ---- the scores' box (0x4632c0-0x463670) ---- */
+
+
+/* 0x463350: the box's lines again. In the melee one: the user's name (the mission record's, 0x403130), its
+   points and kills (0x407340) and 0 deaths, "%s:\t%d\t%d\t%d"; sorted by the points (0x463ba0, one line
+   here). Network play's players and teams are not ported */
+void Scores_Fill(void)
+{
+    Region_Clear(score_box);   /* 0x44ff10 */
+    if (!g_melee) return;
+    char line[80];
+    snprintf(line, sizeof line, exe_str(0x4dc62c), g_sh_rec.player, points, (unsigned)(uint16_t)kills, 0u);
+    Region_Add(score_box, line);   /* 0x44ff70 */
+}
+
+/* 0x4632c0: the box at (50, 150), 540 x 180, red (0xff), fixed lines (8), its tab stops 250, 330 and 410
+   (0x4dc618); hidden, then filled. The record's "courier" and its line life (the stack's) are unused */
+void Scores_Init(void)
+{
+    int32_t t[3];
+    for (int i = 0; i < 3; i++) t[i] = (int32_t)exe_u32(0x4dc618 + 4u * (uint32_t)i);
+    score_box = Region_New(0x32, 0x96, 0x21c, 0xb4, 0xff, 0, 8);
+    Region_Tabs(score_box, 3, t);   /* 0x44fea0 */
+    score_shown = 0;
+    Scores_Fill();
+}
+
+/* 0x4635d0 (SCORE_TOGGLE): outside network play the box shown or hidden (0x44fed0) */
+void Scores_Toggle(void)
+{
+    score_shown = !score_shown;
+    Region_Show(score_box, score_shown);
 }
 
 void Melee_Score(int32_t *p, int16_t *k)

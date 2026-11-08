@@ -1,6 +1,7 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "melee.h"
 #include "damage.h"
 #include "fsm.h"
 #include "notepad.h"
@@ -1289,6 +1290,8 @@ static void game_command(int c)
         Camera_SetMode(u, c);
     } else if (c == 0x23)
         *INPUT_AT(0x4deff9) = 1;   /* self_destruct */
+    else if (c == 0x27 && g_melee)   /* SCORE_TOGGLE, in the melee (0x407370) or network play */
+        Scores_Toggle();   /* 0x4635d0 */
     /* the last command, 0x4e8ab4, is not kept */
 }
 

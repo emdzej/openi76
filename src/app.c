@@ -58,6 +58,7 @@
 #include "render/queue.h"
 #include "render/road_draw.h"
 #include "melee.h"
+#include "textregion.h"
 #include "notepad.h"
 #include "render/sky.h"
 #include "render/surface.h"
@@ -106,6 +107,10 @@ static bool viewer_init(const char *mission)
     /* WinMain: t01, t13 and t17 (0x4a8348, 0x4a8344, 0x4a8340) mark the first of a trip (0x58dc88) */
     g_first_trip = !crt_strnicmp(mission, exe_str(0x4a8348), 3) || !crt_strnicmp(mission, exe_str(0x4a8344), 3) ||
                    !crt_strnicmp(mission, exe_str(0x4a8340), 3);
+    /* WinMain before the load: the screen mode's font (0x4394e0: base6x74.fnt in mode 6, base6x7.fnt in 7,
+       else base6x76.fnt; the port's mode is 5) and the text regions (0x44fca0) */
+    if (!g_game_font) g_game_font = BFont_Load(exe_str(0x4a8124));
+    Regions_Init();
     if (g_melee) SpawnLoc_Init();   /* 0x4626a0 */
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
@@ -314,7 +319,11 @@ static void play_frame(void)
         /* 0x404170 (the objects' detail by distance) is not ported yet */
         Sound_Frame(1);    /* 0x466b70 */
         Sound_Enable(1);   /* 0x466dd0 */
-        if (!(g_play_state & 0xc)) viewer_frame();
+        if (!(g_play_state & 0xc)) {
+            viewer_frame();
+            /* 0x428770 (the cockpit's mask) is not ported */
+            if (g_play_state == 1) Regions_Draw(&surf);   /* 0x450040; 0x450ae0 (network play's chat line) is not ported */
+        }
         show_frame();
         Rel_Clear();   /* 0x421fc0 after the frame's drawing */
     }
@@ -567,6 +576,7 @@ static void mission_finish(void)
     Rel_Clear();
     /* 0x47deb0, 0x47d2b0 (the levels of detail), 0x41fca0 (the radar's mask), 0x47c550 (the textures), 0x48e0b0: */
     Queue_Free();
+    Regions_Free();   /* 0x4503a0 */
     /* 0x41f2f0, 0x450e30, 0x450d30, 0x4503a0 (the heaps of the panels), 0x41e850 (the objectives),
        0x44e350, 0x44e320. The port's set-up empties its own tables as the next mission loads */
     viewer = play = false;

@@ -26,5 +26,9 @@ void Melee_End(void);   /* 0x4072b0 at the mission's end */
 void Melee_Kill(Node *victim);  /* 0x4072e0: a kill by the user */
 void Melee_Score(int32_t *points, int16_t *kills);   /* 0x407340 */
 /* Vehicle_TakeOut 0x42b7d0: a vehicle out of the world (its sounds, entity, weapons and node) */
+/* the scores' box: Scores_Init 0x4632c0, Scores_Fill 0x463350, Scores_Toggle 0x4635d0 (SCORE_TOGGLE) */
+void Scores_Init(void);
+void Scores_Fill(void);
+void Scores_Toggle(void);
 struct Entity;
 void Vehicle_TakeOut(struct Entity *e);

@@ -1468,3 +1468,20 @@
 004329b0	Heli_PartTextures	vehicle	high	part i's damage textures (0x4d5d18) at a frame by level; ported
 00432a70	Frame_PosF	math	high	the frame's place as floats; ported inline
 00432ab0	Frame_SetPosF	math	high	the frame's place from floats; ported inline
+004394e0	BFont_Load	render	high	the game's bitmap font (.fnt): glyphs made masks, the colour map; ported
+004396d0	BFont_Colour	render	high	the font's colour, or none; ported
+00439720	BFont_Glyph	render	high	one glyph through the map, clipped; ported
+00439900	BFont_Draw	render	high	a string scaled from 640x480, with the tab stops; ported
+00439a60	Tabs_Set	render	high	the tab stops (0x4d67a8), -1 after; ported
+00439ab0	Tabs_Reset	render	high	the default stops 32-256; ported
+0044fca0	Regions_Init	hud	high	the text regions' list and line metrics; ported
+0044fd00	Region_New	hud	high	a text region (box, bitmap, lines); ported
+0044fea0	Region_Tabs	hud	high	its tab stops; ported
+0044fed0	Region_Show	hud	high	shown or hidden (flag 2); ported
+0044ff10	Region_Clear	hud	high	its lines cleared; ported
+0044ff70	Region_Add	hud	high	a line added; ported
+00450040	Regions_Draw	hud	high	the shown regions redrawn when changed and laid over the screen; ported
+004503a0	Regions_Free	hud	high	every region freed; ported
+004632c0	Scores_Init	melee	high	the scores' box made, hidden, filled; ported
+00463350	Scores_Fill	melee	high	the scores' lines (the melee's: the user's); ported
+004635d0	Scores_Toggle	melee	high	SCORE_TOGGLE: the box shown or hidden; ported

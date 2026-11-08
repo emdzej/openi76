@@ -152,9 +152,31 @@ The exe's side (src/melee.c):
   counts one more and adds ftol(the user's car's +0xa8 × the victim's +0xa4 × 1000) points (Melee_Kill
   0x4072e0).
 
+**The scores' box (0x4632c0, 0x463350, 0x4635d0; ported, src/melee.c, src/textregion.c).** Made at
+the opponents' load (before the counters are reset, so it shows the last melee's until a kill refills
+it): a text region at (50, 150), 540 x 180, red, its lines fixed, tab stops 250, 330 and 410, hidden. Each
+kill by the user fills it again: the user's name (the mission record's), the points, the kills and 0
+deaths as "%s:\t%d\t%d\t%d". SCORE_TOGGLE (0x27, Ctrl+S by default) shows or hides it.
+
+- **The game's font (0x4394e0, base6x76.fnt at 640 x 480; base6x74 in mode 6, base6x7 in 7).** Four
+  words (+4 the count, 128; +8 the height, 14), the count's offsets from the file's start, then each
+  glyph: its width and width x height bytes, 0xff clear. Loaded, the bytes become masks and a map of
+  0x200 bytes picks [mask << 8 | pixel]: the pixel itself, then the colour (0xf at first; 0x4396d0 sets
+  it, or none out of 0-0xff). A string (0x439900) is placed scaled from 640 x 480 to the screen and steps
+  by each glyph's width plus 2. A tab goes to the first of the eight stops (0x4d67a8, by default 32 to
+  256) past the place; the search goes on from that stop on the next character, and past the last (-1)
+  each tab adds 32. A glyph of no width draws one column of the bytes after it in the original; the
+  port draws none (the scores never use one).
+- **The text regions (0x44fca0-0x4503a0)**: a list, the newest first, each a box with its own bitmap
+  (filled 0xff, keyed out when it is laid over the frame through the remap table). Its columns are the
+  width over 'W''s (at most 0x4f), its rows the height over the font's. Its lines (rows + 5 of 0x54 bytes,
+  the text then an end time) are cleared (0x44ff10) and added (0x44ff70); a fixed box (flag 8) stops at
+  rows + 1, a scrolling one wraps and scrolls a quarter line a frame. WinMain draws them while the play
+  runs (state 1, 0x450040) after the world: a box marked changed (or on a new screen width, or past its
+  first line's end with flag 1) is drawn again, rows + 1 lines, each with the box's stops, then laid
+  over the screen where it is shown (flag 2). Network play's other boxes and its chat line (0x450ae0)
+  are not ported.
+
 Not ported yet:
 
-- the scores' box (0x4632c0, 0x463350: a scroll region of 0x44fd00-0x450350 at 0x32, 0x96, 0x21c by
-  0xb4, its lines "%s:\t%d\t%d\t%d" with tab stops 250, 330, 410, shown by SCORE_TOGGLE, 0x27). It
-  draws with the game's bitmap font, base6x76.fnt (0x4394e0, 0x439720, 0x439900), which isn't ported yet;
 - the network's records (dpGetPlayerData).
