@@ -8,7 +8,8 @@
    - the first named target not yet destroyed within 500 m (a structure: the fireworks stand) attacked;
      one written name@k only once objective k is shown;
    - with "enemies@k" written, once objective k shows, the nearest enemy at any range hunted;
-   - else the leader (a script entity: taurus) followed in formation (order 0x1e), 15 m behind.
+   - else the leader (a script entity: taurus) followed in formation (order 0x1e), 15 m behind, avoiding
+     (+0x9d14) as the script has the leader avoid.
    Whatever it attacks, a person's trigger is pulled while the target is straight ahead. The engine is
    started, the gear put in drive and (--param apskill) the skill set once. Off by default: the play is
    the user's */
@@ -157,6 +158,8 @@ void Autopilot_Frame(void)
         memcpy(ai + 0xa98c, &w, 4);
         memcpy(ai + 0xa980, &across, 4);
         memcpy(ai + 0xa984, &along, 4);
+        uint8_t *la = lead->data && (lead->cls == 1 || lead->cls == 9) ? *Data_Ptr(lead->data, 0x108) : NULL;
+        if (la) memcpy(ai + 0x9d14, la + 0x9d14, 4);   /* avoiding as the leader does (t02's race: off for its jump) */
         AI_Order(u, lead, 0x1e, 0);
     }
 }
