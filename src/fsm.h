@@ -42,6 +42,8 @@ void Fsm_SetWord(uint32_t a, int32_t v);
 uint32_t Fsm_Window(uint8_t *p, uint32_t size);
 /* entity record i's node, refreshed (Node_Live: a freed one becomes NULL) */
 Node *Fsm_Entity(int32_t i);
+/* the port's: the node of the script's entity of that name (the autopilot's targets) */
+Node *Fsm_Named(const char *name);
 
 /* the mission's end: at 0x5054b0 (the script's clock) the game's state becomes 0x5054b4 (0x401280) */
 extern float g_fsm_end_time;

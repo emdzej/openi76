@@ -353,6 +353,15 @@ Node *Fsm_Entity(int32_t i)
     return ent_node[i];
 }
 
+/* the port's (the autopilot's): the node of the entity named name (case-insensitive), NULL if none */
+Node *Fsm_Named(const char *name)
+{
+    if (!g_fsm_loaded) return NULL;
+    for (int32_t i = 0; i < g_fsm.n_entities && i < ent_cap; i++)
+        if (!crt_strnicmp((const char *)at(g_fsm.entities + (uint32_t)i * 0x60), name, 0x50)) return Fsm_Entity(i);
+    return NULL;
+}
+
 /* ---- the actions (0x40d0d0) ---- */
 
 /* argument k: its address (the arguments' stack), the int there */
@@ -982,6 +991,12 @@ static void action(uint32_t m, int32_t index)
     case 15: case 17: case 18: {               /* successAll (1), failAll, failAllObj (0, 0 / the objective) */
         g_fsm_end_state = code == 15;
         g_fsm_end_time = fpu_f32(fpu_add((double)I(m, 0), g_clock_total));
+        {   /* the port's note of how the mission ends */
+            char msg[120];
+            snprintf(msg, sizeof msg, "OpenI76: the script ends the mission (%s) in %d s at %.1f s", code == 15 ? "successAll" : code == 17 ? "failAll" : "failAllObj",
+                     (int)I(m, 0), g_clock_total);
+            plat_log(msg);
+        }
         Objectives_FailExcept(code == 18 ? I(m, 1) : -1);   /* 0x41f280 */
         break;
     }

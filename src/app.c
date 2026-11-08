@@ -59,6 +59,7 @@
 #include "render/road_draw.h"
 #include "melee.h"
 #include "textregion.h"
+#include "autopilot.h"
 #include "notepad.h"
 #include "render/sky.h"
 #include "render/surface.h"
@@ -111,6 +112,7 @@ static bool viewer_init(const char *mission)
        else base6x76.fnt; the port's mode is 5) and the text regions (0x44fca0) */
     if (!g_game_font) g_game_font = BFont_Load(exe_str(0x4a8124));
     Regions_Init();
+    Autopilot_Reset();
     if (g_melee) SpawnLoc_Init();   /* 0x4626a0 */
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
@@ -266,6 +268,7 @@ static void play_frame(void)
         Class_Frame(0);
         Class_Frame(1);
         AI_Frame();
+        Autopilot_Frame();   /* the port's, --param autopilot (off by default) */
         Artillery_Fire();  /* 0x428e80 */
         Shots_Frame();     /* 0x4597a0 */
         Weapons_Frame();   /* 0x455d90 */
@@ -298,6 +301,17 @@ static void play_frame(void)
             snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x shots %d ammo %d",
                      frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags, shots, ammo);
             plat_log(m);
+        }
+        if (trace > 0) {   /* the port's: the objectives' changes with the trace */
+            static uint32_t seen[8];
+            for (int i = 0; i < g_objectives.count && i < 6; i++)
+                if (g_objectives.flags[i] != seen[i]) {
+                    char m[200];
+                    snprintf(m, sizeof m, "OpenI76: frame %d objective %d flags %x: %.120s", frames, i, (unsigned)g_objectives.flags[i],
+                             g_objectives.text[i] ? g_objectives.text[i] : "");
+                    plat_log(m);
+                    seen[i] = g_objectives.flags[i];
+                }
         }
         static int aitrace = -1;
         if (aitrace < 0) {

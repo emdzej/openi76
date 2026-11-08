@@ -36,7 +36,9 @@ camera. With `--param play=1` too it runs the game loop's ported parts: the vehi
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
 cameras: every mode of the presets F1-F11, the death's and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
-trace=<frames>` logs the user's vehicle. Esc's in-game menus and the mission's end menu run, with Replay, Abort and Exit through WinMain's teardown (docs/re/menus.md; their text through src/gdi.c and the disc's LEE_____.TTF). The 3D and the flat cockpit with their instruments, the weapons' and specials' panels, the radar's
+trace=<frames>` logs the user's vehicle. `--param autopilot=<leader>[,<target>[@objective][:guard]...]` (the
+port's, opt-in: src/autopilot.c) hands the user's car to the ported AI with the script's own orders, for
+headless runs through a mission (t01: `taurus,fireworks@1,wagon:guard@2`); `--param apskill` sets its skill. Esc's in-game menus and the mission's end menu run, with Replay, Abort and Exit through WinMain's teardown (docs/re/menus.md; their text through src/gdi.c and the disc's LEE_____.TTF). The 3D and the flat cockpit with their instruments, the weapons' and specials' panels, the radar's
 display, the HUD's target box and the rear-view mirror run (docs/re/cockpit.md). The salvage list
 fills (docs/re/salvage.md). The Smacker movies play (docs/re/movies.md, docs/formats/smk.md): the intro and
 credits at start-up (`--param intro=0` leaves them out) and the script's `playMovie`, Esc skipping them, the
