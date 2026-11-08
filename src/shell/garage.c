@@ -26,7 +26,8 @@ static Box boxes[14];           /* 0x10066e98: twelve boxes, ACCEPT SALVAGE (0x1
 static int32_t scrolls[6][12];  /* 0x10066d78: 0x30 each */
 static ShList *box_list;        /* 0x10066d5c: the boxes, for the hit test */
 static ShList *yard[6];         /* 0x10066d60 engines, d64 guns, d68 specials, d6c wheels, d70 brakes, d74 suspensions */
-static ShList *repairs;         /* 0x1005c904: user.rpr's first block past its split */
+ShList *g_sh_stock_repairs;     /* 0x1005c904: user.rpr's first block past its split */
+#define repairs g_sh_stock_repairs
 static int moved;               /* 0x10092a38: a part moved */
 static int hinted;              /* 0x10092a48 */
 static const uint8_t *frames[3];  /* 0x10066d38, 0x10066d3c, 0x10066d40: entries 0x21-0x23, the damage bars */
@@ -55,6 +56,7 @@ void Garage_Reset(void)   /* i76shell 0x10034df0 (then 0x10010d20 and 0x10003c80
     repairs = NULL;
     for (int i = 0; i < 6; i++) yard[i] = NULL, scrolls[i][0] = 0;
     w_click = w_done = w_yard = w_ask = w_yes = w_no = NULL;
+    Markers_Init();
 }
 
 /* ---- the lists ---- */

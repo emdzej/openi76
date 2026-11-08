@@ -46,6 +46,10 @@ void Garage_Load(void);
 void Garage_State(void);
 /* the EMPTY slots' part (0x1005c920: its part "Empty" with "null" files, its condition 0) */
 extern ShPart g_sh_empty;
+/* the set-up's markers of an empty component (0x1005c940 the engine's, 960 the brakes', 980 the
+   suspension's, 9a0 a wheel's) */
+extern ShPart g_sh_no_engine, g_sh_no_brakes, g_sh_no_susp, g_sh_no_wheel;
+void Markers_Init(void);   /* part of 0x10003c80 */
 extern int g_sh_from_map;           /* 0x1006b050: set by the trip's map (0x10013040), cleared by the garage */
 extern char g_sh_player_dir[16];
 extern int g_sh_bookmark;           /* 0x1008e9f4: the trip came from a bookmark (0x10002d80) */
@@ -70,6 +74,7 @@ void Car_WriteVsf(const char *path, const char *name, const ShList *comps, const
 void Garage_Reset(void);
 void Garage_Open(void);
 void Garage_FreeStock(void);
+extern ShList *g_sh_stock_repairs;   /* 0x1005c904 */
 
 /* 0x10020d30 (0xc01e) */
 void Trip_Next(int prev_state);

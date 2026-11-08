@@ -7,10 +7,11 @@
 #include <string.h>
 
 ShPart g_sh_empty;      /* 0x1005c920 */
+ShPart g_sh_no_engine, g_sh_no_brakes, g_sh_no_susp, g_sh_no_wheel;   /* 0x1005c940, 960, 980, 9a0 */
 int g_sh_from_map;      /* 0x1006b050 */
 char g_sh_player_dir[16];
 
-static uint8_t empty_entry[SHELL_PART];   /* 0x1006b250 */
+static uint8_t empty_entry[5][SHELL_PART];   /* 0x1006b250, 0x1006aee8, 0x1006b058, 0x1006aff8, 0x1006afa0 */
 
 ShList *g_sh_allparts, *g_sh_engines, *g_sh_susps, *g_sh_brakes, *g_sh_wheels, *g_sh_guns, *g_sh_specials;
 #define l_all g_sh_allparts
@@ -24,15 +25,27 @@ ShList *g_sh_allparts, *g_sh_engines, *g_sh_susps, *g_sh_brakes, *g_sh_wheels, *
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 
-/* part of i76shell 0x10003c80 (the shell's start): the marker's part "Empty", its files "null" */
+/* part of i76shell 0x10003c80 (the shell's start, 0x10034df0): the markers' parts "Empty" with "null"
+   files, kinds 2 (the engine's), 4 (the brakes'), 3 (the suspension's) and 5 (a wheel's), conditions 0 */
+void Markers_Init(void)
+{
+    ShPart *m[5] = {&g_sh_empty, &g_sh_no_engine, &g_sh_no_brakes, &g_sh_no_susp, &g_sh_no_wheel};
+    static const int32_t kind[5] = {0, 2, 4, 3, 5};
+    for (int i = 0; i < 5; i++) {
+        uint8_t *e = empty_entry[i];
+        memset(e, 0, SHELL_PART);
+        strcpy((char *)e, dll_str(0x1005ce30));
+        strcpy((char *)e + 0x2e, dll_str(0x1005ce38));
+        strcpy((char *)e + 0x3b, dll_str(0x1005ce40));
+        if (kind[i]) memcpy(e + 0x1e, &kind[i], 4);
+        memset(m[i], 0, sizeof *m[i]);
+        m[i]->part = e;
+    }
+}
+
 static void empty_init(void)
 {
-    if (g_sh_empty.part) return;
-    strcpy((char *)empty_entry, dll_str(0x1005ce30));
-    strcpy((char *)empty_entry + 0x2e, dll_str(0x1005ce38));
-    strcpy((char *)empty_entry + 0x3b, dll_str(0x1005ce40));
-    g_sh_empty.part = empty_entry;
-    g_sh_empty.count = 0;
+    if (!g_sh_empty.part) Markers_Init();
 }
 
 static const uint8_t *car(void) { return g_sh_recs + g_sh_car * SHELL_REC; }
