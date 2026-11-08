@@ -324,5 +324,6 @@ follow:;
         uint8_t *la = lead->data && (lead->cls == 1 || lead->cls == 9) ? *Data_Ptr(lead->data, 0x108) : NULL;
         if (la) memcpy(ai + 0x9d14, la + 0x9d14, 4);   /* avoiding as the leader does (t02's race: off for its jump) */
         AI_Order(u, lead, 0x1e, 0);
-    }
+    } else
+        AI_Order(u, NULL, 0x1f, 0);   /* nothing left: sit, so the tactics' stack still runs (and pops) */
 }
