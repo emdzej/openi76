@@ -82,3 +82,35 @@
 1000fe00	Shell_YesNo	shell	high	the yes/no box (entry 0x24 frame 0xb), waited on; ported
 10035830	Garage_AskText	garage	high	"Leave without taking salvage?"; ported
 1000fb10	Shell_Hint	shell	medium	the trip's hints; not ported
+10003fe0	Setup_Open	setup	high	the car's set-up (0xc00f): the paint, the gun count, the bars, the waves; ported (src/shell/setup.c), the trip's path
+100043d0	Setup_Screen	setup	high	the set-up's clicks: back, DONE, the bookmark; the boxes' edits not ported
+10005b10	Setup_AskText	setup	high	DONE's question on the trip's first mission; ported
+10005ba0	Setup_Refresh	setup	high	the lists refreshed on a return; ported
+10005ca0	Setup_Build	setup	high	the boxes and the lists, filled; ported
+10005f30	Setup_Free	setup	high	the set-up's lists freed; ported
+10006110	Setup_GunLabels	setup	high	the guns' labels, Hand and .45 CAL; ported
+10006320	Setup_DrawList	setup	high	a box's rows to its capacity; ported (the picture's part not yet)
+100063e0	Setup_DrawDrops	setup	high	the droppers' box; ported
+100064a0	Setup_DrawRepairs	setup	medium	the repairs' box; not ported
+100065e0	Setup_Weight	setup	high	the car's weight, drawn as %d LBS; ported
+10006780	Setup_Redraw	setup	high	the set-up's redraw; ported (the repairs and the armour not yet)
+10006bd0	Setup_OrderOf	setup	high	a hard point id's place in the guns' box; ported
+10006c20	Setup_HpLabels	setup	high	the hard points' labels and the guns' order; ported
+10007d70	Setup_Check	setup	high	DONE's check, its notes 0x15-0x1c; ported
+10017920	Rec_PutSlot	trip	high	a part into the record's first slot of a kind; ported
+10018840	Setup_ListsToRecord	setup	high	the boxes back into the record; ported
+1001c690	Kind_IsMount	trip	high	kinds 6, 7, 0xb; ported
+1001c6f0	Kind_IsSpecial	trip	high	kinds 0, 0xc, 0xd; ported
+1001c710	Rec_CountGuns	trip	high	the record's gun slots of its first 30 into +0x864; ported
+1001c7a0	Stock_Write	trip	high	user.rpr: the repairs with their split, the van's parts by kind; ported
+1001e4d0	List_DropFrom	trip	high	a list's items found in another removed; ported
+1002bc70	Spc_Write	trip	high	reconfig.spc and trip4.spc: the record, the parts, the repairs; ported
+10035c50	Bars_Load	trip	high	the damage bars' frames and their picks; ported
+10036b40	Pick_OnCar	trip	high	the first part of a slot's kind on the car; ported
+10036ce0	Wheels_OnCar	trip	high	the wheels on the car, their .wdf from the record; ported
+10036ec0	Fill_Comps	trip	high	the set-up's components; ported
+10036fc0	Fill_Guns	trip	high	the set-up's guns and droppers, and the free lists; ported
+10037400	Refresh_Comps	trip	high	the components refreshed; ported
+100374b0	Refresh_Guns	trip	high	the guns refilled; ported
+10037910	Fill_Specs	trip	high	the set-up's specials; ported
+10037960	Refresh_Specs	trip	high	the specials refreshed; ported

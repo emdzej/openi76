@@ -1,4 +1,14 @@
-# The car's set-up (0xc00f) — survey, being ported
+# The car's set-up (0xc00f) — ported in part
+
+**Port status** (`src/shell/setup.c`): the trip's path opens, fills its boxes from the car's record, draws
+the labels, the parts with their damage bars, the car's name and its weight, and DONE runs its check
+(the notes are logged, 0x1000fb10 is not ported), asks its question on the trip's first mission, writes the
+record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf` and `.vsf`, `user.rpr`,
+and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
+with vehscn.vcf. Not ported yet: the boxes' edits (the clicks on the parts, the repairs, the armour and
+chassis buttons, the car's picture 0x100114d0 and its sets 0x25-0x3f, the name's edit), the melee's
+path from the map. The garage's six functions are a flag here (`Setup_UseTrip`), the only fills ported.
+
 
 The salvage's choice (0xc017, docs/re/garage.md) goes on to 0xc00f once ACCEPT SALVAGE is pressed. It
 first sets six functions that fill and refresh the set-up's lists:

@@ -169,7 +169,8 @@ shell runs, in order:
    SALVAGE goes on to 0xc00f (on trip 1 with nothing moved after "Leave without taking salvage?"), SAVE
    BOOKMARK opens pop-up 1.
 6. **0xc00f (0x10003fe0; screen 0x100043d0, 5.8 KB)**: the car's set-up (paint, the guns on their hard
-   points), then the car written (+0xc, +0x1c) and the mission (0xc010).
+   points), then the car written (+0xc, +0x1c) and the mission (0xc010). Ported in part
+   (src/shell/setup.c, docs/re/setup.md): the boxes shown and DONE's writes; the edits not yet.
 7. **0xc015 (0x10033c60)**: the salvage screen.
 8. **The car written (0x1001d6a0 .vcf, 0x1001de30 .vsf; ported, src/shell/carwrite.c)**, also by NEW
    TRIP and TRAINING. Confirmed from the disassembly (the decompiler drops the wheels' branches).

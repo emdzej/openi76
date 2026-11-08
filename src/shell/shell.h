@@ -64,6 +64,8 @@ void Shell_Click(const uint8_t *wav);
    asks), waited on; then the screen's redraw (g_sh_redraw) and done with the answer */
 void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes));
 extern void (*g_sh_redraw)(void);   /* 0x10063790 */
+const uint8_t *Shell_Set24(void);   /* entry 0x24, the boxes' frames (0x1005fae0) */
+void Shell_Hint(int text);          /* i76shell 0x1000fb10 (garage.c), not ported: logged */
 int Rect_Hit(int x, int y, const void *rect);   /* i76shell 0x10034d20 */
 void Shell_SetScreen(ShScreenFn fn);              /* i76shell 0x10026ef0 */
 void Shell_UnsetScreen(ShScreenFn fn);            /* i76shell 0x10026f00 */

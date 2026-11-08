@@ -40,7 +40,7 @@ static uint8_t *w_click, *w_done, *w_yard, *w_ask, *w_yes, *w_no;
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 
-static void hint(int text)   /* 0x1000fb10: the trip's hints, not ported */
+void Shell_Hint(int text)   /* 0x1000fb10: the trip's hints and notes, not ported */
 {
     char m[64];
     snprintf(m, sizeof m, "OpenI76: the shell's hint 0x%x is not ported yet", text);
@@ -261,26 +261,30 @@ static void boxes_make(void)
    set 0x21 under 0x10059bf8 of whole, 0x23 under 0x10059c00 of that, else 0x22), its name; the car's
    side marks it by where it is ({ 1 on the car, | 2 kept, } 3), the yard's shows the rows from its
    scroll */
+void Part_Bar(const ShPart *p, int x, int y)
+{
+    int32_t full = rd32(p->part + 0x4c);
+    if (full == p->count) return;
+    double lo, hi;
+    memcpy(&lo, dll_data(0x10059bf8, 8), 8);
+    memcpy(&hi, dll_data(0x10059c00, 8), 8);
+    double whole = (double)full * lo;
+    int s = 0;   /* 0x21 below whole, 0x22 under whole times hi, 0x23 from there */
+    if (whole <= (double)p->count) s = (double)p->count < whole * hi ? 1 : 2;
+    Scr_Frame(frames[s], frame_k[s], x, y, 0x8c, 0xe);
+}
+
 static void box_draw(const Box *b)
 {
     int x = b->x0 + 2, y = b->y0 + 1;
     const ShList *l = b->list;
     Scr_Restore(b->x0, b->y0, b->x1 - b->x0 + 1, b->y1 - b->y0 + 1);
-    double lo, hi;
-    memcpy(&lo, dll_data(0x10059bf8, 8), 8);
-    memcpy(&hi, dll_data(0x10059c00, 8), 8);
     char text[64] = "";   /* a part marked otherwise shows the row before's text (quirk, kept) */
     int first = b->scroll ? b->scroll[0] : 0, last = b->scroll ? first + b->rows : l->count;
     for (int i = first; i < last && i < l->count; i++) {
         const ShPart *p = l->items[i];
-        int32_t full = rd32(p->part + 0x4c);
         if (b->scroll) y += row_h;
-        if (full != p->count) {
-            double whole = (double)full * lo;
-            int s = 0;   /* 0x21 below whole, 0x22 under whole times hi, 0x23 from there */
-            if (whole <= (double)p->count) s = (double)p->count < whole * hi ? 1 : 2;
-            Scr_Frame(frames[s], frame_k[s], x, y, 0x8c, 0xe);
-        }
+        Part_Bar(p, x, y);
         const char *name = (const char *)p->part;
         if (!b->scroll) {
             if (p->where == 1) snprintf(text, sizeof text, dll_str(0x10067080), name);
@@ -372,9 +376,10 @@ static void done(uint8_t *wav)
     Shell_Click(wav);
     if (g_sh_rec.trip == 2 && g_sh_prev == 1 && !hinted) {
         hinted = 1;
-        hint(0x20);
+        Shell_Hint(0x20);
     }
     g_sh_from_map = 0;
+    Setup_UseTrip();
     leave(0xc00f);
 }
 
@@ -435,6 +440,15 @@ static uint8_t *wave(int entry)
     return Mw2_Raw(g_sh_db, entry, &n);
 }
 
+void Bars_Load(void)   /* i76shell 0x10035c50 */
+{
+    frame_k[0] = Shell_Rand() % 5;   /* 0x10092a40 */
+    frame_k[1] = Shell_Rand() % 5;   /* 0x10092a3c */
+    frame_k[2] = Shell_Rand() % 5;   /* 0x10092a44 */
+    for (int i = 0; i < 3; i++)
+        if (!frames[i]) frames[i] = wave(0x21 + i);
+}
+
 void Garage_Open(void)   /* i76shell 0x10034eb0 */
 {
     g_sh_redraw = redraw;
@@ -451,16 +465,12 @@ void Garage_Open(void)   /* i76shell 0x10034eb0 */
             w_no = wave(0x4c);
         }
     }
-    frame_k[0] = Shell_Rand() % 5;   /* 0x10092a40 */
-    frame_k[1] = Shell_Rand() % 5;   /* 0x10092a3c */
-    frame_k[2] = Shell_Rand() % 5;   /* 0x10092a44 */
-    for (int i = 0; i < 3; i++)
-        if (!frames[i]) frames[i] = wave(0x21 + i);
+    Bars_Load();
     g_shs.fill = -1;
     int t = g_sh_rec.trip + (g_sh_prev == 1);
     Scr_Background(g_sh_db, t == 5 ? 0x1e : 3);
     boxes_make();
     redraw();
     Shell_SetScreen(screen);
-    if (g_sh_rec.trip == 4 && first && g_sh_prev == 1) hint(0x21);
+    if (g_sh_rec.trip == 4 && first && g_sh_prev == 1) Shell_Hint(0x21);
 }

@@ -152,12 +152,18 @@ static void box_shadow(int x, int y, int w, int h)   /* 0x1003d7c0 with a block 
     Scr_Dirty(x, y, x - 1 + w, y - 1 + h);
 }
 
-void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes))
+const uint8_t *Shell_Set24(void)
 {
     if (!box_set) {   /* the menus' load (0x10010fb0) takes it */
         uint32_t n;
         box_set = Mw2_Raw(g_sh_db, 0x24, &n);
     }
+    return box_set;
+}
+
+void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes))
+{
+    Shell_Set24();
     Scr_Frame(box_set, 0xb, 0x73, 0x82, 0x19a, 0xdc);
     if (text) text(0x73, 0x82);
     box_shadow(0x79, 0x15e, 0x19a, 6);
@@ -337,9 +343,8 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc017:   /* the salvage's choice */
         Garage_Open();
         return;
-    case 0xc00f:   /* the car's set-up: not ported yet, straight to the mission */
-        unported("screen (the garage's, straight to the mission)", msg);
-        Shell_Post(0xc010, 0);
+    case 0xc00f:   /* the car's set-up */
+        Setup_Open();
         return;
     case 0xc008: case 0xc00d: case 0xc015: case 0xc01c: case 0xc01d:
     case 0xc01f: case 0xc020: case 0xc021: case 0xc024: case 0xc025: case 0xc026:
