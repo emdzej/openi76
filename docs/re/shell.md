@@ -331,7 +331,17 @@ shell runs, in order:
   ticked and Done write the word 3; Unlim. Ammo asks.
 - **The player's file** (0x10039e20 read, 0x10039f30 write): I76PLYR.DEF's 0x58 bytes, as the exe's
   block (docs/re/menus.md). The bookmark's load writes it after setting or clearing No Salv. Manag.
-- Not ported yet: pop-ups 3 (modem), 5 (graphic detail, 0x1003e7c0), 6 (audio, 0x10039a90), 7
-  (controls, 0x100093a0).
+- **Pop-up 6, the audio** (0x10039a90, its pass 0x10039b50): its records (0x10093028) are made in code
+  by 0x10039530: for the music's, effects', speech's levels and the channels (the bytes 0x10068fd8-db, the
+  exe's 0x5e14de-e1) a label (font 0x46) at 0xcc, the level at 400 ("Off" below 2, else "%d.00";
+  a click steps it, past 10, or 8 for the channels, to 0) and ten ticks (eight) from 0xca each 0x11 on
+  the next line, drawn "x" up to the level, without a colour map; a tick's click sets the level to its
+  number and lets it be heard through the exe's table (+0x38 0x4688f0 the music's volume, +0x3c 0x468910
+  cammo.wav, +0x40 0x468970 croger.wav; the channels set alone). Done writes the player's file
+  (0x10039f30 given no record: its first 0x40 bytes are the stack's, as it happens; the port writes them
+  as read); Cancel puts back the four levels and the two bytes after and sets the music's volume alone
+  again (the effects' and speech's stay as heard, quirk kept). Checked: the sixth music tick and Done
+  write 6.
+- Not ported yet: pop-ups 3 (modem), 5 (graphic detail, 0x1003e7c0), 7 (controls, 0x100093a0).
 
 Other screens: the melee's, network play.

@@ -29,3 +29,6 @@ void Settings_Defaults(int cls);
 void Settings_Init(void);
 /* I76PLYR.DEF written with the block's 0x58 bytes (0x4965a0, mode 0x4d5370; 0x44d7b0 and the menus) */
 void Settings_Save(void);
+/* the block's two bytes at +0x52 (0x5e14e2, 0x5e14e3; the shell's 0x10068fdc) */
+void Settings_GetMore(uint8_t out[2]);
+void Settings_SetMore(const uint8_t in[2]);

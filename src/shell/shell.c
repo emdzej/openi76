@@ -337,6 +337,10 @@ static bool popup(void)
         PlayOptions_Open();
         g_sh_popup_up = 1;
         return true;
+    case 6:   /* the audio (0x10039a90) */
+        Audio_Open();
+        g_sh_popup_up = 1;
+        return true;
     case 9:   /* the credits (0x10032790) */
         Credits_Open();
         g_sh_popup_up = 1;

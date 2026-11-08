@@ -61,3 +61,6 @@ void Settings_Save(void)
     pack(b);
     Files_Write("I76PLYR.DEF", b, sizeof b);
 }
+
+void Settings_GetMore(uint8_t out[2]) { memcpy(out, more, 2); }
+void Settings_SetMore(const uint8_t in[2]) { memcpy(more, in, 2); }

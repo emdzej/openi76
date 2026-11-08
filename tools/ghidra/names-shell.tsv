@@ -213,3 +213,16 @@
 10008520	Menu_Remake	menu	high	every piece of a menu taken off and made again
 10039e20	Player_Read	player	high	I76PLYR.DEF read into the shell's settings and trip record
 10039f30	Player_Write	player	high	I76PLYR.DEF written from the shell's settings and trip record
+10039a90	Audio_Open	options	high	pop-up 6, the audio levels; ported (src/shell/escmenu.c)
+10039530	Audio_Records	options	high	the audio pop-up's records made in code
+10039b50	Audio_Pass	options	high	the audio's ticks, Done and Cancel; ported
+100393e0	Item_Level	menu	high	a level's value piece, "Off" or "%d.00"
+10039440	Item_StepLevel	menu	high	a click stepping a level past 10 to 0
+10039460	Item_StepChannels	menu	high	a click stepping the channels past 8 to 0
+10039480	Item_Tick	menu	high	a level's tick, "x" up to the level
+100394d0	Item_MusicTick	menu	high	a tick's click: the music's level set and its volume (+0x38)
+100394f0	Item_SfxTick	menu	high	a tick's click: the effects' level and cammo.wav (+0x3c)
+10039510	Item_VoiceTick	menu	high	a tick's click: the speech's level and croger.wav (+0x40)
+100394c0	Item_ChannelTick	menu	high	a tick's click: the channels
+10039a60	Audio_Choice	options	high	Done or Cancel's choice
+10039d20	Record_Set	menu	high	a menu record's words filled
