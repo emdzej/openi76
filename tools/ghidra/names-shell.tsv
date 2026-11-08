@@ -191,3 +191,6 @@
 100337c0	FinalCar_Open	trip	high	0xc00d: the last mission's car; ported
 10033880	FinalCar_Screen	trip	high	the last mission's car lit and chosen; ported
 1003a960	Player_DefaultName	shell	medium	the player's default name (Jefferson Sovereign); not ported
+10032790	Credits_Open	shell	high	pop-up 9, the credits; ported (src/shell/escmenu.c)
+10032990	Credits_Pass	shell	high	the credits' pass and end; ported
+10032af0	Credits_Scroll	shell	high	the credits a pixel up each 30 ms; ported

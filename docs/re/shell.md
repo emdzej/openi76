@@ -312,7 +312,12 @@ shell runs, in order:
 - 0x1008e9e8 is each screen's own message (set by the window's procedure for 0xc008-0xc026 but 0xc010):
   the menu picks its items by it.
 - The main menu's redraw (0x10025320) draws its buttons again after a pop-up.
-- Not ported yet: pop-ups 3 (modem), 4 (play options), 5 (graphic detail), 6 (audio), 7 (controls), 9
-  (credits).
+- **Pop-up 9, the credits (0x10032790, 0x10032990, 0x10032af0)**: the fill 0xf, picture 0xd, the whole
+  screen restored (black); entry 0x53's lines, each centred on x 0x140 by its width in font 46 but drawn
+  in font 42 (a quirk), one under the other from y 480 a line (font 42's height and 2) apart; the music's
+  track 16. Each 30 ms every line moves up a pixel (its place restored first); one past the top leaves
+  the list, and the next is then skipped that time (kept). The end (none left, a click or Esc): track 15
+  again; from the trip's end (0xc008) user.rpr is removed and the main menu opens, else the menu again.
+- Not ported yet: pop-ups 3 (modem), 4 (play options), 5 (graphic detail), 6 (audio), 7 (controls).
 
 Other screens: the melee's, network play.

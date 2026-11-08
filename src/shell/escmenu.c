@@ -6,6 +6,8 @@
    starting with '~' is centred on x. */
 #include "shell/trip.h"
 #include "exe.h"
+#include "files.h"
+#include "music.h"
 #include "platform.h"
 #include "shell/font.h"
 #include "shell/screen.h"
@@ -212,4 +214,86 @@ void QuitMenu_Open(void)   /* 0x100334b0 */
     Shell_KbFlush();
     menu_make(&quit, 0x10066a80);
     Shell_SetMenu(quit_menu);
+}
+
+/* ---- pop-up 9, the credits (0x10032790, 0x10032990, 0x10032af0) ---- */
+
+typedef struct { int x, y, w; char *s; } CLine;   /* 0x10 bytes */
+static CLine *lines;          /* 0x100666f8 */
+static int nlines, line_h;    /* 0x10092594 */
+static double last_ms;        /* 0x10092620 */
+static void credits_menu(int on);
+
+/* 0x10032af0: each 30 ms every line a pixel up: its place restored, then drawn while on the screen; one
+   past the top leaves the list (the next one then skipped that time: quirk kept); 1 when none is left */
+static int credits_scroll(void)
+{
+    double now = plat_ms();
+    if (now - last_ms < 30) return 0;
+    if (!nlines) return 1;
+    last_ms = now;
+    for (int i = 0; i < nlines; i++) {
+        CLine *l = &lines[i];
+        if (l->y < 0x1e1 && l->x >= 0) Scr_Restore(l->x, l->y, l->w, line_h);
+        if (--l->y < -line_h) {
+            free(l->s);
+            memmove(lines + i, lines + i + 1, (size_t)(nlines - i - 1) * sizeof *lines);
+            nlines--;
+        } else if (l->y < 0x1e1 && l->s[0])
+            Scr_Text(l->x, l->y, &g_sh_font42, l->s, NULL);
+    }
+    return 0;
+}
+
+static void credits_menu(int on)
+{
+    if (on) {
+        if (credits_scroll() || g_sh_mouse.click == 1) on = 0;
+        if (on && Shell_KbRead() != 3) return;
+    }
+    Shell_UnsetMenu(credits_menu);
+    g_sh_popup_up = 0;
+    Music_Stop();
+    for (int i = 0; i < nlines; i++) free(lines[i].s);
+    free(lines), lines = NULL, nlines = 0;
+    Music_Play(0xf, 1);
+    if (!g_sh_menu_from) {
+        g_sh_popup_item = 0, g_sh_popup = 1;
+        return;
+    }
+    g_sh_menu_from = 0;
+    g_shs.fill = -1;
+    Scr_Present();
+    Files_Remove(dll_str(0x100614f0));   /* 0x1001d240 */
+    MainMenu_Open();
+}
+
+void Credits_Open(void)   /* 0x10032790 */
+{
+    line_h = g_sh_font42.height + 2;
+    uint32_t n;
+    char *t = (char *)Mw2_Raw(g_sh_db, 0x53, &n);
+    g_shs.fill = 0xf;
+    Scr_Overlay(g_sh_db, 0xd);
+    Scr_Restore(0, 0, 0x280, 0x1e0);
+    lines = calloc(0x182, sizeof *lines);
+    nlines = 0;
+    int y = 0x1e0;
+    for (uint32_t at = 0; t && lines && at < n && nlines < 0x182;) {
+        uint32_t e = at;
+        while (e < n && t[e] != '\n') e++;
+        CLine *l = &lines[nlines++];
+        l->s = malloc(e - at + 1);
+        if (!l->s) break;
+        memcpy(l->s, t + at, e - at), l->s[e - at] = 0;
+        l->w = Text_Width(&g_sh_font46, l->s);   /* measured in font 46, drawn in 42 (quirk kept) */
+        l->x = 0x140 - l->w / 2, l->y = y;
+        y += line_h;
+        at = e + 1;
+    }
+    free(t);
+    Shell_SetMenu(credits_menu);
+    Music_Stop();          /* the exe's +0x54 */
+    Music_Play(0x10, 0);   /* +0x50 */
+    last_ms = plat_ms();
 }

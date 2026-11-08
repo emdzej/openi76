@@ -87,6 +87,7 @@ void Bookmark_Load(void);                   /* i76shell 0x100029c0, pop-up 11 */
 void Bookmark_Restore(void);
 void EscMenu_Open(void);                    /* i76shell 0x1000cc40, pop-up 0 */
 void QuitMenu_Open(void);
+void Credits_Open(void);                    /* i76shell 0x10032790, pop-up 9 */
 void Interlude_Open(void);                  /* i76shell 0x10033c60 (0xc015) */
 void FinalCar_Open(void);                   /* i76shell 0x100337c0 (0xc00d) */                   /* i76shell 0x100334b0, pop-up 2 */                /* i76shell 0x10002d80 (0xc01d) */   /* entry 0x24, the boxes' frames (0x1005fae0) */
 /* i76shell 0x1000fb10: note k (frame k of set 0x24), waited on until a press in its OK (x, y, w, h) */
