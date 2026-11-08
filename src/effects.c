@@ -189,6 +189,59 @@ void Effects_Init(void)
     Xdf_Load(exe_str(0x4db3ec), out, NULL);
 }
 
+static void clear_flags_all(Node *n, uint32_t f)   /* 0x42e290 */
+{
+    if (n->next) clear_flags_all(n->next, f);
+    if (n->child) clear_flags_all(n->child, f);
+    n->flags &= ~f;
+}
+
+static Muzzle *muzzle_of(const Node *n)
+{
+    for (Muzzle *m = g_muzzles; m; m = m->next)
+        if (m->node == n) return m;
+    return NULL;
+}
+
+/* 0x454a60: the flash's animation done: its light out, the flash hidden again (flag 1 down its tree),
+   the animation removed, the record idle */
+static void flash_end(Node *flash)
+{
+    Muzzle *m = muzzle_of(flash->prev);   /* the flash's +0x68: the weapon's node */
+    if (!m || !m->tex[0]) return;
+    Light_Remove(flash, &flash->flags);
+    set_flags_all(flash, 1);   /* 0x42e250 */
+    TexAnim_Remove(flash, m->tex);
+    m->f10 = 0;
+}
+
+void Muzzle_Flash(Node *muzzle)
+{
+    Node *flash = muzzle->child;
+    if (!flash) return;
+    clear_flags_all(flash, 1);
+    Muzzle *m = muzzle_of(muzzle);
+    if (!m) return;
+    if (!Node_Live(muzzle)) {   /* tagged "mzlfls": the weapon freed, its record goes */
+        /* the original unlinks the record only when it is the list's head (its search for the one before
+           stops at the head itself), and frees it either way; the port unlinks it wherever it is */
+        for (Muzzle **p = &g_muzzles; *p; p = &(*p)->next)
+            if (*p == m) {
+                *p = m->next;
+                break;
+            }
+        /* the original then drops the record's reference again (0x41f6f0), on the node the check above has
+           already released: the port's check took the reference, and the second is left out */
+        free(m);
+        return;
+    }
+    if (m->f10 == 1 && m->tex[0]) TexAnim_Remove(flash, m->tex);   /* a flash still going starts again */
+    if (!m->tex[0]) return;
+    if (m->f10 != 1) Light_Add(flash, &flash->flags, flash->frame.m, 0, 25.0f, 0, NULL, NULL);   /* 0x43a1f0 */
+    TexAnim_Once(flash, m->tex, 0.1f, 0, m->w0, flash_end);   /* 0x47eb50 */
+    m->f10 = 1;
+}
+
 void Muzzles_Init(void)
 {
     while (g_muzzles) {

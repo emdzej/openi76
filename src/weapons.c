@@ -1025,8 +1025,8 @@ void Weapons_Tick(void)
 
 void (*g_weapon_launch)(Launch *l, float late);   /* 0x458f40 */
 
-/* not ported yet, as the effects: 0x454940 the muzzle's flash */
-static void muzzle_flash(Node *muzzle) { (void)muzzle; }
+/* 0x454940 the muzzle's flash (effects.c) */
+static void muzzle_flash(Node *muzzle) { Muzzle_Flash(muzzle); }
 /* 0x433b70: the gun out of the window: the animation's frame from -1 towards 2 */
 static void gun_animation(Node *vehicle, int32_t which)
 {

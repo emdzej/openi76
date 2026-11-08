@@ -157,7 +157,8 @@ and 0.015 s, the firings logged, every instance's words after each) on t01 and s
 ## A shot (0x458710)
 
 For n shots of an instance, late s into the frame:
-1. **Effects and sound (not ported yet).** The muzzle's flash (0x454940). By the def's kind (+0x54):
+1. **Effects and sound.** The muzzle's flash (0x454940, docs/re/effects.md "The muzzle's flash"). By the
+   def's kind (+0x54):
    - kind 1: the gun's animation (0x433b70, the vehicle's +0x400 or +0x404 node by the def's index) and
      the instance's sound (+0x2c, 0x468580);
    - kind 2: that sound, placed (0x4685d0) unless the index is 3-6;

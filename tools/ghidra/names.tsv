@@ -1452,3 +1452,5 @@
 00433a80	Window_Down	weapons	high	a window wound down (target 5) unless the gun is out
 00433af0	Window_Up	weapons	high	a window wound up (target 0) unless the gun is out
 004163d0	AI_ShotsAhead	ai	high	the dodged kinds' live shots (12, 14-17, 19), taken as still (0x4a9360 never written), the vehicle within 5 m within 3 s; ported, diffed
+00454940	Muzzle_Flash	effects	high	the weapon's flash shown, lit, its textures run once; a freed weapon's record dropped (only unlinked at the head: quirk); ported, diffed
+00454a60	Muzzle_FlashEnd	effects	high	the flash's animation done: light out, hidden, idle; ported

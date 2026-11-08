@@ -26,6 +26,28 @@ the dropped weapons (0x46ce90-0x46df40) are not yet.
   table, then loads `xcarx1.xdf`, `xbldx1.xdf` and `xcars1.xdf` (0x4db404, 0x4db3f8, 0x4db3ec). The
   structures' SDFC and 0x494b40 load the rest as their objects come.
 
+## The muzzle's flash (0x454860, 0x454940; ported, diffed)
+
+`Muzzles_Add` 0x454860 keeps a record (0x30 bytes, the list 0x55f9bc) for a weapon whose .xdf gave its
+node a child, the flash. The weapon's node is referenced, the flash is hidden (flag 1 down its tree),
+and its first texture is bound to it.
+
+At each shot, `Muzzle_Flash` 0x454940 runs on the muzzle:
+1. The flash is shown: flag 1 cleared down its tree (0x42e290).
+2. The record is found by the node. A weapon freed meanwhile (0x41f890, tagged "mzlfls") drops it:
+   - the original unlinks it only when it is the list's head, since its search for the record before
+     stops at the head, but frees it either way;
+   - it then drops the reference again (0x41f6f0) on the node already released.
+
+   The port unlinks the record wherever it is, and drops the reference once.
+3. A flash still going has its animation removed (0x47e9f0), so it starts again.
+4. With a texture: a new flash gets a light (0x43a1f0: type 0, range 25). The textures run once at 0.1 s
+   a frame for the record's +0x18 frames (0x47eb50). The record is marked going (+0x10 = 1).
+5. **The end (0x454a60):** the record found by the flash's parent (+0x68). Its light goes out, the flash
+   is hidden again (0x42e250), the animation is removed, and the record is idle.
+
+Checked: `diff_objects --call shot`, `launch` and `fly` on t01 and s01, with the flash run in both.
+
 ## The table (0x453f50)
 
 - **Key and buckets.** The key is the 8-byte name, each byte through toupper. The bucket is

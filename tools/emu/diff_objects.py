@@ -777,7 +777,7 @@ def call_shot(exe, n, fpcw):
         CALL_OUT.append(struct.pack("<14I", *out).hex())
 
     if not SHOT:
-        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4)):
+        for a, k in ((0x4685D0, 3), (0x433730, 4)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x458F40, launch, 2)
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -812,7 +812,7 @@ def call_launch(exe, n, fpcw):
         return 1
 
     if not LAUNCH:
-        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2)):
+        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x459B50, fly, 2)
     LAUNCH["n"] = n
@@ -835,7 +835,7 @@ def call_fly(exe, n, fpcw):
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
         # the launch's effects as in call_launch and the hit's sound
-        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1
@@ -959,7 +959,7 @@ def call_missile(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
-        for a, k in ((0x454940, 1), (0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
                      (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1

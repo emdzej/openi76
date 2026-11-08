@@ -31,6 +31,9 @@ extern Muzzle *g_muzzles;                    /* 0x55f9bc */
 
 /* Effects_Init 0x453ed0: the table cleared, then xcarx1.xdf, xbldx1.xdf and xcars1.xdf */
 void Effects_Init(void);
+/* Muzzle_Flash 0x454940: the weapon's flash (its node's child) shown, lit (25 m) and its textures run once
+   at 0.1 s a frame, then hidden again (0x454a60); a freed weapon's record dropped */
+void Muzzle_Flash(Node *muzzle);
 /* Muzzles_Init 0x454840 */
 void Muzzles_Init(void);
 /* Xdf_Load 0x493210: the file; out (8 bytes) gets the first part's name ("null" first, and kept when
