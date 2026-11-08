@@ -359,43 +359,79 @@ shell runs, in order:
   again (its copy taken again, so Cancel keeps the preset); Done asks the exe whether the detail is too
   much (+0x4c, 0x44de10, which always says no, so the question 0x1003f120 is never seen) and writes the
   player's file; Cancel puts the 14 bytes back. Checked: Clouds turned off and Done write +0x41 = 0.
-- Not ported yet: pop-ups 3 (modem, network play's) and 7 (controls, 0x100093a0).
+- Not ported yet: pop-up 3 (modem, network play's).
 
-### Pop-up 7, the controls (0x100093a0; read, not ported yet)
+### Pop-up 7, the controls (0x100093a0, its pass 0x10009630; ported, src/shell/controls.c)
 
 - **The table (0x1005d3e0, 40 records of 0x58 bytes):** +0 the device (0 none, 1 keyboard, 2 joystick,
-  3 mouse), +4 a skip flag (records with it are not written), +8 the action's name (input.map's, from
-  "throttle"), +0x28 the bound input's name (0x20 bytes; the empty name 0x1005e5a0 when none), +0x48 its
-  hit rectangle (x0, x1, y0, y1). Records 1-2 are the throttle's analog halves, 4-19 the first column
-  (names at x 0xbe, rectangles 0xb1-0x138), 21-39 the second (x 0x1e6, 0x1db-0x264); rows from y 0x2f, a
-  row the font 0x10068c08's height plus 5, rectangles 0x10 high. The labels are in the picture.
-- **The open (0x100093a0):** some colour indices set (0x1005e488-0x1005e518), the palette kept, the fill
-  0x10, the keys flushed; four buttons (0x1005e650-0x1005e68c: Done, the joystick's control panel,
-  Defaults, Save); every record's device 0 and name emptied; input.map read (0x10009cb0); each record's
-  name drawn and its rectangle set; the pass 0x10009630 (0x1000963d) runs in the screen's place.
-- **input.map's read (0x10009cb0):** the devices noted first (0x1000acc0: the exe's device list,
-  0x10022790/0x10022900, names starting k, j, m set 0x8000, 0x4000, 0x2000 in 0x1006b430 and copy the
-  device's name). A missing input.map is copied from keyboard.map (or joystick.map with a joystick).
-  Lines lose '#' comments; blank ones are skipped. Each "name {" finds its record by name, then its first
-  binding line "+ device input" sets the device by its first letter (m 3, j 2, else 1), warns when that
-  device is not there, and copies the input's name; the rest up to "}" is skipped. "throttle" and
-  "steer" (an axis) also fill their two half-records' labels by the axis' kind (four-letter matches:
-  Down/Up, Left/Right, Throttle, Rudder), joystick and mouse axes clearing the halves' devices.
-- **The pass:** with the window active, a left click on a button: Done (0) closes; 1 runs
-  control.exe joy.cpl; Defaults (2) empties the table and reads keyboard.map (joystick.map) instead;
-  Save (3) writes input.map (0x1000a6c0) and closes. A left click on a record opens the scrolling picker
-  (0x1000c020: Picker over every device's inputs, 0x1000af20, the axes too for the analog area x < 0x136,
-  y < 0x87). A right click on a record waits for a press (0x1000c160, "Press any key or button..."; a
-  key's name from the exe's names, the grey keys "Grey %s"; mouse buttons; joystick buttons, hat
-  directions), takes that name off any other record and binds it (0x1000b180); the throttle's and
-  steer's halves give up the other half's binding when it is of another device. Esc closes. The close
-  frees the lists and puts the palette back.
-- **input.map's write (0x1000a6c0):** a header line, then each bound record not skipped: the four
-  glances each written three times (the pilot's glance, the track camera's and the overview's
-  matching action, with the same binding); axes as "throttle" / "steer" with Down/Up or Left/Right halves;
-  keys with "- Keyboard Shift" and "- Keyboard Control" exclusions unless the key is Shift or Control
-  itself; then input.def appended as it is.
-
+  3 mouse), +4 a skip flag (never set in v1.0), +8 the action's input.map name, +0x28 the bound control's
+  name (0x20 bytes; "-----", 0x1005e5a0, when none), +0x48 its hit rectangle (x0, x1, y0, y1, a click
+  strictly inside). Records 0 (throttle) and 3 (steer) are the axes, not drawn; 1-2 and 4-5 their halves.
+  The first column draws records 1-2 and 4-20 (names at x 0xbe, rectangles 0xb1-0x138), the second
+  21-39 (x 0x1e6, 0x1db-0x264); rows from y 0x2f, each font 0x44's height plus 5, rectangles 0x10 high.
+  The actions' labels and the four buttons are in picture 0x10.
+- **The open (0x100093a0):** nine entries of the virtual key to DIK table (0x1005e1a0) set for the OEM
+  keys (; , . / ` [ \ ] '), the line count and the list's first row zeroed, the palette kept, picture
+  0x10, the keys flushed; the buttons' records (0x1005e650: 0 CANCEL 490-630, 1 CALIBRATE 9-147,
+  2 RESTORE 168-308, 3 DONE 330-470, all y 450-469); every record emptied; input.map read; the names
+  drawn; the pass set as the menu's function.
+- **The devices:** the shell has its own copy of the exe's three drivers (0x100623a8: the keyboard
+  0x10062350, the mouse 0x10061210, the joystick 0x1005c5f8) and lists their devices like the exe
+  (0x10022790; a record of 0x78 bytes, the driver then the exe's device record). 0x1000acc0 notes which
+  are there by their names' first letters (k 0x8000, j 0x4000, m 0x2000 in 0x1006b430) and copies each
+  one's name over its label (0x1005e5e0: "", "keyboard        ", "Joystick        ", "Mouse           "),
+  so the labels written are "keyboard" and "mouse", and the joystick's stays padded when there is none.
+- **input.map's read (0x10009cb0):** a missing input.map is copied from keyboard.map (joystick.map with
+  a joystick). Each line is cut at '#' and blank ones skipped. A line's first word finds the record by
+  name (case-blind); its next line " %1[+-] %s %s" gives the device (m 3, j 2, else 1; a device not there
+  is reported, "The device you chosen is not configured properly...") and the control, copied as the
+  name; lines up to one starting '}' are skipped. For "throttle" and "steer" the halves also change: with
+  a joystick (or, quirk, when the record *last clicked* is the mouse's: through NULL before any click,
+  which faults in the original) both halves get the device's word and a space, their devices cleared;
+  then, whatever the device, a control starting left / down / thro / rudd adds Left and Right, Up and
+  Down, Throttle twice or Rudder twice. The disc's INPUT.MAP binds throttle and steer to joystick1, so
+  without a joystick its open reports the device twice and shows "joystick1 Up" and so on for the halves
+  (their devices cleared, so a save drops them).
+- **The pass:** a left click on CANCEL closes it (back to the menu, pop-up 0); CALIBRATE runs
+  `control.exe joy.cpl` (not in the port); RESTORE empties the table and reads keyboard.map (joystick.map
+  with a joystick); DONE writes input.map and closes. A left click on a record opens the list; Esc closes;
+  a right click on a record waits for a press. The close frees the lists and puts the palette back.
+- **The list (0x1000c020, 0x1000af20, its draw 0x1000bf70, its end 0x1000b4d0):** the picker
+  (the scrolling picker: frame 0x10, 0xac × 0xeb centred, its list at 0x16, 0x30, 9 rows of font
+  0x45's height plus 2, buttons 0x1005e600) over the devices from the last: each one's header ("--
+  keyboard --", "-- Joystick --", "-- Mouse --"), its discrete controls but those starting '*' and, for a
+  click in the throttle's and steering's rows (x < 0x136, y < 0x87), its analog ones. Each header's row
+  and the row before the next header are noted (the last device's one short, which the end's keyboard
+  test makes up with +1); a click on a header is refused (0x1000bff0 through 0x1000d2f0, a test the
+  picker drops at its close). The end keeps the first row shown for the next open; the picked name is
+  taken off the first record holding it; the record's device follows the row's device. For a record
+  whose action starts "throttle" (8 letters: the halves too) or "steer" (5), a joystick's or the mouse's
+  control makes the halves "<device> " and the axis that device; then, unless the device is the keyboard,
+  a control starting left (4), down (1 letter for the throttle, 4 for the steering), thro (4) or rudder
+  (6) completes the halves and names the axis (Left/Right, Down/Up, else the control); otherwise the
+  control is bound to the record alone and the other half dropped unless it is a key. Last, when the
+  throttle's first half and the steering's have the same name, the other axis's halves are dropped.
+- **The capture (0x1000b180, its wait 0x1000c160):** a box (0x1000f860: frame 0x11 of set 0x24 at 0xb3,
+  0xc2, "Press any key or button..." at 199, 0xe6 in font 0x45, two shadows), the key messages flushed,
+  then a loop on the raw key messages (0x100226e0 through 0x100225d0: the virtual key itself queued, the
+  extended keys' channel noted by 0x10022210 in 0x1006b45c). A key's DIK code comes from 0x1005e1a0 (none
+  or past 0xff: nothing bound) and its name from the shell's keyboard names (0x10061c18, by channel);
+  the extended keypad keys get "Grey" before it, page up and down "*Grey" (so they are never bound); the
+  mouse's buttons are LeftBtn, RightBtn, MiddleBtn; a joystick's Button1-32 and its hat (HatUp ...),
+  none in the port. The record's device is set at once; a name starting '*' stops there. Otherwise the
+  name is taken off the first record holding it (quirk: when that is the record itself, its device goes
+  to 0, so the binding is not saved), an axis half clears the axis's device and the other half unless it
+  is a key, and the name is bound.
+- **input.map's write (0x1000a6c0):** "# Interstate '76 Input mapping file", then each record bound and
+  not skipped: the four glances each written three times (pilot_glance_*, track_yaw/pitch_*,
+  overview_x/z_*) with the same binding; a joystick's or the mouse's control on an action starting "th"
+  or "st" (so start_engine too) as "throttle {" or "steer {" with "- <label> Down/Up" or "Left/Right" (a
+  name starting up, down, left or righ) or the name, the next record then skipped; a key with
+  "- Keyboard Shift" and "- Keyboard Control" lines unless it is one of those; anything else plain. Then
+  input.def is appended. The game reads input.map at each mission's start (docs/re/input.md).
+- **Checked:** the open shows the disc's INPUT.MAP; RESTORE shows keyboard.map's; a pick (Accelerate
+  to Two) takes Two off Fire HardPoint 2; a right click and K binds Brake to K; DONE writes input.map
+  (CR LF lines) and the next mission drives with Two (throttle 1.00) and no longer with the keypad's 8.
 
 The melee's map (AUTO MELEE's SCENARIO, 0xc024, and INSTANT MELEE, 0xc021) and the instant melee's
 STANDINGS (0xc025): docs/re/map.md. Not ported yet: network play.

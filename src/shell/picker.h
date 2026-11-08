@@ -27,3 +27,6 @@ extern uint8_t g_sh_under[640 * 480];   /* 0x1006c2e0: the screen as the picker 
 void Picker_Open(ShPicker *p, int frame, int first);
 /* 0x1000f370: the same from the first row */
 void Picker_OpenTop(ShPicker *p, int frame);
+/* 0x1000d2f0: a test of the rows a click cannot pick (the controls' list's headers), dropped at the
+   picker's close */
+void Picker_Skip(int (*fn)(int row));

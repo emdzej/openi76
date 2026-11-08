@@ -77,6 +77,11 @@ int Shell_Key(void);                        /* i76shell 0x100223b0: the next typ
 extern int g_sh_kb_key;                     /* the keyboard object's key (0x10068bf0 +0) */
 int Shell_KbRead(void);                     /* i76shell 0x10038640: 0 none, 1 a key, 3 Esc */
 void Shell_KbFlush(void);                   /* i76shell 0x10038590 */
+/* the port's: the keys queued as their virtual keys (i76shell 0x100225d0's, the controls' capture's
+   reader 0x100226e0) rather than typed codes */
+extern int g_sh_kb_raw;
+extern int g_sh_kb_ext;                     /* 0x1006b45c: the last key's extended channel + 1, 0 none */
+void Controls_Open(void);                   /* i76shell 0x100093a0, pop-up 7 */
 /* i76shell 0x10038d60: a line's edit at x, y in font f, buf its text (to max characters and max_w
    pixels); per pass: -2 still editing, then -1 a click (g_sh_edit_x, g_sh_edit_y), 0 Esc or a pop-up's
    end, 1 Enter or Tab */

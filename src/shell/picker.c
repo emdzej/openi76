@@ -7,6 +7,9 @@
 
 uint8_t g_sh_under[640 * 480];
 static ShPicker *pk;   /* 0x1005f818 */
+static int (*skip)(int row);   /* 0x1005f814 */
+
+void Picker_Skip(int (*fn)(int row)) { skip = fn; }
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 
 static void step(void)
@@ -29,6 +32,7 @@ static void step(void)
 
 static void close_(void)
 {
+    skip = NULL;
     g_sh_modal = NULL;
     Scr_Restore(pk->x, pk->y, pk->w + 10, pk->h + 10);
     if (pk->done) pk->done();
@@ -53,7 +57,7 @@ static void pass(void)   /* 0x1000dc30 */
         return;
     case 2: {
         int i = pk->first + (g_sh_mouse.y - pk->ly) / pk->row_h;
-        if (pk->count <= i) return;
+        if (pk->count <= i || (skip && skip(i))) return;
         pk->picked = i;
         close_();
         return;

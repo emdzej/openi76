@@ -70,8 +70,19 @@ static uint16_t kq[0x40];        /* 0x10111370 */
 static int kq_r, kq_w;           /* 0x1008e388, 0x1008e38c */
 static uint8_t kq_keys[256];
 
-static void kq_push(int vk)
+int g_sh_kb_raw, g_sh_kb_ext;
+
+static void kq_push(int vk, int dik)
 {
+    /* 0x10022210: an extended key's channel + 1 (0x100621e8 by its scan code), 0 for any other */
+    int scan = dik & 0x7f;
+    g_sh_kb_ext = (dik & 0x80) && scan && scan <= 0x58 ? (int)dll_u32(0x100621e8 + 4 * (uint32_t)scan) : 0;
+    if (g_sh_kb_raw) {   /* 0x100225d0: the virtual key itself */
+        kq[kq_w] = (uint16_t)vk;
+        if (++kq_w == 0x40) kq_w = 0;
+        else if (kq_w == kq_r && ++kq_r == 0x40) kq_r = 0;
+        return;
+    }
     const uint8_t *t = dll_data(0x10061fe8, 0x200);
     uint16_t k = 0;
     if (t) memcpy(&k, t + 2 * (vk & 0xff), 2);
@@ -125,7 +136,7 @@ static void keys_pass(void)
         if (kq_keys[c] && !before[c] && !pressed[c]) downs[nd++] = c;
     memcpy(before, kq_keys, sizeof before);
     for (int i = 0; i < nd; i++) {
-        kq_push(Input_DikVk(downs[i]));
+        kq_push(Input_DikVk(downs[i]), downs[i]);
         if (!g_sh_editing && !g_sh_popup_up && Shell_KbRead() == 3 && !g_sh_modal) g_sh_popup = 1, g_sh_popup_item = 0;
     }
 }
@@ -344,6 +355,10 @@ static bool popup(void)
         return true;
     case 6:   /* the audio (0x10039a90) */
         Audio_Open();
+        g_sh_popup_up = 1;
+        return true;
+    case 7:   /* the controls (0x100093a0) */
+        Controls_Open();
         g_sh_popup_up = 1;
         return true;
     case 9:   /* the credits (0x10032790) */
