@@ -87,3 +87,12 @@ and its start (0x100298b8):
   "You've been rejected!", "Your request timed out.").
 - hosting (2-5): 0x1002a830 (`dpOpen` creating, `dpCreatePlayer`, `dpCreateGroup`, `dpSetPlayerData`;
   "Could not start game").
+- hosting in detail (0x1002a83e): the session's flags +0x4f get 0x40000000, the mission's bits (+0x48 of
+  the map's record, masked 0x3fffffff) and 0x80000000; `dpOpen` with no callback creates it (its errors
+  0-0x10 each a message: "Modem busy", "No answer from modem", "No dialtone from modem", "No response from
+  modem", "Network not present", "Bad service provider version", "Network not responding", "Game Server not
+  responding", else "Could not start game"); `dpCreatePlayer` (its id through the callback 0x1002a820;
+  none: "Could not create player id"); the player's data under key 1 (0x50 bytes, the car, 0x10027ee0) and
+  key 2 (0x20 bytes); `dpCreateGroup` with the session's name; an add-on mission (`addon\%s`, "Mission
+  file %s not found."); then the record 0x1008f964 that the game reads (0x461990): bit 0 set, bit 2 when
+  +0x17c is clear, bit 3 when +0x184 is set, +0x4e the player's name (0x10018490).
