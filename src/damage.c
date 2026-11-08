@@ -1,5 +1,6 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "autopilot.h"
 #include "melee.h"
 #include "sound.h"
 #include "radio.h"
@@ -1356,6 +1357,7 @@ static Node *packet_by;   /* the packet's +0, the source credited (a node: the p
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
 {
     uint8_t *d = n->data;
+    if (p && g_ap_invincible && (n->flags & 0x10)) return 0;   /* the port's test aid (autopilot.h), off by default */
     if (p && (n->flags & 0x20)) return 0;
     int was_dead = (rd32(d + 0x454) & 0x20) != 0;
     if (p && was_dead) return 0;

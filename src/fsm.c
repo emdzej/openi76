@@ -102,8 +102,11 @@ void Fsm_SetWord(uint32_t a, int32_t v) { memcpy(at(a), &v, 4); }
 #define W(a) Fsm_Word(a)
 #define SET(a, v) Fsm_SetWord((a), (int32_t)(v))
 
+static uint32_t wp_path;   /* the port's: Fsm_GotoPoint's path record (one point), in the script's memory */
+
 void Fsm_Reset(void)
 {
+    wp_path = 0;
     free(mem);
     mem = NULL;
     mem_len = mem_cap = 0;
@@ -363,15 +366,22 @@ Node *Fsm_Named(const char *name)
 }
 
 /* the port's (the autopilot's): the user's car sent along the path named name (the first of that name), as
-   the script's goto at speed; 1 when n stands within r of its first point, -1 when there is no such path */
+   the script's goto at speed; 1 when n stands within r of its first point (its last with last), -1 when
+   there is no such path */
 static int32_t within_nav(uint32_t path, Node *n, int32_t r, int square);
-int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r)
+static float wf(uint32_t a);
+int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r, int last)
 {
     if (!g_fsm_loaded || !n || !n->data) return -1;
     for (int32_t i = 0; i < g_fsm.n_paths; i++) {
         uint32_t p = g_fsm.paths + (uint32_t)i * 0x58;
         if (crt_strnicmp((const char *)at(p), name, 0x50)) continue;
-        if (within_nav(p, n, r, 0)) return 1;
+        if (last) {   /* within r of its last point */
+            int32_t cnt = W(p + 0x50);
+            uint32_t pt = (uint32_t)W(p + 0x54) + (uint32_t)(cnt > 0 ? cnt - 1 : 0) * 0xc;
+            double dx = fpu_sub(wf(pt), n->frame.pos[0]), dz = fpu_sub(wf(pt + 8), n->frame.pos[2]);
+            if (fpu_add(fpu_mul(dx, dx), fpu_mul(dz, dz)) < (double)(r * r)) return 1;
+        } else if (within_nav(p, n, r, 0)) return 1;
         uint8_t *ai = *Data_Ptr(n->data, 0x108);
         int32_t pa = (int32_t)p;
         memcpy(ai + 0x8c, &pa, 4);
@@ -380,6 +390,32 @@ int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r)
         return 0;
     }
     return -1;
+}
+
+/* the port's (the autopilot's): n sent to the point (x, z) by the goto order, through a one-point path of
+   its own; 1 once within r of it */
+int Fsm_GotoPoint(Node *n, float x, float z, float speed, int32_t r)
+{
+    if (!g_fsm_loaded || !n || !n->data) return -1;
+    double dx = fpu_sub(x, n->frame.pos[0]), dz = fpu_sub(z, n->frame.pos[2]);
+    if (fpu_add(fpu_mul(dx, dx), fpu_mul(dz, dz)) < (double)(r * r)) return 1;
+    if (!wp_path) {
+        wp_path = alloc(0x58);
+        SET(wp_path + 0x50, 1);
+        SET(wp_path + 0x54, alloc(0xc));
+    }
+    uint32_t pt = (uint32_t)W(wp_path + 0x54);
+    float y = 0;
+    int32_t w;
+    memcpy(&w, &x, 4); SET(pt, w);
+    memcpy(&w, &y, 4); SET(pt + 4, w);
+    memcpy(&w, &z, 4); SET(pt + 8, w);
+    uint8_t *ai = *Data_Ptr(n->data, 0x108);
+    int32_t pa = (int32_t)wp_path;
+    memcpy(ai + 0x8c, &pa, 4);
+    memcpy(ai + 0x80, &speed, 4);
+    AI_Order(n, NULL, 0x16, 0);
+    return 0;
 }
 
 /* ---- the actions (0x40d0d0) ---- */

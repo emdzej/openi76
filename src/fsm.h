@@ -45,8 +45,10 @@ Node *Fsm_Entity(int32_t i);
 /* the port's: the node of the script's entity of that name (the autopilot's targets) */
 Node *Fsm_Named(const char *name);
 /* the port's (the autopilot's): n sent along the path named name at speed (the goto order); 1 once within r
-   of its first point, -1 without such a path */
-int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r);
+   of its first point (its last with last), -1 without such a path */
+int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r, int last);
+/* the port's (the autopilot's): n sent to (x, z) by the goto order at speed; 1 once within r */
+int Fsm_GotoPoint(Node *n, float x, float z, float speed, int32_t r);
 
 /* the mission's end: at 0x5054b0 (the script's clock) the game's state becomes 0x5054b4 (0x401280) */
 extern float g_fsm_end_time;

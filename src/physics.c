@@ -1,5 +1,6 @@
 /* A vehicle's simulation (physics.h). In the current rounding mode (render/fpu.h). */
 #include "physics.h"
+#include "autopilot.h"
 #include "sound.h"
 #include "camera.h"
 #include "ai.h"
@@ -123,6 +124,7 @@ void Vehicle_PhysInit(Node *n)
 void Vehicle_Kill(Node *n)
 {
     if (!n || n->cls != 1) return;
+    if (g_ap_invincible && (n->flags & 0x10)) return;   /* the port's test aid (autopilot.h), off by default */
     uint8_t *d = n->data;
     if (rd32(d + 0x454) & 0x8020) return;
     put32(d + 0x454, rd32(d + 0x454) | 0x20);

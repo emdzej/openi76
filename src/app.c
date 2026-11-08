@@ -267,6 +267,7 @@ static void play_frame(void)
     {
         Collide_Frame();   /* 0x469db0 */
         Input_Poll();
+        Autopilot_Keys();   /* the port's, with --param autopilot */
         Class_Frame(0);
         Class_Frame(1);
         AI_Frame();
