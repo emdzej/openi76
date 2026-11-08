@@ -1383,8 +1383,8 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
     int was_dead = (rd32(d + 0x454) & 0x20) != 0;
     if (p && was_dead) return 0;
     uint8_t strong[0x1c];
-    if (p && g_ap_strong > 1 && packet_by && (packet_by->flags & 0x10) && !(n->flags & 0x10)) {
-        memcpy(strong, p, sizeof strong);   /* the port's test aid (autopilot.h): the user's hits times N */
+    if (p && g_ap_strong > 1 && packet_by && packet_by != n && (packet_by->flags & 0x30)) {
+        memcpy(strong, p, sizeof strong);   /* the port's test aid (autopilot.h): the user's (or a network player's car's) hits on another car times N */
         for (int k = 0; k < 4; k++) {
             uint64_t v = (uint64_t)(uint32_t)rd32(strong + 8 + 4 * k) * (uint32_t)g_ap_strong;
             put32(strong + 8 + 4 * k, (uint32_t)(v > 0x7fffffffu ? 0x7fffffffu : v));

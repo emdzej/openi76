@@ -174,6 +174,13 @@ void Autopilot_Frame(void)
             snprintf(names[nnames++], sizeof names[0], "%s", p);
         }
     }
+    static int aids;
+    if (!aids) {   /* the test aids, with or without the autopilot */
+        char iv[8];
+        aids = 1;
+        g_ap_invincible = plat_param("apinvincible", iv, sizeof iv) && atoi(iv);
+        g_ap_strong = plat_param("apstrong", iv, sizeof iv) ? atoi(iv) : 0;
+    }
     static int kills = -1;   /* --param apkill=name@s,...: the script's destroy on name at s seconds (a test aid) */
     static char kname[16][32];
     static float kat[16];
@@ -200,11 +207,10 @@ void Autopilot_Frame(void)
     if (!on || !g_user_entity || !g_user_entity->node) return;
     Node *u = g_user_entity->node;
     if (dead(u)) return;
+    static Node *car;   /* a new car (network play's respawn): its engine started again */
+    if (car != u) car = u, started = 0;
     if (!started) {
         started = 1;
-        char iv[8];
-        g_ap_invincible = plat_param("apinvincible", iv, sizeof iv) && atoi(iv);
-        g_ap_strong = plat_param("apstrong", iv, sizeof iv) ? atoi(iv) : 0;
         Engine_Start(u);
         Vehicle_SetMode(u, 3);
         char v[16];

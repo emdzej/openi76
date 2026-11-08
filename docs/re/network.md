@@ -9,6 +9,15 @@ gasm:net and a gasm-relay room (src/net/anet.c), and the shell's host, join and 
 triggers from SH) hit and explode on every machine, but only the victim's machine applies the packet to
 its own car, and that machine announces the death with its killer (+0x482).
 
+**Checked** (two instances over the relay, `--param net=host|join`, 2026-11-09): each machine has its own
+car on team 0 and the other's on team 1; both autopilots fire, and each one's hits lower the other's
+health on the victim's machine only; a kill shows "*** Joe was killed by Host" on both machines; a
+self-destruct (Ctrl+Delete) "*** Joe has been killed"; the wreck's end gives a new car at a spawn point,
+which drives on the keys. One kill's score (the victim's +0xa4 x the killer's +0xa8 x 1000) passes the
+shortcut's limit of 20000, so the first kill wins the game and no more respawns are given, as the
+original's rule says (`--param netlimit=0` for no limit). The respawn key is Space (`gamekey.map`'s
+default code 0x20, a character).
+
 The original plays a melee over **Activenet** (`anetdll.dll`, Activision's network library, shipped on
 disc 1), not DirectPlay. The shell (`I76SHELL.DLL`) finds or makes a session, creates the player and
 hands the handle to the game; the game (`I76.EXE`) only sends, receives and reads the players' data. The

@@ -411,7 +411,10 @@ static void play_frame(void)
                 memcpy(&pts, ai + 0xac, 4);
             }
             char m[300];
-            snprintf(m, sizeof m, "OpenI76: frame %d tactic %x depth %d search %d points %d", frames, (unsigned)tac, top, srch, pts);
+            float look = 0;
+            if (ai) memcpy(&look, ai + 0x9d34, 4);
+            snprintf(m, sizeof m, "OpenI76: frame %d tactic %x depth %d search %d points %d look %.1f game %.1f", frames, (unsigned)tac, top, srch,
+                     pts, look, g_clock_game);
             plat_log(m);
             snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x shots %d ammo %d health %.0f team %u",
                      frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags, shots, ammo,
@@ -605,7 +608,7 @@ static bool net_aid_frame(void)
     snprintf(c.car_name, sizeof c.car_name, "%s", c.car_file);
     snprintf(c.session, sizeof c.session, "%s", c.player);
     c.most = 8;
-    c.limit = 20000;
+    c.limit = plat_param("netlimit", v, sizeof v) ? atoi(v) : 20000;   /* the score to win (0: none) */
     if (step == 0) {
         g_sh_mode = net_aid == 1 ? 2 : 6;
         if (!Shnet_Open()) return false;
