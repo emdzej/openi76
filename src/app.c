@@ -402,7 +402,17 @@ static void play_frame(void)
             for (int i = 0; i < g_hardpoint_count; i++)
                 if (g_hardpoints[i].vehicle == u && g_hardpoints[i].slot[0].inst != -1)
                     ammo = (int)g_weapons[g_hardpoints[i].slot[0].inst].v18;
-            char m[260];
+            int32_t top = -1, tac = -1, srch = 0, pts = 0;
+            uint8_t *ai = d && u->data ? *Data_Ptr((uint8_t *)d, 0x108) : NULL;
+            if (ai) {
+                memcpy(&top, ai + 0xa93c, 4);
+                if (top >= 0 && top < 0x31) memcpy(&tac, ai + 0xa874 + 4 * top, 4);
+                memcpy(&srch, ai + 0x84, 4);
+                memcpy(&pts, ai + 0xac, 4);
+            }
+            char m[300];
+            snprintf(m, sizeof m, "OpenI76: frame %d tactic %x depth %d search %d points %d", frames, (unsigned)tac, top, srch, pts);
+            plat_log(m);
             snprintf(m, sizeof m, "OpenI76: frame %d step %.3f at %.1f %.1f %.1f speed %.2f throttle %.2f steer %.2f gear %d flags %x shots %d ammo %d health %.0f team %u",
                      frames, g_clock_step, u->frame.pos[0], u->frame.pos[1], u->frame.pos[2], f[2], f[1], f[0], gear, flags, shots, ammo,
                      Vehicle_Health((Node *)u), (unsigned)((u->flags >> 16) & 7));
