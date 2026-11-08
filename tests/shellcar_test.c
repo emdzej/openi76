@@ -2,6 +2,8 @@
    car reads with its parts and weight, and a .vsf written through the file layer reads back. Skips
    (exit 0) without data. */
 #include "carfile.h"
+#include "chunks.h"
+#include "vehicle.h"
 #include "exe.h"
 #include "res.h"
 #include "shellcar.h"
@@ -35,6 +37,7 @@ int main(void)
     }
     Res_Init();
     CHECK(ShellCar_CheckTables());
+    CHECK(Chunks_Check(Vehicle_VsfTable(), 5, 0x4e9ff8));
 
     static uint8_t s[SHELL_VCF];
     CHECK(ShellCar_ReadVcf("vppa01.vcf", s));

@@ -1389,3 +1389,7 @@
 0048b540	ShellCar_WriteState	carfile	high	the table's +0x1c: a state as a .vsf; ported
 0048b620	ShellCar_RewriteState	carfile	high	the table's +0x10: a state over an old .vsf as a new one; ported
 0048b700	Vsf_FromState	carfile	high	a state into the .vsf scratch (third words -1, the armour twice), written; ported
+00487570	Vsf_Vcst	carfile	high	a .vsf's VCST onto the vehicle: armour, conditions, velocity, height; ported (src/vehicle.c)
+00487730	Vsf_Wlst	carfile	high	a .vsf's WLST: the six wheels' conditions; ported
+00487810	Vsf_Wpst	carfile	high	a .vsf's WPST through 0x4552a0; ported
+004552a0	Weapon_SetState	weapons	high	a gun's rounds (and +0x18) by vehicle and hard point id; ported

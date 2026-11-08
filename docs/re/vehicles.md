@@ -15,8 +15,9 @@ is stubbed in the emulator. File formats: [docs/formats/vehicles.md](../formats/
   - The user's object (node flag 0x10, unless 0x4e9c20 is set) reads the chosen vehicle instead: the file
     name of 0x58dcd0 (WinMain copies `vppirna1` from 0x4a8448 before the shell's choice) plus `.vcf`. The
     node takes that name.
-  - In training missions (0x606e24 = 2) `<name>.vsf` follows when it exists (VCST, WLST, WPST, SALV,
-    0x4e9ff8). The disc has none; not ported yet.
+  - In a trip's or training's missions (0x606e24 = 2) `<name>.vsf` follows when it exists (VCST, WLST,
+    WPST, SALV, 0x4e9ff8; docs/re/carfile.md). The disc has none: the shell and the won missions write
+    `addon\vehscn.vsf`. Ported.
   - On success the entity gets the COLP record (0x494720: three 4s, then the twelve words in the order
     7 6 5 4 11 10 9 8 3 2 1 0) and the five words.
 - **.vcf** (0x4e9c28): VCFC, SPEC, WEPN, EXIT.

@@ -99,6 +99,9 @@ void Weapons_Faster(Node *vehicle);
 /* WEPN 0x4863d0: the chunk (header included) for x's vehicle; 0 fails the vehicle */
 int Weapons_Wepn(const uint8_t *c, ObjCtx *x);
 
+/* 0x4552a0: a .vsf's WPST: the gun on vehicle's hard point id gets count rounds, and v18 unless it is -1 */
+void Weapon_SetState(Node *vehicle, int32_t id, int32_t v18, int32_t count);
+
 extern int32_t g_weapons_free;   /* 0x4db474 */
 extern int32_t g_net_game;       /* 0x4dc4e4 (0x461900) */
 /* the shot's firing (0x458710: n shots of w, late s into the frame), and the empty trigger's click */

@@ -27,8 +27,10 @@ typedef struct {
 } EtblSource;
 const uint8_t *Etbl_Region(const char *table, const char *region);
 EtblSource Etbl_Source(const char *region);
+/* the .vsf's table (0x4e9ff8), for the tests */
+const ChunkDesc *Vehicle_VsfTable(void);
 /* Vehicle_Load 0x485030: x->node's .vcf (path: the record's name and .vcf); the user's (node flag 0x10)
-   is g_user_vcf's, and the node takes its name */
+   is g_user_vcf's, and the node takes its name; in a trip its state from <name>.vsf when there is one */
 bool Vehicle_Load(ObjCtx *x, const char *path);
 /* Artillery_Lookup 0x428db0 (after AI_Begin): each gun's weapon, its carrier's list and facts */
 void Artillery_Lookup(void);

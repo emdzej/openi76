@@ -676,6 +676,69 @@ void Vehicle_Init(void)
     Entity_OnRemove(artillery_remove);
 }
 
+/* ---- the state from a .vsf (table 0x4e9ff8; docs/re/carfile.md) ---- */
+
+static Node *data_node(uint8_t *d, uint32_t off) { return *(Node **)Data_Ptr(d, off); }
+
+/* 0x487570: VCST. The armour's two sets of four into the whole and current (+0x138 and +0x158, +0x148
+   and +0x168), the engine's, suspension's and brakes' conditions, the velocity (+0xbc, its length
+   +0xac) and the height (the frame's y) */
+static int vsf_vcst(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    ObjCtx *x = arg;
+    Node *n = x->node;
+    char fname[16];
+    crt_splitname((const char *)c + 8, fname, sizeof fname);
+    if (crt_strnicmp(fname, n->name, 8)) {
+        char m[160], obj[9];
+        memcpy(obj, n->name, 8), obj[8] = 0;   /* 0x492c50 */
+        snprintf(m, sizeof m, exe_str(0x4eaa9c), (const char *)x->vcf, (const char *)c + 8, obj);
+        plat_log(m);
+    }
+    uint8_t *d = n->data;
+    Node *engine = data_node(d, 0x3c4), *susp = data_node(d, 0x3c8), *brakes = data_node(d, 0x3cc);
+    memcpy(d + 0x138, c + 0x15, 16), memcpy(d + 0x158, c + 0x15, 16);
+    memcpy(d + 0x148, c + 0x25, 16), memcpy(d + 0x168, c + 0x25, 16);
+    /* the original writes through the parts unchecked */
+    if (engine) memcpy(engine->data, c + 0x45, 4);
+    if (susp) memcpy(susp->data, c + 0x4d, 4);
+    if (brakes) memcpy(brakes->data + 4, c + 0x49, 4);
+    float vx = rdf(c + 0x35), vy = rdf(c + 0x39), vz = rdf(c + 0x3d);
+    memcpy(d + 0xbc, c + 0x35, 12);
+    float len = fpu_f32(fpu_sqrt(fpu_add(fpu_add(fpu_mul(vy, vy), fpu_mul(vx, vx)), fpu_mul(vz, vz))));
+    memcpy(d + 0xac, &len, 4);
+    n->frame.pos[1] = rdf(c + 0x41);
+    return 1;
+}
+
+/* 0x487730: WLST, the six wheels' conditions (+0x3a8-0x3bc, their data's +4) */
+static int vsf_wlst(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    uint8_t *d = ((ObjCtx *)arg)->node->data;
+    for (int i = 0; i < 6; i++) {
+        Node *w = data_node(d, 0x3a8 + 4 * (uint32_t)i);
+        if (w && w->data) memcpy(w->data + 4, c + 8 + 4 * i, 4);
+    }
+    return 1;
+}
+
+/* 0x487810: WPST, a gun's rounds by its hard point */
+static int vsf_wpst(const uint8_t *c, void *arg, const uint8_t *end)
+{
+    (void)end;
+    Weapon_SetState(((ObjCtx *)arg)->node, rd32(c + 8), rd32(c + 0x10), rd32(c + 0xc));
+    return 1;
+}
+
+static ChunkDesc vsf_table[] = {   /* 0x4e9ff8 (SALV is the salvage's, read elsewhere) */
+    {"VCST", vsf_vcst, 0x800}, {"WLST", vsf_wlst, 0x800}, {"WPST", vsf_wpst, 0xc00}, {"SALV", NULL, 0xc00},
+    {"EXIT", Objects_Exit, 0x800},
+};
+
+const ChunkDesc *Vehicle_VsfTable(void) { return vsf_table; }
+
 bool Vehicle_Load(ObjCtx *x, const char *path)
 {
     static uint8_t scratch[SCRATCH];
@@ -695,11 +758,10 @@ bool Vehicle_Load(ObjCtx *x, const char *path)
     }
     if (!Bwd2_Read(name, vcf_table, 4, x)) return false;
     if (g_mission_kind != 2) return true;
-    /* training: the vehicle's saved state, <name>.vsf (VCST, WLST, WPST, SALV: 0x4e9ff8), when there is
-       one; the disc has none, and its reading is not ported yet */
+    /* a trip's (or training's): the vehicle's state, <name>.vsf, when there is one (0x4928c0) */
     char base[16], vsf[24];
     crt_splitname(name, base, sizeof base);
     snprintf(vsf, sizeof vsf, "%s%s", base, exe_str(0x4e971c));
-    if (Res_Exists(vsf)) plat_log("a .vsf is not read yet (0x4e9ff8)");
+    if (Res_Exists(vsf)) Bwd2_Read(vsf, vsf_table, 5, x);
     return true;
 }

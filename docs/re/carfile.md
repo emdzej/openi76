@@ -45,6 +45,27 @@ The WPST chunks are written last gun first. Then 0x488db0 writes each salvage it
 bytes from the name: name, condition, flag) and an `EXIT`. After t12 it writes nothing. The close then
 writes a second `EXIT`.
 
+## The .vsf read at the mission's load (table 0x4e9ff8) — confirmed
+
+In a trip's or training's mission (kind 2), Vehicle_Load (0x485030) reads `<name>.vsf` after the
+vehicle's `.vcf` when the file index has it (0x4928c0). The table has four chunks:
+- **VCST (0x487570).**
+  - When the record's name (without its extension) differs from the object's first 8 characters, it
+    logs "State file %s calls for %s, but is associated with obj76 %s" and goes on.
+  - The armour: +0xd's four words go to the vehicle data's +0x138 (whole) and +0x158 (current), +0x1d's
+    to +0x148 and +0x168.
+  - The conditions: +0x3d to the engine's data +0 (data +0x3c4), +0x45 to the suspension's +0 (+0x3c8),
+    +0x41 to the brakes' +4 (+0x3cc).
+  - +0x2d-0x35 are a velocity (data +0xbc-0xc4), its length (y² + x² + z², through the FPU) goes to
+    +0xac. +0x39 (a float) becomes the object's height (its frame's y, a double). The mission's .vsf
+    and the shell's leave all four 0.
+- **WLST (0x487730).** The six words go to the six wheels' data +4 (+0x3a8-0x3bc, each when present).
+- **WPST (0x487810 → 0x4552a0).** It finds the vehicle's hard points' record, then the slot of the id.
+  The instance gets the count (+0xc) and, unless it is -1, the third word as its +0x18. When no slot has
+  the id, the original reads the instance from the slot before the first, which is the record's count
+  (a quirk, kept). An instance of -1 logs "Cannot set the state on nonexistant weapons.".
+- **SALV** has no handler here: the salvage is the shell's (0x1001fdf0).
+
 ## The file index's added paths (0x48c290, 0x48c220) — confirmed
 
 0x48c290(name, dir) adds dir to the index's roots (at most 256, "More than %d zix paths specified") and

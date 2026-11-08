@@ -715,6 +715,25 @@ static char *sound(uint8_t *s)
     return (char *)s;
 }
 
+void Weapon_SetState(Node *vehicle, int32_t id, int32_t v18, int32_t count)
+{
+    int i = 0;
+    while (i < g_hardpoint_count && g_hardpoints[i].vehicle != vehicle) i++;
+    if (i == g_hardpoint_count) return;   /* the original goes on with the record before the first */
+    HardPoints *hp = &g_hardpoints[i];
+    int j = 0;
+    while (j < 7 && hp->slot[j].id != id) j++;
+    /* no slot of the id: the original reads the instance from the slot before the first, which is the
+       record's count (quirk, kept) */
+    int32_t inst = j < 7 ? hp->slot[j].inst : hp->count;
+    if (inst == -1 || inst < 0 || inst >= 350) {   /* past the table: the port's */
+        plat_log(exe_str(0x4dc348));   /* "Cannot set the state on nonexistant weapons." */
+        return;
+    }
+    g_weapons[inst].v0c = count;
+    if (v18 != -1) g_weapons[inst].v18 = (uint32_t)v18;
+}
+
 int Weapons_Wepn(const uint8_t *c, ObjCtx *x)
 {
     static GdfCtx g;   /* 0x168 bytes on the original's stack */
