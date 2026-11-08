@@ -96,7 +96,9 @@ void Bars_Load(void);                            /* i76shell 0x10035c50: the dam
 void Part_Bar(const ShPart *p, int x, int y);    /* a part's damage bar, as 0x100366d0 draws it */
 void Setup_UseTrip(void);                        /* the set-up's fills, the trip's (the garage's done) */
 void Setup_Open(void);
-void Setup_Reset(void);                           /* i76shell 0x10003fe0 (0xc00f) */
+void Setup_Reset(void);
+void Garage_StopWave(void);   /* i76shell 0x10036eb0: the yard's wave stopped */
+void Setup_StopWave(void);    /* i76shell 0x10008130: the set-up's first wave stopped */                           /* i76shell 0x10003fe0 (0xc00f) */
 extern ShList *g_sh_stock_repairs;   /* 0x1005c904 */
 
 /* 0x10020d30 (0xc01e) */

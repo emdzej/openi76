@@ -279,4 +279,27 @@ shell runs, in order:
 - **Checked:** `--storage-dir`, SAVE BOOKMARK in the garage, "test" typed and Enter: savegame.dir and
   save000.cmp; a second run's TRIP, LOAD BOOKMARK, the row and LOAD give the same garage.
 
-Other screens: the melee's, the options, network play.
+## The menu (pop-up 0) and the exit's question (pop-up 2) (ported: escmenu.c)
+
+- **The data-driven menus (0x10008430 lays out, 0x100085d0 hits, 0x10008590 frees)**: records of 0x2c
+  bytes ended by an x of -1: x, y, w, h (-1 from the piece), +0x14 a colour map, +0x18 the piece, +0x1c
+  its maker (0x10008730 the text in font 46, 0x100086a0 in font 47), +0x20 the click's function, +0x24
+  the text ('~' first: centred on x), +0x28 the choice. A y with bit 31 is relative to the last item's.
+  The colour map (0x1006c1c8, 0x10092930) is each colour itself but 1, made 200 (0 stays 0).
+- **Pop-up 0 (Esc; 0x1000cc40)**: the palette kept, the fill 0x10, picture 6 over the screen ("Options
+  Menu"), the yard's and the set-up's first waves stopped, wave 0x48, the keys flushed, the items by the
+  screen: the main menu's (0x1005f1a0), a trip's (0x1005ef90: with Save Bookmark and Exit Trip), the
+  others' (0x1005f358). Its pass (0x1000cde0) takes an item's choice into the next pop-up: 1 Play
+  Options (4), 2 Graphic Detail (5), 3 Audio Control (6), 4 Control Configuration (7), 5 Load Bookmark
+  (11), 6 Save Bookmark (1), 7 Exit Interstate '76 (2), 9 Exit Trip (the set-up's and garage's lists
+  freed, then 10: the main menu), 10 Credits (9), 11 Modem Setup (3); Done (8) or Esc shuts it: the
+  pieces off, the palette back and, with no pop-up to follow, the screen's redraw.
+- **Pop-up 2 (0x100334b0, 0x10033550)**: picture 8 ("Exit Game"), "Are you gonna leave me,
+  sweetheart?", Yes the end (pop-up 8), No or Esc the menu again; its close restores the whole screen.
+- 0x1008e9e8 is each screen's own message (set by the window's procedure for 0xc008-0xc026 but 0xc010):
+  the menu picks its items by it.
+- The main menu's redraw (0x10025320) draws its buttons again after a pop-up.
+- Not ported yet: pop-ups 3 (modem), 4 (play options), 5 (graphic detail), 6 (audio), 7 (controls), 9
+  (credits).
+
+Other screens: the melee's, network play.

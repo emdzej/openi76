@@ -116,10 +116,30 @@ static void build(void)
     for (int i = 0; i < list->count; i++) Btn_Draw(list->items[i]);
 }
 
+/* 0x10025320, the screen's redraw (0x10063790): the four, the panels open, TRIP's shut, the list */
+static void redraw(void)
+{
+    Btn_Draw(&b_e588), Btn_Draw(&b_e4e0), Btn_Draw(&b_e860), Btn_Draw(&b_e4a8);
+    if (open & 0x1000000) Btn_Draw(&b_e5f8);
+    if (open & 0x2000000) Btn_Draw(&b_e898);
+    if (open & 0x80000000u) Btn_Draw(&b_e5c0);
+    if (open & 0x40000000) Btn_Draw(&b_e748);
+    if (open & 0x10000000) {
+        open &= ~0x10000000u;
+        b_e588.frame = 0x19;
+        b_e588.on = 0;
+        Btn_Draw(&b_e588);
+        ShList_Remove(list, &b_e780), ShList_Remove(list, &b_e828), ShList_Remove(list, &b_e6d8);
+        Btn_Hide(&b_e780), Btn_Hide(&b_e828), Btn_Hide(&b_e6d8);
+        reset();
+    }
+    for (int i = 0; i < list->count; i++) Btn_Draw(list->items[i]);
+}
+
 static void screen(uint32_t msg);
 
 /* 0x100236d0 (the message 0xc00e): the frame set, the click, the background, the buttons, the screen's
-   function; the menu function 0x10025320 and the arrow cursor */
+   function; the redraw 0x10025320 and the arrow cursor */
 void MainMenu_Open(void)
 {
     open = 0;
@@ -131,6 +151,7 @@ void MainMenu_Open(void)
     if (list) ShList_Free(list);
     build();
     pending = NULL;
+    g_sh_redraw = redraw;
     Shell_SetScreen(screen);
 }
 

@@ -324,6 +324,14 @@ static bool popup(void)
     if (menu_fn) menu_fn(0);
     g_sh_popup = 0;
     switch (g_sh_popup_item) {
+    case 0:   /* the menu (0x1000cc40) */
+        EscMenu_Open();
+        g_sh_popup_up = 1;
+        return true;
+    case 2:   /* the exit's question (0x100334b0) */
+        QuitMenu_Open();
+        g_sh_popup_up = 1;
+        return true;
     case 1:   /* the bookmark's save (0x1001ad30) */
         g_sh_popup_up = 1;
         Bookmark_Save();
@@ -434,12 +442,12 @@ static void message(uint32_t msg, uint32_t wparam)
 {
     (void)wparam;
     if (popup()) return;
+    if (msg >= 0xc008 && msg <= 0xc026 && msg != 0xc010) g_sh_screen_msg = msg;   /* 0x1008e9e8, each screen's */
     switch (msg) {
     case 0xc002:   /* the shell's end: 0x1002a6d0, then the quit */
         Shell_Quit(0xc002);
         return;
     case 0xc00e:   /* the main menu */
-        g_sh_screen_msg = msg;
         MainMenu_Open();
         return;
     case 0xc010:   /* the mission: a trip's or training's needs disc 2 in the drive (the exe's +0x44) */

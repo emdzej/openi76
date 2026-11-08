@@ -175,3 +175,17 @@
 10002d80	Bookmark_Restore	shell	high	0xc01d: the trip back from a bookmark; ported
 1000fe00	Shell_Ask	shell	high	the yes/no box waited on (with a text function); ported (Shell_YesNo)
 10007d40	Setup_ListsBack	setup	high	the set-up's boxes into the record when open; ported
+1000cc40	EscMenu_Open	shell	high	pop-up 0, the menu (Esc); ported (src/shell/escmenu.c)
+1000cde0	EscMenu_Pass	shell	high	the menu's pass; ported
+1000cb30	Menu_Choose	shell	high	an item's click: the choice = its +0x28; ported
+10008430	Menu_Make	shell	high	a data-driven menu laid out and its pieces made; ported
+100085d0	Menu_Hit	shell	high	the item under the mouse; ported
+10008590	Menu_Free	shell	high	the menu's pieces taken off; ported
+10008730	Menu_Text46	shell	high	an item's text piece in font 46; ported
+100086a0	Menu_Text47	shell	high	an item's text piece in font 47; ported
+100334b0	QuitMenu_Open	shell	high	pop-up 2, "Exit Game"; ported
+10033550	QuitMenu_Pass	shell	high	the exit's question's pass; ported
+100334a0	QuitMenu_Choose	shell	high	the exit's item click; ported
+10036eb0	Garage_StopWave	trip	high	the yard's wave stopped; ported
+10008130	Setup_StopWave	setup	high	the set-up's first wave stopped; ported
+10025320	MainMenu_Redraw	shell	high	the main menu's buttons drawn again; ported

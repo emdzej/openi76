@@ -1363,6 +1363,11 @@ void Setup_Open(void)
     Shell_SetScreen(screen);
 }
 
+void Setup_StopWave(void)   /* 0x10008130 */
+{
+    if (w_hello) Sound_StopData(w_hello);
+}
+
 void Setup_ListsBack(void)   /* 0x10007d40 */
 {
     if (sb_list) lists_to_record();

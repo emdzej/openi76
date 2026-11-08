@@ -423,6 +423,11 @@ static void screen(uint32_t msg)
     }
 }
 
+void Garage_StopWave(void)   /* i76shell 0x10036eb0 */
+{
+    if (w_yard) Sound_StopData(w_yard);
+}
+
 static uint8_t *wave(int entry)
 {
     uint32_t n;
