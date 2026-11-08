@@ -153,3 +153,49 @@ In order:
 4. The nine specials (kind 0xd), files `spc01`-`spc09`, named from the table at 0x4eac48.
 
 On disc 1 that is 223 parts: 71 wheels, 46 guns, 79 paints.
+
+## The car written back (0x48aa60, 0x48b540, 0x48b620) — confirmed, tested
+
+**0x48aa60** (the shell's +0xc) writes a record as a .vcf (0x487d60: VCFC of 0x81 bytes, three SPECs,
+the WEPNs, EXIT). Each part is found in the catalogue by its name (strcmp, the first match):
+- **The components.** The first slot of kind 2, 3 and 4, each searched from slot 0. Their numbers
+  (VCFC +0x2a, +0x2e, +0x32) are the parts' +0x48. Two quirks are kept:
+  - Only the engines' +0x48 is ever set (0x489400), so the suspension and brakes write 0 when the
+    shell's array is fresh.
+  - "ERROR vehicle has no engine" is the message for all three.
+- **The wheels.** The front pair's file goes to +0x36. The next pair (two slots on) is the rear. With a
+  third pair, the middle's file goes to +0x43 and the rear's to +0x50. Without one, the rear's goes to
+  +0x50 and "NULL" to +0x43. A missing pair or part is fatal.
+- **The armour.** The nine words from +0x7fc, at +0x5d.
+- **The guns.** From the first slot of kind 7-0xb, the run of such slots: each its .gdf and its hard
+  point's id (+0x784). An `EMPTY` gun finds the first EMPTY part, whose file is "", and 0x487d60 skips
+  WEPNs without a file.
+- **The SPECs.** Always written as three zeros: the specials' array is cleared and never filled (quirk,
+  kept).
+
+**0x48b540** (the shell's +0x1c) and **0x48b620** (+0x10) write a state as a .vsf. Both name the
+VCST's +0 after the path as `.vcf`; 0x48b620 starts from an old .vsf, 0x48b540 from nothing with the
+count of WPSTs given. 0x48b700 puts the state in: the conditions, the WPSTs (their third word -1), the
+specials' bytes, and the armour's four words as both +0xd and +0x1d. 0x487c90 writes VCST, WLST, the
+WPSTs whose count is not -1, and EXIT, without salvage.
+
+The shell's table (Shell_Load 0x401000), as far as it is known:
+
+| Offset | Exe function |
+|---|---|
+| +0 | 0x4892e0, the parts catalogue |
+| +4 | 0x489250, a list of the cars' files (vppirna1.vcf, …) |
+| +8 | 0x48c290, a file into the index |
+| +0xc | 0x48aa60, a record as a .vcf |
+| +0x10 | 0x48b620, a state over an old .vsf |
+| +0x14 | 0x489cf0, a .vcf as a record |
+| +0x18 | 0x48b420, a .vsf as a state |
+| +0x1c | 0x48b540, a state as a .vsf |
+| +0x20, +0x24 | 0x487d60, 0x487c90, the writers |
+| +0x28 | 0x466b70, the sound frame |
+| +0x2c-0x34 | 0x467390, 0x4674a0, 0x4674f0, the shell's sounds |
+| +0x38-0x40 | 0x4688f0, 0x468910, 0x468970, the volumes |
+| +0x44 | 0x484d10, disc 2's check |
+| +0x48, +0x4c | 0x44e260, 0x44de10 |
+| +0x50, +0x54 | 0x4686c0, 0x468800, the music |
+| +0x58 | 0x484af0 |

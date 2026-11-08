@@ -1,6 +1,8 @@
 /* shellcar.h */
 #include "shellcar.h"
+#include "carfile.h"
 #include "chunks.h"
+#include "crt.h"
 #include "exe.h"
 #include "objects.h"
 #include "platform.h"
@@ -617,6 +619,168 @@ int ShellCar_Catalogue(uint8_t *cat)
     components_parts(cat, 2, 4);
     specials_parts(cat);
     return ncat;
+}
+
+
+/* ---- the car written back (0x48aa60, 0x487d60, 0x48b540-0x48b700, 0x487c90) ---- */
+
+static void fatal(uint32_t msg)   /* 0x402c80, then exit(0) */
+{
+    plat_log(exe_str(msg));
+    exit(0);
+}
+
+/* the first slot of a kind from slot 0, or the count */
+static int slot_of(const uint8_t *r, int32_t kind, int from)
+{
+    int i = from;
+    while (i < rd32(r + 0x3c) && rd32(r + 0x40 + i * 0x20) != kind) i++;
+    return i;
+}
+
+/* the first part of the catalogue named as slot i's part (strcmp), or n */
+static int part_of(const uint8_t *r, int i, const uint8_t *cat, int n)
+{
+    int k = 0;
+    while (k < n && strcmp((const char *)r + 0x400 + i * 0x1e, (const char *)cat + k * SHELL_PART)) k++;
+    return k;
+}
+
+/* 0x487d60: VCFC (0x81), the three SPECs, the WEPNs (0x11 each) with a file, last first, EXIT */
+static int vcf_write(const char *path, const uint8_t vcfc[0x81], const uint8_t *wepn, int n, const uint8_t spec[12])
+{
+    Bwd2Out f;
+    if (!Bwd2_Create(&f, path, 3)) return 0;
+    int ok = 0;
+    if (Bwd2_Chunk(&f, 0x56434643, vcfc, 0x81)) {
+        int i = 0;
+        for (; i < 3; i++)
+            if (!Bwd2_Chunk(&f, 0x53504543, spec + 4 * i, 4)) break;
+        int k = n;
+        while (k-- > 0)
+            if (wepn[k * 0x11 + 4] && !Bwd2_Chunk(&f, 0x5745504e, wepn + k * 0x11, 0x11)) break;
+        if (k < 0) ok = 1;
+    }
+    Bwd2_Close(&f, ok);
+    return ok;
+}
+
+void ShellCar_WriteVcf(const uint8_t *recs, const uint8_t *cat, int n, const char *path, int index)
+{
+    const uint8_t *r = recs + index * SHELL_REC;
+    uint8_t v[0x81] = {0}, w[10 * 0x11] = {0}, spec[12] = {0};   /* the SPECs are never filled (quirk, kept) */
+    strcpy((char *)v, (const char *)r + 0x14);
+    strcpy((char *)v + 0x10, (const char *)r + 0x820);
+    strcpy((char *)v + 0x1d, (const char *)r + 0x82d);
+    /* the components' numbers (their parts' +0x48: only the engines' is ever set) */
+    static const struct { int32_t kind; uint32_t missing; uint8_t at; } comp[3] = {
+        {2, 0x4eae98, 0x2a}, {3, 0x4eae70, 0x2e}, {4, 0x4eae4c, 0x32}};
+    for (int c = 0; c < 3; c++) {
+        int i = slot_of(r, comp[c].kind, 0);
+        if (i == rd32(r + 0x3c)) fatal(0x4eaebc);   /* "ERROR vehicle has no engine", for each */
+        int k = part_of(r, i, cat, n);
+        if (k == n) fatal(comp[c].missing);
+        memcpy(v + comp[c].at, cat + k * SHELL_PART + 0x48, 4);
+    }
+    /* the wheels: the front pair, the rear, then a middle one if there are six (the rear's file then at
+       +0x50 and the middle's at +0x43, else "NULL" there) */
+    int i = slot_of(r, 5, 0);
+    if (i == rd32(r + 0x3c)) fatal(0x4eae28);   /* "no front tires" */
+    int k = part_of(r, i, cat, n);
+    if (k == n) fatal(0x4eae04);
+    strcpy((char *)v + 0x36, (const char *)cat + k * SHELL_PART + 0x3b);
+    i = slot_of(r, 5, i + 2);
+    if (i == rd32(r + 0x3c)) fatal(0x4eade4);   /* "no rear tires" */
+    int rear = part_of(r, i, cat, n);
+    if (rear == n) fatal(0x4eae04);
+    i = slot_of(r, 5, i + 2);
+    if (i == rd32(r + 0x3c)) {
+        strcpy((char *)v + 0x50, (const char *)cat + rear * SHELL_PART + 0x3b);
+        copy_exe(v + 0x43, 0x4eaddc, 5);   /* "NULL" */
+    } else {
+        k = part_of(r, i, cat, n);
+        if (k == n) fatal(0x4eae04);
+        strcpy((char *)v + 0x43, (const char *)cat + k * SHELL_PART + 0x3b);
+        strcpy((char *)v + 0x50, (const char *)cat + rear * SHELL_PART + 0x3b);
+    }
+    memcpy(v + 0x5d, r + 0x7fc, 9 * 4);
+    /* the guns: the slots from the first of kind 7-0xb while their kinds stay above 6 and below 0xc */
+    int guns = 0;
+    i = 0;
+    while (i < rd32(r + 0x3c) && (rd32(r + 0x40 + i * 0x20) <= 6 || rd32(r + 0x40 + i * 0x20) >= 0xc)) i++;
+    if (i != rd32(r + 0x3c)) {
+        do {
+            k = part_of(r, i, cat, n);
+            if (k == n) fatal(0x4eadb8);   /* "cannot find weapon component" */
+            strcpy((char *)w + guns * 0x11 + 4, (const char *)cat + k * SHELL_PART + 0x3b);
+            memcpy(w + guns * 0x11, r + 0x784 + i * 4, 4);
+            guns++, i++;
+        } while (guns < 10 && rd32(r + 0x40 + i * 0x20) > 6 && rd32(r + 0x40 + i * 0x20) < 0xc &&
+                 i < rd32(r + 0x3c));
+    }
+    vcf_write(path, v, w, guns, spec);
+}
+
+/* 0x487c90: VCST, WLST, the WPSTs whose count is not -1 (last first), EXIT */
+static int vsf_write(const char *path, const uint8_t *s, int n)
+{
+    Bwd2Out f;
+    if (!Bwd2_Create(&f, path, 2)) return 0;
+    int ok = 0;
+    if (Bwd2_Chunk(&f, 0x56435354, s, 0x4c) && Bwd2_Chunk(&f, 0x574c5354, s + 0x4c, 0x18)) {
+        int i = n;
+        while (i-- > 0)
+            if (rd32(s + 0x64 + i * 0xc + 4) != -1 && !Bwd2_Chunk(&f, 0x57505354, s + 0x64 + i * 0xc, 0xc)) break;
+        if (i < 0) ok = 1;
+    }
+    Bwd2_Close(&f, ok);
+    return ok;
+}
+
+/* 0x48b700: the state into the scratch (the WPSTs' third words -1, the armour as both its words), then
+   written */
+static void vsf_from_state(uint8_t *s, const int32_t st[0x4e], const char *path)
+{
+    put32(s + 0x3d, st[0]);
+    put32(s + 0x41, st[1]);
+    put32(s + 0x45, st[2]);
+    for (int i = 0; i < 6; i++) put32(s + 0x4c + 4 * i, st[3 + i]);
+    for (int i = 0; i < rd32(s + 0xbc) && i < 7; i++) {
+        put32(s + 0x64 + 0xc * i, st[9 + i]);
+        put32(s + 0x68 + 0xc * i, st[9 + i + 0x1e]);
+        put32(s + 0x6c + 0xc * i, -1);
+    }
+    const uint8_t *b = (const uint8_t *)st;
+    s[0x49] = b[0x114], s[0x4a] = b[0x115], s[0x4b] = b[0x116];
+    for (int i = 0; i < 4; i++) {
+        put32(s + 0xd + 4 * i, st[0x46 + i]);
+        put32(s + 0x1d + 4 * i, st[0x46 + i]);
+    }
+    vsf_write(path, s, rd32(s + 0xbc));
+}
+
+/* the scratch's +0: path's name as .vcf */
+static void vsf_name(uint8_t *s, const char *path)
+{
+    char base[40];
+    crt_splitname(path, base, sizeof base);
+    snprintf((char *)s, 13, "%s%s", base, exe_str(0x4a8100));
+}
+
+void ShellCar_WriteState(const char *path, const int32_t st[0x4e], int guns)   /* 0x48b540 */
+{
+    uint8_t s[SHELL_VSF] = {0};
+    vsf_name(s, path);
+    put32(s + 0xbc, guns);
+    vsf_from_state(s, st, path);
+}
+
+void ShellCar_RewriteState(const int32_t st[0x4e], const char *path, const char *from)   /* 0x48b620 */
+{
+    uint8_t s[SHELL_VSF] = {0};
+    ShellCar_ReadVsf(from, s, NULL);
+    vsf_name(s, path);
+    vsf_from_state(s, st, path);
 }
 
 bool ShellCar_CheckTables(void)

@@ -73,6 +73,18 @@ int main(void)
                (char *)cat + i * SHELL_PART + 0x2e, (char *)cat + i * SHELL_PART + 0x3b);
     CHECK(by[2] == 5 && by[3] == 5 && by[4] == 5 && by[0xd] == 10 && by[5] > 1 && by[7] > 1 && by[0xe] > 1);
 
+    /* the record back as a .vcf, read again */
+    ShellCar_WriteVcf(recs, cat, parts, "addon\\shtest.vcf", 0);
+    CHECK(Res_AddPath("shtest.vcf", "addon"));
+    static uint8_t s2[SHELL_VCF];
+    CHECK(ShellCar_ReadVcf("shtest.vcf", s2));
+    printf("written back: \"%s\" %s %s, engine \"%s\", guns %s %s %s %s\n", (char *)s2 + 0x50, (char *)s2 + 0xf0,
+           (char *)s2 + 0xfd, (char *)s2 + 0x137, (char *)s2 + 0x3c8, (char *)s2 + 0x3c8 + 0xfc,
+           (char *)s2 + 0x3c8 + 2 * 0xfc, (char *)s2 + 0x3c8 + 3 * 0xfc);
+    CHECK(!strcmp((char *)s2 + 0x50, (char *)s + 0x50) && !strcmp((char *)s2 + 0xf0, (char *)s + 0xf0) &&
+          !strcmp((char *)s2 + 0x137, (char *)s + 0x137) && !strcmp((char *)s2 + 0x3c8, (char *)s + 0x3c8) &&
+          !strcmp((char *)s2 + 0x3c8 + 3 * 0xfc, (char *)s + 0x3c8 + 3 * 0xfc));
+
     Bwd2Out f;
     uint8_t vcst[0x4c] = {0}, wlst[0x18] = {0}, wp[0xc] = {0}, sv[0x18] = {0};
     vcst[0x3d] = 9;

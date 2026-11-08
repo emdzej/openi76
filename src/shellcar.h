@@ -40,5 +40,14 @@ int ShellCar_Record(uint8_t *recs, const char *name, int index);
    the file index, the four engines, brakes and suspensions, the nine specials; their count */
 int ShellCar_Catalogue(uint8_t *cat);
 
+/* 0x48aa60 (the table's +0xc, through 0x487d60): record index as a .vcf at path, its parts found by
+   name in the catalogue (n parts): the components' numbers, the wheels' and guns' files, the armour.
+   A slot missing or a part not found is fatal, as the original's */
+void ShellCar_WriteVcf(const uint8_t *recs, const uint8_t *cat, int n, const char *path, int index);
+/* 0x48b540 (+0x1c): a state as a .vsf at path, with guns WPSTs */
+void ShellCar_WriteState(const char *path, const int32_t st[0x4e], int guns);
+/* 0x48b620 (+0x10): a state over the .vsf from (its WPST count kept) as a .vsf at path */
+void ShellCar_RewriteState(const int32_t st[0x4e], const char *path, const char *from);
+
 /* the port's tables are the exe's (tests) */
 bool ShellCar_CheckTables(void);

@@ -1383,3 +1383,9 @@
 00486aa0	ShellCar_ReadGdf	carfile	high	a .gdf (table 0x4e9f98); ported
 00485600	ShellCar_ReadVtf	carfile	high	a .vtf's name (table 0x4e9eb8); ported
 00487500	ShellCar_Vtfc	carfile	high	VTFC: 15 characters from +0x15; ported
+0048aa60	ShellCar_WriteVcf	carfile	high	the table's +0xc: a shell record as a .vcf, parts found by name in the catalogue; ported
+00487d60	Vcf_Write	carfile	high	VCFC, three SPECs, the WEPNs with a file (last first), EXIT; ported
+00487c90	Vsf_Write	carfile	high	VCST, WLST, the WPSTs whose count is not -1 (last first), EXIT; ported
+0048b540	ShellCar_WriteState	carfile	high	the table's +0x1c: a state as a .vsf; ported
+0048b620	ShellCar_RewriteState	carfile	high	the table's +0x10: a state over an old .vsf as a new one; ported
+0048b700	Vsf_FromState	carfile	high	a state into the .vsf scratch (third words -1, the armour twice), written; ported
