@@ -1413,3 +1413,5 @@
 00475d50	Nitro_Use	vehicles	med	the user's nitro: 15 s of +0x454 0x800, bnitro.wav, a charge; ported
 0042d3b0	Vehicle_TimedFlags	vehicles	med	+0x450 the time, +0x454 |= flags | 0x80000000
 0042d970	Special_UseCharge	vehicles	med	the special's data +4 less one
+00409420	AI_NearestTarget	ai	med	nearestEnemy's vehicle, or for the user the nearest artillery when nearer; ported (src/fsm.c Fsm_NearestTarget)
+004290c0	Artillery_Nearest	vehicle	med	the nearest artillery gun in 3D; ported

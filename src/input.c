@@ -2,6 +2,7 @@
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
 #include "damage.h"
+#include "fsm.h"
 #include "movie.h"
 #include "sound.h"
 #include "radar.h"
@@ -1166,8 +1167,7 @@ void User_Controls(void)
     if (*INPUT_AT(0x4deff1)) Radar_ToggleRange(n);   /* 0x4213d0 */
     if (*INPUT_AT(0x4deff2)) Radar_RangeReset(n);       /* 0x421400 */
     if (*INPUT_AT(0x4deff3)) Radar_ToggleCamera(n);    /* 0x421430 */
-    /* 0x4deff4 target_nearest_enemy: the nearest enemy (0x409420, through the script's nearestEnemy 0x409590) chosen
-       (0x4218a0): not ported yet */
+    if (*INPUT_AT(0x4deff4)) Radar_Choose(n, Fsm_NearestTarget(n));   /* target_nearest_enemy: 0x409420, 0x4218a0 */
     if (*INPUT_AT(0x4deff5)) {
         if ((fbits_f(target_wait) & 0x7fffffffu) == 0) Radar_Clear(n);   /* 0x421840 */
         Radar_Next(n);   /* 0x421540 */

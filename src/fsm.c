@@ -29,6 +29,8 @@
 #include "physics.h"
 #include "input.h"
 #include "vfs.h"
+#include "melee.h"
+#include "vehicle.h"
 #include "render/fpu.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -668,23 +670,26 @@ static void set_artillery(Node *n, uint32_t off, int32_t v)
    nearestEnemy 0x409590, nearestBlg 0x40b190): the entity record holding node, else a new one at the
    table's end named "NoLabel<count>" (0x4a898c) with a reference on the node ("ai"); its number to *out */
 
-static void label(Node *node, uint32_t out)
+static int32_t label_index(Node *node)   /* -1 when the table is full */
 {
     for (int32_t i = 0; i < g_fsm.n_entities; i++)
-        if (ent_node[i] == node) {
-            SET(out, i);
-            return;
-        }
+        if (ent_node[i] == node) return i;
     int32_t k = g_fsm.n_entities;
-    if (k >= ent_cap) return;   /* the original writes past its 200 spare records */
+    if (k >= ent_cap) return -1;   /* the original writes past its 200 spare records */
     char nm[40];
     snprintf(nm, sizeof nm, exe_str(0x4a898c), (int)k);
     uint8_t *r = at(g_fsm.entities + (uint32_t)k * 0x60);
     memcpy(r, nm, strlen(nm) + 1);
     ent_node[k] = node;
     if (node) Node_Ref(node);   /* 0x41f440 */
-    SET(out, k);
     g_fsm.n_entities = k + 1;
+    return k;
+}
+
+static void label(Node *node, uint32_t out)
+{
+    int32_t k = label_index(node);
+    if (k >= 0) SET(out, k);
 }
 
 /* the AI block's source at off (+0xa6e4 rammed, +0xa6e8 shot, +0xa6ec attacked); with none the original
@@ -699,16 +704,15 @@ static void who(Node *n, uint32_t off, uint32_t out)
 }
 
 /* nearestEnemy 0x409590: the nearest in x and z of the live vehicles (not +0x454 bit 0x20) of the other
-   teams (team 0 only in network play or the melee: 0x461900, 0x407370); with none the record past the
-   end is cleared and its number given, the count left */
-static void nearest_enemy(Node *n, uint32_t out)
+   teams (team 0 only in network play or the melee: 0x461900, 0x407370); its record's number (labelled),
+   or with none the record past the end cleared and its number, the count left */
+static int32_t nearest_enemy_at(Node *n)
 {
-    if (!n) return;
     float best = 3.4028234663852886e+38f;
     Node *found = NULL;
     int team = (int)((n->flags & 0x70000) >> 16);
     for (int t = 0; t < AI_TEAMS; t++) {
-        if ((!g_net_game && t == 0) || t == team) continue;
+        if ((!g_net_game && !g_melee && t == 0) || t == team) continue;
         for (int i = 0; i < g_team_count[t]; i++) {
             Node *o = g_teams[t][i]->node;
             uint32_t f;
@@ -722,10 +726,53 @@ static void nearest_enemy(Node *n, uint32_t out)
     if (!found) {
         int32_t k = g_fsm.n_entities;
         if (k < ent_cap) ent_node[k] = NULL;
-        SET(out, k);
-        return;
+        return k;
     }
-    label(found, out);
+    int32_t k = label_index(found);
+    return k >= 0 ? k : g_fsm.n_entities;
+}
+
+static void nearest_enemy(Node *n, uint32_t out)
+{
+    if (!n) return;
+    SET(out, nearest_enemy_at(n));
+}
+
+/* 0x4290c0: the nearest artillery gun to n in three dimensions (by its entity's node), NULL with none */
+static Node *nearest_artillery(Node *n)
+{
+    float best = 3.4028234663852886e+38f;
+    Node *found = NULL;
+    for (int i = 0; i < g_artillery_count; i++) {
+        Node *o = g_artillery[i]->node;
+        float dx = fpu_f32(fpu_sub(fpu_f32(o->frame.pos[0]), fpu_f32(n->frame.pos[0])));
+        float dy = fpu_f32(fpu_sub(fpu_f32(o->frame.pos[1]), fpu_f32(n->frame.pos[1])));
+        float dz = fpu_f32(fpu_sub(fpu_f32(o->frame.pos[2]), fpu_f32(n->frame.pos[2])));
+        double d = fpu_add(fpu_add(fpu_mul(dx, dx), fpu_mul(dy, dy)), fpu_mul(dz, dz));
+        if (d < best) best = fpu_f32(d), found = o;
+    }
+    return found;
+}
+
+Node *Fsm_NearestTarget(Node *n)
+{
+    if (!n || !(n->cls == 1 || n->cls == 8 || n->cls == 9)) return NULL;   /* 0x42e570 */
+    int32_t k = nearest_enemy_at(n);
+    Node *e = k < g_fsm.n_entities ? ent_node[k] : NULL;
+    if (g_user_entity && g_user_entity->node != n) return e;
+    Node *a = nearest_artillery(n);
+    if (!e) return a;
+    if (!a) return e;
+    float ex = fpu_f32(fpu_sub(fpu_f32(e->frame.pos[0]), fpu_f32(n->frame.pos[0])));
+    float ey = fpu_f32(fpu_sub(fpu_f32(e->frame.pos[1]), fpu_f32(n->frame.pos[1])));
+    float ax = fpu_f32(fpu_sub(fpu_f32(a->frame.pos[0]), fpu_f32(n->frame.pos[0])));
+    float ez = fpu_f32(fpu_sub(fpu_f32(e->frame.pos[2]), fpu_f32(n->frame.pos[2])));
+    float ay = fpu_f32(fpu_sub(fpu_f32(a->frame.pos[1]), fpu_f32(n->frame.pos[1])));
+    float az = fpu_f32(fpu_sub(fpu_f32(a->frame.pos[2]), fpu_f32(n->frame.pos[2])));
+    return fpu_add(fpu_add(fpu_mul(ex, ex), fpu_mul(ez, ez)), fpu_mul(ey, ey)) <
+                   fpu_add(fpu_add(fpu_mul(ax, ax), fpu_mul(az, az)), fpu_mul(ay, ay))
+               ? e
+               : a;
 }
 
 /* nearestBlg 0x40b190: the nearest standing structure on the collision lists in x and z; with none

@@ -38,3 +38,5 @@ void Artillery_Lookup(void);
    decides on the user (0x413b10, skill and aim 1) one frame in eight (rand % (2 x 5 - 2)), and pulls its
    trigger; the weapons are looked up again first after any vehicle was removed (0x428d00) */
 void Artillery_Fire(void);
+extern struct Entity *g_artillery[200];   /* 0x550640: the artillery guns (class 8) */
+extern int g_artillery_count;      /* 0x550960 */

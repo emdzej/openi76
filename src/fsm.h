@@ -51,3 +51,6 @@ extern int32_t g_game_state;
 /* Movie_Exists 0x44ebc0: a movie on the disc (<drive>:\cutscene\name, _stat), with local_too also in
    smk\ */
 bool Movie_Exists(const char *name, int local_too);
+/* 0x409420: the nearest enemy vehicle to n (nearestEnemy's, labelled in the script's table); for the user
+   the nearest artillery gun instead when it is nearer in three dimensions (0x4290c0) */
+Node *Fsm_NearestTarget(Node *n);

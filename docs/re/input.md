@@ -172,8 +172,10 @@ The actions go into the user's vehicle's data:
   - For class 1, `shift_up` and `shift_down` change the mode +0x104 within 0-5. The direction +0xe8 is
     -1 in mode 1, else 1. `reverse_direction` flips it and sets the mode to 1 (reverse) or 3.
   - 0x4deff9 kills the vehicle.
-- The radar's and the targets' keys are ported (docs/re/weapons.md, "The radar"), except
-  target_nearest_enemy.
+- The radar's and the targets' keys are ported (docs/re/weapons.md, "The radar"). target_nearest_enemy
+  chooses (0x4218a0) the nearest enemy (0x409420): the script's nearestEnemy (0x409590, so the vehicle is
+  labelled in the script's table), or for the user the nearest artillery gun (0x4290c0, in three
+  dimensions) when that is nearer.
 - **The specials** (0x4821e0, after the self-destruct): each of `special1`-`special3` (0x4defe3-5) whose key
   is down uses the special in its slot (+0x3ec + 4i) by its kind:
   - 1, the radar jammer (0x421f30), with a charge and time left (+4, +8 above 0): the lock-on's warning
@@ -186,7 +188,7 @@ The actions go into the user's vehicle's data:
   - 4, the blower: +0xf4 = 1 for good (the throttle doubled).
 - Then the horn (0x476420) and the binoculars (0x4deff0: the last view not the cockpit, preset 0xc, camera
   mode 0xc), before the radar's keys.
-- **Not ported yet:** the map, the notepad, the poetry, target_nearest_enemy and the combat view.
+- **Not ported yet:** the map, the notepad, the poetry and the combat view.
 
 The shipped `input.map` drives with the keypad's arrows (scan codes 0x48, 0x50, 0x4b, 0x4d: `UpArrow` and
 the others are the keypad's). The grey arrows and the grey Page Up and Page Down move the pilot's glance
