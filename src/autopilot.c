@@ -42,9 +42,10 @@ static double dist2(const Node *a, const Node *b)
 static int dead(const Node *n)
 {
     uint32_t f;
-    if (!n || (n->flags & 0x200) || !n->data) return 1;
+    if (!n || (n->flags & 0x200)) return 1;
+    if (n->cls != 1 || !n->data) return 0;   /* a structure (no data of its own) stands until destroyed */
     memcpy(&f, n->data + 0x454, 4);
-    return n->cls == 1 && (f & 0x20);
+    return (f & 0x20) != 0;
 }
 
 void Autopilot_Reset(void) { started = skilled = 0, focus = NULL; }
@@ -137,7 +138,7 @@ void Autopilot_Frame(void)
     for (int k = 1; k < nnames; k++) {
         Node *o = Fsm_Named(names[k]);
         if (guard[k] || !gate_ok(k)) continue;
-        if (o && !dead(o) && dist2(o, u) < 500.0 * 500.0) {
+        if (o && !dead(o)) {   /* at any range (t03's Bar-D, 1.1 km off once its defenders are dead) */
             AI_Order(u, o, 0, 0);
             trigger(u, o);
             return;
