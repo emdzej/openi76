@@ -1,7 +1,7 @@
-/* The application (app.h). For now: the exe check, then disc 1's loading screen (LOADSCR.PCX) through the
-   8-bit presentation path, or with --param mission=<name> the mission viewer below. The original's
-   start-up (WinMain, the shell, the intro movie) replaces this in steps 4, 5 and 10 of
-   docs/re/port-plan.md. */
+/* The application (app.h). For now: the exe check, WinMain's start-up movies (introf01, credf01), then disc
+   1's loading screen (LOADSCR.PCX) through the 8-bit presentation path, or with --param mission=<name> the
+   mission viewer below. The rest of the original's start-up (WinMain, the shell) replaces this in steps 4
+   and 5 of docs/re/port-plan.md. */
 #include "texanim.h"
 #include "weapons.h"
 #include "ordnance.h"
@@ -11,6 +11,7 @@
 #include "camera.h"
 #include "cockpit.h"
 #include "mirror.h"
+#include "movie.h"
 #include "smoke.h"
 #include "contrail.h"
 #include "skid.h"
@@ -82,7 +83,6 @@ static bool viewer_init(const char *mission)
     Sound_Init();       /* 0x466ab0, WinMain's first */
     Sound_Enable(0);    /* 0x466dd0 while the mission loads */
     Radio_On(1);        /* 0x46fa50, each mission */
-    Gamma_Build();
     InvSqrt_Init();
     if (!Draw_Init(err, sizeof err) || !Queue_Init()) {
         snprintf(m, sizeof m, "OpenI76: the renderer: %s", err);
@@ -105,7 +105,7 @@ static bool viewer_init(const char *mission)
     Roads_Setup(mission);
     /* WinMain: the colours of black (0x58dcbc) and of the first grey that is not 0xff (0x58dcb8), the lum
        ramp of 0xef, the glow table, then the terrain's textures */
-    Color_Match(0, 0, 0);
+    g_black = (uint8_t)Color_Match(0, 0, 0);
     int grey;
     for (float g = 0; (grey = Color_Match(g, g, g)) == 0xff; g += 0.015625f) {}   /* 0x4a500c */
     g_grey = (uint8_t)grey;
@@ -113,6 +113,7 @@ static bool viewer_init(const char *mission)
     Glow_Build(g_shown_pal);
     Terrain_LoadTextures();
     pixels = calloc(640 * 480, 1);
+    Movie_SetScreen(pixels, 640);
     surf = (Surface){640, pixels, 0, 0, 639, 479, 1, 640, 480};
     /* 0x403360: fov pi/2, aspect (h * 4) / (w * 3), the world's range with DET_RANGE (else 150), zoom 1 */
     float range = g_detail.b[DET_RANGE] ? g_world.range : 150.0f;
@@ -212,7 +213,15 @@ static void play_frame(void)
     Input_Keys();
     Clock_Tick();
     Input_Update();
-    if (!(g_play_state & 0x3e)) {
+    if (g_play_state & 0x3e) {   /* WinMain's loop with the play stopped: 0x44fab0, then a movie's frame */
+        if (g_play_state == 0x20) Movie_Frame();   /* 0x44ed90 */
+        else {
+            Sound_Frame(1);   /* 0x466b70 */
+            plat_present(pixels, 640, 480, 640, g_shown_pal);
+        }
+        return;
+    }
+    {
         Input_Poll();
         Class_Frame(0);
         Class_Frame(1);
@@ -279,8 +288,32 @@ static void play_frame(void)
             plat_log(m);
             shown_state = g_game_state;
         }
-    } else
-        plat_present(pixels, 640, 480, 640, g_shown_pal);
+    }
+}
+
+/* the start-up's movies, one after the other */
+static const char *intro[2];
+static int intro_at;
+static uint8_t *movie_screen;
+
+static bool intro_next(void)
+{
+    while (intro_at < 2)
+        if (Movie_Play(intro[intro_at++])) return true;
+    return false;
+}
+
+static bool intro_frame(void)
+{
+    if (intro_at == 0 || (intro_at == 2 && !Movie_Playing())) return false;
+    Input_Keys();
+    if (Movie_Playing()) {
+        if (g_play_state == 0x20) Movie_Frame();   /* 0x44ed90 */
+        else Sound_Frame(1);                        /* the pause (2) holds it */
+        return true;
+    }
+    if (intro_next()) return true;
+    return false;
 }
 
 bool app_init(void)
@@ -292,6 +325,7 @@ bool app_init(void)
         return false;
     }
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
+    Gamma_Build();          /* 0x43c1e0, early in WinMain */
     Sound_Defaults();       /* and the audio's (0x44d660) */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
@@ -300,6 +334,17 @@ bool app_init(void)
         if (!(viewer = viewer_init(mission))) return false;
         if (plat_param("play", v, sizeof v) && atoi(v)) play = play_init();
         return true;
+    }
+    /* WinMain before the shell: the sound (0x466ab0), the movies' (0x44e6b0), then introf01 and credf01, each
+       to its end or Esc. --param intro=0 (the port's) leaves them out */
+    Sound_Init();
+    Movie_SoundUse();
+    Input_Tables();
+    if (!plat_param("intro", v, sizeof v) || atoi(v)) {
+        intro[0] = exe_str(0x4a8364), intro[1] = exe_str(0x4a8358);
+        movie_screen = calloc(640 * 480, 1);
+        Movie_SetScreen(movie_screen, 640);
+        intro_next();
     }
     size_t n;
     uint8_t *d = vfs_read_all("LOADSCR.PCX", &n);
@@ -311,6 +356,7 @@ bool app_init(void)
 
 bool app_frame(void)
 {
+    if (intro_frame()) return true;
     if (play) play_frame();
     else if (viewer) viewer_frame();
     else if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);
@@ -345,5 +391,6 @@ void app_exit(void)
 {
     pcx_free(&screen);
     free(pixels);
+    free(movie_screen);
     exe_free();
 }

@@ -177,6 +177,9 @@ Write one page per format under `docs/formats/` (internal; not published).
   and ffmpeg's decoder is a behaviour reference). The cutscenes are 640x480
   pal8, so they slot straight into the 8-bit presenter.
 - **Check:** frame hashes against `ffmpeg -f framemd5`.
+- **Done:** `src/smacker.c` and `src/movie.c` (docs/formats/smk.md, docs/re/movies.md); `tools/smk-ref.sh`
+  matches every frame of the credits and the intro's first 903, and the samples. The start-up's intro and
+  credits play, as does the script's `playMovie`; the shell's movie before a mission waits for the shell.
 
 ## 11. What the port adds (opt-in, after the faithful game)
 

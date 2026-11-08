@@ -29,7 +29,7 @@ terrain, the roads, the sky; `tools/emu/regress.sh` diffs them against the origi
 the objects (entities, node trees, levels of detail, collision set-up, and their drawing with the
 dynamic lights and the shadows; docs/re/objects.md), the lines of objects (LDEF), the vehicles' loading
 (docs/re/vehicles.md) with their weapons (docs/re/weapons.md), the effects' loading (docs/re/effects.md)
-the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app shows disc 1's loading screen, or with `--param
+the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app plays the intro and the credits, then shows disc 1's loading screen, or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
@@ -37,8 +37,10 @@ cameras: every mode of the presets F1-F11, the death's and the script's cameras 
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. The 3D and the flat cockpit with their instruments, the weapons' and specials' panels, the radar's
 display, the HUD's target box and the rear-view mirror run (docs/re/cockpit.md). The salvage list
-fills (docs/re/salvage.md). Not ported yet: the mission's script's movies (its machines, conditions, orders, objectives and the rest
-of its actions run: docs/re/fsm.md), the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
+fills (docs/re/salvage.md). The Smacker movies play (docs/re/movies.md, docs/formats/smk.md): the intro and
+credits at start-up (`--param intro=0` leaves them out) and the script's `playMovie`, Esc skipping them, the
+pause (2) holding them; the mission's script's machines, conditions, orders, objectives and the rest of
+its actions run (docs/re/fsm.md). Not ported yet: the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke, the
 rockets' contrails, the flame throwers' flames, the skid marks and the debris run: docs/re/effects.md, with the wrecks' kicks,
 thrown parts and chunks), the shell and the music. The sound manager runs, with the engines,

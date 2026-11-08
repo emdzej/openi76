@@ -37,6 +37,8 @@ void Input_Keys(void);
 /* Input_Update 0x480290, each frame: the analog sinks' resets, the actions cleared, every present device
    polled, the chords evaluated into the actions, the analog values ramped and scaled; the typed key */
 void Input_Update(void);
+/* the exe's tables (the keys' codes the window's procedure reads), before Input_Init */
+bool Input_Tables(void);
 /* Input_MenuPoll 0x480720: the menus' poll; 1 when the menu key was typed */
 int Input_MenuPoll(void);
 /* Input_Poll 0x480870, each frame of play: the cheats, the typed key's command (0x4809b0), the user's

@@ -1,5 +1,6 @@
 /* The mission's script (fsm.h, docs/re/fsm.md). */
 #include "fsm.h"
+#include "movie.h"
 #include "sound.h"
 #include "radio.h"
 #include "salvage.h"
@@ -860,9 +861,6 @@ static void destroy(Node *n)
         Structure_Destroy(n);
 }
 
-/* the game's side of the actions, not ported yet: each answers 0 (docs/re/fsm.md "The actions") */
-static int32_t later(uint32_t va) { (void)va; return 0; }
-
 static void action(uint32_t m, int32_t index)
 {
     int32_t code = W(g_fsm.actions + (uint32_t)index * 0x54 + 0x50);
@@ -960,7 +958,7 @@ static void action(uint32_t m, int32_t index)
     }
     case 49: teleport(E(m, 0), g_fsm.paths + (uint32_t)I(m, 1) * 0x58, A(m, 2), A(m, 3), 0, 0); break;   /* teleport */
     case 50: destroy(E(m, 0)); break;  /* destroy */
-    case 51: later(0x44e6e0); break;           /* playMovie */
+    case 51: Movie_Play(cb_name(m)); break;   /* playMovie: a name of the sounds' table */
     case 52:   /* pushCam; with the dashboard swapped (0x428880) first the preset view 0xc again, which swaps it
                   back (0x480990, 0x4809a0, Camera_SetMode) */
         if (Dash_IsOn()) {

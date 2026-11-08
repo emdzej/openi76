@@ -1,6 +1,7 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "movie.h"
 #include "sound.h"
 #include "radar.h"
 #include "ai.h"
@@ -310,9 +311,32 @@ static uint32_t dik_lparam(int c)
     return (uint32_t)(c & 0x7f) << 16 | (c & 0x80 ? 0x1000000u : 0);
 }
 
-/* the window's key messages (0x480f60): WM_KEYDOWN the typed key then the set, WM_KEYUP the set. The
-   platform gives the frame's presses in order and the keys held: the presses go first, then keys found
-   down without a press, then the releases. Held keys do not repeat. */
+/* the window's key messages (the window's procedure 0x402c9e): in the pause (the state 2) only the pause's
+   key (0x1ff) on WM_KEYDOWN, toggling it (0x44fc00); in a movie (0x20) Esc skipping it (0x44f170) and the
+   pause's key; else 0x480f60, WM_KEYDOWN the typed key then the set, WM_KEYUP the set. The platform gives
+   the frame's presses in order and the keys held: the presses go first, then keys found down without a
+   press, then the releases. Held keys do not repeat. */
+static void key_down(int vk, uint32_t lparam)
+{
+    uint16_t k = kb_vk[vk & 0xff];
+    if (g_play_state == 2) {
+        if (k == 0x1ff) Pause_Toggle();
+        return;
+    }
+    if (g_play_state != 0x20) {
+        kb_typed(vk);
+        kb_message(lparam, 1);
+        return;
+    }
+    if (k == 0x1b) Movie_Skip();
+    else if (k == 0x1ff) Pause_Toggle();
+}
+
+static void key_up(uint32_t lparam)
+{
+    if (g_play_state != 2 && g_play_state != 0x20) kb_message(lparam, 0);
+}
+
 void Input_Keys(void)
 {
     static uint8_t before[KEY_COUNT];
@@ -321,16 +345,12 @@ void Input_Keys(void)
     int n = plat_key_presses(press, 64);
     for (int i = 0; i < n; i++) {
         pressed[press[i]] = 1;
-        kb_typed(dik_vk(press[i]));
-        kb_message(dik_lparam(press[i]), 1);
+        key_down(dik_vk(press[i]), dik_lparam(press[i]));
     }
     for (int c = 1; c < KEY_COUNT; c++)
-        if (keys_now[c] && !before[c] && !pressed[c]) {
-            kb_typed(dik_vk(c));
-            kb_message(dik_lparam(c), 1);
-        }
+        if (keys_now[c] && !before[c] && !pressed[c]) key_down(dik_vk(c), dik_lparam(c));
     for (int c = 1; c < KEY_COUNT; c++)
-        if (!keys_now[c] && (before[c] || pressed[c])) kb_message(dik_lparam(c), 0);
+        if (!keys_now[c] && (before[c] || pressed[c])) key_up(dik_lparam(c));
     memcpy(before, keys_now, sizeof before);
 }
 
@@ -925,7 +945,7 @@ int Input_MenuPoll(void)
     if (typed()) {
         int c = Input_GameKey(typed());
         if (c == 0x20) g_input_main = 1;
-        /* c == 0x2c, PAUSE_GAME: the pause (0x44fc00), not ported yet */
+        else if (c == 0x2c) Pause_Toggle();   /* PAUSE_GAME (0x44fc00) */
         kb_clear();
         memset(INPUT_AT(INPUT_TYPED), 0, 2);
     }
@@ -965,14 +985,18 @@ static int user_dead(void)
     return u && (rd32(u->node->data + 0x454) & 0x20);
 }
 
-/* 0x4809b0: a typed key's command. Ported: the preset views, the mirror and the self-destruct; the rest (the pause, the
+/* 0x4809b0: a typed key's command. Ported: the preset views, the mirror, the self-destruct and the pause; the rest (the
    menus, the rear view, the video mode, network play's) is not yet */
 static void game_command(int c)
 {
     Entity *u = g_user_entity;
     if (g_net_game && !u) return;   /* only the chat and its invitation (0x2d, 0x2e) */
-    /* the first table's: 0xa, 0x20, 0x24, 0x2c and 0x2d end here, as does 0 */
-    if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2c || c == 0x2d) return;
+    if (c == 0x2c) {   /* PAUSE_GAME */
+        Pause_Toggle();   /* 0x44fc00 */
+        return;
+    }
+    /* the first table's: 0xa, 0x20, 0x24 and 0x2d end here, as does 0 */
+    if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2d) return;
     if (user_dead()) return;   /* and while network play's chat line takes the keys (0x462690) */
     if (c == 0xb) {
         Mirror_Toggle(u ? u->node : NULL);   /* 0x4712e0; the original reads the entity unchecked */
@@ -1185,6 +1209,8 @@ static bool load_tables(void)
     if (g) memcpy(gamekey, g, sizeof gamekey);
     return true;
 }
+
+bool Input_Tables(void) { return load_tables(); }
 
 bool Input_Init(void)
 {

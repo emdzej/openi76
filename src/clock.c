@@ -9,7 +9,7 @@ float g_clock_time;
 float g_clock_dt = 0.06f;     /* 0x3d75c28f, as 0x450e90 sets them */
 float g_clock_step = 0.06f;
 float g_clock_inv = 16.666668f, g_clock_game;
-uint32_t g_play_state;
+uint32_t g_play_state = 1;
 
 static float inv_step = 16.666668f;   /* 0x4db13c: 1 / g_clock_step */
 static float last;                    /* 0x55f738: the previous tick, in seconds */

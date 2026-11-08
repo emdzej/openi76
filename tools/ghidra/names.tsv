@@ -1237,3 +1237,16 @@
 00453a70	Buf_ReadLine	text	high	a line of a buffer, past an end of line and the white space after it; ported
 00455370	Weapons_Unarm	weapons	high	a dead car's hard points record and weapon instances taken out; ported
 00455530	Inst_Cmp	weapons	high	qsort's: instance indices highest first
+0044e6b0	Movie_SoundUse	movie	high	SmackSoundUseDirectSound on the game's DirectSound; ported
+0044e6e0	Movie_Play	movie	high	a movie of cutscene\ opened full screen, the state 0x20, the sounds paused, 22,050 Hz; ported
+0044e400	Movie_FrameWindowed	movie	high	a movie's frame through its SmackBuffer (the windowed path)
+0044ed50	Movie_Playing	movie	high	a movie is open; ported
+0044ed60	Movie_RealizePalette	movie	medium	WM_QUERYNEWPALETTE: the movie's palette set again
+0044ed90	Movie_Frame	movie	high	the next frame when due, its palette through the gamma; at the last the movie closed; ported
+0044f090	Movie_End	movie	high	the movie closed, the mode and rate back; ported
+0044f170	Movie_Skip	movie	high	Esc or a click: the movie closed, the sounds resumed; ported
+0044f570	Movie_SoundOff	movie	high	SmackSoundOnOff 0; 1 with a movie open; ported
+0044f5a0	Movie_SoundOn	movie	high	the palette asked again, SmackSoundOnOff 1; ported
+0044f7d0	Play_SetState	clock	high	the play's state set, or 1 when it is that already; ported
+0044fc00	Pause_Toggle	clock	high	the pause on and off (the state 2), the movie's or the game's sounds; ported
+0044fab0	Play_StoppedKeys	clock	medium	WinMain's pass with the play stopped: the pause's, map's and notepad's keys, the menu
