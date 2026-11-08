@@ -1485,3 +1485,6 @@
 004632c0	Scores_Init	melee	high	the scores' box made, hidden, filled; ported
 00463350	Scores_Fill	melee	high	the scores' lines (the melee's: the user's); ported
 004635d0	Scores_Toggle	melee	high	SCORE_TOGGLE: the box shown or hidden; ported
+00469db0	Collide_Frame	collide	high	each frame: the moving entities' boxes swept through the frame, then the entities' collisions; boxes ported (src/collide.c)
+00469f30	Box_Overlap	collide	high	a segment's box against an entity's (+0x50) in x and z
+00469f80	Collide_Pair	collide	high	two entities' collision: boxes, spheres' sweep, meshes, the class's response and sounds; not ported

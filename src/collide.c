@@ -1,6 +1,9 @@
 /* The collision world's set-up (collide.h). In the current rounding mode (render/fpu.h). */
 #include "collide.h"
 #include "classes.h"
+#include "clock.h"
+#include "combat.h"
+#include "platform.h"
 #include "exe.h"
 #include "lod.h"
 #include "terrain.h"
@@ -192,6 +195,40 @@ void Collide_Add(Entity *e)
     if (cls > 10 && cls < 0xe) {
         ground_faces(e->node, e, cls == 0xc);
         if (e->a) g_coll_ground = List_Push(g_coll_ground, NULL, e);
+    }
+}
+
+void Collide_Frame(void)
+{
+    for (Cell *c = g_coll_moving; c; c = c->next) {
+        Entity *e = c->value;
+        float dt = g_clock_dt, p[3], v[3], sp;
+        Frame_Points(&p, &e->c, 1, &e->node->frame);   /* 0x4240e0 */
+        Class_Velocity(e->node, v, &sp);
+        float *box = (float *)&e->rest[(0x50 - 0x34) / 4];
+        box[0] = p[0];
+        box[2] = p[2];
+        box[3] = F32(ADD(MUL(v[0], dt), p[0]));
+        box[5] = F32(ADD(MUL(v[2], dt), p[2]));
+        if (box[3] < box[0]) {
+            float t = box[0];
+            box[0] = box[3], box[3] = t;
+        }
+        if (box[5] < box[2]) {
+            float t = box[2];
+            box[2] = box[5], box[5] = t;
+        }
+        box[0] = F32(SUB(box[0], e->r));
+        box[2] = F32(SUB(box[2], e->r));
+        box[3] = F32(ADD(box[3], e->r));
+        box[5] = F32(ADD(box[5], e->r));
+    }
+    /* each moving entity against the moving after it and against every static one (0x469f80; with a
+       static one touched, 0x48d530 merges their scene nodes): not ported yet */
+    static int said;
+    if (!said && g_coll_moving) {
+        said = 1;
+        plat_log("OpenI76: the collisions between entities (0x469f80) are not ported yet");
     }
 }
 

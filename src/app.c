@@ -29,6 +29,7 @@
 #include "salvage.h"
 #include "classes.h"
 #include "clock.h"
+#include "collide.h"
 #include "combat.h"
 #include "crt.h"
 #include "input.h"
@@ -264,6 +265,7 @@ static void play_frame(void)
         return;
     }
     {
+        Collide_Frame();   /* 0x469db0 */
         Input_Poll();
         Class_Frame(0);
         Class_Frame(1);

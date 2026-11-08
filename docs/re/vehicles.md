@@ -127,6 +127,18 @@ Registered by WinMain's per-mission set-up, in this order:
    radius to its COLP box's farthest corner + 0.1.
    - In that sum, dz stays unrounded on the stack (fst) and is multiplied by its float.
 
+**Each frame's collision pass (0x469db0, WinMain's, before the input; src/collide.c Collide_Frame).** For
+each entity on the moving list (classes 1, 7, 9): its box at +0x50 (x0, y0, z0, x1, y1, z1; only x and z
+written) from its sphere's centre in the world (0x4240e0) to that centre plus its velocity (0x425be0)
+times the frame's step, ordered, then widened by its radius (+0x10) on each side. The static entities'
+boxes are set once, when they are added (0x469c10). Every sweep through the lists tests these boxes
+first (0x469f30: the shots' 0x46a9b0, the avoidance's), so before this pass was ported no shot ever hit
+a vehicle (found by a t01 run: every impact on structures, the wagon and the attackers only scratched).
+Then each moving entity against every moving one after it and every static one (0x469f80: the boxes,
+the spheres' sweep 0x46a1d0, the meshes 0x479b80, the class's collision 0x425d20 with the impact's
+sounds 0x46b340, else "vvbo1.wav"; a static one touched with 0x577170 and 0x577184 set has its scene
+merged, 0x48d530): **not ported yet**, so vehicles pass through each other and through objects.
+
 ## The start (Vehicle_Start 0x4294e0, ported, diffed)
 
 The class 1 start handler (docs/re/classes.md), checked by `diff_objects.py --start` (confirmed, 40
