@@ -112,6 +112,21 @@ bool vfs_put(const char *rel, const void *data, size_t size)
     return true;
 }
 
+bool vfs_drop(const char *rel)
+{
+    char key[256];
+    written_key(rel, key, sizeof key);
+    for (Written **w = &written; *w; w = &(*w)->next)
+        if (!strcmp((*w)->path, key)) {
+            Written *d = *w;
+            *w = d->next;
+            free(d->data);
+            free(d);
+            return true;
+        }
+    return false;
+}
+
 bool vfs_written(int i, const char **path)
 {
     for (Written *w = written; w; w = w->next)

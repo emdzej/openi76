@@ -218,6 +218,13 @@ bool plat_save_user_file(const char *name, const void *data, size_t size)
     return k && gasm_storage_set(key, k, data, (uint32_t)size) == 0;
 }
 
+bool plat_delete_user_file(const char *name)
+{
+    char key[128];
+    uint32_t k = storage_key(name, key, sizeof key);
+    return k && gasm_storage_delete(key, k) == 0;
+}
+
 /* storage_key's reverse */
 /* ---- network: gasm:net ---- */
 

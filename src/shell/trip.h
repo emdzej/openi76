@@ -2,6 +2,7 @@
    the parts catalogue the exe fills (shellcar.h), the list of parts the garage moves between the car and
    the salvage, and the message 0xc01e (Trip_Next) that sets them up after a mission. */
 #pragma once
+#include <stdbool.h>
 #include "shell/button.h"
 #include "shellcar.h"
 #include <stdint.h>
@@ -22,6 +23,7 @@ struct ShPart {             /* 0x20 bytes, in a ring (0x10068be4) */
     int32_t where;          /* +0x10: 1 on the car (C), 2 in the van (V), 3 in repair (R), 4 the field's */
     int32_t kind;           /* +0x14: the slot's kind it sits in */
     int32_t w18, w1c;
+    bool owns;              /* the port's: its part a copy of its own (read from a file), freed with it */
 };
 extern ShPart *g_sh_parts;  /* 0x10068be4 */
 
@@ -40,6 +42,10 @@ extern int32_t g_sh_armour[9];   /* 0x1008ba68-0x1008ba74, 0x1008ba50-0x1008ba5c
    name (then marked 2) */
 void Parts_Add(int kind, const char *name, int32_t count, int32_t flag);
 void Parts_Free(void);
+/* i76shell 0x1002bf00: a Reconfigure's, trip 4's or a bookmark's file (written by 0x1002bc70) back: the
+   current record, the ring (from trip4.spc without the field's salvage and with the repaired whole), the
+   repairs' list; false without the file */
+bool Spc_Read(const char *path);
 /* 0x100206a0: the record g_sh_rec_at's slots into the garage, each with its part on the car */
 void Garage_Load(void);
 /* 0x10020fb0: the state's conditions onto the slots' parts */

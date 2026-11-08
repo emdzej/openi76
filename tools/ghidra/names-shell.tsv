@@ -147,3 +147,6 @@
 1001e590	Armour_Balance	setup	high	BALANCE; ported
 1001eec0	Armour_Draw	setup	high	the armour's and chassis' figures; ported
 10008170	Setup_DrawArmour	setup	high	the weight and the armour redrawn; ported
+1002bf00	Spc_Read	trip	high	reconfig.spc, trip4.spc or a bookmark's .cmp read back; ported (src/shell/trip.c)
+1001f8b0	Parts_FreeRing	trip	high	the salvage ring freed; ported (Parts_Free)
+1001d240	Stock_Remove	trip	high	user.rpr removed; ported

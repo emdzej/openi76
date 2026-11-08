@@ -12,6 +12,12 @@ bool Files_Write(const char *path, const void *data, size_t size)
     return true;
 }
 
+bool Files_Remove(const char *path)
+{
+    plat_delete_user_file(path);
+    return vfs_drop(path);
+}
+
 void Files_Restore(void)
 {
     char name[160];

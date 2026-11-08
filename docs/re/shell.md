@@ -147,8 +147,16 @@ The menus' and screens' meanings are to be found as each is ported.
 
 **The trip between missions** (the exe's side is ported: docs/re/carfile.md). After a won mission the
 shell runs, in order:
-1. **0xc01e (0x10020d30).** After a Reconfigure (state 8, not trip 0x11) it frees the lists (0x1001d240,
-   0x1001d210, 0x10034df0) and opens the garage (0xc017), or the main menu without `reconfig.spc`.
+1. **0xc01e (0x10020d30).** After a Reconfigure (state 8, not trip 0x11) it removes `user.rpr`
+   (0x1001d240), frees the stock and resets the garage (0x1001d210, 0x10034df0), and reads `reconfig.spc`
+   back (0x1002bf00), then opens the garage (0xc017), or the main menu without the file.
+   - **The .spc/.cmp file** (written by 0x1002bc70 at the set-up's DONE, and as a bookmark's
+     `save%03d.cmp`): the current record (0x8c4 bytes); a count and the ring's nodes (0x20 bytes as in
+     memory, then the part's 0x54), those named EMPTY left out and the all-parts list's (0x100614b8) after
+     them; a count and the repairs' nodes. The reader frees the ring and rebuilds it from copies of the
+     parts. From `trip4.spc` it leaves the field's salvage (+0x10 = 4) and makes the parts in repair whole
+     and kept (+0xc = the part's +0x4c, +0x10 = 2), and stops there; otherwise each repair is matched to
+     the ring's first part in repair with its condition and file not yet in the list.
    Otherwise, with t the trip (+1 after a win):
    - it empties the salvage list (0x10068be4, a ring of 0x20-byte nodes) and fills the parts catalogue
      (+0, into 0x1010a048, the count at 0x10068bd8);

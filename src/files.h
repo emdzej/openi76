@@ -8,5 +8,7 @@
 
 /* fopen(path, "wb"), fwrite and fclose in one: false if it cannot be kept */
 bool Files_Write(const char *path, const void *data, size_t size);
+/* remove(path): the written file and its kept copy gone; false if there was none */
+bool Files_Remove(const char *path);
 /* the user files put back over the data (at start-up, after the data is mounted) */
 void Files_Restore(void);

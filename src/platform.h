@@ -57,6 +57,7 @@ void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t 
 /* Persistent user files (saves, settings). */
 uint8_t *plat_load_user_file(const char *name, size_t *size);
 bool plat_save_user_file(const char *name, const void *data, size_t size);
+bool plat_delete_user_file(const char *name);
 /* The user files' names in a stable (sorted) order: false past the last */
 bool plat_user_file_name(int i, char *name, size_t cap);
 /* Message connections (gasm:net: WebSocket semantics, reliable and ordered, binary), non-blocking.

@@ -2,9 +2,11 @@
 #include "shell/trip.h"
 #include "crt.h"
 #include "exe.h"
+#include "files.h"
 #include "physics.h"
 #include "platform.h"
 #include "shell/shell.h"
+#include "vfs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,11 +48,65 @@ void Parts_Free(void)
     ShPart *p = g_sh_parts->next;
     while (p != g_sh_parts) {
         ShPart *n = p->next;
+        if (p->owns) free((void *)p->part);
         free(p);
         p = n;
     }
+    if (g_sh_parts->owns) free((void *)g_sh_parts->part);
     free(g_sh_parts);
     g_sh_parts = NULL;
+}
+
+bool Spc_Read(const char *path)
+{
+    int trip4 = !crt_stricmp(path, dll_str(0x10064b00));
+    Parts_Free();   /* 0x1001f8b0 */
+    size_t n;
+    uint8_t *f = vfs_read_all(path, &n);
+    if (!f) return false;
+    size_t at = 0;
+#define TAKE(dst, k) (at + (k) <= n ? (memcpy(dst, f + at, k), at += (k), 1) : 0)
+    TAKE(g_sh_recs + g_sh_car * SHELL_REC, SHELL_REC);
+    int32_t count = 0;
+    uint8_t rec[0x20 + SHELL_PART];
+    TAKE(&count, 4);
+    for (int i = 0; i < count && TAKE(rec, sizeof rec); i++) {
+        int32_t where = rd32(rec + 0x10);
+        if (trip4 && where == 4) continue;   /* the field's salvage left */
+        uint8_t *e = malloc(SHELL_PART);
+        ShPart *p = e ? ring_add() : NULL;
+        if (!p) {
+            free(e);
+            break;
+        }
+        memcpy(e, rec + 0x20, SHELL_PART);
+        p->part = e, p->owns = true;
+        p->count = rd32(rec + 0xc), p->where = where, p->kind = rd32(rec + 0x14);
+        p->w18 = rd32(rec + 0x18), p->w1c = rd32(rec + 0x1c);
+        if (trip4 && where == 3) p->count = rd32(e + 0x4c), p->where = 2;   /* repaired */
+    }
+    if (!trip4) {   /* the repairs: each the ring's first in repair of its condition and file not yet taken */
+        if (!g_sh_stock_repairs) g_sh_stock_repairs = ShList_New(0x40);
+        ShList_Clear(g_sh_stock_repairs);
+        TAKE(&count, 4);
+        for (int i = 0; i < count && TAKE(rec, sizeof rec); i++) {
+            ShPart *q = g_sh_parts;
+            if (q) do {
+                    int taken = 0;
+                    for (int k = 0; k < g_sh_stock_repairs->count; k++)
+                        if (g_sh_stock_repairs->items[k] == q) taken = 1;
+                    if (q->count == rd32(rec + 0xc) && !taken && q->where == 3 &&
+                        !crt_stricmp((const char *)rec + 0x20 + 0x3b, (const char *)q->part + 0x3b)) {
+                        ShList_Add(g_sh_stock_repairs, q, NULL);
+                        break;
+                    }
+                    q = q->next;
+                } while (q != g_sh_parts);
+        }
+    }
+#undef TAKE
+    free(f);
+    return true;
 }
 
 void Parts_Add(int kind, const char *name, int32_t count, int32_t flag)
@@ -164,10 +220,12 @@ void Garage_State(void)
 void Trip_Next(int prev_state)
 {
     if (prev_state == 8 && g_sh_rec.trip != 0x11) {
-        /* Reconfigure: the lists freed (0x1001d240, 0x1001d210, 0x10034df0), then the garage, or the main
-           menu without reconfig.spc (0x1002bf00: not ported, taken as there) */
-        Parts_Free();
-        Shell_Post(0xc017, 0xc01e);
+        /* Reconfigure: user.rpr removed (0x1001d240), the stock freed (0x1001d210), the garage reset
+           (0x10034df0), then the car as it was from reconfig.spc, or the main menu without it */
+        Files_Remove(dll_str(0x100614f0));
+        Garage_FreeStock();
+        Garage_Reset();
+        Shell_Post(Spc_Read(dll_str(0x10061810)) ? 0xc017 : 0xc00e, 0xc01e);
         return;
     }
     int t = g_sh_rec.trip + (prev_state == 1);

@@ -44,6 +44,8 @@ bool vfs_list(const char *dir, VfsListFn fn, void *user);
    replaces the first. Persisting them is the app's (plat_save_user_file). false out of memory or for a
    "CD:" path. */
 bool vfs_put(const char *rel, const void *data, size_t size);
+/* a written file forgotten (the game's remove()); false if none was written */
+bool vfs_drop(const char *rel);
 /* the i-th written file's path (normalized, lower case); false past the last */
 bool vfs_written(int i, const char **path);
 
