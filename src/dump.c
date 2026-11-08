@@ -360,6 +360,7 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "tracers.h"
 #include "tex.h"
 #include "settings.h"
+#include "heli.h"
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
 /* the calls' results, a line per vehicle (Dump_CallOut) */
 static char call_out[1 << 23];
@@ -1648,6 +1649,53 @@ int Dump_CallVehicles(int which, int upside)
             salvage_line();
             Salvage_Free();
             g_mission_kind = k0, g_mission_number = n0;
+            break;
+        }
+        case 75: {   /* the helicopters (0x4314a0), once: each class 9 entity (with data) flown 60 frames at the
+                        step 0.05 (throttle +0xe4 and bank +0xe0: 1 and 0, 0.6 and 0.5, 0 and -0.5, 20 frames
+                        each), then falling (+0x454 0x10, the turn 0.2, 0, -0.5) for up to 200 frames, until it
+                        crashes; after every 5th frame and the crash its state, then the entity count */
+            static int done;
+            if (done++) break;
+            float was = g_clock_dt;
+            g_clock_dt = 0.05f;
+            static const float thr[3] = {1, 0.6f, 0}, bank[3] = {0, 0.5f, -0.5f};
+            for (int i = 0; i < g_entity_count; i++) {
+                Node *h = g_entities[i].node;
+                if (!h || h->cls != 9 || !h->data) continue;
+                uint8_t *d = h->data;
+                for (int f = 0; f < 260; f++) {
+                    if (f < 60) {
+                        memcpy(d + 0xe4, &thr[f / 20], 4);
+                        memcpy(d + 0xe0, &bank[f / 20], 4);
+                    } else if (f == 60) {
+                        uint32_t fl, w[3] = {0x3e4ccccd, 0, 0xbf000000u};
+                        memcpy(&fl, d + 0x454, 4);
+                        fl |= 0x10;
+                        memcpy(d + 0x454, &fl, 4);
+                        memcpy(d + 0xc8, w, 12);
+                    }
+                    g_fpu_round = FPU_DOWN;
+                    Heli_Frame(h);
+                    uint32_t fl;
+                    memcpy(&fl, d + 0x454, 4);
+                    if (f % 5 != 4 && !(fl & 0x20)) continue;
+                    uint8_t b[0x24 + 24 + 4 * 12];
+                    memcpy(b, h->frame.m, 0x24);
+                    memcpy(b + 0x24, h->frame.pos, 24);
+                    uint8_t *k = *Data_Ptr(d, 0x508);
+                    memcpy(b + 0x3c, d + 0x454, 4);
+                    memcpy(b + 0x40, d + 0xbc, 12);
+                    memcpy(b + 0x4c, d + 0xac, 4);
+                    memcpy(b + 0x50, d + 0xc8, 12);
+                    memcpy(b + 0x5c, k + 0xc, 12);
+                    memcpy(b + 0x68, &h->flags, 4);
+                    call_line(b, sizeof b);
+                    if (fl & 0x20) break;
+                }
+            }
+            call_line(&g_entity_count, 4);
+            g_clock_dt = was;
             break;
         }
         case 74: {   /* the steering wheel (class 31: 0x4343c0, then 0x434430 with its first texture) on n's tree,

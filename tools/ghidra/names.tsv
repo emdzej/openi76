@@ -1462,3 +1462,9 @@
 00434650	Spin_Frame	classes	high	class 10's frame: turned by its angular velocity; ported, diffed
 004343c0	Steering_Frame	classes	high	class 31: the steering wheel's target frame from the steering; ported, diffed
 00434430	Class31_Anim	classes	high	the steering wheel's frame eased to its target on the user's vehicle; ported, diffed
+004314a0	Heli_Frame	vehicle	high	class 9's frame: the flight, then the crash (explosions, parts, chunks, smoke); ported, diffed
+00431de0	Heli_Fly	vehicle	high	one flight step: thrust, bank, braking, drag, the height over the ground, the frame from the acceleration; falling; ported, diffed
+00432920	Heli_PartState	vehicle	high	part i (table 0x4d5ce8) in a state by level, the sphere dropped on a change; ported
+004329b0	Heli_PartTextures	vehicle	high	part i's damage textures (0x4d5d18) at a frame by level; ported
+00432a70	Frame_PosF	math	high	the frame's place as floats; ported inline
+00432ab0	Frame_SetPosF	math	high	the frame's place from floats; ported inline

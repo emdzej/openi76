@@ -62,9 +62,9 @@ if [ -z "$1" ]; then
       done
     done
   done
-  # the guns', helicopters', gates' and class 0xa's destruction where they stand (t12: all but 0xa; t05: 0xa)
+  # the guns', helicopters', gates' and class 0xa's destruction where they stand (t12: all but 0xa; t05: 0xa), and the helicopters' flight and crash (t12)
   for m in t12.msn t05.msn; do
-    for c in kill gate; do
+    for c in kill gate heli; do
       out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" --call $c 2>&1) || fail=1
       echo "$out" | grep -q identical || { echo "[--call $c $m]"; echo "$out" | tail -4; }
     done

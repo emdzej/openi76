@@ -664,3 +664,73 @@ node that is freed, the original reads it on as freed memory; the port keeps the
 Checked: `diff_objects.py --call wreck` (the start, then forty steps per vehicle: the timer, the flags,
 every part's flags, children and state, the kicks and throws) is identical on t01, s04, t15, s01, a01,
 t10 and t05, and upside down on t01 and s04.
+
+## The helicopters (class 9: 0x4314a0, 0x431de0; ported, diffed)
+
+A helicopter is a vehicle's data (0x50c bytes) with no wheels. Its 0x508 block holds the points (+0), the
+eased throttle (+0xc) and bank (+0x10), and the height it keeps over the ground (+0x14). Its controls are
+the vehicle's: the throttle at +0xe4, the steering at +0xe0 (the AI's, drive.c 0x409fe0).
+
+**Its frame (0x4314a0)**, each frame on the frame's step (0x450e50):
+1. A hit in its motion block (+0x38 set) brings it down as lethal damage does (0x431c60). The points go
+   to 0, it falls (+0x454 0x10) with the turn (0.2, 0, -0.5) at +0xc8, and x1_bldx1 goes off at its place.
+2. Dead (0x20): nothing more.
+3. Parked (0x80) with the throttle above 1e-4 (its bits compared as an integer): the height becomes 20
+   and it takes off.
+4. The flight step (below).
+5. When the step leaves it dead, the crash:
+   - the entity's sphere dropped (0x4286c0);
+   - for the user's: the menu keys only (0x480680), the death camera (0xfefe), the dash off, and 8 at
+     0x4def9c, as a car's death does;
+   - x1_bldx1 twice at its place, owned by it, the first on nothing and the second on itself;
+   - its five parts (table 0x4d5ce8 into the +0x408 slots) put in state 3 (0x432920), each change
+     dropping the sphere again, and their damage textures (0x4d5d00 names of 13 bytes at 0x4d5d18, ten a
+     part) at frame 3 (0x4329b0). Both helpers map a level 0-4 to the state
+     (0, 0, 1, 2, 3) or frame (0, 1, 1, 2, 3); the crash always passes 4;
+   - 0x201 on the node; each child's destruction chunks thrown (0x45b0a0);
+   - ten smokes at its place, still, for 15 s (CHUNK1 on an odd rand, else CHUNK2);
+   - the weapons taken out, every AI told to choose again, sound 7;
+   - a computer's in the melee (or in network play, not ported) is taken out of the world (0x42b7d0).
+     Otherwise it leaves the collision lists and its engine's sound stops.
+
+**The flight (0x431de0)** works on floats: the place (the frame's doubles rounded), the velocity +0xbc,
+the speed +0xac and the flags. It uses two flat unit vectors, the nose (the frame's z row with y set to
+0) and the side (its x row's x and z), both through Fast_InvSqrt.
+
+- *Falling (0x10).* The place and velocity under gravity 9.8 (Ballistic). Within 0.5 of the ground it
+  sits on it, with no vertical speed. The frame turns by +0xc8 over the step. On the ground it is dead
+  (0x20), the test being exact equality with the ground's height.
+- *Parked (0x80).* Nothing moves.
+- *Flying.*
+  1. Below a height of 10 (the place's y bits under 10.0's) the eased throttle and bank are held at 0.
+     Above it, each eases toward its control by the step: it jumps when the step is negative or above
+     0.95, or within 0.005.
+  2. The thrust t is the throttle × 20.2, the bank's push s the bank × −20.2.
+  3. A computer's helicopter with no thrust (t's bits at most 0) brakes instead:
+     - with −t below the speed, the velocity's direction × t, plus the side × s;
+     - else, above a speed of 1, the side × s less the velocity (its y only negated);
+     - else, any speed above 0, the velocity negated;
+     - at a standstill, the speed and velocity go to 0.
+
+     Otherwise (the user's always) the acceleration is nose × t + side × s.
+  4. Above a speed of 1 the drag adds velocity × speed × −0.00155.
+  5. One step of Integrate_F.
+  6. A computer's with a negative throttle that would reverse (the new velocity against the old) stops:
+     velocity and acceleration 0.
+  7. Under the ground: stopped and dead (0x20).
+  8. The height eases (step × 0.5, with the same jumps) toward +0x14 over the higher of the ground below
+     and the ground 2 s ahead along the new velocity.
+- *Not falling, after the above (parked too).* The turn +0xc8 goes to 0. The frame is rebuilt by
+  Frame_UpFwd: its up is the acceleration plus 19.6 on y, normalised; its nose is the velocity when the
+  speed is at least 1 and the velocity is ahead of the flat nose, else the flat nose. A helicopter banks
+  into its acceleration and tilts against it under thrust and when braking.
+
+The speed is the new velocity's length (sqrt in that order: y² + z², then + x²). The frame's place takes
+the float place back as doubles.
+
+Checked: `diff_objects.py --call heli` is identical on every mission (t12 has one).
+- Each helicopter flies 60 frames at 0.05 s: the throttle and bank 1 and 0, then 0.6 and 0.5, then 0
+  and −0.5, 20 frames each. That covers parked, the take-off, flying and braking.
+- It is then set falling (as the damage does) until it crashes, up to 200 frames.
+- Compared every 5th frame and at the crash: the frame, the flags, velocity, speed, turn, the 0x508
+  block's +0xc-+0x14 and the node's flags; after them, the entity count.

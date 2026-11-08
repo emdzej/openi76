@@ -97,8 +97,7 @@ int SpawnLoc_Get(void)
     return at;
 }
 
-/* 0x42b7d0: the user's old car out of the world */
-static void take_out(Entity *e)
+void Vehicle_TakeOut(Entity *e)
 {
     Node *n = e->node;
     Engine_SoundStop(n);   /* 0x4763b0 */
@@ -110,7 +109,7 @@ static void take_out(Entity *e)
 
 Node *Spawn_Vehicle(int at, int kind, const uint8_t name8[8], int user)
 {
-    if (user && g_user_entity) take_out(g_user_entity);
+    if (user && g_user_entity) Vehicle_TakeOut(g_user_entity);
     Node *n = Node_New(NULL, exe_str(0x4dc5c0));   /* "netwrk" */
     if (!n) return NULL;
     ObjCtx x;

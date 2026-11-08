@@ -1,5 +1,6 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
+#include "heli.h"
 #include "sound.h"
 #include "cockpit.h"
 #include "mirror.h"
@@ -496,8 +497,9 @@ void Spin_Frame(Node *n)
     n->frame = f;
 }
 
-/* a per-frame handler not ported yet: present so that the class keeps its nodes listed */
-static void later(Node *n) { (void)n; }
+/* the per-frame handlers that return at once (class 8's 0x428950, class 40's 0x433330): present so that
+   the class keeps its nodes listed */
+static void nothing(Node *n) { (void)n; }
 
 /* 0x429d70, a vehicle's second frame: for the user's, the cockpit (0x426b60) and the engine's sound
    (0x468ac0, not ported) */
@@ -514,8 +516,8 @@ static const struct {
     {2, start_structure, {NULL, NULL}},     /* 0x4306c0 */
     {4, start_structure, {NULL, NULL}},     /* 0x434930 */
     {1, start_vehicle, {Vehicle_Frame, vehicle_frame2}},   /* 0x4294e0; 0x429c70, 0x429d70 */
-    {9, start_class9, {later, NULL}},       /* 0x4313f0; 0x4314a0 */
-    {8, start_artillery, {later, NULL}},    /* 0x428910; 0x428950 */
+    {9, start_class9, {Heli_Frame, NULL}},  /* 0x4313f0; 0x4314a0 */
+    {8, start_artillery, {nothing, NULL}},    /* 0x428910; 0x428950 */
     {7, start_class7, {Gate_Frame, NULL}},  /* 0x432b90; 0x432c70 */
     {10, no_start, {Spin_Frame, NULL}},     /* 0x434640; 0x434650 */
     {21, start_class21, {NULL, NULL}},      /* 0x42f460 */
@@ -533,7 +535,7 @@ static const struct {
     {53, no_start, {Debris_Frame, NULL}},   /* 0x45bc90; 0x45bca0 */
     {5, start_scrounge, {NULL, NULL}},      /* 0x42ed80 */
     {41, start_class41, {NULL, NULL}},      /* 0x433370 */
-    {40, start_class40, {NULL, later}},     /* 0x433180; 0x433330 */
+    {40, start_class40, {NULL, nothing}},     /* 0x433180; 0x433330 */
 };
 
 static int handler_index(int cls)

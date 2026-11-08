@@ -2098,6 +2098,7 @@ def call_mortar(exe, n, fpcw):
 
 
 GATE = []
+HELI = []
 
 
 def call_gate(exe, n, fpcw):
@@ -2127,6 +2128,41 @@ def call_gate(exe, n, fpcw):
             CALL_OUT.append((exe.read(e + 0x18, 0x24) + exe.read(e + 0x40, 24)
                              + (exe.read(u(e + 0x70) + 0x6C, 0x28) if c == 7 else bytes(0x28))).hex())
     exe.write(0x4DB138, was)
+
+
+def call_heli(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    if HELI:
+        return
+    HELI.append(1)
+    was = exe.read(0x4DB12C, 4)
+    exe.write(0x4DB12C, struct.pack("<f", 0.05))
+    rd = (fpcw & ~0xC00) | 0x400
+    thr, bank = (1.0, 0.6, 0.0), (0.0, 0.5, -0.5)
+    for i in range(struct.unpack("<i", exe.read(0x4D3B5C, 4))[0]):
+        h = u(0x547E60 + i * 0x78)
+        if not h or u(h + 0x6C) != 9 or not u(h + 0x70):
+            continue
+        d = u(h + 0x70)
+        for f in range(260):
+            if f < 60:
+                exe.write(d + 0xE4, struct.pack("<f", thr[f // 20]))
+                exe.write(d + 0xE0, struct.pack("<f", bank[f // 20]))
+            elif f == 60:
+                exe.write(d + 0x454, struct.pack("<I", u(d + 0x454) | 0x10))
+                exe.write(d + 0xC8, struct.pack("<III", 0x3E4CCCCD, 0, 0xBF000000))
+            exe.call(0x4314A0, h, limit=500_000_000, fpcw=rd)
+            fl = u(d + 0x454)
+            if f % 5 != 4 and not fl & 0x20:
+                continue
+            k = u(d + 0x508)
+            CALL_OUT.append((exe.read(h + 0x18, 0x24) + exe.read(h + 0x40, 24) + exe.read(d + 0x454, 4)
+                             + exe.read(d + 0xBC, 12) + exe.read(d + 0xAC, 4) + exe.read(d + 0xC8, 12)
+                             + exe.read(k + 0xC, 12) + exe.read(h + 0x10, 4)).hex())
+            if fl & 0x20:
+                break
+    CALL_OUT.append(exe.read(0x4D3B5C, 4).hex())
+    exe.write(0x4DB12C, was)
 
 
 def call_wheel31(exe, n, fpcw):
@@ -2161,7 +2197,7 @@ def call_wheel31(exe, n, fpcw):
 
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge), "mortar": (72, call_mortar), "gate": (73, call_gate), "wheel31": (74, call_wheel31)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge), "mortar": (72, call_mortar), "gate": (73, call_gate), "wheel31": (74, call_wheel31), "heli": (75, call_heli)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None

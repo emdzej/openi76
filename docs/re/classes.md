@@ -75,7 +75,7 @@ turret's aim (class 7) would come out one step off.
   twice the clamped step of the way, truncated. It jumps when that share is below 0 or above 0.95, or
   within 0.005. The frame is then shown. On another vehicle the shown frame takes the target, unshown.
 - **Class 8 (0x428950)** returns at once. Class 40's per-frame entry (0x433330) does nothing.
-- **Class 9, a helicopter (0x4314a0):** see vehicles.md.
+- **Class 9, a helicopter (0x4314a0; ported, diffed):** its flight and crash, vehicles.md "The helicopters".
 
 Checked: `diff_objects --call wheel31` on t01 and s04 (five steerings, three frames each). `--call gate`
 on t12, t05 and s04. Every gate is triggered and every class 10 node
