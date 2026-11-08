@@ -38,7 +38,7 @@ the melee's arenas run and are being played through; the details of each are sti
 
 ## Not ported yet
 
-- Network play's replay of a game and the joiner's information box on a listed game.
+Nothing of the original is left unported; the remaining work is checking each mission's play through.
 
 ## Beyond the original
 

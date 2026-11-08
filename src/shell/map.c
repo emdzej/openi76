@@ -12,6 +12,7 @@
 #include "shell/shell.h"
 #include "shell/shnet.h"
 #include "vfs.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -797,6 +798,54 @@ static void team_open(void (*then)(void))
     g_sh_modal = team_pass;
 }
 
+/* 0x1002a4f0's box (0x10010970: frame 0xd of set 0x24 at (9, 0x6c), 0x26e x 0x108, its shadows, the screen
+   kept for the redraws), its pass (0x1000e480: the poll, then OK or the game gone closes it) and its
+   drawing (0x10029e00) */
+static uint8_t info_saved[640 * 480];
+
+static void info_draw(void)
+{
+    const int x = 9, y = 0x6c;
+    for (int r = y + 0xe; r < y + 0xe + 0xd4; r++) memcpy(g_shs.px + r * 640 + x + 0xb, info_saved + r * 640 + x + 0xb, 0x256);
+    Scr_Dirty(x + 0xb, y + 0xe, x + 0xb + 0x255, y + 0xe + 0xd3);
+    const ShInfo *I = &g_shnet_info;
+    text(x + 0x14, y + 0x21, I->game.name);
+    text(x + 0xb5, y + 0x21, I->access);
+    text(x + 0x13a, y + 0x21, I->limit);
+    text(x + 0x1cb, y + 0x21, I->teams);
+    text(x + 0x1e8, y + 0x21, I->level);
+    int teams = toupper((unsigned char)I->teams[0]) == 'Y';
+    for (int i = 0, ry = y + 0x5b; i < I->nplayers; i++, ry += row_h()) {
+        text(x + 0x12, ry, I->players[i].name);
+        text(x + 0xb8, ry, I->players[i].car);
+        text(x + 0x1cc, ry, teams ? I->players[i].team : dll_str(0x10064498));   /* "N/A" */
+    }
+}
+
+static void info_pass(void)
+{
+    int r = Shnet_InfoPoll();   /* 0x1002a030 */
+    info_draw();
+    int ok = g_sh_mouse.click == 1 && g_sh_mouse.x - 9 > 0x21a && g_sh_mouse.x - 9 < 0x260 &&
+             g_sh_mouse.y - 0x6c > 0xec && g_sh_mouse.y - 0x6c < 0xfb;
+    if (!ok && r != 2) return;
+    g_sh_modal = NULL;
+    Scr_Restore(9, 0x6c, 0x26e + 0x10, 0x108 + 0x10);
+    redraw();   /* 0x10029da0: the list freed, the map's redraw, dpClose */
+    Shnet_InfoClose();
+}
+
+static void info_open(const ShSession *g)
+{
+    Shnet_InfoOpen(g);
+    Scr_Shadow(9 + 6, 0x6c + 0x108, 0x26e, 6);
+    Scr_Shadow(9 + 0x26e, 0x6c + 6, 6, 0x108);
+    Scr_Frame(Shell_Set24(), 0xd, 9, 0x6c, 0x26e, 0x108);
+    memcpy(info_saved, g_shs.px, sizeof info_saved);
+    info_draw();
+    g_sh_modal = info_pass;
+}
+
 static void net_go(void)   /* in a session: the game's kind 5 */
 {
     g_shnet_on_list = NULL;
@@ -1004,8 +1053,8 @@ static void screen(uint32_t msg)
         if (g_sh_mode >= 6) {
             Shell_Click(w_click);
             if (i >= g_shnet_ngames) return;
-            if (x >= 0xcf) {   /* the game's players (0x1002a4f0's box, its own dpOpen): not ported */
-                plat_log("OpenI76: the game's information box is not ported");
+            if (x >= 0xcf) {   /* its information button: the box of its players (0x1002a4f0) */
+                info_open(&g_shnet_games[i]);
                 return;
             }
             scen = i;

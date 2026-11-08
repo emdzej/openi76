@@ -381,3 +381,111 @@ int Shnet_Cancelled(void)
     int x = g_sh_mouse.x - 0xe2, y = g_sh_mouse.y - 0xc2;
     return x > 0x68 && x < 0xae && y > 0x3f && y < 0x50;
 }
+
+/* ---- a listed game's information box (0x1002a4f0, 0x1002a030's end) ---- */
+
+ShInfo g_shnet_info;
+static int info_open;           /* 0x10090b94: 1 open, 2 failed, the port's 3 opening */
+static int info_listing;        /* 0x1008f968: 1 enumerating, 2 done */
+static uint32_t info_at;        /* 0x10091db4 */
+static ShInfoPlayer info_found[16];   /* 0x10092098 */
+static int info_nfound;               /* 0x10090ba8 */
+
+void Shnet_InfoOpen(const ShSession *g)
+{
+    memset(&g_shnet_info, 0, sizeof g_shnet_info);
+    g_shnet_info.game = *g;
+    snprintf(g_shnet_info.access, sizeof g_shnet_info.access, "%s", dll_str(0x10064514));   /* "" until read */
+    snprintf(g_shnet_info.teams, sizeof g_shnet_info.teams, "%s", dll_str(0x10064518));
+    snprintf(g_shnet_info.level, sizeof g_shnet_info.level, "%s", dll_str(0x1006451c));
+    info_listing = 0, info_at = 0, info_nfound = 0;
+    int r = dpOpen(&g->session, false);   /* the callback 0x1002a7f0: 1 open, 2 not */
+    info_open = r == dp_RES_OK ? 1 : r == dp_RES_BUSY ? 3 : 2;
+}
+
+/* 0x1002cb40: a player's record: its name, id, the car and team from key 1 (0x10027f80), the level's name
+   from key 2 into the box's heading; the end, the list done */
+static int info_player(dpid_t id, const char *name, long flags, void *ctx)
+{
+    (void)flags, (void)ctx;
+    if (!name) {
+        info_listing = 2;
+        return 0;
+    }
+    if (info_nfound >= 16) return 1;
+    ShInfoPlayer *p = &info_found[info_nfound];
+    memset(p, 0, sizeof *p);
+    snprintf(p->name, sizeof p->name, "%.31s", name);
+    p->id = id;
+    uint8_t d[0x50] = {0};
+    size_t len = sizeof d;
+    if (dpGetPlayerData(id, 1, d, &len) == dp_RES_OK) {
+        int team = (int8_t)d[1] - 1;   /* (none: the table's word before, unchecked in the original) */
+        snprintf(p->car, sizeof p->car, "%.31s", (const char *)d + 6);
+        if (team >= 0 && team < 8) snprintf(p->team, sizeof p->team, "%s", dll_str(dll_u32(0x100609f8 + 4 * (uint32_t)team)));
+    }
+    char lv[0x50] = {0};
+    len = sizeof lv;
+    if (dpGetPlayerData(id, 2, lv, &len) == dp_RES_OK) snprintf(g_shnet_info.level, sizeof g_shnet_info.level, "%.31s", lv);
+    info_nfound++;
+    return 1;
+}
+
+static int info_by_name(const void *a, const void *b)   /* 0x1002bc20 */
+{
+    return strcmp(((const ShInfoPlayer *)a)->name, ((const ShInfoPlayer *)b)->name);
+}
+
+int Shnet_InfoPoll(void)
+{
+    if (info_open == 3) {
+        int r = dpOpen(&g_shnet_info.game.session, false);
+        if (r != dp_RES_BUSY) info_open = r == dp_RES_OK ? 1 : 2;
+    }
+    if (info_open != 1) return 0;
+    ShInfo *I = &g_shnet_info;
+    if (now_ms() - info_at > 1000 && info_listing == 0) {
+        const ShSession *g = NULL;   /* the game still listed */
+        for (int i = 0; i < g_shnet_ngames; i++)
+            if (!memcmp(g_shnet_games[i].session.instance, I->game.session.instance, 16)) g = &g_shnet_games[i];
+        if (!g) {
+            g_shnet_state = 0;
+            notice(dll_str(0x100644c0));   /* "This game has closed." */
+            return 2;
+        }
+        snprintf(I->teams, sizeof I->teams, "%s", dll_str(g->teams ? 0x1006449c : 0x100644a0));     /* Yes, No */
+        snprintf(I->access, sizeof I->access, "%s", dll_str(g->approve ? 0x100644a4 : 0x100644b0));  /* Invite Only, Open */
+        if (g->limit) snprintf(I->limit, sizeof I->limit, dll_str(0x1006448c), (int)g->limit);   /* "%d" */
+        else snprintf(I->limit, sizeof I->limit, "%s", dll_str(0x10064490));                     /* None */
+        info_listing = 1;
+        info_nfound = 0;
+        dpEnumPlayers(info_player, NULL);   /* 0x1002c9f0 */
+        info_at = now_ms();
+    }
+    if (info_listing == 2) {   /* merged as the games are: those seen again kept, the new added, the rest gone */
+        info_listing = 0;
+        for (int i = 0; i < I->nplayers; i++) I->players[i].unseen++;
+        for (int k = 0; k < info_nfound; k++) {
+            int i;
+            for (i = 0; i < I->nplayers; i++)
+                if (I->players[i].id == info_found[k].id) {
+                    I->players[i] = info_found[k];
+                    I->players[i].unseen = 0;
+                    break;
+                }
+            if (i == I->nplayers && I->nplayers < 16) I->players[I->nplayers++] = info_found[k];
+        }
+        for (int i = 0; i < I->nplayers; i++)
+            if (I->players[i].unseen) I->players[i--] = I->players[--I->nplayers];
+        qsort(I->players, (size_t)I->nplayers, sizeof I->players[0], info_by_name);
+    }
+    return 0;
+}
+
+void Shnet_InfoClose(void)
+{
+    g_shnet_info.nplayers = 0;
+    info_listing = 0;
+    dpClose();
+    info_open = 0;
+}

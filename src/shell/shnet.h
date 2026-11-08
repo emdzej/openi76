@@ -62,3 +62,29 @@ int Shnet_Start(const ShNetConfig *c, const ShSession *game, const ShLevel *lv);
 void Shnet_Poll(void);             /* Net_Poll 0x1002b090 */
 /* the waiting dialog's Cancel (0x10010430: a click within (0x14a-0x190, 0x102-0x112)) */
 int Shnet_Cancelled(void);
+
+/* a listed game's information box (0x1002a4f0): the session opened with no player of ours, its players
+   read once a second (0x1002a030's end: dpEnumPlayers through 0x1002c9f0, its callback 0x1002cb40) */
+typedef struct {
+    char name[32];          /* +0 */
+    dpid_t id;              /* +0x20 */
+    char car[32];           /* +0x22: key 1's from +6 (0x10027f80) */
+    char team[22];          /* +0x42: the team's name (0x100609f8) */
+    int32_t unseen;         /* +0x58 */
+} ShInfoPlayer;
+
+typedef struct {
+    ShSession game;         /* 0x1008f898.. */
+    char access[24];        /* 0x1008f90b: "Open" or "Invite Only" */
+    char limit[16];         /* 0x1008f92c: the score to reach, "None" */
+    char teams[8];          /* 0x1008f930: "Yes", "No" */
+    char level[32];         /* 0x1008f944: key 2 of a player's (the host's) */
+    ShInfoPlayer players[16];
+    int nplayers;
+} ShInfo;
+
+extern ShInfo g_shnet_info;
+void Shnet_InfoOpen(const ShSession *g);   /* 0x1002a4f0 */
+/* each pass of the box: 2 once the game is gone ("This game has closed.") */
+int Shnet_InfoPoll(void);
+void Shnet_InfoClose(void);                /* 0x10029da0's: the list freed, dpClose */

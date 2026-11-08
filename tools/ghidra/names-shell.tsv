@@ -318,3 +318,10 @@
 10018450	Map_CarRecord	map	high	the chosen type's car record
 10018490	Map_CarFile	map	high	"%s%d": the type's name and the variant, the car's file
 100184d0	Map_Team	map	high	the team chosen (0x1006c748)
+1002a030	Net_PollInfo	shnet	med	Net_Poll's receive and RE, then the info box's players once a second
+1002cb40	Info_Player	shnet	high	the info box's player record: name, id, car and team (key 1), the level (key 2)
+10027f80	PlayerData_Parse	shnet	high	key 1's data: the host bit, the team, a number, the car's name
+10029e00	Info_Draw	shnet	high	the info box's heading and rows
+10029da0	Info_Close	shnet	high	the info box closed: the list freed, the map's redraw, dpClose
+1000e480	Info_Pass	shnet	high	the info box's pass: the poll, DONE or the game gone closes it
+10010970	Box_Open	shell	high	a box (frame 0xd of set 0x24) with its shadows, the screen kept

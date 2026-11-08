@@ -90,8 +90,8 @@ Elsewhere in the game the network's branches are ported (src/net/netgame.c and i
   by team): the name, the car (key 1's data from +6), the team, its car's +0xa4, the deaths, the kills,
   the score.
 
-Not ported: the menus' replay (state 7) of a network game, the game's information box of the joiner's
-list (0x1002a4f0, which opens the session to list its players).
+A replay (state 7) after a network game plays the mission alone: WinMain has turned network play off
+(0x461910 with 0) before its replay branch, and kind 5 copies no car, as the port does.
 
 ## The shell's side (shnet.cpp, 0x100298b8-0x1002ba60)
 
@@ -136,6 +136,11 @@ modem's host still at its start, as the original).
   one the level's again). With teams the teams' box (0x1000ff90) picks the host's team first.
 - Join (6-9): background 0x15, 0x12, 0x12, 0x17; for IPX and the internet the games found (0x10016650:
   the name, "(players/most)", the info button; "No games found"), redrawn after each merge (0x10018040).
+  A game's info button (x from 0xcf) opens its box (0x1002a4f0: frame 0xd at (9, 0x6c), DONE closes it):
+  the session opened with no player of ours, once a second (0x1002a030's end) its name, Open or Invite
+  Only, the score to reach ("None"), teams (Yes, No), the level (a player's key 2), and its players by
+  name (0x1002cb40: the name, the car and the team from key 1; "N/A" without teams); "This game has
+  closed." once it is no longer listed.
   JOIN (6) on a game (with teams, the team first) opens the waiting box (0x10010330: frame 0x12, or 0x1f for
   a modem or a cable, with its Cancel) and sends `RE` until the host answers; the map's buttons are off
   meanwhile. In, the game's kind 5 starts the mission.
