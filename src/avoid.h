@@ -42,3 +42,6 @@ int Sphere_Sweep(const float p[3], const float v[3], const float q[3], const flo
    node tree within r, faces as asked): *who what was met, *t when, nrm its normal */
 int Entity_Sweep(const float p[3], const float v[3], Entity *e, Node **who, float *t, float nrm[3], float r,
                  int faces);
+/* AI_ShotsAhead 0x4163d0: a live shot of the kinds dodged (12, 14-17, 19) the vehicle comes within 5 m of
+   within 3 s (docs/re/ai.md "Avoiding") */
+int AI_ShotsAhead(Node *n, float *slow, float *factor, float *t);

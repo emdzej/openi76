@@ -577,20 +577,65 @@ static int objects_ahead(Node *n, float *slow, float *factor, Node **who, const 
 
 /* ---- the shots ahead (0x4163d0) ---- */
 
-/* 0x4163d0: the live shots of the ordnance kinds 12, 14-17 and 19 (each kind's node's children, and its
-   second list at +0x10) near enough to hit within 3 s. Shots are not ported yet: both lists are empty,
-   so it finds none, as the original does without shots */
-static int shots_ahead(Node *n, float *slow, float *factor, float *t)
+/* a shot of either list against the vehicle at p moving at v. The shots' velocity is the vector 0x4a9360,
+   which nothing writes: every shot is taken as standing still (a quirk, kept). Within 200 m in x and z,
+   the time t the two come closest (d . r / r . r, r = -v, d = p - q; 1e7 for r . r below 0.01) goes to *t;
+   with 0.001 <= t <= 3 (the float's bits as an integer) and the vehicle then within 5 m of the shot: *slow
+   1, *factor t + 0.5. The two lists differ only in their sums' orders and roundings */
+static int shot_near(const float p[3], const float v[3], const Node *s, int second, float *slow, float *factor,
+                     float *t)
 {
-    (void)n, (void)slow, (void)factor, (void)t;
+    float q[3] = {F32(s->frame.pos[0]), F32(s->frame.pos[1]), F32(s->frame.pos[2])};
+    float lim = F32(200.0);   /* 0x4a5520, a double */
+    if (!below_eq(fabs(SUB(p[0], q[0])), lim) || !below_eq(fabs(SUB(p[2], q[2])), lim)) return 0;
+    float d[3], r[3];
+    for (int i = 0; i < 3; i++) {   /* 0x416a10 */
+        d[i] = F32(SUB(p[i], q[i]));
+        r[i] = F32(SUB(0.0f, v[i]));
+    }
+    float tt;
+    if (!second) {
+        float l = F32(ADD(ADD(MUL(r[0], r[0]), MUL(r[2], r[2])), MUL(r[1], r[1])));
+        if (below(fabs(l), 0.01f)) tt = 1e7f;   /* 0x4a53e4 */
+        else tt = F32(DIV(ADD(ADD(MUL(d[0], r[0]), MUL(r[1], d[1])), MUL(r[2], d[2])), l));   /* 0x416a60 */
+    } else {
+        double l = ADD(ADD(MUL(r[0], r[0]), MUL(r[1], r[1])), MUL(r[2], r[2]));
+        if (below(fabs(l), 0.01f)) tt = 1e7f;
+        else tt = F32(DIV(ADD(ADD(MUL(d[0], r[0]), MUL(r[1], d[1])), MUL(r[2], d[2])), F32(l)));
+    }
+    *t = tt;
+    int32_t bits;
+    memcpy(&bits, &tt, 4);
+    if (below(tt, F32(0.001)) || bits >= 0x40400001) return 0;   /* 0x4a5448, a double; 3.0 */
+    float a[3], b[3], e[3];
+    for (int i = 0; i < 3; i++) {   /* 0x414d50: the vehicle and the still shot at t */
+        a[i] = F32(ADD(MUL(v[i], tt), p[i]));
+        b[i] = F32(ADD(MUL(0.0f, tt), q[i]));
+        e[i] = F32(SUB(a[i], b[i]));
+    }
+    double dist = second ? fpu_sqrt(ADD(ADD(MUL(e[0], e[0]), MUL(e[1], e[1])), MUL(e[2], e[2])))   /* 0x4169e0 */
+                         : fpu_sqrt(ADD(ADD(MUL(e[0], e[0]), MUL(e[2], e[2])), MUL(e[1], e[1])));
+    if (!below(dist, 5.0f)) return 0;   /* 0x4a5518 */
+    *factor = F32(ADD(tt, 0.5f));       /* 0x4a54d4 */
+    *slow = 1.0f;
+    return 1;
+}
+
+/* 0x4163d0: the live shots of the ordnance kinds 12, 14-17 and 19: each kind's node's children, then its
+   second list (+0x10), by shot_near; the first that comes near answers */
+int AI_ShotsAhead(Node *n, float *slow, float *factor, float *t)
+{
+    float p[3] = {F32(n->frame.pos[0]), F32(n->frame.pos[1]), F32(n->frame.pos[2])}, v[3], sp;
+    Class_Velocity(n, v, &sp);   /* 0x425be0 */
     for (int k = 0; k < 20; k++) {
         const Ordnance *o = &g_ordnance[k];
         int ty = o->type;
         if (ty != 12 && ty != 14 && ty != 15 && ty != 16 && ty != 17 && ty != 19) continue;
-        if ((o->node && o->node->child) || o->list1) {
-            static int told;
-            if (!told++) plat_log("OpenI76: dodging shots (0x4163d0) is not ported yet");
-        }
+        if (o->node)
+            for (const Node *s = o->node->child; s; s = s->next)
+                if (shot_near(p, v, s, 0, slow, factor, t)) return 1;
+        for (const Node *s = o->list1; s; s = s->next)
+            if (shot_near(p, v, s, 1, slow, factor, t)) return 1;
     }
     return 0;
 }
@@ -647,7 +692,7 @@ int AI_Avoid(Node *n, float steer, float throttle, Node **who, float *slow, floa
     }
     int r = crt_rand() % 1000;
     uint8_t *ai = ai_of(n);
-    if (below(ADD(MUL(SUB(1.0f, rdf(ai + 0xa820)), 150.0f), 850.0f), r) && shots_ahead(n, slow, factor, t)) {   /* 0x4a540c, 0x4a5530 */
+    if (below(ADD(MUL(SUB(1.0f, rdf(ai + 0xa820)), 150.0f), 850.0f), r) && AI_ShotsAhead(n, slow, factor, t)) {   /* 0x4a540c, 0x4a5530 */
         *who = NULL;
         return 1;
     }

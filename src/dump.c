@@ -1650,6 +1650,37 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 71: {   /* the shots dodged (0x4163d0): n given the velocity (3, 0.5, 7); a still shot of the first kind
+                        dodged (12, 14-17, 19) at six places about n, in turn the kind's node's child and its
+                        second list's; each time the answer, *slow, *factor and *t */
+            if (n->cls != 1 || !n->data) break;
+            Ordnance *o = NULL;
+            for (int k = 0; k < 20 && !o; k++) {
+                int ty = g_ordnance[k].type;
+                if ((ty == 12 || (ty >= 14 && ty <= 17) || ty == 19) && g_ordnance[k].node) o = &g_ordnance[k];
+            }
+            if (!o) break;
+            float vel[3] = {3.0f, 0.5f, 7.0f};
+            memcpy(n->data + 0xbc, vel, 12);
+            for (int j = 0; j < 6; j++) {
+                Node shot;
+                memset(&shot, 0, sizeof shot);
+                shot.frame.pos[0] = n->frame.pos[0] + (j * 1.5 - 2);
+                shot.frame.pos[1] = n->frame.pos[1] + 0.3;
+                shot.frame.pos[2] = n->frame.pos[2] + (j * 4 - 1);
+                Node *child = o->node->child, *l1 = o->list1;
+                if (j & 1) o->node->child = NULL, o->list1 = &shot;
+                else o->node->child = &shot, o->list1 = NULL;
+                float slow = -1, factor = -1, t = -1;
+                g_fpu_round = FPU_DOWN;
+                int32_t r = AI_ShotsAhead(n, &slow, &factor, &t);
+                o->node->child = child, o->list1 = l1;
+                uint8_t b[16];
+                memcpy(b, &r, 4), memcpy(b + 4, &slow, 4), memcpy(b + 8, &factor, 4), memcpy(b + 12, &t, 4);
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 70: {   /* the cockpit's views (0x481c10) on the user's vehicle, 24 frames: the sub-mode 0 (the pilot's)
                         for 0-11, 2 (the dashboard's) for 12-17, 1 for 18-19, 0 again after; each frame the glance
                         keys of the pattern below. After each: the glance's three actions, the gauges' flag and

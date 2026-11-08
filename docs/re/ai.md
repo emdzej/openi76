@@ -328,8 +328,19 @@ back, and looks from the step's place p with its velocity v:
    box, 0x479070 in weapons.md "The hit"). A hit: *slow 1, *factor 1.25, *who, *t the time the two centres come
    closest.
 4. With probability (150 x (1 - steering gain +0xa820)) / 1000 (rand() % 1000 above 850 + that): the
-   shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19. The shots fly now, but this test
-   is not ported yet: it finds none (logged once when such shots are live).
+   shots (0x4163d0), the live shots of ordnance kinds 12, 14-17 and 19 (each kind's node's children, then
+   its second list +0x10). The vehicle at p moves at its class's velocity v (0x425be0).
+   - The shots' velocity is the vector 0x4a9360, which nothing writes. Every shot is taken as standing
+     still (a quirk, kept).
+   - A shot within 200 m of p in x and in z gets the time the two come closest: t = d . r / r . r, with
+     r = -v and d = p - the shot. It is 1e7 when r . r is below 0.01. t goes to *t whatever follows.
+   - With 0.001 <= t and t's bits as an integer at most 3.0's: the vehicle at p + v t within 5 m of the
+     shot gives *slow 1 and *factor t + 0.5, with no who.
+   - The two lists differ only in rounding. The first's r . r is rounded to a float and summed
+     (x, z, y); the second's is not, and is summed (x, y, z). Their distances are summed the same two ways.
+
+   Checked: `diff_objects --call dodge` on t01, s01 and t05. Each vehicle gets the velocity (3, 0.5, 7),
+   and a still shot at six places about it, in either list in turn.
 
 None: *slow 0, *factor 0.5, answer 0.
 
