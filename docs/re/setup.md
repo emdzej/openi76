@@ -7,9 +7,44 @@ record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf`
 and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
 with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's
 name puts EMPTY in its place; the repair order, SELECT REPAIRS, the armour's and chassis' buttons and
-BALANCE run, and the car's picture (0x100114d0, below) shows each part. Not ported yet: the name's edit
-and the melee's path from the map, with its paint (box 10, 0x10007bc0: only that path's box list has
-box 0x1005cb80, so a trip's set-up has no paint to choose).
+BALANCE run, and the car's picture (0x100114d0, below) shows each part. The melee's path from the map
+runs too ("From the map" below). Not ported yet: the paint (box 10, 0x10007bc0: only the map's box list
+has box 0x1005cb80, so a trip's set-up has no paint to choose) and PARTS CATALOG (box 7 from the map,
+0xc01f, 0x10041170).
+
+## From the map (0x1006b050 set)
+
+The map's CONFIGURE CHASSIS (docs/re/map.md) makes the map's car the record (+0x38) and sets the six
+fill functions to the map's. 0x10018ba0 (and its refresh 0x10018c60) puts the engine, suspension and
+brakes the map's redraw picked into items 0-2 of c900, each only while its kind's list has any (the
+count grows only then: quirk, kept), and items 3-6 from the map's car's wheels while there are that many
+wheels at all. 0x10018d20 (0x100190a0) walks the record's slots as the trip's does, but a slot's gun or
+dropper is the first of its name in the map's car's guns (where it is is not checked), EMPTY by name.
+0x10019430 (0x10019470) takes the map's car's first three specials. The open (0x10003fe0) takes
+background 2 and only the click's wave, turns box 4 into CANCEL (0x1ec-0x276 by 0x1c2-0x1d5, no rows),
+and keeps the record's variant name (+0x14, at 0x1006b1b8) and paint (+0x82d, at 0x1006b0d0). Its box
+list keeps box 8 (the name) and adds box 10 (the paint) instead of 11 (the bookmark); box 4 is not added
+a second time. The redraw draws entry 0x3d's frame of the type's picture at 0x1c2, 0x46 (0x10016d70), the
+make at 0x69, 2 and the variant at 0x52, 0x11; each refresh (0x10005ba0) remakes the hard points' labels
+and the gun boxes' heights.
+
+- **Box 8:** the variant's name edited (0x10038d60 at 0x52, 0x11, 15 characters, 0xa0 wide); a change
+  marks the car renamed (0x1006b054).
+- **Box 4, CANCEL:** the name and paint back, then the map (0xc024 for a scenario, 0xc021 the instant
+  melee, else 0xc026).
+- **Box 9, DONE**, after the check: unchanged (0x1006b204 clear) and not renamed, the map. Changed but
+  not renamed: a variant of the disc's (at or below the type's first free, 0x10017d40) gives note 0x1e;
+  otherwise it asks to overwrite the current variant (0x10005ae0). Renamed: the variant of that name
+  among the type's (0x10017e50) is asked to be overwritten, else 0x10005ab0 asks for a new one, which
+  raises the type's count, becomes the variant and writes `i76car.def` again (0x10017d70, 0x100257c0).
+  On yes the boxes go back into the record (0x10018840), the weight goes in, and the car is written as
+  `addon\<type><n>.vcf` (0x1001d6a0); the instant melee's player is given it (0x100194b0). Overwriting a
+  named variant uses its index from 0 against the files' numbers from 1, so the file before it is the
+  one written (quirk, kept). A Phaedra Rattler whose variant is named knat... or natk... is armoured
+  1500 on all eight sides (natk: 6000), and retpocileh... 3000 on two (+0x7fc and +0x80c): the tank and
+  the helicopter, spelled backwards.
+- The exe's Zix_Load (0x48bbe0, its 0x48bf10) puts every file of `addon\` into the file index before the
+  disc's, so the saved variants are found by name in later runs (`src/res.c`).
 
 ## The car's picture (0x100114d0)
 

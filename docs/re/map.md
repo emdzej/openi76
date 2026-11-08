@@ -1,7 +1,7 @@
 # The melee's map (0x10013040, its screen 0x100136d0)
 
-Ported for a scenario (mode 1) in `src/shell/map.c`; the instant melee (mode 0), the set-up from the map
-(button 5) and network play are not yet.
+Ported for a scenario (mode 1) in `src/shell/map.c`, with the set-up from the map (button 5,
+docs/re/setup.md "From the map"); the instant melee (mode 0) and network play are not yet.
 
 The main menu's AUTO MELEE opens two items: SCENARIO (button 9, message 0xc024) and INSTANT MELEE
 (button 4, 0xc021). Both open the same screen, 0x10013040, with the mode 0x1008e9fc set first: 0 for the
