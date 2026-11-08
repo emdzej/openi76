@@ -7,6 +7,7 @@
 #include "sound.h"
 #include "cd.h"
 #include "music.h"
+#include "shell/trip.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -183,12 +184,14 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc022:
         Trip_Start();
         return;
-    case 0xc01e:   /* the trip's next mission (0x10020d30): its briefing, the garage and the salvage are not
-                      ported yet; the port goes straight to the mission */
-        unported("screen (the trip's, straight to the mission)", msg);
+    case 0xc01e:   /* the trip's next mission (0x10020d30): the car, its state and the salvage */
+        Trip_Next(prev);
+        return;
+    case 0xc017: case 0xc00f:   /* the garage and the car's set-up: not ported yet, straight to the mission */
+        unported("screen (the garage's, straight to the mission)", msg);
         Shell_Post(0xc010, 0);
         return;
-    case 0xc008: case 0xc00d: case 0xc00f: case 0xc015: case 0xc017: case 0xc01c: case 0xc01d:
+    case 0xc008: case 0xc00d: case 0xc015: case 0xc01c: case 0xc01d:
     case 0xc01f: case 0xc020: case 0xc021: case 0xc024: case 0xc025: case 0xc026:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
