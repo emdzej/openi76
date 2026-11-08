@@ -35,6 +35,13 @@ static float pitch_to, pitch, yaw_to, yaw, roll_to, roll;
 /* the other modes' parameters: the chase's pitch 0x4a8680 and yaw 0x4a8684, the track view's targets for
    them 0x4a8670 and 0x4a8674 (pi/6 and 0 at the reset), the distance's target 0x4a867c and the eased
    distance 0x4a868c (5.5 at the reset) */
+void Camera_GlanceAt(float p, float y, float r)
+{
+    pitch_to = pitch = p;
+    yaw_to = yaw = y;
+    roll_to = roll = r;
+}
+
 int Camera_GlanceCmp(float a)   /* 0x4034f0 */
 {
     if (yaw < a || yaw != yaw || a != a) return -1;

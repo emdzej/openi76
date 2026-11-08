@@ -50,6 +50,7 @@ void Cockpit_Frame(Node *n);
 void Cockpit_Draw(const View *view);
 /* 0x4279a0 (1) and 0x4279b0 (0): the flat cockpit's gauges hidden or shown */
 void Cockpit_Gauges(int hide);
+int Cockpit_GaugesHidden(void);   /* 0x4d4b90 */
 /* Handset_Toggle 0x426940 (also a CB message from the user's, radio.c), Handset_IsOn 0x426960 */
 void Handset_Toggle(void);
 int32_t Handset_IsOn(void);

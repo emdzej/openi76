@@ -120,7 +120,51 @@ mirrors it. Without either the rate is 0.
      attacks the user. 0x4088a0 clears it at each mission's set-up.
 3. A UI window that takes the keys (0x450ab0) gets the key first; not ported.
 4. The typed key's command (`gamekey.map`) goes to `Game_Command` 0x4809b0. See "The commands" below.
-5. The cockpit (0x481c10, not ported), then `User_Controls` 0x481d00.
+5. The cockpit's views (0x481c10, below), then `User_Controls` 0x481d00.
+
+## The cockpit's views (0x481c10)
+
+`Cockpit_Views` runs on the user's vehicle by the camera's sub-mode (0x4a8480, docs/re/camera.md):
+
+- **Outside the cockpit** (any sub-mode but 0), both windows' animations stop (0x4339d0): a window
+  moving (its frame, target, mode and fourth word all set) gets its texture's first frames back, and
+  every word is cleared. Outside both cockpit views (not 0 or 2) the wind `ADWIND.WAV` is held at the
+  camera's entity (0x4685d0). In them, the wind found playing (0x467770) is freed.
+- **The pilot's view** (sub-mode 0, 0x4825c0). Coming from another sub-mode, the glance goes ahead
+  (0x482310). The glance's actions become yaw 0, pitch -13 and roll 0, and the eased angles take them at
+  once, in radians (× 0x4a7420). Each frame:
+  1. The glance keys form a chord (`pilot_glance_left` 0x1000, `_right` 0x100, `_up` 0x10, `_down` 1).
+  2. The next glance is read from the table 0x4e9258: a row of 8 words for each glance 0-7, by the
+     chord (left, left and down, none, down, right, right and down, up). No key at all takes the row's
+     "none". A chord not in the row keeps the glance. From glance 6 or 7, any chord gives 6.
+  3. Each glance is a preset of the actions (0x482b70; yaw, roll, pitch in degrees): 0 -88, -2, -3;
+     1 -45, -2, 0; 2 0, 0, -13 (ahead); 3 0, 0, 6; 4 93, 2, -3; 5 45, 2, 0; 6 160, 2, -2; 7 160, 2, 0.
+  4. With `pilot_glance_target` and a radar contact (0x421ba0), the glance is kept and the pilot looks
+     at the contact (0x4824a0). The yaw is measured from the vehicle's forward (its frame's third row)
+     to the contact's centre, and the pitch the same way. A yaw below 2.79 and above -2.27 rad goes to
+     `pilot_yaw_delta`, a pitch within ±0.279 to `pilot_pitch`, each truncated to whole degrees.
+     - The yaw is `atan2(x, z)` of the forward less that of the direction (0x482cd0), negated.
+     - The pitch is `atan2(|v|, y)` of each (0x482d70), with the length summed `(y² + z²) + x²`.
+     - The difference is brought within ±π.
+  5. `zoom_factor` is 1. The flat gauges show only at glance 2, and not while looking at a contact.
+  6. At glance 4 with the eased yaw above 1.0123 (0x3f8192c0), the first window winds down to frame 5
+     (0x433a80). Otherwise, if it is down, it winds up (0x433af0). The second window does the same at
+     glance 0 with the yaw below -0.9250 (0xbf6cce68). A window whose gun is out is not wound.
+  7. The glance keys are cleared.
+- **The dashboard's view** (sub-mode 2, 0x482380). Coming from another sub-mode, the glance's actions,
+  the eased angles and its yaw 0x4e9238 all go to 0 (0x4822d0). Each frame, a contact with
+  `pilot_glance_target` is looked at as above. Otherwise:
+  - left turns the yaw by -29 a frame while it is above -88, or sets it to -45 with down;
+  - right turns it by 31 while it is below 93, or sets it to 45 with down;
+  - with neither, the yaw is 0.
+
+  The yaw goes to `pilot_yaw_delta`, and the glance keys are cleared.
+- The sub-mode is kept for the next frame. `User_ControlsReset` 0x481be0 (each mission's set-up) sets the
+  glance to 2 and the rest to 0.
+
+Checked: `diff_objects --call glance` on t01 and s04, 24 frames of chords through sub-modes 0, 2 and 1.
+It compares the actions, the gauges' flag and the windows. The windows' winding needs the eased yaw,
+which the check does not move.
 
 ## gamekey.map
 

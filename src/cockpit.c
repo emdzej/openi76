@@ -656,6 +656,7 @@ void Specials_Frame(Node *v)
 }
 
 void Cockpit_Gauges(int hide) { flat_hidden = hide; }   /* 0x4279a0, 0x4279b0 */
+int Cockpit_GaugesHidden(void) { return flat_hidden; }
 
 /* the flat cockpit's reticle at a share of the screen (0x4a593c across; down 0x4a5934 or 0x4a594c),
    through the remap table bottom up */

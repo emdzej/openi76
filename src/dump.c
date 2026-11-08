@@ -1650,6 +1650,33 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 70: {   /* the cockpit's views (0x481c10) on the user's vehicle, 24 frames: the sub-mode 0 (the pilot's)
+                        for 0-11, 2 (the dashboard's) for 12-17, 1 for 18-19, 0 again after; each frame the glance
+                        keys of the pattern below. After each: the glance's three actions, the gauges' flag and
+                        both windows' animations */
+            if (!g_user_entity || g_user_entity->node != n || !n->data) break;
+            static const uint8_t keys[24] = {0, 1, 1, 0, 2, 2, 8, 9, 4, 6, 0, 0x10, 1, 1, 1, 2, 9, 0, 0, 1, 1, 4, 0, 0};
+            for (int k = 0; k < 24; k++) {
+                g_camera_mode = k < 12 ? 0 : k < 18 ? 2 : k < 20 ? 1 : 0;
+                for (int j = 0; j < 5; j++) *INPUT_AT(0x4def87 + (uint32_t)j) = (keys[k] >> j) & 1;
+                g_fpu_round = FPU_DOWN;
+                Cockpit_Views();
+                int32_t b[3 + 1 + 10] = {0};
+                memcpy(&b[0], INPUT_AT(0x4def70), 4);
+                memcpy(&b[1], INPUT_AT(0x4def78), 4);
+                memcpy(&b[2], INPUT_AT(0x4def80), 4);
+                b[3] = Cockpit_GaugesHidden();
+                for (int w = 0; w < 2; w++) {
+                    Node *wn = *(Node **)Data_Ptr(n->data, w ? 0x404 : 0x400);
+                    int32_t on = 0;
+                    if (wn && wn->data) memcpy(&on, wn->data + 4, 4);
+                    WindowAnim *a = on ? *(WindowAnim **)Data_Ptr(wn->data, 0) : NULL;
+                    if (a) memcpy(&b[4 + 5 * w], a, 20);
+                }
+                call_line(b, sizeof b);
+            }
+            break;
+        }
         case 69: {   /* a gun's, a helicopter's, a turret's destruction (0x4289f0, 0x431c60, 0x432ed0, 0x4346b0
                         through Class_Damage): the nearest intact node of class 7, 8, 9 or 0xa (the entities'
                         trees, depth first) hit by 100000 of the first kind; the result, the rand seed, its

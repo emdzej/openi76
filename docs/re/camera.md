@@ -41,7 +41,7 @@ classes' frames and before `Render_World` (inferred from WinMain's order). Other
 - 0x4a8660: the entity the camera is on.
 - 0x4a847c: 1 in the cockpit. `Render_World` then draws the rear-view mirror (0x471390, through a second
   view, 0x5e2ae0).
-- 0x4a8480: a sub-mode, read by the cockpit's per-frame (0x481c10).
+- 0x4a8480: a sub-mode, read by the cockpit's views (0x481c10, docs/re/input.md "The cockpit's views").
 
 `View_Init` 0x403360 makes the view: fov pi/2, aspect 1 (or (h·4)/(w·3) when 0x4d66e0 is set), the
 world's range when the detail's range is set (else 150), zoom 1. With 1 it also resets:

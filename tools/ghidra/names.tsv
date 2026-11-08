@@ -1441,3 +1441,13 @@
 00428c70	Velocity_Artillery	combat	high	class 8's velocity: class 1's (0x42a740)
 004919e0	Headlight_Queue	render	high	a vehicle's beam (+0x440) queued as type 10 by night, or off the world list with the vehicle freed; ported, diffed
 0048cd80	Draw_Beam	render	high	type 10: the beam's faces through its frame, q 0.85, mode 0x80 or 0xc4; the frame's m[2] cleared by the flush (quirk); ported, diffed
+00481c10	Cockpit_Views	input	high	the cockpit's views: the pilot's and the dashboard's glances, the windows, the wind outside; ported, diffed
+004825c0	Pilot_View	input	high	the pilot's glance by the chord and the table 0x4e9258; the gauges, the windows; ported, diffed
+00482380	Dash_View	input	high	the dashboard view's yaw by the glance keys; ported, diffed
+004824a0	Glance_AtTarget	input	high	the glance's yaw and pitch at the radar's contact, in degrees; ported
+00482b70	Glance_Preset	input	high	the glance's presets 0-7 (0x482c10-0x482cb0); ported
+00482cd0	Angle_YawDiff	input	high	atan2(x, z) of a less b's, within pi, negated
+00482d70	Angle_PitchDiff	input	high	atan2(|v|, y) of a less b's, within pi
+004339d0	Window_Stop	weapons	high	a window's animation stopped, its texture back to the first frames
+00433a80	Window_Down	weapons	high	a window wound down (target 5) unless the gun is out
+00433af0	Window_Up	weapons	high	a window wound up (target 0) unless the gun is out

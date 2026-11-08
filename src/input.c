@@ -19,6 +19,10 @@
 #include "platform.h"
 #include "vfs.h"
 #include "weapons.h"
+#include "tex.h"
+#include "effects.h"
+#include "combat.h"
+#include "cockpit.h"
 #include "render/fpu.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -1022,6 +1026,240 @@ static int user_dead(void)
     return u && (rd32(u->node->data + 0x454) & 0x20);
 }
 
+/* ---- the cockpit's views and the wind (0x481c10) ---- */
+
+static Snd *wind;            /* 0x4e923c */
+static int32_t last_mode;    /* 0x4e9240: the sub-mode at the frame before */
+static int32_t glance = 2;   /* 0x4e9254: the pilot's glance, 0-7 */
+static int32_t dash_yaw;     /* 0x4e9238: the dashboard view's yaw */
+
+static void put_i32(uint32_t va, int32_t v) { memcpy(INPUT_AT(va), &v, 4); }
+static void glance_set(int32_t yaw, int32_t roll, int32_t pitch)
+{
+    put_i32(0x4def70, yaw);    /* pilot_yaw_delta */
+    put_i32(0x4def80, roll);   /* pilot_roll */
+    put_i32(0x4def78, pitch);  /* pilot_pitch */
+}
+
+static WindowAnim *window_anim(Node *v, int which, Node **w)
+{
+    *w = v && v->data ? *(Node **)Data_Ptr(v->data, which == 1 ? 0x400 : 0x404) : NULL;
+    if (!*w || !rd32((*w)->data + 4)) return NULL;
+    return *(WindowAnim **)Data_Ptr((*w)->data, 0);
+}
+
+/* 0x4339d0: the window's animation stopped; when it was going (every word but the state set) its texture
+   back to the first frames */
+static void window_stop(Node *v, int which)
+{
+    Node *w;
+    WindowAnim *a = window_anim(v, which, &w);
+    if (!a) return;
+    if (a->target && a->shown && a->mode && a->w4) {
+        const char *t = Node_FirstTexture(w, 0);   /* 0x482ea0 */
+        Tex_SetFrame((uintptr_t)w, t, 1, 0, 0);
+        Tex_SetFrame((uintptr_t)w, t, 0, 0, 1);
+    }
+    a->target = a->shown = a->mode = a->w4 = a->state = 0;
+}
+
+/* 0x433a80 (down, to frame 5) and 0x433af0 (up, to 0): a window the gun is not out of wound */
+static void window_wind(Node *v, int which, int32_t to)
+{
+    Node *w;
+    WindowAnim *a = window_anim(v, which, &w);
+    if (!a || a->state != 0) return;
+    a->target = to;
+    const char *t = Node_FirstTexture(w, 0);
+    a->w4 = a->mode = 0;
+    Tex_SetFrame((uintptr_t)w, t, 1, 0, 0);
+}
+
+/* 0x482cd0 (yaw: atan2(x, z)) and 0x482d70 (pitch: atan2(|v|, y), the length ((y y + z z) + x x)): f's
+   angle less d's, each as a float, the difference brought within -pi..pi; the yaw's negated */
+static float angle_diff(const float f[3], const float d[3], int pitch)
+{
+    double a, b;
+    if (pitch) {
+        float lf = fpu_f32(fpu_sqrt(fpu_add(fpu_add(fpu_mul(f[1], f[1]), fpu_mul(f[2], f[2])), fpu_mul(f[0], f[0]))));
+        a = fpu_f32(atan2(lf, f[1]));
+        float ld = fpu_f32(fpu_sqrt(fpu_add(fpu_add(fpu_mul(d[1], d[1]), fpu_mul(d[2], d[2])), fpu_mul(d[0], d[0]))));
+        b = atan2(ld, d[1]);
+    } else {
+        a = fpu_f32(atan2(f[0], f[2]));
+        b = atan2(d[0], d[2]);
+    }
+    double x = fpu_sub(a, b);
+    float s = fpu_f32(x), r;
+    uint32_t bits;
+    memcpy(&bits, &s, 4);
+    if (x > exe_f32(0x4a7440)) r = fpu_f32(fpu_sub(s, exe_f32(0x4a7444)));        /* pi, 2 pi */
+    else if (bits > 0xc0490fdbu) r = fpu_f32(fpu_add(s, exe_f32(0x4a7444)));     /* below -pi */
+    else r = s;
+    return pitch ? r : -r;
+}
+
+/* 0x4824a0: the glance at the target: the yaw from the vehicle's forward (its frame's third row) to the
+   target's centre, kept below 2.79 and above -2.27 rad, and the pitch within +-0.279, into the glance's
+   actions in whole degrees (truncated) */
+static void glance_at(Node *n, Node *target)
+{
+    float f[3] = {n->frame.m[6], n->frame.m[7], n->frame.m[8]}, c[4], d[3];
+    Node_CentreNow(c, target);   /* 0x424130 */
+    for (int i = 0; i < 3; i++) d[i] = fpu_f32(fpu_sub(c[i], n->frame.pos[i]));
+    float y = angle_diff(f, d, 0);
+    uint32_t b;
+    memcpy(&b, &y, 4);
+    if (y < exe_f32(0x4a7424) && b < 0xc011361eu) put_i32(0x4def70, (int32_t)(int64_t)fpu_mul(y, exe_f32(0x4a742c)));
+    float p = angle_diff(f, d, 1);
+    memcpy(&b, &p, 4);
+    if (p < exe_f32(0x4a7430) && b < 0xbe8efa35u) put_i32(0x4def78, (int32_t)(int64_t)fpu_mul(p, exe_f32(0x4a742c)));
+}
+
+/* 0x482b70: the glance's preset (yaw, roll, pitch in degrees): 0 -88, 1 -45, 2 ahead and down 13
+   (0x482c10), 3 up 6 (0x482c30), 4 93, 5 45, 6 and 7 160 (0x482c50-0x482cb0) */
+static void glance_preset(int32_t g)
+{
+    switch (g) {
+    case 0: glance_set(-88, -2, -3); break;
+    case 1: glance_set(-45, -2, 0); break;
+    case 2: glance_set(0, 0, -13); break;
+    case 3: glance_set(0, 0, 6); break;
+    case 4: glance_set(93, 2, -3); break;
+    case 5: glance_set(45, 2, 0); break;
+    case 6: glance_set(160, 2, -2); break;
+    case 7: glance_set(160, 2, 0); break;
+    }
+}
+
+static void glance_keys_clear(uint8_t l, uint8_t r, uint8_t u, uint8_t d)
+{
+    if (l) *INPUT_AT(0x4def87) = 0;
+    if (r) *INPUT_AT(0x4def88) = 0;
+    if (u) *INPUT_AT(0x4def89) = 0;
+    if (d) *INPUT_AT(0x4def8a) = 0;
+}
+
+/* 0x4825c0, the pilot's view: the glance keys as a chord (left 0x1000, right 0x100, up 0x10, down 1) pick
+   the next glance from the table 0x4e9258 (a row of 8 words a glance, by the chord: left, left and down,
+   none, down, right, right and down, up); another chord keeps it, and from 6 or 7 any chord gives 6. With
+   glance_target and a radar's contact the pilot looks at it instead. The flat gauges show only at glance 2;
+   at glance 4 with the eased yaw above 1.0123 the first window winds down, at 0 below -0.9250 the second,
+   else they wind up. The glance keys are then cleared */
+static void pilot_view(void)
+{
+    uint8_t l = *INPUT_AT(0x4def87), r = *INPUT_AT(0x4def88), u = *INPUT_AT(0x4def89), dn = *INPUT_AT(0x4def8a),
+            tg = *INPUT_AT(0x4def8b);
+    Node *n = g_user_entity->node;
+    uint32_t keys = (l ? 0x1000u : 0) | (r ? 0x100u : 0) | (u ? 0x10u : 0) | (dn ? 1u : 0);
+    int32_t g = 0;
+    if (!keys)
+        g = (int32_t)exe_u32(0x4e9260 + 0x20u * (uint32_t)glance);
+    else if (glance >= 0 && glance <= 5) {
+        uint32_t row = 0x4e9258 + 0x20u * (uint32_t)glance, col = 0;
+        g = glance;
+        switch (keys) {
+        case 0x10: col = 0x18; break;
+        case 1: col = 0xc; break;
+        case 0x1000: col = 0; break;
+        case 0x1001: col = 4; break;
+        case 0x100: col = 0x10; break;
+        case 0x101: col = 0x14; break;
+        default: col = 0xff; break;
+        }
+        if (col != 0xff) g = (int32_t)exe_u32(row + col);
+    } else if (glance == 6 || glance == 7)
+        g = 6;
+    Node *t = Radar_Current(n);   /* 0x421ba0 */
+    if (!tg || !t) {
+        glance = g;
+        glance_preset(g);
+    } else
+        glance_at(n, t);
+    put_i32(0x4defa4, 0x10000);   /* zoom_factor */
+    Cockpit_Gauges(!(glance == 2 && (!tg || !t)));   /* 0x4279b0 shown, 0x4279a0 hidden */
+    if (glance == 4 && Camera_GlanceCmp(1.01229095f) == 1) {   /* 0x3f8192c0 */
+        if (!Window_Open(n, 1)) window_wind(n, 1, 5);
+    } else if (Window_Open(n, 1))
+        window_wind(n, 1, 0);
+    if (glance == 0 && Camera_GlanceCmp(-0.925025463f) == -1) {   /* 0xbf6cce68 */
+        if (!Window_Open(n, 2)) window_wind(n, 2, 5);
+    } else if (Window_Open(n, 2))
+        window_wind(n, 2, 0);
+    glance_keys_clear(l, r, u, dn);
+}
+
+/* 0x482380, the dashboard's view: glance_target looks at the radar's contact; otherwise glance_left turns
+   the yaw by -29 a frame down to -88 (with glance_down: -45 at once), glance_right by 31 up to 93 (with
+   glance_down: 45), neither 0; the yaw goes to the action */
+static void dash_view(void)
+{
+    uint8_t l = *INPUT_AT(0x4def87), r = *INPUT_AT(0x4def88), u = *INPUT_AT(0x4def89), dn = *INPUT_AT(0x4def8a),
+            tg = *INPUT_AT(0x4def8b);
+    Node *n = g_user_entity->node;
+    Node *t = Radar_Current(n);
+    if (tg && t)
+        glance_at(n, t);
+    else {
+        if (l) {
+            if (!dn) {
+                if (dash_yaw > -0x58) dash_yaw -= 0x1d;
+            } else
+                dash_yaw = -0x2d;
+        } else if (r) {
+            if (!dn) {
+                if (dash_yaw < 0x5d) dash_yaw += 0x1f;
+            } else
+                dash_yaw = 0x2d;
+        } else
+            dash_yaw = 0;
+        put_i32(0x4def70, dash_yaw);
+    }
+    glance_keys_clear(l, r, u, dn);
+}
+
+/* 0x481c10: outside the cockpit's two views (sub-modes 0 and 2) the user's windows stop and the wind
+   (ADWIND.WAV) is held at the camera's entity; inside it, the wind found playing stops. Then the pilot's
+   view (from another, first its glance ahead with the eased angles at once, 0x482310) or the
+   dashboard's (from another, every angle 0, 0x4822d0) */
+void Cockpit_Views(void)
+{
+    if (!g_user_entity) return;   /* 0x423fc0 */
+    Node *n = g_user_entity->node;
+    const char *name = exe_str(0x4e935c);
+    int held = 0;
+    if (g_camera_mode != 0) {
+        window_stop(n, 1);
+        window_stop(n, 2);
+        if (g_camera_mode != 2) {
+            if (g_camera_entity && g_camera_entity->node) Sound_PlayHeld(name, g_camera_entity->node, NULL);
+            held = 1;
+        }
+    }
+    if (!held) wind = Sound_FindPlaying(name, g_camera_entity ? g_camera_entity->node : NULL);   /* 0x467770 */
+    if (wind) {
+        Sound_Free(wind);
+        wind = NULL;
+    }
+    if (g_camera_mode == 0) {
+        if (last_mode != 0) {
+            glance_set(0, 0, -13);   /* 0x482c10 */
+            const float k = exe_f32(0x4a7420);   /* pi / 180 */
+            Camera_GlanceAt(fpu_f32(fpu_mul((double)-13, k)), fpu_f32(fpu_mul((double)0, k)), fpu_f32(fpu_mul((double)0, k)));
+        }
+        pilot_view();
+    } else if (g_camera_mode == 2) {
+        if (last_mode != 2) {
+            glance_set(0, 0, 0);
+            dash_yaw = 0;
+            Camera_GlanceAt(0, 0, 0);
+        }
+        dash_view();
+    }
+    last_mode = g_camera_mode;
+}
+
+
 /* 0x4809b0: a typed key's command. Ported: the menu, the preset views, the mirror, the self-destruct and the pause; the rest (the
    rear view, the video mode, network play's) is not yet */
 static void game_command(int c)
@@ -1070,7 +1308,7 @@ void Input_Poll(void)
     int c = Input_GameKey(k);
     if (c) game_command(c);
     /* network play without a vehicle stops here (0x461900) */
-    /* the cockpit's views and sounds (0x481c10) are not ported yet */
+    Cockpit_Views();   /* 0x481c10 */
     User_Controls();
     g_input_main = 0;
 }
@@ -1083,6 +1321,9 @@ static float target_wait;                                   /* 0x4e9358 */
 void User_ControlsReset(void)
 {
     ramp_up = ramp_down = ramp_right = ramp_left = 0;
+    dash_yaw = last_mode = 0;   /* and the cockpit's views' (the wind's handle 0x4e923c, not freed) */
+    wind = NULL;
+    glance = 2;
 }
 
 /* a key's ramp: the step added, at most 3 (compared before the store) */

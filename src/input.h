@@ -57,7 +57,10 @@ int Input_MenuPoll(void);
 void Input_Poll(void);
 /* the command bound to a typed key (0x4806a0), 0 for none */
 int Input_GameKey(int16_t key);
-/* User_ControlsReset 0x481be0: the key ramps' timers at 0 */
+/* Cockpit_Views 0x481c10: the pilot's and the dashboard's views' glances (their keys), the windows and the
+   wind outside (docs/re/input.md "The cockpit's views") */
+void Cockpit_Views(void);
+/* User_ControlsReset 0x481be0: the key ramps' timers at 0, the cockpit's views' state (glance 2, ahead) */
 void User_ControlsReset(void);
 /* User_Controls 0x481d00: the actions into the user's vehicle's data: the throttle (+0xe4) and the
    steering (+0xe0) from the analog values, or with the keys from ramps over 3 s; the engine (+0xec), the
