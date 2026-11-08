@@ -79,3 +79,26 @@ the last one drawn stays the car (quirk, kept). The list's down arrow goes on un
 alone shows (quirk, kept).
 
 After the mission ShellMain comes back to the map by the record's kind: 4 → 0xc024, 3 → 0xc025.
+
+## The instant melee (mode 0) — surveyed, not ported
+
+The shell's side: the open's mode 0 (background 0x18, 0x100160f0 makes the players' list once: the
+player plus a second drawn from the 53 drivers' names at 0x10060510, "Torque Daisy" on, each with a
+random type's first variant), the players' rows (0x10016240) and the levels' list (0x10016550, "The
+Crater" on, 0x2d bytes each at 0x100605e8, the addon levels after 15), buttons 8 and 9 (one player fewer
+or more, to 8), 7 and 10 (whose car the form shows), 11-13 (the level's list and scroll). The start
+writes `multicar.def` (0x10025b30: the players but the first, 0xeb bytes each from 0x10025820 over the
+player's record), the user's car as `addon\vehscn.vcf`, the game's kind 3, the level's `m0n.msn`
+(0x10060608 + 0x2d i), then 0xc010. After the mission (kind 3) the shell opens 0xc025, the results
+(0x1003bb50: background 0x1c, the rows 0x1003be80 reads, each name, car and three numbers).
+
+The exe's side (port-plan step 12's local part): WinMain's kind 3 sets the melee (0x4072d0(1), read
+by 0x407370). The mission's start then puts the user's car in at a spawn point (0x462820: a random one
+of the mission's, the next one free of every vehicle's radius; 0x462b90: an entity tagged "netwrk" built
+from the .vcf through the class loader 0x485030 and 0x423d30) and loads the opponents
+(Opponents_Load 0x407070: `multicar.def`'s records as `nvcl<n>.vcf` through 0x487d60, each spawned the
+same way; the AI's aggression 0x408f70(3), its attackers 0x40b780(8)). Each vehicle killed counts down
+(0x4073a0, Entity_OnRemove's callback); the last one brings them all back, one aggression level lower
+(to 1) and one attacker more. The user's kills score (Melee_Kill 0x4072e0) and the HUD shows the
+scores (0x463350, "courier"). The mission's spawn points (0x4dc52c of them at 0x5749b0) are not read by
+the port's mission loader yet.
