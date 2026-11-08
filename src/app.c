@@ -383,6 +383,17 @@ bool app_frame(void)
     if (intro_frame()) return true;
     if (!viewer && !play && shell_frame()) return true;
     if (shell_state == 2 && Shell_Result() == 0xff) return false;   /* WinMain's end */
+    if (shell_state == 2 && Shell_Result() == 3 && !viewer) {
+        /* Shell_Load's end: with the game's kind 2-4 the vehicle chosen (0x58d849) as the user's (0x58dcd0);
+           then WinMain's mission (the record's +0x5d): loaded and played */
+        if (g_sh_rec.kind >= 2 && g_sh_rec.kind <= 4) snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
+        char m[128];
+        snprintf(m, sizeof m, "OpenI76: the shell starts %s with %s", g_sh_rec.mission, g_user_vcf);
+        plat_log(m);
+        if (!(viewer = viewer_init(g_sh_rec.mission))) return false;
+        play = play_init();
+        return true;
+    }
     if (play) play_frame();
     else if (viewer) viewer_frame();
     else if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);

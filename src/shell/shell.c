@@ -3,6 +3,7 @@
 #include "shell/screen.h"
 #include "platform.h"
 #include "sound.h"
+#include "cd.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@ int g_sh_popup;
 int g_sh_popup_item;
 uint32_t g_sh_screen_msg;
 int g_sh_mode;
+ShellRecords g_sh_rec;
 
 static ShScreenFn screen_fn;   /* 0x10063784 */
 static int active = 1;         /* 0x1005c8d8: WM_ACTIVATEAPP's */
@@ -116,6 +118,28 @@ static bool popup(void)
     }
 }
 
+/* 0x1000fc80: the box asking for the disc (entry 0x24's frame, Retry and Cancel), waited on; not ported:
+   the message logged and Cancel taken */
+static int insert_disc(void)
+{
+    Cd_Disc2(1);
+    return 0;
+}
+
+/* i76shell 0x10001680, TRAINING: the trip's record new (the mission 1 of a trip, none played), the
+   training's car vppa01.vcf loaded through the exe (+0x14, then +0) and written as the user's
+   (addon\vehscn.vcf, 0x1001d6a0/0x1001de30), the trip's number 1, the mission a01.msn (0x1005c444), the
+   game record from the trip's with vehscn.vcf (0x1005c44c) as the user's vehicle. The port keeps the
+   records; the car's file round trip (the exe's vcf reader and the shell's writer) is not ported, the
+   car taken as vppa01.vcf (0x1005c410) itself, which training writes back unchanged */
+void Training_Start(void)
+{
+    g_sh_rec.trip = 1;
+    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", "a01.msn");
+    g_sh_rec.kind = 0;
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", "vppa01.vcf");
+}
+
 static void message(uint32_t msg, uint32_t wparam)
 {
     (void)wparam;
@@ -128,7 +152,16 @@ static void message(uint32_t msg, uint32_t wparam)
         g_sh_screen_msg = msg;
         MainMenu_Open();
         return;
-    case 0xc008: case 0xc00d: case 0xc00f: case 0xc010: case 0xc015: case 0xc017: case 0xc01c: case 0xc01d:
+    case 0xc010:   /* the mission: a trip's or training's needs disc 2 in the drive (the exe's +0x44) */
+        if (g_sh_mode < 2)
+            while (!Cd_Disc2(0))
+                if (!insert_disc()) {
+                    Shell_Post(0xc00e, 0xc010);
+                    return;
+                }
+        Shell_Quit(0xc001);
+        return;
+    case 0xc008: case 0xc00d: case 0xc00f: case 0xc015: case 0xc017: case 0xc01c: case 0xc01d:
     case 0xc01e: case 0xc01f: case 0xc020: case 0xc021: case 0xc022: case 0xc024: case 0xc025: case 0xc026:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
@@ -172,8 +205,13 @@ bool Shell_Pass(void)
     if (result >= 0) return false;
     Sound_Frame(0);
     if (quit) {
-        /* ShellMain's end: 0xc001 a mission to play (3), else 0xff */
-        result = quit_code == 0xc001 ? 3 : 0xff;
+        /* ShellMain's end: 0xc001 a mission to play (3; a trip's next t%02d.msn, the game's kind 0 or 1
+           made 2), else 0xff (0x1002a6d0) */
+        if (quit_code == 0xc001) {
+            if (g_sh_rec.kind == 0 || g_sh_rec.kind == 1) g_sh_rec.kind = 2;
+            result = 3;
+        } else
+            result = 0xff;
         return false;
     }
     if (q_count) {

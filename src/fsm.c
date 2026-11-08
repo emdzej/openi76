@@ -1,5 +1,6 @@
 /* The mission's script (fsm.h, docs/re/fsm.md). */
 #include "fsm.h"
+#include "cd.h"
 #include "movie.h"
 #include "sound.h"
 #include "radio.h"
@@ -263,7 +264,7 @@ bool Movie_Exists(const char *name, int local_too)
 {
     if (!name || !*name) return false;
     char path[300];
-    snprintf(path, sizeof path, "%s%s", exe_str(0x4dafc0) + 2, name);   /* the disc's "\cutscene\" */
+    snprintf(path, sizeof path, "%s%s%s", Cd_Root(), exe_str(0x4dafc0) + 2, name);   /* the disc's "\cutscene\" */
     if (vfs_exists(path)) return true;
     if (!local_too) return false;
     snprintf(path, sizeof path, "%s%s", exe_str(0x4dafb8), name);       /* "smk\" */

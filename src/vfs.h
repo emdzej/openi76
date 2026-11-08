@@ -72,3 +72,10 @@ typedef struct {
 /* Mounts the ISO 9660 file system of an image. sector_hint: 2048, 2352 or 0 = detect. On failure
    returns false (the source is closed) and nothing new is mounted. */
 bool vfs_mount_image(const VfsSource *src, int sector_hint, const char *desc);
+
+/* The CD drive: a disc image in a slot of its own, beside the game's mount, the way the original finds
+   its second disc by the volume label. Paths starting "CD:" open from it. */
+bool vfs_drive_mount_image(const VfsSource *src, int sector_hint, const char *desc);
+void vfs_drive_unmount(void);
+const char *vfs_drive_label(void);      /* NULL with the drive empty */
+const char *vfs_drive_describe(void);

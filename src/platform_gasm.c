@@ -366,6 +366,22 @@ static int64_t image_read_at(void *ctx, uint64_t off, void *dst, size_t len)
 
 static void image_close(void *ctx) { free(ctx); }
 
+/* The CD drive: disc 2 as asset cd2 (gasm-run --asset cd2=I76_CD2.ISO), the disc the game plays with */
+static void mount_drive(void)
+{
+    int64_t size = gasm_asset_size64("cd2", 3);
+    if (size < 0) return;
+    ImageAsset *a = calloc(1, sizeof *a);
+    if (!a) return;
+    snprintf(a->name, sizeof a->name, "cd2");
+    VfsSource src = {a, (uint64_t)size, image_read_at, image_close};
+    if (vfs_drive_mount_image(&src, 0, "asset cd2")) {
+        char m[600];
+        snprintf(m, sizeof m, "OpenI76: in the CD drive: %s, %s", vfs_drive_label(), vfs_drive_describe());
+        plat_log(m);
+    }
+}
+
 static bool mount_game(void)
 {
     static const char *const images[] = {"cd", "cd1", "iso"};
@@ -430,6 +446,7 @@ GASM_EXPORT("gasm_init") int32_t i76_gasm_init(void)
     char m[640];
     snprintf(m, sizeof m, "OpenI76: game data from %s", vfs_describe());
     plat_log(m);
+    mount_drive();
     if (!app_init()) return 1;
     running = true;
     return 0;

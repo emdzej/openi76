@@ -28,6 +28,19 @@ extern int g_sh_popup_item;    /* 0x1008ea10 */
 extern uint32_t g_sh_screen_msg; /* 0x1008e9e8: the message that opened the screen */
 extern int g_sh_mode;          /* 0x1008e9fc: the melee's or trip's kind the screens pass on */
 
+/* the exe's records ShellMain is given (its arguments 7, 10, 12): the trip's mission number
+   (0x4a80dc), the mission record (WinMain's, +0x5d its file), the game record (0x58d820: +0x20 the
+   kind of game, +0x29 the user's vehicle file) */
+typedef struct {
+    int32_t trip;              /* 0x4a80dc */
+    char mission[64];          /* the mission record's +0x5d */
+    int32_t kind;              /* 0x58d840: 2 a trip's or training's, 3, 4, 5 network play */
+    char vehicle[32];          /* 0x58d849 */
+} ShellRecords;
+extern ShellRecords g_sh_rec;
+
+void Training_Start(void);       /* i76shell 0x10001680 */
+
 /* ShellMain's set-up: prev_state the exe's state (0x4a80f4; 5 after the intro); false if the database
    cannot be opened */
 bool Shell_Start(int prev_state);

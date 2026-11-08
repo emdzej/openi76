@@ -238,6 +238,11 @@ In the core, the CD source abstraction plays in this order:
 MP3/AAC are for users who already have rips. In the browser they could
 decode through `gasm:media` instead of the core.
 
+**Done: the data track.** The port has a CD drive (src/vfs.c, the drive slot; `CD:` paths open from it).
+The gasm runner mounts its asset `cd2` there (`--asset cd2=I76_CD2.ISO`). The exe's disc-2 check
+(0x484d10, src/cd.c) asks the drive for the label and the probe movie, as the original asks Windows' CD
+drives; the movies are read from `CD:CUTSCENE/`. The music is still to come.
+
 ## Open questions
 
 - `DATABASE.MW2` and `CDROM.SPD`: what they are and who opens them.

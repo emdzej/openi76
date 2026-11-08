@@ -1,6 +1,7 @@
 /* movie.h: the movies, as the exe plays them full screen (its DirectDraw path; the windowed one, through a
    SmackBuffer and its blits, is not the port's) */
 #include "movie.h"
+#include "cd.h"
 #include "clock.h"
 #include "dsound.h"
 #include "platform.h"
@@ -100,7 +101,7 @@ bool Movie_Play(const char *name)
     if (smk) return false;
     Ds_SetPrimary(0x5622, 8, 2);   /* 0x477ff0 */
     char path[96];
-    snprintf(path, sizeof path, "CUTSCENE/%s", name);
+    snprintf(path, sizeof path, "%sCUTSCENE/%s", Cd_Root(), name);
     if (!(smk = Smk_Open(path))) {
         char m[200];
         snprintf(m, sizeof m, "OpenI76: the movie %s cannot be opened", path);

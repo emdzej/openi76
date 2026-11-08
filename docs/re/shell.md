@@ -113,6 +113,14 @@ The menus' and screens' meanings are to be found as each is ported.
   A click on no button shuts the panels, as the original does (frame 0x1d for buttons 3 and 5 kept).
 - **The app** runs the shell after the movies. ShellMain's 0xff result ends the game. `--param shell=0`
   (the port's) shows the loading screen instead.
+- **The mission's start** (0xc010). TRAINING's set-up (0x10001680) records the trip's first mission,
+  a01.msn, and the car vppa01.vcf. In a trip or training (mode below 2), 0xc010 first asks the exe for disc
+  2 (its function +0x44, 0x484d10: the drive's label `I76_CD2`, then `int12f01.smk` on it). While the disc
+  is missing it opens the insert-disc dialog (0x1000fc80; stubbed: the port logs and cancels, back to the
+  main menu). Then it quits with 0xc001. ShellMain's end makes the game's kind 0 or 1 into 2 and returns 3.
+  Shell_Load copies the car's file into the exe's (0x58d849 to 0x58dcd0), and the app loads the mission
+  and plays it. The original writes the car out as `addon\vehscn.vcf` for the exe to read back; the port
+  hands over the name.
 - **Checked:** the main menu's first frame is identical to a Python render of the formats. Scripted
   pointer input lights TRIP, opens its panel and shows a label under the mouse.
 - gasm's headless pointer (`PTR(x,y)`) is in drawable pixels: 1280 × 720 with the frame scaled by 1.5
@@ -123,9 +131,6 @@ The menus' and screens' meanings are to be found as each is ported.
 
 ## What comes next
 
-- The training trip's set-up (0x10001680) and the mission's start (0xc010): the exe's CD check (+0x44, the
-  second disc's `int12f01.smk`), ShellMain's 0xc001 end, and Shell_Load's mission name (0x58d849 to
-  0x58dcd0), into WinMain's mission.
+- The mission's end back into the shell (WinMain's states, the salvage file, the trip's state).
 - The fonts (entries 0x42, 0x44-0x47) and the text drawing (0x1003e200), which most screens need.
-- The exe's side around the shell: the function table, and WinMain's states (the mission's movie
-  0x58dc90, the salvage file, the trip's state).
+- NEW TRIP (0xc022), the melee's screens, the options and the bookmarks.

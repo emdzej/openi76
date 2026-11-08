@@ -237,7 +237,10 @@ static uint32_t choose(ShButton *b)
         reset();
         break;
     case 0xb: g_sh_mode = -1; return 0xc022;
-    case 0xc: g_sh_mode = -1; return 0xc010;   /* 0x10001680 first (the new trip's set-up: not ported yet) */
+    case 0xc:   /* TRAINING */
+        g_sh_mode = -1;
+        Training_Start();
+        return 0xc010;
     case 0xd:   /* TRIP */
         open |= 0x10000000;
         b_e588.on = 1;

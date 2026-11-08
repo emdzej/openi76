@@ -40,5 +40,6 @@
 10010fb0	MenuSet_Load	mainmenu	high	entry 0x3e; ported
 100111f0	MenuSet_Free	mainmenu	high	ported
 100336d0	Click_Play	mainmenu	high	a wave played through the exe and waited out; ported as a wait across passes
-10001680	Training_Start	trip	high	the training trip's set-up before 0xc010
+10001680	Training_Start	trip	high	the training trip's set-up before 0xc010: a01.msn, vppa01.vcf; ported
 1002b090	Net_Poll	net	medium	anet's dpReceive each pass
+1000fc80	InsertDisc	shell	medium	the dialog that asks for disc 2 (Retry, Cancel); stubbed: the port logs and cancels

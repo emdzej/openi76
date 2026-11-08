@@ -1250,3 +1250,4 @@
 0044f7d0	Play_SetState	clock	high	the play's state set, or 1 when it is that already; ported
 0044fc00	Pause_Toggle	clock	high	the pause on and off (the state 2), the movie's or the game's sounds; ported
 0044fab0	Play_StoppedKeys	clock	medium	WinMain's pass with the play stopped: the pause's, map's and notepad's keys, the menu
+00484d10	Cd_Disc2	files	high	the disc-2 check: the CD drive's label I76_CD2, then int12f01.smk on it; ported (src/cd.c)

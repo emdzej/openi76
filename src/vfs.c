@@ -6,11 +6,16 @@
 #include <string.h>
 #include <strings.h>
 
-struct VfsFile { void *h; uint64_t size; };
+struct VfsFile { void *h; uint64_t size; const VfsBackend *b; };
 
 static VfsBackend mnt;
 static bool mounted;
 static char mnt_desc[512];
+
+/* the CD drive: a second image the game finds by its volume label ("CD:/" paths) */
+static VfsBackend drv;
+static bool drv_on;
+static char drv_desc[512], drv_label[33], last_label[33];
 
 void vfs_unmount(void)
 {
@@ -68,17 +73,25 @@ static void normalize(const char *rel, char *out, size_t cap)
 
 VfsFile *vfs_open(const char *rel)
 {
-    if (!mounted || !rel) return NULL;
+    if (!rel) return NULL;
+    const VfsBackend *b = &mnt;
+    if (!strncasecmp(rel, "CD:", 3)) {
+        if (!drv_on) return NULL;
+        b = &drv;
+        rel += 3;
+    } else if (!mounted)
+        return NULL;
     char norm[1024];
     normalize(rel, norm, sizeof norm);
     rel = norm;
     uint64_t size = 0;
-    void *h = mnt.open(mnt.ctx, rel, &size);
+    void *h = b->open(b->ctx, rel, &size);
     if (!h) return NULL;
     VfsFile *f = malloc(sizeof *f);
-    if (!f) { mnt.close(mnt.ctx, h); return NULL; }
+    if (!f) { b->close(b->ctx, h); return NULL; }
     f->h = h;
     f->size = size;
+    f->b = b;
     return f;
 }
 
@@ -89,15 +102,42 @@ int64_t vfs_read_at(VfsFile *f, uint64_t off, void *dst, size_t len)
     if (!f) return -1;
     if (off >= f->size || !len) return 0;
     if (len > f->size - off) len = (size_t)(f->size - off);
-    return mnt.read_at(mnt.ctx, f->h, off, dst, len);
+    return f->b->read_at(f->b->ctx, f->h, off, dst, len);
 }
 
 void vfs_close(VfsFile *f)
 {
     if (!f) return;
-    if (mounted) mnt.close(mnt.ctx, f->h);
+    if (f->b == &drv ? drv_on : mounted) f->b->close(f->b->ctx, f->h);
     free(f);
 }
+
+bool vfs_drive_mount_image(const VfsSource *src, int sector_hint, const char *desc)
+{
+    VfsBackend keep;
+    char kdesc[512];
+    bool had = vfs_detach(&keep, kdesc, sizeof kdesc);
+    bool ok = vfs_mount_image(src, sector_hint, desc);
+    if (ok) {
+        vfs_drive_unmount();
+        vfs_detach(&drv, drv_desc, sizeof drv_desc);
+        drv_on = true;
+        memcpy(drv_label, last_label, sizeof drv_label);
+    }
+    if (had) vfs_mount(&keep, kdesc);
+    return ok;
+}
+
+void vfs_drive_unmount(void)
+{
+    if (drv_on && drv.unmount) drv.unmount(drv.ctx);
+    memset(&drv, 0, sizeof drv);
+    drv_on = false;
+    drv_desc[0] = drv_label[0] = 0;
+}
+
+const char *vfs_drive_label(void) { return drv_on ? drv_label : NULL; }
+const char *vfs_drive_describe(void) { return drv_desc; }
 
 int64_t vfs_size(const char *rel)
 {
@@ -356,6 +396,13 @@ bool vfs_mount_image(const VfsSource *src, int sector_hint, const char *desc)
             iso->joliet = true;
             break;
         }
+    /* the volume label: the primary descriptor's 32 characters at +40, its trailing spaces dropped */
+    uint8_t pd[2048];
+    if (iso_pvd(iso, pd)) {
+        memcpy(last_label, pd + 40, 32);
+        last_label[32] = 0;
+        for (int k = 31; k >= 0 && last_label[k] == ' '; k--) last_label[k] = 0;
+    }
     const uint8_t *root = pvd + 156;                          /* root directory record */
     IsoEntry r = { .name = "", .parent = -1, .dir = true, .lba = rd32le(root + 2), .size = rd32le(root + 10) };
     if (!iso_add(iso, &r)) { iso_unmount(iso); return false; }
