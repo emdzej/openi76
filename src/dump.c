@@ -1650,6 +1650,40 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 72: {   /* the mortar's elevation (0x45ddb0, 0x433730) from n's first weapon's muzzle at 60 m/s: the
+                        angle for each of the first three other vehicles (and at 250 m/s), then the muzzle's frame pitched for the
+                        first (and for none) */
+            WeaponInst *w = NULL;
+            for (int i = 0; i < g_weapon_count && !w; i++)
+                if (g_weapons[i].hp && g_weapons[i].hp->vehicle == n && g_weapons[i].muzzle && g_weapons[i].muzzle->data)
+                    w = &g_weapons[i];
+            if (!w) break;
+            Node *t[3] = {0};
+            int nt = 0;
+            for (int i = 0; i < g_entity_count && nt < 3; i++) {
+                Node *o = g_entities[i].node;
+                if (o && o != n && o->cls == 1) t[nt++] = o;
+            }
+            float v = 60.0f;
+            int32_t vb;
+            memcpy(&vb, &v, 4);
+            for (int k = 0; k < nt; k++)
+                for (int j = 0; j < 2; j++) {
+                    g_fpu_round = FPU_DOWN;
+                    float a = Mortar_Angle(n, t[k], w->muzzle, j ? 250.0f : v);
+                    call_line(&a, 4);
+                }
+            for (int k = 0; k < 2; k++) {
+                g_fpu_round = FPU_DOWN;
+                Mortar_Elevation(n, w->muzzle, k ? NULL : t[0], vb);
+                uint8_t b[0x24 + 24];
+                memcpy(b, w->muzzle->frame.m, 0x24);
+                memcpy(b + 0x24, w->muzzle->frame.pos, 24);
+                call_line(b, sizeof b);
+            }
+            memcpy(&w->muzzle->frame, w->muzzle->data, sizeof w->muzzle->frame);
+            break;
+        }
         case 71: {   /* the shots dodged (0x4163d0): n given the velocity (3, 0.5, 7); a still shot of the first kind
                         dodged (12, 14-17, 19) at six places about n, in turn the kind's node's child and its
                         second list's; each time the answer, *slow, *factor and *t */

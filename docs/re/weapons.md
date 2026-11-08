@@ -154,6 +154,34 @@ words it uses:
 Checked: `diff_objects --call trigger` (each vehicle's triggers pulled before three ticks of 0.06, 0.2
 and 0.015 s, the firings logged, every instance's words after each) on t01 and s04.
 
+## The mortar (0x433730, 0x45ddb0; ported, diffed)
+
+A shot of a type 3 weapon of kind 3 and index 3 first pitches the muzzle for its target (0x433730). The
+vehicle, the muzzle and the speed (the def's v[5], its bits but the sign not 0) must be there.
+1. The muzzle's frame is reset from its data (the frame at rest).
+2. It is turned up about x (Frame_Pitch 0x451880, by minus the angle, inside the frame at rest). The
+   angle is 14 degrees (0.2443461) without a target, else 0x45ddb0's.
+
+**The angle (0x45ddb0)** for target t at speed v:
+- The muzzle's world frame (0x42e6d0) gives the start p (its place), the forward f (its z row) and the
+  axis a (its x row).
+- The target's aim point (0x45d710) and its velocity (0x425be0) are read. The vehicle's own velocity is
+  read too, then cleared and never used.
+- **The turn (0x45e350, inlined once).** f is turned about a by about the angle: b = a × angle / 2, then
+  `(2 / (b . b + 1)) ((f . b) b + f × b + f) − f`. The result times v is the start velocity.
+- **The flight (0x45dbc0).** It steps by the frame's step (0x4db12c) under (0, −39.2, 0), each step's
+  position taking half the step's change of velocity, until the ground (Terrain_Height, 0 off the grid)
+  is no longer below it. Its time and its place (0.1 above the ground) come out. The height query leaves
+  the FPU rounding down for the rest.
+- First at 45 degrees (0x4a6308 × 2). If the shot does not carry beyond where the target will be by then
+  (in x and z, by its velocity), the answer is 45 degrees (0x4a630c).
+- Otherwise each of 120 angles from 0 by 0.0065 rad is flown, the last first. The answer is the one that
+  lands nearest (in three dimensions) the target's place at its time.
+
+Checked: `diff_objects --call mortar` on t01, s01 and t12. The muzzle is each vehicle's first weapon's.
+The targets are three other vehicles, at 60 and at 250 m/s. It compares the angles and the muzzle's frame
+pitched for a target and for none. The shot checks run the original's 0x433730 too.
+
 ## A shot (0x458710)
 
 For n shots of an instance, late s into the frame:

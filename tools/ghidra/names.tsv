@@ -1454,3 +1454,7 @@
 004163d0	AI_ShotsAhead	ai	high	the dodged kinds' live shots (12, 14-17, 19), taken as still (0x4a9360 never written), the vehicle within 5 m within 3 s; ported, diffed
 00454940	Muzzle_Flash	effects	high	the weapon's flash shown, lit, its textures run once; a freed weapon's record dropped (only unlinked at the head: quirk); ported, diffed
 00454a60	Muzzle_FlashEnd	effects	high	the flash's animation done: light out, hidden, idle; ported
+00433730	Mortar_Elevation	weapons	high	a type 3 mortar's muzzle at rest pitched up by the range's angle (14 degrees without a target); ported, diffed
+0045ddb0	Mortar_Angle	weapons	high	the elevation landing nearest the target: 45 degrees beyond reach, else the best of 120; ported, diffed
+0045dbc0	Mortar_Fall	weapons	high	a shot flown by the frame's step under -39.2 until the ground; its time and place; ported
+0045e350	Mortar_Turn	weapons	high	a vector turned about an axis by about an angle (b = a angle / 2, a Cayley rotation); ported

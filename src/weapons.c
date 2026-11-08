@@ -14,6 +14,7 @@
 #include "ai.h"
 #include <stdlib.h>
 #include "texanim.h"
+#include "terrain.h"
 #include "tex.h"
 #include "physics.h"
 #include "damage.h"
@@ -33,6 +34,7 @@
 
 #define ADD fpu_add
 #define SUB fpu_sub
+#define DIV fpu_div
 #define MUL fpu_mul
 #define F32 fpu_f32
 
@@ -1050,8 +1052,102 @@ static void shot_sound(const char *name, Node *at, int held)
     if (held) Sound_PlayHeld(name, at, NULL);
     else Sound_PlayAt(name, at, NULL);
 }
-/* 0x433730: a type 3 mortar's muzzle raised for its target's range (0x45ddb0); not ported yet */
-static void mortar_elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v) { (void)vehicle, (void)muzzle, (void)target, (void)v; }
+/* 0x45dbc0: a shot from p at v under gravity (0, -39.2, 0), stepped by the frame's step (0x450e50) until it is
+   no longer above the ground (0 off the grid); its time, its place (on the ground, 0.1 above) and velocity */
+static void mortar_fall(const float p[3], const float v[3], float *time, float at[3], float vel[3])
+{
+    *time = 0;
+    float dt = g_clock_dt;
+    for (int i = 0; i < 3; i++) at[i] = p[i], vel[i] = v[i];
+    float g = exe_f32(0x4a62dc), dvy = F32(MUL(dt, g)), dvz = F32(MUL(dt, 0.0f));
+    float hy = F32(MUL(dvy, exe_f32(0x4a62e0))), hz = F32(MUL(dvz, exe_f32(0x4a62e0)));   /* 0.5 */
+    float ground;
+    do {
+        at[0] = F32(ADD(MUL(dt, vel[0]), at[0]));
+        at[1] = F32(ADD(MUL(ADD(vel[1], hy), dt), at[1]));
+        at[2] = F32(ADD(MUL(ADD(vel[2], hz), dt), at[2]));
+        vel[1] = F32(ADD(dvy, vel[1]));
+        vel[2] = F32(ADD(dvz, vel[2]));
+        *time = F32(ADD(*time, dt));
+        ground = Terrain_Inside(at[0], at[2]) ? F32(Terrain_Height(at[0], at[2])) : 0.0f;   /* 0x48e210, 0x491f00 */
+    } while (ground < at[1]);
+    at[1] = F32(ADD(ground, exe_f32(0x4a62e4)));
+}
+
+/* 0x45e350 (and inlined in 0x45ddb0): f turned about the axis a by about angle: b = a angle / 2, then
+   (2 / (b . b + 1)) ((f . b) b + f x b + f) - f */
+static void mortar_turn(float out[3], const float f[3], const float a[3], float angle)
+{
+    float h = F32(MUL(angle, exe_f32(0x4a62e0)));
+    float bx = F32(MUL(a[0], h)), by = F32(MUL(a[1], h)), bz = F32(MUL(h, a[2]));
+    float s = F32(DIV(exe_f32(0x4a62fc), ADD(ADD(ADD(MUL(bx, bx), MUL(by, by)), MUL(bz, bz)), exe_f32(0x4a62f8))));
+    float dot = F32(ADD(ADD(MUL(bx, f[0]), MUL(f[1], by)), MUL(f[2], bz)));
+    out[0] = F32(SUB(MUL(ADD(ADD(MUL(dot, bx), SUB(MUL(f[1], bz), MUL(f[2], by))), f[0]), s), f[0]));
+    out[1] = F32(SUB(MUL(ADD(ADD(MUL(f[2], bx), SUB(MUL(dot, by), MUL(bz, f[0]))), f[1]), s), f[1]));
+    out[2] = F32(SUB(MUL(ADD(ADD(MUL(by, f[0]), SUB(MUL(bz, dot), MUL(f[1], bx))), f[2]), s), f[2]));
+}
+
+/* 0x45ddb0: the mortar's elevation for target t at speed v. The muzzle's world frame gives the start (its
+   place), the forward (its z row) and the axis (its x row). At the base angle (0x4a6308 x 2, 45 degrees)
+   the shot falls short of where the target will be by its time of flight (its velocity's x and z): 45
+   degrees (0x4a630c). Otherwise each of 120 angles from 0 by 0.0065 rad, the last first, is flown and the
+   one landing nearest the target's place at its time (by its velocity) is taken. The vehicle's own
+   velocity is read and then cleared (unused) */
+float Mortar_Angle(Node *vehicle, Node *t, Node *muzzle, float v)
+{
+    float table[120];
+    float a0 = 0;
+    for (int i = 0; i < 120; i++) {
+        table[i] = a0;
+        a0 = F32(ADD(a0, exe_f32(0x4a6300)));
+    }
+    Frame mf;
+    Node_FrameIn(&mf, muzzle, NULL);   /* 0x42e6d0 */
+    float p[3] = {F32(mf.pos[0]), F32(mf.pos[1]), F32(mf.pos[2])};
+    float f[3] = {mf.m[6], mf.m[7], mf.m[8]}, ax[3] = {mf.m[0], mf.m[1], mf.m[2]};
+    float tp[3], tv[3], vv[3], sp;
+    Shot_Target(tp, t);                 /* 0x45d710 */
+    Class_Velocity(vehicle, vv, &sp);   /* 0x425be0 */
+    Class_Velocity(t, tv, &sp);
+    float v0[3], dir[3];
+    mortar_turn(dir, f, ax, F32(MUL(exe_f32(0x4a6308), 2.0f)));
+    for (int i = 0; i < 3; i++) v0[i] = F32(MUL(dir[i], v));
+    float time, at[3], vel[3];
+    mortar_fall(p, v0, &time, at, vel);
+    float rx = F32(SUB(at[0], p[0])), rz = F32(SUB(at[2], p[2]));
+    float qx = F32(SUB(ADD(MUL(time, tv[0]), tp[0]), p[0])), qz = F32(SUB(ADD(MUL(time, tv[2]), tp[2]), p[2]));
+    float reach = F32(fpu_sqrt(ADD(MUL(qx, qx), MUL(qz, qz))));
+    if (!(fpu_sqrt(ADD(MUL(rx, rx), MUL(rz, rz))) > reach)) return exe_f32(0x4a630c);
+    float best = exe_f32(0x4a6304), best_a = 0;
+    for (int i = 119; i >= 0; i--) {
+        mortar_turn(dir, f, ax, table[i]);
+        for (int k = 0; k < 3; k++) v0[k] = F32(MUL(dir[k], v));
+        mortar_fall(p, v0, &time, at, vel);
+        float d[3];
+        for (int k = 0; k < 3; k++) {   /* 0x414d50: the target at the time */
+            float q = F32(ADD(MUL(tv[k], time), tp[k]));
+            d[k] = F32(SUB(at[k], q));
+        }
+        float dist = F32(fpu_sqrt(ADD(ADD(MUL(d[0], d[0]), MUL(d[1], d[1])), MUL(d[2], d[2]))));   /* 0x4169e0 */
+        if (dist < best) best = dist, best_a = table[i];
+    }
+    return best_a;
+}
+
+/* 0x433730: a type 3 mortar's muzzle (whose data keeps its frame at rest) pitched up by the angle for its
+   target's range (0x45ddb0), 14 degrees without a target; nothing without the vehicle, the muzzle or a speed */
+void Mortar_Elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v)
+{
+    if (!muzzle || !vehicle || !(v & 0x7fffffff)) return;
+    float speed;
+    memcpy(&speed, &v, 4);
+    memcpy(&muzzle->frame, muzzle->data, sizeof muzzle->frame);
+    float a = target ? Mortar_Angle(vehicle, target, muzzle, speed) : 0.2443461f;   /* 0x3e7a3682 */
+    Frame pitch, out;
+    Frame_Pitch(&pitch, -a);
+    Frame_Mul(&out, &pitch, &muzzle->frame);
+    muzzle->frame = out;
+}
 
 /* 0x46add0: the two nodes' z axes in the world alike or opposite, beyond 0.84 */
 int Nodes_AxesAlike(Node *a, Node *b)
@@ -1135,7 +1231,7 @@ void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late)
     default: l.target = Radar_Current(vehicle); break;   /* 0x421ba0 */
     }
     /* 0x4098e0 with types 3 and 8 and a target: a no-op */
-    if (d->kind == 3 && d->index == 3) mortar_elevation(vehicle, w->muzzle, l.target, d->v[5]);
+    if (d->kind == 3 && d->index == 3) Mortar_Elevation(vehicle, w->muzzle, l.target, d->v[5]);
     l.w28 = d->v[9];
     Class_Velocity(vehicle, l.v, &l.speed);
     if (n > 0) {

@@ -777,7 +777,7 @@ def call_shot(exe, n, fpcw):
         CALL_OUT.append(struct.pack("<14I", *out).hex())
 
     if not SHOT:
-        for a, k in ((0x4685D0, 3), (0x433730, 4)):
+        for a, k in ((0x4685D0, 3),):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x458F40, launch, 2)
     cnt = struct.unpack("<i", exe.read(0x570A64, 4))[0]
@@ -812,7 +812,7 @@ def call_launch(exe, n, fpcw):
         return 1
 
     if not LAUNCH:
-        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2)):
+        for a, k in ((0x4685D0, 3), (0x46EF60, 2), (0x46C220, 2)):
             exe.stub(a, lambda *x: 0, k)
         exe.stub(0x459B50, fly, 2)
     LAUNCH["n"] = n
@@ -835,7 +835,7 @@ def call_fly(exe, n, fpcw):
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
         # the launch's effects as in call_launch and the hit's sound
-        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x4685D0, 3), (0x46EF60, 2), (0x46C220, 2),
                      (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1
@@ -959,7 +959,7 @@ def call_missile(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     rd = (fpcw & ~0xC00) | 0x400
     if not FLY:
-        for a, k in ((0x4685D0, 3), (0x433730, 4), (0x46EF60, 2), (0x46C220, 2),
+        for a, k in ((0x4685D0, 3), (0x46EF60, 2), (0x46C220, 2),
                      (0x468640, 3), (0x46F170, 1)):
             exe.stub(a, lambda *x: 0, k)
         FLY["on"] = 1
@@ -2062,8 +2062,43 @@ def call_dodge(exe, n, fpcw):
         CALL_OUT.append((struct.pack("<i", r) + exe.read(out + 4, 12)).hex())
 
 
+MORTAR = []
+
+
+def call_mortar(exe, n, fpcw):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not MORTAR:   # 0x45ddb0's st0 through a stub that stores it as a float
+        out = exe.put(bytes(8))
+        stub = x86.STUBS + 0xA00
+        code = b"\xff\x74\x24\x10" * 4 + b"\xe8" + struct.pack("<i", 0x45DDB0 - (stub + 21)) + b"\x83\xc4\x10" \
+            + b"\xd9\x1d" + struct.pack("<I", out) + b"\xc3"
+        exe.write(stub, code)
+        MORTAR[:] = [stub, out]
+    w = next((0x55F9C0 + i * 0x50 for i in range(struct.unpack("<i", exe.read(0x570A64, 4))[0])
+              if u(0x55F9C0 + i * 0x50 + 0x10) and u(u(0x55F9C0 + i * 0x50 + 0x10)) == n
+              and u(0x55F9C0 + i * 0x50 + 4) and u(u(0x55F9C0 + i * 0x50 + 4) + 0x70)), 0)
+    if not w:
+        return
+    mz = u(w + 4)
+    ts = []
+    for i in range(struct.unpack("<i", exe.read(0x4D3B5C, 4))[0]):
+        o = u(0x547E60 + i * 0x78)
+        if o and o != n and u(o + 0x6C) == 1 and len(ts) < 3:
+            ts.append(o)
+    v = struct.unpack("<I", struct.pack("<f", 60.0))[0]
+    for t in ts:
+        for vv in (v, struct.unpack("<I", struct.pack("<f", 250.0))[0]):
+            exe.call(MORTAR[0], n, t, mz, vv, limit=2_000_000_000, fpcw=rd)
+            CALL_OUT.append(exe.read(MORTAR[1], 4).hex())
+    for k in range(2):
+        exe.call(0x433730, n, mz, 0 if k else ts[0] if ts else 0, v, limit=2_000_000_000, fpcw=rd)
+        CALL_OUT.append((exe.read(mz + 0x18, 0x24) + exe.read(mz + 0x40, 24)).hex())
+    exe.write(mz + 0x18, exe.read(u(mz + 0x70), 0x40))
+
+
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge), "mortar": (72, call_mortar)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None

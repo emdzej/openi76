@@ -159,6 +159,11 @@ int Window_Busy(Node *vehicle, int which);
 /* Turrets_Aim 0x455560: the turrets turned towards the radar's chosen contact and ready (+0x3c, +0x40)
    once on it; the other weapons ready, the fixed guns' muzzles pitched at their kind's target (0x4333f0) */
 void Turrets_Aim(void);
+/* Mortar_Angle 0x45ddb0: the elevation landing a shot at v nearest target t, from the muzzle (docs/re/weapons.md
+   "The mortar") */
+float Mortar_Angle(Node *vehicle, Node *t, Node *muzzle, float v);
+/* Mortar_Elevation 0x433730: the muzzle at rest, pitched up by Mortar_Angle (14 degrees without a target) */
+void Mortar_Elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v);
 extern int32_t g_weapons_linked;   /* 0x4db478 */
 /* Weapons_Frame 0x455d90: the turrets (Turrets_Aim), the user's triggers, group and link from the
    actions, then every instance's timers (Weapons_Tick) and the dashboard (Weapons_DisplayFrame) */
