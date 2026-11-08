@@ -1,7 +1,8 @@
 # The melee's map (0x10013040, its screen 0x100136d0)
 
 Ported for a scenario (mode 1) and the instant melee (mode 0) in `src/shell/map.c`, with the set-up
-from the map (button 5, docs/re/setup.md "From the map"); network play is not.
+from the map (button 5, docs/re/setup.md "From the map"), and network play's modes 2-9 (docs/re/network.md
+"The map's network modes").
 
 The main menu's AUTO MELEE opens two items: SCENARIO (button 9, message 0xc024) and INSTANT MELEE
 (button 4, 0xc021). Both open the same screen, 0x10013040, with the mode 0x1008e9fc set first: 0 for the
@@ -174,9 +175,7 @@ deaths as "%s:\t%d\t%d\t%d". SCORE_TOGGLE (0x27, Ctrl+S by default) shows or hid
   rows + 1, a scrolling one wraps and scrolls a quarter line a frame. WinMain draws them while the play
   runs (state 1, 0x450040) after the world: a box marked changed (or on a new screen width, or past its
   first line's end with flag 1) is drawn again, rows + 1 lines, each with the box's stops, then laid
-  over the screen where it is shown (flag 2). Network play's other boxes and its chat line (0x450ae0)
-  are not ported.
+  over the screen where it is shown (flag 2). Network play's chat line is an edit line drawn after
+  them (0x450ae0, docs/re/network.md).
 
-Not ported yet:
-
-- the network's records (dpGetPlayerData).
+Network play's records (dpGetPlayerData, every player's) are written too (docs/re/network.md).

@@ -1,5 +1,6 @@
 /* shell.h: ShellMain and ShellWindowProc */
 #include "shell/shell.h"
+#include "shell/shnet.h"
 #include "crt.h"
 #include "exe.h"
 #include "files.h"
@@ -564,6 +565,7 @@ bool Shell_Start(int prev_state)
     Scr_Init();
     fonts_load();
     Garage_Reset();        /* 0x10034df0 */
+    Shnet_Leave();         /* 0x1002a660: a network game's session left */
     nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL, note_rect[0] = -1;
     menu_fn = NULL, g_sh_popup_up = 0, g_sh_editing = 0, g_sh_next_msg = 0xc004, kq_r = kq_w = 0;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);

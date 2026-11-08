@@ -136,7 +136,7 @@ The menus' and screens' meanings are to be found as each is ported.
 - gasm's headless pointer (`PTR(x,y)`) is in drawable pixels: 1280 × 720 with the frame scaled by 1.5
   and centred (x + 160).
 - **Not ported yet** (as of the main menu's first port; see "What comes next" below for the rest): the
-  cursors (the runner's is shown), the player's file, and network play.
+  cursors (the runner's is shown) and the player's file. Network play: docs/re/network.md.
 
 - **The way back:** when a mission ends with a state other than 7 or 10, WinMain frees it and calls
   Shell_Load again with that state (docs/re/menus.md). ShellMain opens the main menu after the
@@ -434,4 +434,4 @@ shell runs, in order:
   (CR LF lines) and the next mission drives with Two (throttle 1.00) and no longer with the keypad's 8.
 
 The melee's map (AUTO MELEE's SCENARIO, 0xc024, and INSTANT MELEE, 0xc021) and the instant melee's
-STANDINGS (0xc025): docs/re/map.md. Not ported yet: network play.
+STANDINGS (0xc025): docs/re/map.md; network play's modes of the map: docs/re/network.md.

@@ -64,10 +64,34 @@ the car, flags), the chat ("To %s: ", "From %s: "), the join request ("Let %s jo
 CTRL-N)"). The network's vehicles (0x465c60-0x465dd0): `nvcl%1x.vcf` files written for the others' cars
 ("No open slots for net vehicles"). The spawns (0x462820-0x4631f0, partly ported for the melee).
 
-Elsewhere in the game, network play's branches are marked in the port as not ported: the clock's tick
-(0x461900 checks in src/clock.c), the damage's messages (0x465520), the triggers and messages of the
-weapons (0x4624a0, 0x462580), the helicopters (0x462d50), the vehicles' sounds (0x462d60), the menus'
-replay (state 7), the score's records (dpGetPlayerData in 0x463670).
+Elsewhere in the game the network's branches are ported (src/net/netgame.c and its callers):
+
+- the clock's tick (src/clock.c): no pause, no bound on the step, the joiners' clock set from the keeper's;
+- a structure's index among the destructible objects at its start (0x4654e0, the data's +8) and its end
+  sent as `SC` (0x465520) from the five places a structure goes (0x430750, 0x430900 twice, 0x430e40 twice);
+- the weapons' frame (0x455d90): a damaged weapon below 0.7 of its health misfires at random (a chance of
+  (1 - health) - 0.3, at most 0.5, against rand() over 32767; the trigger lost and a frame's worth of its
+  rate taken from its ammunition), then the triggers (0x4624a0) and, after the tick, the locks (0x462580);
+- the user's death: the killer's credit and the death's line (Vehicle_Damage), its time (0x462d50, also a
+  helicopter's), the wreck's end asking for a new car (0x462d60) instead of hiding it; a gone player's
+  wreck freed (0x4644f0 finds no name), as the melee frees every wreck;
+- the typed keys (0x4809b0): Ctrl-Y, Ctrl-N and the deferral on a join request (the keeper's), the
+  messages' box shown or hidden (0x463e80), the chat line opened for everyone (0x463cb0), the score box,
+  the names over the cars (0x428580), a dead player's new car after the wait (0x462d60 with 1); without a
+  car only the quit keys; no keys and no driving once someone has won or while a car is asked for;
+- the names over the cars (0x428310, Render_World's last in network play): the radar target's, or every
+  targetable car's (the toggle), in the colour of its kind's target corners (the corner's first pixel),
+  above the target box, unless farther than the view's range;
+- the chat line (0x463bd0: an edit line at (50, 360), 0x450430-0x450ae0): the active line takes the
+  typed keys first (Backspace, Enter, Esc; Shift maps a US keyboard's symbols; the arrows fall outside
+  the original's switch and do nothing) and the keyboard device is not polled while it is active; Enter
+  sends `CH` and shows the line as from the user;
+- NSCR.DAT at the end (0x463670): every player's record in the players' table's order (with teams, team
+  by team): the name, the car (key 1's data from +6), the team, its car's +0xa4, the deaths, the kills,
+  the score.
+
+Not ported: the menus' replay (state 7) of a network game, the game's information box of the joiner's
+list (0x1002a4f0, which opens the session to list its players).
 
 ## The shell's side (shnet.cpp, 0x100298b8-0x1002ba60)
 
@@ -96,6 +120,28 @@ and its start (0x100298b8):
   key 2 (0x20 bytes); `dpCreateGroup` with the session's name; an add-on mission (`addon\%s`, "Mission
   file %s not found."); then the record 0x1008f964 that the game reads (0x461990): bit 0 set, bit 2 when
   +0x17c is clear, bit 3 when +0x184 is set, +0x4e the player's name (0x10018490).
+
+### The map's network modes (0x10013040, 0x100136d0; ported in src/shell/map.c)
+
+The four transports of MULTI MELEE: 2/6 a modem, 3/7 IPX, 4/8 the internet, 5/9 a serial cable (host /
+join). In the port every one is the relay; the address books the internet and modem modes open first
+(internet.lst 0x1003f8a0, phone.lst 0x1003f6b0) are left out and the Activenet is opened at once (a
+modem's host still at its start, as the original).
+
+- Host (2-5): background 0x14, 0x13, 0x13, 0x16; the level list (ids 11-13), the player's name (14), the
+  car (3-5) and BROADCAST GAME (6). A modem's or a cable's game is for two. IPX and the internet (3, 4)
+  add the settings (0x10016380): the drivers' count (8, 9, 2 to 8, 4 at first), TEAM PLAY (16, 0x8000),
+  INVITE ONLY (17, 0x4000: the host approves the joins), MAX SCORE (18, 0x2000) and its value (20, 21: 1000
+  a step, 1000 to 100000, 20000 at first), the game's name (22: the level's until one is typed, an empty
+  one the level's again). With teams the teams' box (0x1000ff90) picks the host's team first.
+- Join (6-9): background 0x15, 0x12, 0x12, 0x17; for IPX and the internet the games found (0x10016650:
+  the name, "(players/most)", the info button; "No games found"), redrawn after each merge (0x10018040).
+  JOIN (6) on a game (with teams, the team first) opens the waiting box (0x10010330: frame 0x12, or 0x1f for
+  a modem or a cable, with its Cancel) and sends `RE` until the host answers; the map's buttons are off
+  meanwhile. In, the game's kind 5 starts the mission.
+- **Checked:** two instances over a local relay: the host's form (NET MELEE HOST EVENT FORM, the level
+  list, the settings) broadcasts The Crater; the joiner's list shows it, JOIN gets the host's `JO`, both
+  play m01 with each other's car and the joins' and leaves' lines.
 
 ## The flow of a game
 

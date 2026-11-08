@@ -303,3 +303,18 @@
 10022790	Devices_List	shell	high	the shell's drivers' devices listed (0x78-byte records)
 10022900	Devices_Get	shell	high	the listed device i
 10022930	Devices_Free	shell	high	every listed device closed, the list freed
+10016380	Map_NetSettingsDraw	map	high	a host's settings: name, drivers, the TEAM PLAY / INVITE ONLY / MAX SCORE marks, the score, the game's name
+10016650	Map_GamesDraw	map	high	a joiner's games found from a row: name, (players/most), the info button; "No games found"
+10018040	Map_GamesListed	map	high	the games' list merged: the first row kept in range, the list redrawn
+1000ff90	Teams_Box	map	high	the teams' box: an X by the team, OK keeps it, Cancel -1 (its own loop)
+10010330	Wait_Open	shnet	high	the join's waiting box (frame 0x12, or 0x1f for a modem or a cable) with its shadows
+10010480	Wait_Close	shnet	high	the waiting box restored away, the screen's redraw
+10010f10	Map_InfoButton	map	high	frame 0xe of set 0x24 at (x, y): a listed game's info button
+1002a4f0	Shnet_GameInfo	shnet	med	a listed game's information box: its session opened to list its players (not ported)
+1003f8a0	Map_InternetBook	map	med	the internet's address book (internet.lst) before modes 4 and 8 (not ported: the relay)
+1003f6b0	Map_PhoneBook	map	med	the modem's phone book (phone.lst) before mode 6 (not ported: the relay)
+10018410	Map_SessionName	map	high	the session's name (0x1006c7c0)
+10018440	Map_PlayerName	map	high	the player's name (0x1008a500)
+10018450	Map_CarRecord	map	high	the chosen type's car record
+10018490	Map_CarFile	map	high	"%s%d": the type's name and the variant, the car's file
+100184d0	Map_Team	map	high	the team chosen (0x1006c748)

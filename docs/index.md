@@ -69,7 +69,7 @@ The game runs from your discs or their images: the intro, the shell's menus, the
 the training and the melee's set-up, and every mission's terrain, roads, objects, vehicles and script. In a
 mission the vehicles drive and collide, the AI drives and fights, every weapon flies and hits, and the
 cockpit, the radar, the sounds and the music run. The first four missions of the trip play to a win; the
-others are being played through, and network play is not ported. Details in [Status](/guide/status).
+others are being played through, and network play runs over the gasm relay. Details in [Status](/guide/status).
 
 ## Sibling projects
 

@@ -1,7 +1,7 @@
-/* trip.h: the melee's map (i76shell 0x10013040, its screen 0x100136d0; docs/re/map.md). AUTO MELEE's
-   SCENARIO (mode 1) is ported: the scenarios' list, the car's type and variant from i76car.def, the
-   player's name, the start and the way back. The instant melee (mode 0) and the network's modes (2-9)
-   are not yet. */
+/* trip.h: the melee's map (i76shell 0x10013040, its screen 0x100136d0; docs/re/map.md): the instant
+   melee (mode 0), AUTO MELEE's scenarios (1) and network play's: a host's (2 modem, 3 IPX, 4 the
+   internet, 5 serial: the level, and for 3 and 4 the players, teams, approval and score) and a joiner's
+   (6-9: the games found). */
 #include "shell/trip.h"
 #include "crt.h"
 #include "exe.h"
@@ -10,6 +10,7 @@
 #include "shell/picker.h"
 #include "shell/screen.h"
 #include "shell/shell.h"
+#include "shell/shnet.h"
 #include "vfs.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +61,13 @@ static struct { int id, wait; } hold;   /* a button held (the scroll arrows, the
 static int user_type;                   /* 0x1006c7a0: the instant melee's player's type */
 static int user_sel = 1;                /* 0x1006cbe0: the player (not an opponent) shown */
 static ShList *drivers;                 /* 0x100603a8: the drivers' names not taken */
+static int named;                       /* 0x1008a4d8: the session's name typed (not the level's) */
+static int team;                        /* 0x1006c748: the team chosen */
+static uint32_t net_flags;              /* 0x1006c794: 0x2000 a score to reach, 0x4000 joins approved,
+                                           0x8000 teams */
+static int32_t net_limit = 20000;       /* 0x1006c798 */
+static int net_hosting, net_asking;     /* the port's: a session being made, a join being answered */
+static void (*team_then)(void);         /* the port's: what follows the team's pick */
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static uint8_t *car_rec(int i) { return g_sh_recs + i * SHELL_REC; }
@@ -112,19 +120,23 @@ void Melee_Reset(void)   /* 0x10012d90 */
     types = NULL, ntypes = 0, type_first = 0, victory = NULL;
     nscen = NSCEN_MAX, nlevels = 0xf;
     l_cguns = l_cwheels = l_cspecs = NULL;
+    team = 0;
+    named = 1;
     if (!mel_read()) {
         snprintf(net_name, sizeof net_name, "%s", dll_str(0x10060f50));   /* Unnamed */
         snprintf(name, sizeof name, "%s", dll_str(0x10060f58));
         scen = 0, variant = 1, g_sh_car = 0;
         snprintf(level, sizeof level, "%s", dll_str(0x100605e8));          /* the first level's */
-    }   /* and 0x1008a4d8, whether it was read (the network's levels' name): not kept */
+        named = 0;
+    }
     players[0].variant = variant, players[0].type = g_sh_car;
     nplayers = 0, player_at = 0;   /* the count read is dropped (quirk, kept) */
     type_at = user_type = g_sh_car;
     drivers = NULL;   /* unfreed, as the original */
-    /* not ported: the network's names (0x1006c770 "Unknown", 0x10001030, 0x10001000) and options
-       (0x1006c794, 0x1006c798), the addon levels (addon\*.lvl through the exe's +0x58 into 0x100603a4,
-       counted into 0x100603c4) */
+    net_flags = 0, net_limit = 20000;
+    /* not ported: the Activenet's names (0x1006c770 "Unknown", 0x10001030, 0x10001000: the relay's
+       need none) and the addon levels (addon\*.lvl through the exe's +0x58 into 0x100603a4, counted
+       into 0x100603c4) */
     first = 0, user_sel = 1;
     pic_set = top_set = NULL;   /* 0x10010d20 (with the car picture's sets) */
     Markers_Init(), Setup_Reset();   /* 0x10003c80 */
@@ -259,7 +271,17 @@ static void init(void)
         btn[8][3] = btn[9][3] = 0x120, btn[8][4] = btn[9][4] = 0x12f;
         for (int i = 0; i <= 2; i++) ShList_Remove(buttons, btn[i]);
     }
-    /* the network's modes 2-9 (their buttons moved and taken out): not ported */
+    else if (g_sh_mode > 1) {   /* network play: no scenarios, opponents' rows nor players' count */
+        int out[] = {10, 0, 1, 2, 8, 9};
+        for (size_t i = 0; i < sizeof out / sizeof *out; i++) ShList_Remove(buttons, btn[out[i]]);
+        if (g_sh_mode == 6 || g_sh_mode == 9) ShList_Remove(buttons, btn[12]), ShList_Remove(buttons, btn[13]);
+    }
+    if (g_sh_mode == 3 || g_sh_mode == 4) {   /* the host's settings: the players' count lower, the rest */
+        btn[8][3] = btn[9][3] = 0x152, btn[8][4] = btn[9][4] = 0x161;
+        ShList_Remove(buttons, btn[19]);
+        int in[] = {8, 9, 16, 17, 18, 20, 21, 22};
+        for (size_t i = 0; i < sizeof in / sizeof *in; i++) ShList_Add(buttons, btn[in[i]], NULL);
+    }
     types = read_types(&ntypes);
     if (!types) return;
     for (int i = 0; i < ntypes; i++) load_rec(i, 0x10061018, 1);   /* "%s1.vcf" */
@@ -303,6 +325,52 @@ static void levels_draw(int from)   /* 0x10016550: the chosen level, then six fr
     Scr_Restore(0xb, 0x5c, 0xce, 0xb6);
     text(0x22, 0x6d, level_name(scen));
     for (int i = from, y = 0x95; i < nlevels && i < from + 6; i++, y += row_h()) text(0x22, y, level_name(i));
+}
+
+/* 0x10016380: a host's settings: the player's name, the players' count, the marks of teams (0x8000),
+   approval (0x4000) and a score to reach (0x2000) at their buttons, the score, the session's name */
+static void settings_draw(void)
+{
+    char c[16];
+    Scr_Restore(0x116, 0x3a, 0xaa, 0x12);
+    Scr_Restore(9, 0x12e, 0xcf, 0x7c);
+    Scr_Restore(0xb, 0x130, 0x9f, 0x10);
+    text(0x120, 0x3a, name);
+    snprintf(c, sizeof c, dll_str(0x10061040), nplayers);   /* "%2.2d" */
+    text(0xac, 0x152, c);
+    if (net_flags & 0x8000) text(btn[16][1], btn[16][3], dll_str(0x10061048));   /* "X" */
+    if (net_flags & 0x4000) text(btn[17][1], btn[17][3], dll_str(0x1006104c));
+    if (net_flags & 0x2000) text(btn[18][1], btn[18][3], dll_str(0x10061050));
+    snprintf(c, sizeof c, dll_str(0x10061054), net_limit);   /* "%d" */
+    text(0x7e, 400, c);
+    text(0xb, 0x131, level);
+}
+
+/* 0x10016650: a joiner's games found: the chosen one's name, then six from the first with their players
+   and most ("(%d/%d)") and the info button's picture (0x10010f10: frame 0xe of set 0x24); "No games
+   found" without any */
+static void games_draw(int from)
+{
+    Scr_Restore(0xb, 0x60, 0xce, 0xb4);
+    if (scen >= g_shnet_ngames) scen = 0;
+    if (!g_shnet_ngames) {
+        text(0x22, 0x6d, dll_str(0x10061058));
+        return;
+    }
+    text(0x22, 0x6d, g_shnet_games[scen].name);
+    char c[20];
+    for (int i = from, y = 0x95; i < g_shnet_ngames && i < from + 6; i++, y += row_h()) {
+        text(0xe, y, g_shnet_games[i].name);
+        snprintf(c, sizeof c, dll_str(0x10061068), g_shnet_games[i].players, g_shnet_games[i].most);
+        text(0xa0, y, c);
+        Scr_Frame(Shell_Set24(), 0xe, 0xcc, y, 0xb, 0xe);
+    }
+}
+
+static void games_listed(void)   /* 0x10018040, the games' list merged */
+{
+    if (g_shnet_ngames <= first) first = 0;
+    games_draw(first);
 }
 
 /* 0x10016240: the opponents' count, the player's name, the shown player's, the opponents' rows, the
@@ -586,15 +654,27 @@ static void hold_step(void)
         break;
     case 0xd:
         if (first + 1 < nlevels && nlevels >= 6) first++;
+        if ((g_sh_mode == 7 || g_sh_mode == 8) && first >= g_shnet_ngames) first--;
         break;
-    case 8: players_fewer(); break;
-    case 9: players_more(); break;
+    case 8:   /* the opponents (or a host's players: not under 2) one fewer */
+        if (nplayers <= 1) break;
+        if (g_sh_mode == 0) players_fewer();
+        else nplayers--, settings_draw();
+        break;
+    case 9:
+        if (nplayers >= NPLAYERS) break;
+        if (g_sh_mode == 0) players_more();
+        else nplayers++, settings_draw();
+        break;
     }
     if (hold.id == 1 || hold.id == 2) {
         list_draw();
         text(0x120, 0x3a, name);
-    } else if (hold.id == 0xc || hold.id == 0xd)
-        players_draw(first);
+    } else if (hold.id == 0xc || hold.id == 0xd) {
+        if (g_sh_mode == 7 || g_sh_mode == 8) games_draw(first);   /* 0x10016650 */
+        else if (g_sh_mode < 2) players_draw(first);
+        else levels_draw(first);
+    }
     hold.wait = 6;
 }
 
@@ -664,6 +744,134 @@ static void start(void)   /* button 6, a scenario's */
     leave(0xc010, 0);
 }
 
+/* ---- network play's start (button 6 in modes 2-9) ---- */
+
+/* 0x1000ff90: the teams' box (frame 0x13 of set 0x24 at (0xbf, 0x53), 0x103 x 0x13a, its shadows): an X
+   by the team chosen; a team's row moves it, OK (8) keeps it, Cancel (9) gives -1. The original's own
+   loop; the port's a pass in the screen's place, then team_then */
+static uint8_t team_saved[640 * 480];
+static int team_pick;
+
+static void team_mark(void)
+{
+    const uint8_t *r = dll_data(0x1005f9c8 + 0x14 * (uint32_t)team_pick, 20);
+    if (r) text(0xe4, rd32(r + 0xc) + 0x53, dll_str(0x1005fad4));   /* "X" */
+}
+
+static void team_pass(void)
+{
+    Scr_Present();
+    if (g_sh_mouse.click != 1) return;
+    int k = -1;
+    for (int i = 0; i < 10; i++)
+        if (Rect_Hit(g_sh_mouse.x - 0xbf, g_sh_mouse.y - 0x53, dll_data(0x1005f9c8 + 0x14 * (uint32_t)i, 20))) {
+            k = rd32(dll_data(0x1005f9c8 + 0x14 * (uint32_t)i, 20));
+            break;
+        }
+    if (k >= 0 && k <= 7) {   /* the box as it was, the mark moved */
+        for (int y = 0x53; y < 0x53 + 300; y++) memcpy(g_shs.px + y * 640 + 0xbf, team_saved + y * 640 + 0xbf, 200);
+        Scr_Dirty(0xbf, 0x53, 0xbf + 199, 0x53 + 299);
+        team_pick = k;
+        team_mark();
+        return;
+    }
+    if (k != 8 && k != 9) return;
+    g_sh_modal = NULL;
+    Scr_Restore(0xbf, 0x53, 0x120, 0x170);
+    redraw();
+    if (k == 8) {
+        team = team_pick;
+        if (team_then) team_then();
+    } else team = 0;   /* (the original's -1, then 0) */
+}
+
+static void team_open(void (*then)(void))
+{
+    Scr_Frame(Shell_Set24(), 0x13, 0xbf, 0x53, 0x103, 0x13a);
+    Scr_Shadow(0xc5, 0x18d, 0x103, 6);
+    Scr_Shadow(0x1c2, 0x59, 6, 0x13a);
+    memcpy(team_saved, g_shs.px, sizeof team_saved);
+    team_pick = 0;   /* the original's argument */
+    team_mark();
+    team_then = then;
+    g_sh_modal = team_pass;
+}
+
+static void net_go(void)   /* in a session: the game's kind 5 */
+{
+    g_shnet_on_list = NULL;
+    g_sh_rec.kind = 5;
+    Setup_Reset();   /* 0x10005f30 */
+    leave(0xc010, 0);
+}
+
+static ShNetConfig net_config(void)   /* what Shnet_Start reads back (0x10018410-0x100184d0) */
+{
+    ShNetConfig c;
+    memset(&c, 0, sizeof c);
+    snprintf(c.session, sizeof c.session, "%s", level);
+    snprintf(c.player, sizeof c.player, "%s", name);
+    snprintf(c.car_name, sizeof c.car_name, "%s", (const char *)car_rec(type_at));
+    if (types) snprintf(c.car_file, sizeof c.car_file, dll_str(0x1006117c), types[type_at].name, variant);   /* "%s%d" */
+    c.team = team;
+    c.most = nplayers;
+    c.flags = net_flags;
+    c.limit = net_limit;
+    return c;
+}
+
+/* 0x10010330: the waiting box (frame 0x12, or 0x1f for a modem's or a cable's, at (0xe2, 0xc2), with its
+   Cancel) and its shadows; 0x10010480 takes it away */
+static void wait_open(void)
+{
+    Scr_Shadow(0xe8, 0x11d, 0xbc, 6);
+    Scr_Shadow(0x19e, 200, 6, 0x5b);
+    Scr_Frame(Shell_Set24(), g_sh_mode == 6 || g_sh_mode == 9 ? 0x1f : 0x12, 0xe2, 0xc2, 0xbc, 0x5c);
+    Scr_Present();
+}
+
+static void wait_close(void)
+{
+    Scr_Restore(0xe2, 0xc2, 0xdc, 0x78);
+    redraw();
+}
+
+static void host_go(void)
+{
+    /* the original runs a thread (0x10013610) for the screen while Shnet_Start blocks; the port's start
+       may finish at a later pass (Shnet_Poll) */
+    if (g_sh_mode == 2 && !Shnet_Open()) return;   /* a modem's host opens it now */
+    ShNetConfig c = net_config();
+    ShLevel lv = {level_name(scen), dll_str(0x10060608 + 0x2d * (uint32_t)scen)};   /* the level's .msn */
+    if (!Shnet_Start(&c, NULL, &lv)) return;
+    if (g_shnet_state == 3) net_go();
+    else net_hosting = 1;
+}
+
+static void join_go(void)
+{
+    ShNetConfig c = net_config();
+    if (Shnet_Start(&c, &g_shnet_games[scen], NULL) && Shnet_Asking()) {
+        net_asking = 1;
+        wait_open();
+    }
+}
+
+static void net_start(void)
+{
+    if (g_sh_mode <= 5) {
+        if (net_flags & 0x8000) team_open(host_go);   /* teams: the host's team first */
+        else host_go();
+        return;
+    }
+    if (!g_shnet_ngames) {
+        plat_log(dll_str(0x10060fe4));   /* "There are no games to join." (a message box) */
+        return;
+    }
+    if (g_shnet_games[scen].teams) team_open(join_go);
+    else join_go();
+}
+
 static void back(void)   /* button 15: the lists freed (0x10015a90), the garage reset, the state again */
 {
     ShList **l[] = {&g_sh_engines, &g_sh_specials, &g_sh_guns, &g_sh_wheels, &g_sh_brakes, &g_sh_susps,
@@ -679,6 +887,8 @@ static void back(void)   /* button 15: the lists freed (0x10015a90), the garage 
     if (drivers) ShList_Free(drivers), drivers = NULL;
     w_click = NULL;
     pic_set = top_set = NULL;   /* 0x10010e10 */
+    if (g_sh_mode > 1) Shnet_Close(1);   /* 0x10029ca0 */
+    g_shnet_on_list = NULL;
     Garage_Reset();   /* 0x10034df0 */
     Melee_Reset();
     leave(0xc00e, 1);
@@ -688,6 +898,18 @@ static void screen(uint32_t msg)
 {
     if (msg != 0xc004) {
         leave(msg, 0);
+        return;
+    }
+    if (editing == 2) {   /* the session's name: an empty one is the level's again */
+        if (Edit_Pass() == -2) return;
+        editing = 0;
+        text(0xb, 0x131, level);
+        if (!strcmp(level, dll_str(0x10061178))) {   /* "" */
+            snprintf(level, sizeof level, "%s", level_name(scen));
+            Scr_Restore(0xb, 0x130, 0x9f, 0x10);
+            text(0xb, 0x131, level);
+            named = 0;
+        } else named = 1;
         return;
     }
     if (editing) {
@@ -702,6 +924,22 @@ static void screen(uint32_t msg)
         text(0x120, 0x3a, name);
         return;
     }
+    if (net_hosting) {   /* the port's: the session being made */
+        Shnet_Poll();
+        if (g_shnet_state == 3) net_hosting = 0, net_go();
+        else if (g_shnet_state == 0) net_hosting = 0;
+        return;
+    }
+    if (g_sh_mode >= 6 && Shnet_Browse() == 1) {   /* 0x100297e0: in the game joined */
+        net_asking = 0;
+        net_go();
+        return;
+    }
+    if (net_asking && !Shnet_Asking()) {   /* refused, timed out or cancelled */
+        net_asking = 0;
+        wait_close();
+    }
+    if (Shnet_Asking()) return;   /* 0x1002a7a0: the buttons off while a join waits */
     if (hold.id) {
         if (!g_sh_mouse.left) hold.id = 0;
         else if (--hold.wait <= 0) hold_step();
@@ -747,6 +985,7 @@ static void screen(uint32_t msg)
         Shell_Click(w_click);
         if (g_sh_mode == 1) start();
         else if (g_sh_mode == 0) start_melee();
+        else net_start();
         return;
     case 7:
         if (player_at == 0) return;
@@ -760,13 +999,30 @@ static void screen(uint32_t msg)
         player_show(i, 0x1006100c);
         return;
     }
-    case 0xb: {   /* a level */
+    case 0xb: {   /* a level, or a joiner's game */
         int i = first + (y - 0x97) / row_h();
+        if (g_sh_mode >= 6) {
+            Shell_Click(w_click);
+            if (i >= g_shnet_ngames) return;
+            if (x >= 0xcf) {   /* the game's players (0x1002a4f0's box, its own dpOpen): not ported */
+                plat_log("OpenI76: the game's information box is not ported");
+                return;
+            }
+            scen = i;
+            Scr_Restore(0x13, 0x6a, 0xbe, 0x14);
+            text(0x22, 0x6d, g_shnet_games[scen].name);
+            return;
+        }
         if (i == scen || i >= nlevels || i - first >= 6) return;
         Shell_Click(w_click);
         scen = i;
         Scr_Restore(0x13, 0x6a, 0xbe, 0x14);
         text(0x22, 0x6d, level_name(scen));
+        if (!named && g_sh_mode > 1) {   /* a host's session named after its level, until typed */
+            snprintf(level, sizeof level, "%s", level_name(scen));
+            Scr_Restore(0xb, 0x130, 0x9f, 0x10);
+            text(0xb, 0x131, level);
+        }
         return;
     }
     case 0xe:   /* the name */
@@ -778,6 +1034,31 @@ static void screen(uint32_t msg)
     case 0xf:
         Shell_Click(w_click);
         back();
+        return;
+    case 0x10: case 0x11: case 0x12:   /* a host's teams, approval and score to reach */
+        Shell_Click(w_click);
+        net_flags ^= 0x8000u >> (id - 0x10);
+        settings_draw();
+        return;
+    case 0x13:
+        Shell_Click(w_click);
+        return;
+    case 0x14:   /* the score less 1000, not under 1000 */
+        Shell_Click(w_click);
+        net_limit -= 1000;
+        if (net_limit < 0x3e9) net_limit = 1000;
+        settings_draw();
+        return;
+    case 0x15:   /* more, to 100000 */
+        Shell_Click(w_click);
+        if (net_limit + 1000 <= 100000) net_limit += 1000;
+        settings_draw();
+        return;
+    case 0x16:   /* the session's name */
+        Shell_Click(w_click);
+        Scr_Restore(0xb, 0x130, 0x9f, 0x10);
+        Edit_Begin(&g_sh_font45, 0xb, 0x131, level, 0x18, 0xa0);
+        editing = 2;
         return;
     }
 }
@@ -805,10 +1086,42 @@ void Catalog_Open(void)   /* the set-up's PARTS CATALOG from the map: background
 void Map_Open(void)
 {
     if (g_sh_mode > 1) {   /* network play */
-        char m[80];
-        snprintf(m, sizeof m, "OpenI76: the melee map's mode %d is not ported yet", g_sh_mode);
-        plat_log(m);
-        Shell_Post(0xc00e, 0);
+        g_sh_redraw = redraw;
+        g_sh_from_map = 1;
+        init();
+        g_sh_rec.kind = 3;
+        /* the Activenet: at once for 3, 5, 7 and 9, a modem's host's (2) at its start; 4 and 8 open it
+           from their address book (internet.lst, 0x1003f8a0), 6 from its phone book (phone.lst,
+           0x1003f6b0), which the relay has no use for: the port opens it at once */
+        if (g_sh_mode != 2) Shnet_Open();
+        g_shnet_on_list = games_listed;
+        net_hosting = net_asking = 0;
+        switch (g_sh_mode) {
+        case 2: case 5:   /* a modem's or a cable's host: two players */
+            if (scen >= nlevels) scen = 0;
+            nplayers = 2;
+            Scr_Background(g_sh_db, g_sh_mode == 2 ? 0x14 : 0x16);
+            levels_draw(0);
+            text(0x120, 0x3a, name);
+            break;
+        case 3: case 4:
+            if (scen >= nlevels) scen = 0;
+            Scr_Background(g_sh_db, 0x13);
+            levels_draw(0);
+            if (!nplayers) nplayers = 4;
+            settings_draw();
+            break;
+        case 6: case 9:
+            Scr_Background(g_sh_db, g_sh_mode == 6 ? 0x15 : 0x17);
+            text(0x120, 0x3a, name);
+            break;
+        default:   /* 7, 8 */
+            Scr_Background(g_sh_db, 0x12);
+            text(0x120, 0x3a, name);
+            text(0xc, 0x2d, name);
+        }
+        redraw();
+        Shell_SetScreen(screen);
         return;
     }
     g_sh_redraw = redraw;

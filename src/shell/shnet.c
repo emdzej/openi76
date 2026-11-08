@@ -22,6 +22,7 @@ static int listing;             /* 0x10090b9c: 1 enumerating, 2 done */
 static dpid_t me;               /* 0x10090ba0 */
 ShSession g_shnet_games[16];    /* 0x1008f970 */
 int g_shnet_ngames;             /* 0x1008f894 */
+void (*g_shnet_on_list)(void);
 static ShSession found[16];     /* 0x10090bb0: one enumeration's */
 static int nfound;              /* 0x10091db0 */
 ShNetRecord g_shnet_rec;        /* 0x1008f964: the record the game reads */
@@ -130,6 +131,7 @@ static void games_merge(void)
     for (int i = 0; i < g_shnet_ngames; i++)
         if (g_shnet_games[i].unseen) g_shnet_games[i--] = g_shnet_games[--g_shnet_ngames];
     qsort(g_shnet_games, (size_t)g_shnet_ngames, sizeof g_shnet_games[0], by_name);
+    if (g_shnet_on_list) g_shnet_on_list();   /* 0x10018040 */
 }
 
 int Shnet_Browse(void)

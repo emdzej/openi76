@@ -49,6 +49,7 @@ extern int g_shnet_state;          /* 0x1008f814: 2 a join asked, 3 in */
 extern ShSession g_shnet_games[16];
 extern int g_shnet_ngames;
 extern ShNetRecord g_shnet_rec;
+extern void (*g_shnet_on_list)(void);   /* 0x10018040: the map's list redrawn after a merge */
 
 int Shnet_Open(void);              /* 0x10029700: the Activenet for the mode (0: none) */
 void Shnet_Close(int record);      /* 0x1002a6d0 / 0x10029ca0 */
