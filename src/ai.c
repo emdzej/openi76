@@ -102,8 +102,11 @@ bool AI_UserInScene(Node *n)
     return g_user_entity && g_user_entity->node == n && !g_user_pressed_prev;
 }
 
+int g_ai_getdown;   /* 0x505450 */
+
 void AI_Begin(void)
 {
+    g_ai_getdown = 0;   /* 0x4088a0's, at the mission's set-up */
     g_ai_user = g_user_entity ? g_user_entity->node : NULL;
     g_user_pressed = g_user_pressed_prev = 0;
 }
@@ -153,8 +156,8 @@ void AI_Frame(void)
     g_ai_505514 = 0;   /* 0x40f0a0 */
     g_ai_505508 = 0;   /* 0x40f050 */
     ai_boxes();
-    if (g_melee) Melee_Frame();   /* 0x408e20 in the melee (0x407370) */
-    else Fsm_Frame();   /* while 0x505450 is clear */
+    if (g_melee || g_ai_getdown) Melee_Frame();   /* 0x408e20 in the melee (0x407370) or after getdown */
+    else Fsm_Frame();
     g_ai_505510 = g_ai_505508 < g_ai_50550c ? 1 : g_ai_505508 == g_ai_50550c ? 0 : 2;   /* 0x40f060 */
     /* the user hidden from the radar (0x421e30, for its side effects: the jammer's time up switches it
        off) outside network play; the words it clears are not read anywhere. The original asks between

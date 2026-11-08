@@ -35,3 +35,4 @@ void AI_SearchTurns(void);
 int AI_TargetLost(Node *n, Node *t);
 /* 0x4199a0: its opposite, 1 too while the user does not hide */
 int AI_TargetSeen(Node *n, Node *t);
+extern int g_ai_getdown;   /* 0x505450: the cheat getdown on (Melee_Frame in the script's place) */

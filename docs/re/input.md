@@ -109,8 +109,15 @@ mirrors it. Without either the rate is 0.
 
 1. It returns at once after the menus' poll, or when the AI's flag 0x505494 is set.
 2. The cheats (0x480800): a key typed with Ctrl+Shift goes into a ring of 15 characters. `wiggleburger`
-   calls 0x452a90, `freelance` 0x4034d0 and `getdown` 0x408d30; `thirdnostril` does nothing. Their effects
-   are not ported.
+   toggles the screen's shake (0x452a90: 0x4db32c, read by the shake 0x452ac0, which isn't ported yet).
+   `freelance` toggles 0x4a846c (0x4034d0; WinMain's 0x403360 sets it to 1 and nothing else reads it).
+   `thirdnostril` does nothing. `getdown` (0x408d30) works once, outside network play:
+   - every team's helicopter but the user's climbs (setHeliHeight), the first to 25 and each next one 10
+     higher;
+   - gdsgc69.wav plays on the CB;
+   - the user may now be attacked by 1000 at once (its AI block's +0xa948);
+   - 0x505450 is set, so the AI's frame runs Melee_Frame (0x408e20) instead of the script: every vehicle
+     attacks the user. 0x4088a0 clears it at each mission's set-up.
 3. A UI window that takes the keys (0x450ab0) gets the key first; not ported.
 4. The typed key's command (`gamekey.map`) goes to `Game_Command` 0x4809b0. See "The commands" below.
 5. The cockpit (0x481c10, not ported), then `User_Controls` 0x481d00.

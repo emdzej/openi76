@@ -640,6 +640,36 @@ static void set_heli_height(Node *n, int32_t h)
     }
 }
 
+/* 0x408d30, the cheat "getdown" (outside network play, once): every team's helicopter but the user's
+   climbs, the first to 25 and each next 10 higher (setHeliHeight 0x40b340), gdsgc69.wav on the CB, the
+   user may be attacked by 1000 at once (its AI block's +0xa948), and from now on the AI's frame runs
+   Melee_Frame in the script's place (0x505450): everyone attacks the user */
+void Cheat_GetDown(void)
+{
+    if (g_net_game || g_ai_getdown) return;
+    Entity *u = g_user_entity;
+    if (!u) {
+        g_ai_getdown = 0;
+        return;
+    }
+    int32_t h = 25;
+    for (int t = 0; t < AI_TEAMS; t++)
+        for (int i = 0; i < g_team_count[t] && i < 0x40; i++) {
+            Entity *e = g_teams[t][i];
+            if (e && e != u && e->node && e->node->cls == 9) {
+                set_heli_height(e->node, h);
+                h += 10;
+            }
+        }
+    Radio_Say(exe_str(0x4a8958), NULL, 0);
+    g_ai_getdown = 1;
+    uint8_t *ai = ai_block(u->node);
+    if (ai) {
+        int32_t k = 1000;
+        memcpy(ai + 0xa948, &k, 4);
+    }
+}
+
 /* setLights 0x40b7c0: the lights toggled (0x42d660) when +0x454's bit 0x40 is not the value */
 static void set_lights(Node *n, int32_t v)
 {

@@ -995,16 +995,20 @@ static int cheat_typed(const char *s)
         if (s[n - 1 - i] != cheat_ring[14 - i]) return 0;
     return 1;
 }
-/* 0x480800: the cheats; what they do (0x452a90, 0x4034d0, 0x408d30) is not ported yet */
+int32_t g_cheat_shake, g_cheat_free;   /* 0x4db32c (the screen's shake, 0x452ac0: not ported), 0x4a846c */
+
+/* 0x480800: the cheats, typed with Ctrl+Shift: wiggleburger toggles the screen's shake (0x452a90),
+   freelance the flag 0x4a846c (0x4034d0; 1 from 0x403360, read by nothing else), getdown sets everyone on
+   the user (0x408d30), thirdnostril does nothing */
 static void cheats(uint16_t key)
 {
     if ((uint8_t)(key >> 8) != 3) return;
     memmove(cheat_ring, cheat_ring + 1, 14);
     cheat_ring[14] = (char)key;
-    if (cheat_typed("wiggleburger")) {}
-    if (cheat_typed("freelance")) {}
-    if (cheat_typed("getdown")) {}
-    if (cheat_typed("thirdnostril")) return;
+    if (cheat_typed(exe_str(0x4e8aa0))) g_cheat_shake = !g_cheat_shake;
+    if (cheat_typed(exe_str(0x4e8a94))) g_cheat_free = !g_cheat_free;
+    if (cheat_typed(exe_str(0x4e8a8c))) Cheat_GetDown();
+    if (cheat_typed(exe_str(0x4e8a7c))) return;
 }
 
 /* 0x581ebc: the last view was preset 1 (the cockpit); 0x581ec0: the last other preset (read by 0x480940,

@@ -1424,3 +1424,6 @@
 004513c0	Poetry_Ask	radio	med	the poetry key: the asking, Taurus's poem, the answer on the CB; ported
 004512f0	Poetry_ShuffleCmp	radio	med	qsort's random comparison
 00480940	View_Combat	input	med	toggle_cmbt_view: the cockpit or the last other preset; ported (src/input.c)
+00408d30	Cheat_GetDown	ai	med	getdown: helicopters up, gdsgc69, 1000 attackers, everyone on the user (0x505450); ported (src/fsm.c)
+00452a90	Cheat_Shake	camera	med	wiggleburger: the screen's shake toggled (0x4db32c); ported
+004034d0	Cheat_Freelance	app	med	freelance: 0x4a846c toggled; ported
