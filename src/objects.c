@@ -311,7 +311,7 @@ static void spawn(const uint8_t *rec, int kind)
 
 /* 0x494720: a vehicle's COLP words as the entity's record (0x3c bytes from the game heap): three 4s,
    then the twelve words in the order 7 6 5 4 11 10 9 8 3 2 1 0 */
-static void *colp_record(const int32_t x[12])
+void *Obj_ColpRecord(const int32_t x[12])
 {
     int32_t *r = calloc(1, 0x3c);
     if (!r) return NULL;
@@ -368,7 +368,7 @@ int Objects_Obj(const uint8_t *c, void *arg, const uint8_t *end)
             x.node->child = NULL;
             Node_Free(x.node);
         } else {
-            if (!Entity_Add(x.node, x.has_x ? colp_record(x.x) : NULL, x.has_b ? x.b : NULL)) {
+            if (!Entity_Add(x.node, x.has_x ? Obj_ColpRecord(x.x) : NULL, x.has_b ? x.b : NULL)) {
                 plat_log("Interstate '76 cannot create entity - The world is full!");
                 return 0;
             }
@@ -466,7 +466,7 @@ static int line_obj(const uint8_t *c, void *arg, const uint8_t *end)
     }
     free(pt);
     for (;;) {
-        Entity *e = Entity_Add(x.node, x.has_x ? colp_record(x.x) : NULL, x.has_b ? x.b : NULL);
+        Entity *e = Entity_Add(x.node, x.has_x ? Obj_ColpRecord(x.x) : NULL, x.has_b ? x.b : NULL);
         if (!e) {
             plat_log("Interstate '76 cannot create entity - The world is full!");   /* the original's fatal */
             return 0;

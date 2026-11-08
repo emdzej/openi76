@@ -32,6 +32,8 @@ void Fsm_Reset(void);
 /* Fsm_Frame 0x40ef00: the mission's end once its time comes (0x5054b0, the state 0x5054b4), then every
    machine runs until it yields; one that returns from its start is removed */
 void Fsm_Frame(void);
+/* setSkill 0x40b480: n's AI skills at levels a and b */
+void Fsm_SetSkill(Node *n, int32_t a, int32_t b);
 
 /* the arena: an address's word */
 int32_t Fsm_Word(uint32_t a);

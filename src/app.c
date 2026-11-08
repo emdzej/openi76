@@ -57,6 +57,7 @@
 #include "render/shadow.h"
 #include "render/queue.h"
 #include "render/road_draw.h"
+#include "melee.h"
 #include "render/sky.h"
 #include "render/surface.h"
 #include "render/terrain_draw.h"
@@ -104,6 +105,7 @@ static bool viewer_init(const char *mission)
     /* WinMain: t01, t13 and t17 (0x4a8348, 0x4a8344, 0x4a8340) mark the first of a trip (0x58dc88) */
     g_first_trip = !crt_strnicmp(mission, exe_str(0x4a8348), 3) || !crt_strnicmp(mission, exe_str(0x4a8344), 3) ||
                    !crt_strnicmp(mission, exe_str(0x4a8340), 3);
+    if (g_melee) SpawnLoc_Init();   /* 0x4626a0 */
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
         plat_log(m);
@@ -122,6 +124,7 @@ static bool viewer_init(const char *mission)
     Lum_Ramp(0xe0, 0xef, 0xef);
     Glow_Build(g_shown_pal);
     Terrain_LoadTextures();
+    Melee_Start();   /* in a melee: the user's car and the opponents at the spawn points */
     if (!pixels) pixels = calloc(640 * 480, 1);
     Movie_SetScreen(pixels, 640);
     surf = (Surface){640, pixels, 0, 0, 639, 479, 1, 640, 480};
@@ -357,6 +360,7 @@ bool app_init(void)
     Movie_SoundUse();    /* 0x44e6b0 */
     if (plat_param("mission", mission, sizeof mission)) {
         g_no_shell = 1;   /* 0x4a80e0: the command line's mission */
+        if (plat_param("melee", v, sizeof v)) Melee_Set(atoi(v) != 0);   /* the port's, for tests */
         if (plat_param("play", v, sizeof v) && atoi(v)) return mission_start(mission);
         return (viewer = viewer_init(mission));
     }
@@ -419,6 +423,7 @@ static void shell_frame(void)
        network play's, is not ported); the sounds stopped and parked, the sound off */
     if (shell_result != 0xff && g_sh_rec.kind >= 2 && g_sh_rec.kind <= 4)
         snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
+    Melee_Set(shell_result != 0xff && g_sh_rec.kind == 3);   /* 0x4072d0: the game's kind 3 */
     Sound_StopPlaying();   /* 0x468380 */
     Sound_FreeParked();
     Sound_Enable(0);
@@ -484,6 +489,7 @@ static void mission_end(void)
     Sound_FreeParked();    /* 0x468340 */
     /* 0x428660: the links' heap (the port's links are freed with their nodes) */
     Class_EndAll();        /* 0x425580 */
+    if (g_melee) Melee_End();   /* 0x4072b0 (and 0x463130) */
     if (g_game_state == 1 && g_cheater) g_game_state = 0xb;
     if (g_game_state == 1) {   /* won: the salvage (but in t04), and the mission's last movie */
         if (crt_strnicmp(exe_str(0x4a833c), mission_name, 3)) {

@@ -1,5 +1,6 @@
 /* The AI (ai.h). In the current rounding mode (render/fpu.h). */
 #include "ai.h"
+#include "melee.h"
 #include "entity.h"
 #include "weapons.h"
 #include "damage.h"
@@ -152,7 +153,8 @@ void AI_Frame(void)
     g_ai_505514 = 0;   /* 0x40f0a0 */
     g_ai_505508 = 0;   /* 0x40f050 */
     ai_boxes();
-    Fsm_Frame();   /* outside the melee (0x407370) and while 0x505450 is clear */
+    if (g_melee) Melee_Frame();   /* 0x408e20 in the melee (0x407370) */
+    else Fsm_Frame();   /* while 0x505450 is clear */
     g_ai_505510 = g_ai_505508 < g_ai_50550c ? 1 : g_ai_505508 == g_ai_50550c ? 0 : 2;   /* 0x40f060 */
     /* the user hidden from the radar (0x421e30, for its side effects: the jammer's time up switches it
        off) outside network play; the words it clears are not read anywhere. The original asks between

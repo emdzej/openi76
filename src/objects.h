@@ -33,6 +33,9 @@ typedef struct {
     int32_t has_b;
 } ObjCtx;
 
+/* 0x494720: a vehicle's COLP words as its entity's record (0x3c bytes) */
+void *Obj_ColpRecord(const int32_t x[12]);
+
 /* Obj_Lists 0x493c10: count list pointers, each stride records of 100 bytes after the last */
 void Obj_Lists(const uint8_t **out, const uint8_t *first, int count, int32_t stride);
 /* Obj_Tree100 0x493c90: Obj_Tree's form for 100-byte records (VGEO, WGEO, VLOC's needles): the parent

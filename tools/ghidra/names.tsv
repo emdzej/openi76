@@ -605,7 +605,7 @@
 0040d0d0	Fsm_Action	fsm	high	the 96 actions by code
 0040d0b0	Fsm_Init	fsm	high	the end time FLT_MAX, the slow flag cleared
 00409020	AI_Frame	ai	high	each AI vehicle's look-ahead box, the script (or the melee 0x408e20), the frame's ends
-00408e20	Melee_Frame	ai	med	everyone not dead attacks the user (the melee's script)
+00408e20	Melee_Frame	ai	med	the end state at its time, state 1 after the user dies, everyone not dead attacks the user (the melee's script); ported
 0044ebc0	Movie_Exists	movie	high	a movie on the disc (<drive>:\cutscene\name) or, with local, in smk\
 00401280	Game_SetState	app	high	0x4a80f4 = the state
 00450e80	Clock_Script	clock	high	returns 0x55f73c, the steps summed after the first three ticks
@@ -1395,3 +1395,14 @@
 004552a0	Weapon_SetState	weapons	high	a gun's rounds (and +0x18) by vehicle and hard point id; ported
 0047de00	Lod_Unload	lod	high	a node's loaded meshes released, its record kept (no level shown)
 0042d800	Lod_UnloadTree	lod	high	Lod_Unload on a node and every node below it
+004072b0	Melee_End	score	med	the melee's end: waves off; ported (src/melee.c)
+004072d0	Melee_Set	score	med	0x4a8760 by the game's kind (3); ported
+00407340	Melee_Score	score	med	the points and kills; ported
+004073a0	Opponent_Out	score	med	Entity_OnRemove's: the last opponent gone brings the wave back, aggression one lower, attackers one more; ported
+00408f70	AI_SetAllAggression	ai	med	setAllAggresion: skills and +0xa818 of every team vehicle but the user's; ported
+004626a0	SpawnLoc_Init	objects	med	no spawn points, the vehicles' list kept by the entities' callbacks; ported
+00462820	SpawnLoc_Get	objects	med	a random spawn point clear of every vehicle's radius plus 0x4a63e0; ported
+00462b90	Spawn_Vehicle	objects	med	a vehicle from its .vcf at a spawn point as an entity, the user's replacing the old; ported
+004631f0	SpawnLoc_VehicleIn	objects	med	a vehicle into the spawn module's list; ported
+00463260	SpawnLoc_VehicleOut	objects	med	a vehicle out of it; ported
+0042b7d0	Vehicle_TakeOut	vehicle	med	sounds stopped, entity removed, unarmed, node freed; ported

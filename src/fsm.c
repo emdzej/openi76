@@ -577,6 +577,8 @@ static void set_skill(Node *n, int32_t a, int32_t b)
     memcpy(ai + 0xa828, &v[3], 4);
 }
 
+void Fsm_SetSkill(Node *n, int32_t a, int32_t b) { set_skill(n, a, b); }
+
 /* setAgg 0x40b640: the aggression less one (+0xa818), the tactics started anew (0x40cbb0 on +0xa82c) */
 static void set_agg(Node *n, int32_t v)
 {
