@@ -74,10 +74,21 @@ void Car_WriteVsf(const char *path, const char *name, const ShList *comps, const
 void Garage_Reset(void);
 void Garage_Open(void);
 void Garage_FreeStock(void);
+typedef struct {        /* the trip's screens' boxes (0x20 bytes: the garage's 0x10066e98, the set-up's 0x1005ca40) */
+    int32_t id;         /* +0: what the hit test answers */
+    int32_t rows;       /* +4: the rows shown */
+    int32_t x0, x1, y0, y1;
+    int32_t *scroll;    /* +0x18: the first row shown, then the up and down arrows' rects */
+    ShList *list;       /* +0x1c */
+} ShBox;
+/* i76shell 0x10036980: the row under x, y (from the scroll's first), -3 and -2 the arrows (the scroll
+   moved), -1 none */
+int Box_RowAt(int x, int y, const ShBox *b);
 void Bars_Load(void);                            /* i76shell 0x10035c50: the damage bars' frames */
 void Part_Bar(const ShPart *p, int x, int y);    /* a part's damage bar, as 0x100366d0 draws it */
 void Setup_UseTrip(void);                        /* the set-up's fills, the trip's (the garage's done) */
-void Setup_Open(void);                           /* i76shell 0x10003fe0 (0xc00f) */
+void Setup_Open(void);
+void Setup_Reset(void);                           /* i76shell 0x10003fe0 (0xc00f) */
 extern ShList *g_sh_stock_repairs;   /* 0x1005c904 */
 
 /* 0x10020d30 (0xc01e) */

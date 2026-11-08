@@ -6,9 +6,9 @@ the labels, the parts with their damage bars, the car's name and its weight, and
 record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf` and `.vsf`, `user.rpr`,
 and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
 with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's
-name puts EMPTY in its place. Not ported yet: the repairs (0x10007040, 0x1000e7d0), the armour and
-chassis buttons (0x1001ee50, 0x1001eec0), box 10 (0x10007bc0), the car's picture 0x100114d0 and its sets
-0x25-0x3f, the name's edit, the melee's path from the map.
+name puts EMPTY in its place; the repair order, SELECT REPAIRS, the armour's and chassis' buttons and
+BALANCE run. Not ported yet: the paint (box 10, 0x10007bc0), the car's picture 0x100114d0 and its sets
+0x25-0x3e, the name's edit, the melee's path from the map.
 
 ## The pickers
 
@@ -238,3 +238,30 @@ the record's kind-0xc slots. Not yet read in full.
 then 0x100614b8's, then c904's count and records.
 
 **0x1001c7a0** writes `user.rpr` (179 lines of decompile, not yet read).
+
+## The repairs and the armour
+
+- **The trip's repair box** is set by the open (0x1005cac4-0x1005cad8): 10 rows, x 0x1c2-0x268, y
+  0x30-0x107, the scroll 0x1005ca10 (the melee's: no rows, x 0x1ec-0x276, y 0x1c2-0x1d5). Its rows (0x100064a0)
+  start a row under y0 + 2, from 0x1006b0f8 (reset by 0x10003c80, with the budget 0x1006b328 = 0x20); the
+  cost of the rows shown (the kind's cost 0x1005cbc0 times the level: 3 under whole times 0x10059020, 2
+  under that times 0x10059028, else 1), to 0x20, picks the repair time's gauge frame (cost / 2) of entry
+  0x3f at 0x26a, 0x30 (0x10010e70). A click (0x10007040, through the box hit 0x10036980) scrolls with the
+  arrows (its own first row moves beside the scroll's, and they can part: quirk kept) or takes the row's
+  part out of the repair (+0x10 set 2).
+- **SELECT REPAIRS** (the button 0x1e2-0x25c x 0xf1-0x102, 0x1000e7d0): the pop-up 0x10, 0x60, 0x260 x
+  0x120 (frame 6 of set 0x24, shadows 0xc wide), its eight records at 0x1005f908 (0x18 bytes: id, x0, x1,
+  y0, y1, the list): engines, specials, guns, wheels, brakes, suspensions, OK, CANCEL. The base cost
+  (0x10008190) counts the parts in repair (+0x10 = 3) of every list but the specials. A click on a
+  damaged part (0x1000ed10, levels by 0x10059048/50) puts it in repair (its place kept in a block at the
+  ring node's +0x18) or takes it out, refusing (0x10008140: wave 0x4f) past the budget. OK sets the
+  chosen in repair (3), adds them to the order, takes them off the car (0x10006f50: the kind's marker in
+  their slot) and drops from the order any not in repair; CANCEL puts back every kept place. The close
+  (0x1000e540) restores 0x10 more each way, redraws, frees the blocks.
+- **The armour** (box 5, 0x1001ee50): rows 0-3 front, right, left, rear; the record's armour +0x7fc and
+  chassis +0x80c (by the row), +0x81c what is left. The row's minus and plus (0x100615bc, 0x100615d0, 0x2c
+  a row; the chassis' the armour's minus moved 100 and 0x92 right) move 10 between the side and what is
+  left, a side kept at the total of the nine times 0x10059138; held, they step each 100 ms (0x1001e670,
+  the port: 6 passes). BALANCE (0xb9-0xf6 x 0x1a6-0x1b3, 0x1001e590): the total times 0x10059130 to each
+  of the eight, the total's remainder by 8 to the front's armour, none left. The figures (0x1001eec0, font
+  47): each times 0x10059140 as "%1.1f", at x0 + 0x15 and x0 + 0x79, what is left at x0 + 0x1d under them.

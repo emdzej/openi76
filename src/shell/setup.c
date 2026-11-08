@@ -14,11 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {        /* 0x20 bytes, from 0x1005ca40 */
-    int32_t id, rows, x0, x1, y0, y1;
-    int32_t *scroll;
-    ShList *list;
-} SBox;
+typedef ShBox SBox;   /* 0x20 bytes, from 0x1005ca40 */
 
 static SBox sb[12];             /* 0x1005ca40-0x1005cba0 */
 static int32_t sb_scroll[12];   /* 0x1005ca10 */
@@ -31,8 +27,12 @@ static int n_fwd, n_top, n_rear, n_drop, n_rows;   /* 0x1006b200, b23c, b1fc, b0
 static int32_t order[16];       /* 0x1006b2a8: the guns' hard point ids in the box's order */
 static int row_h;               /* 0x1006b0f0 */
 static int32_t weight;          /* 0x1006af3c */
-static uint8_t *w_click, *w_done, *w_hello;   /* entries 0x52, 0x50, 0x4e (0x4f's with the edits) */
+static uint8_t *w_click, *w_done, *w_hello;   /* entries 0x52, 0x50 (0x1006b240), 0x4e (0x1006b248) */
 static int changed;             /* 0x1006b204: a part changed (read by the melee's DONE, not ported) */
+enum { REPAIR_BUDGET = 0x20 };   /* 0x1006b328, set 0x20 by 0x10003c80 */
+static int rep_first;           /* 0x1006b0f8: the repair order's first row */
+static const uint8_t *gauge;    /* 0x1005fb50: entry 0x3f, the repair time's gauge */
+static uint8_t *w_refuse;       /* entry 0x4f (0x1006b244): over the repair budget */
 static int trip_fns;            /* the garage's six functions set (0x1006b0ac and the rest) */
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -44,6 +44,21 @@ static char *slot_name(int i) { return (char *)rec() + 0x400 + i * 0x1e; }
 static const char *pname(const ShPart *p) { return (const char *)p->part; }
 static const char *pfile(const ShPart *p) { return (const char *)p->part + 0x3b; }
 static int32_t pkind(const ShPart *p) { return rd32(p->part + 0x1e); }
+/* a part's repair level by its damage: 3 below whole times k1, 2 below that times k2, else 1 (the
+   doubles' pairs 0x10059020/28, 0x10059048/50, 0x10059118/20) */
+static int level(const ShPart *p, uint32_t k)
+{
+    double k1, k2;
+    memcpy(&k1, dll_data(k, 8), 8);
+    memcpy(&k2, dll_data(k + 8, 8), 8);
+    double whole = (double)rd32(p->part + 0x4c) * k1;
+    return (double)p->count < whole ? 3 : (double)p->count < whole * k2 ? 2 : 1;
+}
+static int32_t repair_cost(const ShPart *p, uint32_t k)   /* by the kind's cost, 0x1005cbc0 */
+{
+    return (int32_t)dll_u32(0x1005cbc0 + 4 * (uint32_t)pkind(p)) * level(p, k);
+}
+
 static int index_of(const ShList *l, const void *it)   /* 0x10034bf0 */
 {
     for (int i = 0; i < l->count; i++)
@@ -307,6 +322,48 @@ static void gun_labels(const SBox *b)
     Scr_Text(0x6c, 0xfb, &g_sh_font45, dll_str(dll_u32(0x1005c9fc)), NULL);
 }
 
+/* 0x100064a0: the repair order from its first row, ten rows under its heading, and the repair time's
+   gauge by their cost (to 0x20, a frame each two) */
+static void draw_repairs(const ShList *l, const SBox *b)
+{
+    int x = b->x0, y = b->y0 + 2 + row_h;
+    Scr_Restore(b->x0, b->y0, b->x1 - b->x0 + 1, b->y1 - b->y0 + 1);
+    int32_t cost = 0;
+    for (int i = rep_first; i < l->count && i < rep_first + 10; i++) {
+        const ShPart *p = l->items[i];
+        if (!p) continue;
+        cost += repair_cost(p, 0x10059020);
+        Part_Bar(p, x + 1, y);
+        Scr_Text(x + 1, y, &g_sh_font45, pname(p), NULL);
+        y += row_h;
+    }
+    if (cost > REPAIR_BUDGET) cost = REPAIR_BUDGET;
+    if (gauge) Scr_Frame(gauge, cost >> 1, 0x26a, 0x30, 0xc, 0xd8);   /* 0x10010e70 */
+}
+
+/* the record's armour (+0x7fc front, right, left, rear) and chassis (+0x80c, the same), and what is left
+   to give (+0x81c) */
+static int32_t *armour(int i) { return (int32_t *)(void *)(rec() + 0x7fc + 4 * i); }
+
+/* 0x1001eec0: the armour's and chassis' figures, times 0x10059140, and what is left under them */
+static void draw_armour(const SBox *b)
+{
+    double k;
+    memcpy(&k, dll_data(0x10059140, 8), 8);
+    Scr_Restore(b->x0, b->y0, b->x1 - b->x0 + 1, b->y1 - b->y0 + 1);
+    int y = b->y0 + 4;
+    char t[32];
+    for (int i = 0; i < 4; i++) {
+        if (i) y += row_h;
+        snprintf(t, sizeof t, dll_str(0x10061668 + 0x10 * (uint32_t)i), (double)rd32(rec() + 0x7fc + 4 * i) * k);
+        Scr_Text(b->x0 + 0x15, y, &g_sh_font47, t, NULL);
+        snprintf(t, sizeof t, dll_str(0x10061670 + 0x10 * (uint32_t)i), (double)rd32(rec() + 0x80c + 4 * i) * k);
+        Scr_Text(b->x0 + 0x79, y, &g_sh_font47, t, NULL);
+    }
+    snprintf(t, sizeof t, dll_str(0x100616a8), (double)rd32(rec() + 0x81c) * k);
+    Scr_Text(b->x0 + 0x1d, y - 1 + row_h, &g_sh_font47, t, NULL);
+}
+
 static void redraw(void)   /* 0x10006780 */
 {
     row_h = g_sh_font45.height + 2;
@@ -329,7 +386,8 @@ static void redraw(void)   /* 0x10006780 */
     draw_list(specs, &sb[3]);
     ((uint8_t *)g_sh_empty.part)[0x1e] = 8;
     draw_drops(drops, &sb[2]);
-    /* the repairs (0x100064a0) and the armour (0x1001eec0): not ported yet */
+    if (g_sh_stock_repairs) draw_repairs(g_sh_stock_repairs, &sb[4]);
+    draw_armour(&sb[5]);
     Scr_Text(0x52, 10, &g_sh_font45, (const char *)rec(), NULL);
     draw_weight();
 }
@@ -359,6 +417,8 @@ static void build(void)
         sb[i] = (SBox){rd32(b), rd32(b + 4), rd32(b + 8), rd32(b + 0xc), rd32(b + 0x10), rd32(b + 0x14),
                        rd32(b + 0x18) ? sb_scroll : NULL, NULL};
     }
+    /* the open's (0x10003fe0) for the trip: the repair order's box */
+    sb[4].rows = 10, sb[4].x0 = 0x1c2, sb[4].x1 = 0x268, sb[4].y0 = 0x30, sb[4].y1 = 0x107, sb[4].scroll = sb_scroll;
     sb_list = ShList_New(16);
     for (int i = 0; i < 10; i++) ShList_Add(sb_list, &sb[i], NULL);
     ShList_Add(sb_list, &sb[11], NULL);
@@ -762,16 +822,10 @@ static void drop_from(ShList *l, const ShList *from)   /* 0x1001e4d0 */
    of each kind, those on the car or in repair taken out of the garage's lists first */
 static void write_stock(ShList *rep, ShList *c, ShList *g, ShList *d, ShList *s)
 {
-    double k1, k2;
-    memcpy(&k1, dll_data(0x10059118, 8), 8);
-    memcpy(&k2, dll_data(0x10059120, 8), 8);
     int32_t split = rep->count, cost = 0;
     for (int i = 0; i < rep->count; i++) {
-        const ShPart *p = rep->items[i];
-        double whole = (double)rd32(p->part + 0x4c) * k1;
-        int lvl = (double)p->count < whole ? 3 : (double)p->count < whole * k2 ? 2 : 1;
-        cost += (int32_t)dll_u32(0x1005cbc0 + 4 * (uint32_t)pkind(p)) * lvl;
-        if (cost > 0x20) {
+        cost += repair_cost(rep->items[i], 0x10059118);
+        if (cost > REPAIR_BUDGET) {
             split = i - 1;
             break;
         }
@@ -826,6 +880,260 @@ static void write_spc(const char *path)
         for (int i = 0; i < rep->count; i++) put_node(&b, &n, &cap, rep->items[i]);
     if (b) Files_Write(path, b, n);
     free(b);
+}
+
+/* ---- the repairs and the armour ---- */
+
+/* 0x10007040: the repair order's arrows scroll it (its own first row, beside the scroll's, quirk kept),
+   a click on a part takes it out of the repair */
+static int repairs_click(int x, int y, const SBox *b)
+{
+    ShList *l = g_sh_stock_repairs;
+    if (!l) return 0;
+    int r = Box_RowAt(x, y, b);
+    if (r == -3) {
+        if (--rep_first < 0) {
+            rep_first = 0;
+            return 1;
+        }
+        draw_repairs(l, b);
+        return 1;
+    }
+    if (r == -2) {
+        if (l->count <= rep_first + 1) return 1;
+        rep_first++;
+        draw_repairs(l, b);
+        return 1;
+    }
+    if (r < 0 || r >= l->count) return 0;
+    ShPart *p = l->items[r];
+    p->where = 2;
+    ShList_Remove(l, p);
+    return 1;
+}
+
+/* 0x10006f50: a part sent to repair comes off the car: its slot gets the kind's marker */
+static void take_off(const ShPart *p)
+{
+    ShPart **c = (ShPart **)comps->items;
+    if (c[0] == p) { c[0] = &g_sh_no_engine; return; }
+    if (c[1] == p) { c[1] = &g_sh_no_susp; return; }
+    if (c[2] == p) { c[2] = &g_sh_no_brakes; return; }
+    for (int i = 3; i < 7; i++)
+        if (c[i] == p) { c[i] = &g_sh_no_wheel; return; }
+    ShList *l[3] = {guns, drops, specs};
+    for (int j = 0; j < 3; j++)
+        for (int i = 0; i < l[j]->count; i++)
+            if (l[j]->items[i] == p) { l[j]->items[i] = &g_sh_empty; return; }
+}
+
+/* SELECT REPAIRS (0x1000e7d0): a pop-up over the screen (0x10, 0x60, 0x260 x 0x120, frame 6) with the six
+   kinds' lists in its rects (0x1005f908, 0x18 bytes: id, x0, x1, y0, y1, the list), OK (6) and CANCEL
+   (7). A damaged part clicked goes in or out of the repair while the cost (by its damage, from those in
+   repair already: the specials' left out of it, quirk kept) stays within the budget; the ring's +0x18
+   holds a part's place before (here its +0x10 and 1; the original's a block) */
+static struct {
+    int x, y, w, h;
+    int32_t r[8][5];
+    ShList *lists[6], *chosen;   /* 0x1005f81c */
+    int32_t base;                /* 0x1006c2f8 */
+} rp;
+
+static void ring_each(void (*fn)(ShPart *))
+{
+    ShPart *p = g_sh_parts;
+    if (p) do {
+            fn(p);
+            p = p->next;
+        } while (p && p != g_sh_parts);
+}
+static void unsave(ShPart *p) { p->w18 = 0; }
+static void restore_where(ShPart *p) { if (p->w18) p->where = p->w18 - 1; }
+
+static void rp_draw(int i)   /* 0x1000e640 */
+{
+    int x = rp.x + rp.r[i][1], y = rp.y + rp.r[i][3];
+    int w = rp.r[i][2] - rp.r[i][1] + 1, h = rp.r[i][4] - rp.r[i][3] + 1;
+    for (int r = 0; r < h && y + r < 480; r++)
+        for (int c = 0; c < w && x + c < 640; c++) g_shs.px[(y + r) * 640 + x + c] = pk_under[(y + r) * 640 + x + c];
+    Scr_Dirty(x, y, x + w - 1, y + h - 1);
+    char text[32] = "";
+    const ShList *l = rp.lists[i];
+    y += 2;
+    for (int k = 0; l && k < l->count; k++, y += row_h) part_row(l->items[k], x + 3, y, text, 0x1005fab0);
+}
+
+static void rp_close(void)   /* 0x1000e540 */
+{
+    g_sh_modal = NULL;
+    Scr_Restore(rp.x, rp.y, rp.w + 0x10, rp.h + 0x10);
+    redraw();
+    ring_each(unsave);
+    if (rp.chosen) ShList_Clear(rp.chosen), ShList_Free(rp.chosen), rp.chosen = NULL;
+}
+
+static void refuse(void)   /* 0x10008140 */
+{
+    if (w_hello) Sound_StopData(w_hello);
+    if (w_refuse) Sound_PlayData(w_refuse, 100, 0, -1);
+}
+
+static void rp_toggle(int i)   /* 0x1000ed10 */
+{
+    const ShList *l = rp.lists[i];
+    int row = (g_sh_mouse.y - rp.y - rp.r[i][3]) / row_h;
+    if (!l || row >= l->count) return;
+    ShPart *p = l->items[row];
+    if (rd32(p->part + 0x4c) == p->count) return;
+    int32_t cost = rp.base;
+    for (int k = 0; k < rp.chosen->count; k++) {
+        cost += repair_cost(rp.chosen->items[k], 0x10059048);
+        if (cost >= REPAIR_BUDGET && p->where != 3) {
+            refuse();
+            return;
+        }
+    }
+    if (p->where == 3) {
+        if (!p->w18) {   /* in repair from before: out of it */
+            p->w18 = 3 + 1;
+            p->where = 2;
+        } else {
+            p->where = p->w18 - 1;
+            p->w18 = 0;
+        }
+        if (index_of(rp.chosen, p) == -1) rp.base -= repair_cost(p, 0x10059048);
+        else ShList_Remove(rp.chosen, p);
+    } else {
+        if (REPAIR_BUDGET < repair_cost(p, 0x10059048) + cost) {
+            refuse();
+            return;
+        }
+        p->w18 = p->where + 1;
+        p->where = 3;
+        ShList_Add(rp.chosen, p, NULL);
+    }
+    rp_draw(i);
+}
+
+static void rp_pass(void)   /* 0x1000da90 */
+{
+    if (g_sh_mouse.click != 1) return;
+    int hit = -1;
+    for (int i = 0; i < 8 && hit < 0; i++)
+        if (rp.r[i][1] + rp.x < g_sh_mouse.x && g_sh_mouse.x < rp.r[i][2] + rp.x &&
+            rp.r[i][3] + rp.y < g_sh_mouse.y && g_sh_mouse.y < rp.r[i][4] + rp.y)
+            hit = i;
+    if (hit >= 0 && hit < 6) {
+        rp_toggle(hit);
+        return;
+    }
+    if (hit == 6) {   /* OK: the chosen in repair and off the car, the rest out of it */
+        if (w_refuse) Sound_StopData(w_refuse);
+        if (!g_sh_stock_repairs) g_sh_stock_repairs = ShList_New(0x40);
+        ShList *rep = g_sh_stock_repairs;
+        for (int k = 0; k < rp.chosen->count; k++) {
+            ShPart *p = rp.chosen->items[k];
+            p->where = 3;
+            if (index_of(rep, p) == -1) ShList_Add(rep, p, NULL);
+            take_off(p);
+        }
+        for (int k = rep->count - 1; k >= 0; k--)
+            if (((ShPart *)rep->items[k])->where != 3) ShList_Remove(rep, rep->items[k]);
+        rp_close();
+    } else if (hit == 7) {
+        if (w_refuse) Sound_StopData(w_refuse);
+        ring_each(restore_where);
+        rp_close();
+    }
+}
+
+/* 0x10008190: the cost of those in repair, the engines', guns', wheels', brakes' and suspensions' */
+static int32_t in_repair_cost(void)
+{
+    ShList *l[5] = {g_sh_engines, g_sh_guns, g_sh_wheels, g_sh_brakes, g_sh_susps};
+    int32_t c = 0;
+    for (int j = 0; j < 5; j++)
+        for (int i = 0; i < l[j]->count; i++)
+            if (((ShPart *)l[j]->items[i])->where == 3) c += repair_cost(l[j]->items[i], 0x10059020);
+    return c;
+}
+
+static void select_repairs(void)
+{
+    rp.x = 0x10, rp.y = 0x60, rp.w = 0x260, rp.h = 0x120;
+    const uint8_t *d = dll_data(0x1005f908, 8 * 0x18);
+    if (!d) return;
+    for (int i = 0; i < 8; i++)
+        for (int k = 0; k < 5; k++) rp.r[i][k] = rd32(d + i * 0x18 + 4 * k);
+    ring_each(unsave);
+    ShList *l[6] = {g_sh_engines, g_sh_specials, g_sh_guns, g_sh_wheels, g_sh_brakes, g_sh_susps};
+    memcpy(rp.lists, l, sizeof l);
+    rp.chosen = ShList_New(0x40);
+    rp.base = in_repair_cost();
+    Scr_Shadow(rp.x + 0xc, rp.y + rp.h, rp.w, 0xc);
+    Scr_Shadow(rp.x + rp.w, rp.y + 0xc, 0xc, rp.h);
+    Scr_Frame(Shell_Set24(), 6, rp.x, rp.y, rp.w, rp.h);
+    memcpy(pk_under, g_shs.px, sizeof pk_under);
+    for (int i = 0; i < 6; i++) rp_draw(i);
+    g_sh_modal = rp_pass;
+}
+
+/* 0x1001e670: an armour's or chassis' minus and plus (the rects 0x100615bc and 0x100615d0, 0x2c a row;
+   the chassis' the minus moved 100 and 0x92 right): 10 a step, from what is left (+0x81c), each kept to
+   the total (the nine) times 0x10059138; while the button is held it steps each 100 ms */
+static struct { int row, which, wait; } hold = {-1, 0, 0};
+
+static void armour_step(void)
+{
+    int32_t total = 0;
+    for (int i = 0; i < 9; i++) total += *armour(i);
+    double k;
+    memcpy(&k, dll_data(0x10059138, 8), 8);
+    int32_t least = (int32_t)((double)total * k), *pool = armour(8);
+    int32_t *v = armour(hold.row + (hold.which >= 2 ? 4 : 0));
+    if (hold.which & 1) {
+        if (*pool - 10 >= 0) *v += 10, *pool -= 10;
+    } else if (least <= *v - 10)
+        *v -= 10, *pool += 10;
+    draw_weight();   /* 0x10008170 */
+    draw_armour(&sb[5]);
+}
+
+/* 0x1001e590: BALANCE: the total in eight, the rest to the front's armour, none left */
+static void balance(void)
+{
+    int32_t total = 0;
+    for (int i = 0; i < 9; i++) total += *armour(i);
+    double k;
+    memcpy(&k, dll_data(0x10059130, 8), 8);
+    int32_t each = (int32_t)((double)total * k);
+    for (int i = 0; i < 8; i++) *armour(i) = each;
+    *armour(0) = each + total % 8;
+    *armour(8) = 0;
+}
+
+static int armour_click(int x, int y, const SBox *b)   /* 0x1001ee50 */
+{
+    int row = (y - b->y0) / row_h;
+    if (row < 4) {
+        uint32_t at = 0x100615bc + 0x2c * (uint32_t)row;
+        int32_t r[5];
+        memcpy(r, dll_data(at, 20), 20);
+        int32_t chm[5] = {r[0], r[1] + 100, r[2] + 100, r[3], r[4]};
+        int32_t chp[5] = {r[0], r[1] + 0x92, r[2] + 0x92, r[3], r[4]};
+        int which = Rect_Hit(x, y, r) ? 0 : Rect_Hit(x, y, dll_data(at + 0x14, 20)) ? 1
+                  : Rect_Hit(x, y, chm) ? 2 : Rect_Hit(x, y, chp) ? 3 : -1;
+        if (which >= 0) {
+            hold.row = row, hold.which = which, hold.wait = 6;
+            armour_step();
+        }
+        return 1;
+    }
+    if (0xb9 < x && x < 0xf6 && 0x1a6 < y && y < 0x1b3) {
+        balance();
+        return 1;
+    }
+    return 0;
 }
 
 /* ---- the clicks (0x100043d0) ---- */
@@ -945,6 +1253,11 @@ static void screen(uint32_t msg)
         leave(msg);
         return;
     }
+    if (hold.row >= 0) {   /* an armour's button held (the original loops in 0x1001e670) */
+        if (!g_sh_mouse.left) hold.row = -1;
+        else if (--hold.wait <= 0) hold.wait = 6, armour_step();
+        return;
+    }
     int x = g_sh_mouse.x, y = g_sh_mouse.y, id = box_at(x, y);
     if (g_sh_mouse.click != 1) return;
     switch (id) {
@@ -987,7 +1300,22 @@ static void screen(uint32_t msg)
         if (x < 0xfe) unmount(specs, &sb[3], y, 0x1005d0d8, 1);
         else pick_spec(&sb[3], x, y);
         return;
-    case 4: case 5: case 10:   /* the repairs (0x10007040, 0x1000e7d0), the armour (0x1001ee50), 0x10007bc0 */
+    case 4:
+        Shell_Click(w_click);
+        if (x < 0x1e2 || 0x25c < x || y < 0xf1 || 0x102 < y) {
+            if (repairs_click(x, y, &sb[4])) draw_repairs(g_sh_stock_repairs, &sb[4]);
+        } else
+            select_repairs();
+        return;
+    case 5:
+        Shell_Click(w_click);
+        if (armour_click(x, y, &sb[5])) {
+            draw_armour(&sb[5]);
+            draw_weight();
+            changed = 1;
+        }
+        return;
+    case 10:   /* the paint (0x10007bc0) */
         Shell_Click(w_click);
         unported(id);
         return;
@@ -1017,11 +1345,13 @@ void Setup_Open(void)
     for (int i = 0; i < 0x1e; i++)
         if (any_gun(slot_kind(i))) guns_n++;
     put32(rec() + 0x864, guns_n);
-    Bars_Load();   /* 0x10035c50 (0x10010fe0, the sets 0x25-0x3f for the picture, not yet) */
+    Bars_Load();   /* 0x10035c50 */
+    if (!gauge) gauge = wave(0x3f);   /* of 0x10010fe0's sets (0x25-0x3e, the picture's, not yet) */
     Scr_Background(g_sh_db, g_sh_from_map ? 2 : 1);
     if (!sb_list) {
         w_click = wave(0x52);
         if (!g_sh_from_map) {
+            w_refuse = wave(0x4f);
             w_done = wave(0x50);
             if (g_sh_rec.trip == 1 && !g_sh_bookmark) {
                 w_hello = wave(0x4e);
@@ -1031,4 +1361,11 @@ void Setup_Open(void)
     }
     build();
     Shell_SetScreen(screen);
+}
+
+void Setup_Reset(void)   /* of 0x10003c80: the repair order's first row (and the screen's lists) */
+{
+    rep_first = 0;
+    setup_free();
+    trip_fns = 0;
 }

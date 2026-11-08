@@ -130,3 +130,20 @@
 10007360	Drops_Done	setup	high	the droppers' picker's end; ported
 10007450	Drops_Draw	setup	high	the droppers' picker's rows; ported
 10036600	Part_Bar	trip	high	a part's damage bar; ported
+100064a0	Setup_DrawRepairs	setup	high	the repair order and the repair time's gauge; ported
+10007040	Setup_RepairsClick	setup	high	the repair order's scroll and a part out of repair; ported
+10010e70	Setup_Gauge	setup	high	the repair time's gauge (entry 0x3f); ported
+1000e7d0	Repairs_Open	setup	high	SELECT REPAIRS' pop-up; ported
+1000da90	Repairs_Pass	setup	high	SELECT REPAIRS' pass: OK, CANCEL, the lists; ported
+1000ed10	Repairs_Toggle	setup	high	a part in or out of repair within the budget; ported
+1000e640	Repairs_DrawList	setup	high	SELECT REPAIRS' list; ported
+1000e540	Repairs_Close	setup	high	SELECT REPAIRS' close; ported
+10008190	Repairs_Cost	setup	high	the cost of the parts in repair (not the specials'); ported
+10008140	Repairs_Refuse	setup	high	over the budget: wave 0x4f; ported
+10008160	Repairs_StopWave	setup	high	wave 0x4f stopped; ported
+10006f50	Setup_TakeOff	setup	high	a part sent to repair off the car; ported
+1001ee50	Armour_Click	setup	high	the armour's box; ported
+1001e670	Armour_Step	setup	high	an armour's or chassis' minus and plus, held; ported
+1001e590	Armour_Balance	setup	high	BALANCE; ported
+1001eec0	Armour_Draw	setup	high	the armour's and chassis' figures; ported
+10008170	Setup_DrawArmour	setup	high	the weight and the armour redrawn; ported

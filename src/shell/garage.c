@@ -14,13 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {        /* 0x20 bytes, from 0x10066e98 */
-    int32_t id;         /* +0: what the hit test answers */
-    int32_t rows;       /* +4: the rows shown */
-    int32_t x0, x1, y0, y1;
-    int32_t *scroll;    /* +0x18: the yard's: the first row shown, then the up and down arrows' rects */
-    ShList *list;       /* +0x1c */
-} Box;
+typedef ShBox Box;   /* 0x20 bytes, from 0x10066e98 */
 
 static Box boxes[14];           /* 0x10066e98: twelve boxes, ACCEPT SALVAGE (0x10067018), SAVE BOOKMARK (0x10067038) */
 static int32_t scrolls[6][12];  /* 0x10066d78: 0x30 each */
@@ -57,6 +51,7 @@ void Garage_Reset(void)   /* i76shell 0x10034df0 (then 0x10010d20 and 0x10003c80
     for (int i = 0; i < 6; i++) yard[i] = NULL, scrolls[i][0] = 0;
     w_click = w_done = w_yard = w_ask = w_yes = w_no = NULL;
     Markers_Init();
+    Setup_Reset();
 }
 
 /* ---- the lists ---- */
@@ -317,8 +312,9 @@ static int box_at(int x, int y)
 
 /* i76shell 0x10036980: the row under the mouse; a yard's arrows scroll it (-3 up, -2 down, -1 at the end
    or outside the rows) */
-static int row_at(int x, int y, const Box *b)
+int Box_RowAt(int x, int y, const ShBox *b)   /* i76shell 0x10036980 */
 {
+    int row_h = g_sh_font45.height + 2;
     int32_t *s = b->scroll;
     int r = y - b->y0;
     if (!s) return r / row_h;
@@ -345,7 +341,7 @@ static int row_at(int x, int y, const Box *b)
    its rows), marked 2 or (into the yard) 4; 1 when something is to be drawn */
 static int move(Box *to, Box *from, int x, int y)
 {
-    int r = row_at(x, y, from);
+    int r = Box_RowAt(x, y, from);
     if (r == -3 || r == -2) return 1;
     if (r == -1 || r >= from->list->count || r < 0) return 0;   /* r < 0: the port's */
     if (!to->scroll && to->rows <= to->list->count) return 0;
