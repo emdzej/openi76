@@ -22,4 +22,5 @@ inside the original program are read from your copy when the game starts.
 - [Game data](/guide/game-data): the discs, the images and what the game reads from them.
 - [Running on gasm](/guide/gasm): the native runner and its options.
 - [Playing](/guide/playing): the controls, and the player in the browser.
+- [How the game works](/guide/theory): the theory of operation, from the frame loop to the missions.
 - [Build from source](/howto/build).

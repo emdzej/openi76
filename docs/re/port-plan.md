@@ -201,6 +201,9 @@ Write one page per format under `docs/formats/` (internal; not published).
 
 ## 13. Theory of operation (after the port)
 
+**Status:** the first edition is written (`docs/guide/theory.md`, in the site's guide). Revise it as
+the last missions are won and the network's details are checked.
+
 - A published guide to how the game works (`docs/guide/theory.md`, AGENTS.md rule 6), written from the
   finished port.
   It is for someone who wants to learn how to build a game like this, not a

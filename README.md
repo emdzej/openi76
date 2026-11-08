@@ -13,6 +13,7 @@ the game itself runs yet. The order of work is in the [port plan](docs/re/port-p
 
 - [What is on the discs](docs/re/inventory.md), [port plan](docs/re/port-plan.md)
 - [File formats](docs/formats/index.md)
+- [How the game works](docs/guide/theory.md), the theory of operation
 
 ## Data
 

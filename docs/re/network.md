@@ -1,7 +1,13 @@
 # Network play
 
-Status: being reverse-engineered (docs/re/port-plan.md step 12). Nothing of it is ported yet but the
-melee's single-player parts (src/melee.c: the spawns, 0x4631f0, 0x463670's score file).
+Status: ported (docs/re/port-plan.md step 12): the game's module (src/net/netgame.c), Activenet's calls on
+gasm:net and a gasm-relay room (src/net/anet.c), and the shell's host, join and information screens
+(src/shell/map.c, src/shell/shnet.c). Two instances play m01 against each other through the shell.
+
+**Damage is the owner's.** A vehicle with the node flag 0x20 (another player's car) takes no damage here
+(the class 1 damage handler's packet test, src/damage.c): the shots fired from a remote car (its
+triggers from SH) hit and explode on every machine, but only the victim's machine applies the packet to
+its own car, and that machine announces the death with its killer (+0x482).
 
 The original plays a melee over **Activenet** (`anetdll.dll`, Activision's network library, shipped on
 disc 1), not DirectPlay. The shell (`I76SHELL.DLL`) finds or makes a session, creates the player and
