@@ -493,8 +493,14 @@ static void explosion(const char name[8], Node *n, const float at[3])
     Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], NULL);
 }
 
-/* not ported yet, as the sounds: 0x4683c0 the sound by number 7, 0x468580 a sound by name */
-static void sound_named(const char *name, Node *n) { (void)name, (void)n; }
+/* 0x468580: the data's sound (+0x18, up to its +0x28) by name at n */
+static void sound_named(const char *name, Node *n)
+{
+    char s[17];
+    memcpy(s, name, 16);
+    s[16] = 0;
+    Sound_PlayAt(s, n, NULL);
+}
 /* 0x431320's: a puff of smoke, CHUNK1 (0x4d5394) or else CHUNK2 (0x4d538c), at at thrown at v, for life s */
 static void smoke_puff(int first, const float at[3], const float v[3], float life)
 {
