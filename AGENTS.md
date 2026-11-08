@@ -41,7 +41,7 @@ display, the HUD's target box and the rear-view mirror run (docs/re/cockpit.md).
 fills (docs/re/salvage.md). The Smacker movies play (docs/re/movies.md, docs/formats/smk.md): the intro and
 credits at start-up (`--param intro=0` leaves them out) and the script's `playMovie`, Esc skipping them, the
 pause (2) holding them; the mission's script's machines, conditions, orders, objectives and the rest of
-its actions run, the notepad showing the objectives (docs/re/fsm.md); the user's specials (jammer, nitro,
+its actions run, the notepad showing the objectives and the map its picture (docs/re/fsm.md); the user's specials (jammer, nitro,
 blower) work (docs/re/input.md). Not ported yet: the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke, the
 rockets' contrails, the flame throwers' flames, the skid marks and the debris run: docs/re/effects.md, with the wrecks' kicks,

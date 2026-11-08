@@ -237,11 +237,12 @@ static void play_frame(void)
     Clock_Tick();
     Input_Update();
     if (g_play_state & 0x3e) {   /* WinMain's loop with the play stopped: 0x44fab0, then a movie's frame */
-        if (g_play_state == 0x10) Menu_Keys();     /* 0x44fab0's menu (its map's is not ported) */
+        if (g_play_state == 0x10) Menu_Keys();     /* 0x44fab0's menu */
         int16_t typed;
         memcpy(&typed, INPUT_AT(INPUT_TYPED), 2);
-        if (g_play_state == 8 && typed) {   /* the notepad: a key but its own closes it */
-            if (!*INPUT_AT(0x4defed)) Notepad_Toggle();
+        if ((g_play_state == 4 || g_play_state == 8) && typed) {   /* the map, the notepad: a key but its own puts it away */
+            if (g_play_state == 4 && !*INPUT_AT(0x4defec)) Map_Toggle();
+            else if (g_play_state == 8 && !*INPUT_AT(0x4defed)) Notepad_Toggle();
             Input_Poll();   /* 0x480870 */
             if (g_play_state == 1) return;
         }

@@ -1155,7 +1155,7 @@ void User_Controls(void)
     }
     int sp[3] = {*INPUT_AT(0x4defe3) != 0, *INPUT_AT(0x4defe4) != 0, *INPUT_AT(0x4defe5) != 0};
     Specials_Use(n, sp);   /* 0x4821e0 with the vehicle's data */
-    /* the map (0x4defec, 0x44f7f0) is not ported yet */
+    if (*INPUT_AT(0x4defec)) Map_Toggle();       /* show_map, 0x44f7f0 */
     if (*INPUT_AT(0x4defed)) Notepad_Toggle();   /* Notepad_Init 0x41e950 */
     if (*INPUT_AT(0x4defee)) Horn_Held(n);   /* horn, 0x476420 */
     /* the poetry (0x4defef, 0x4513c0) is not ported yet */

@@ -212,6 +212,23 @@ or a new one at the table's end named `NoLabel<count>`, with a reference on the 
 - The close stops cnote.wav, frees everything, resumes the sounds (0x467a20) and sets the state back to
   1.
 
+### The map (0x44f7f0, src/notepad.c)
+
+`show_map` (M) shows the mission's map picture, WRLD's +0x79 (0x4db010).
+
+**Opening.**
+
+- With no map named it only warns.
+- The name is loaded by its screen name: Res_ScreenName at 1, 4 puts the mode's digit in place of the
+  name's fifth character, so `zmap6t01.map` stays as it is at 640 × 480. Without that file the name is
+  loaded as it is.
+- The picture goes onto the screen (0x41e8c0, scaled when the sizes differ), which is shown.
+- The playing sounds are paused, `cmap2.wav` and `gdsgc26.wav` play flat and the state becomes 4. The
+  music driver's pause is not ported.
+
+**Closing.** Play_StoppedKeys's state 4 closes it as the notepad's state 8 does: any key but its own,
+then Input_Poll. Both sounds stop, the picture is freed, the sounds resume and the state is 1 again.
+
 The port's glyphs: GDI's rasterizer turns a pixel on when its centre is inside the outline, and its
 dropout control keeps the strokes thinner than a pixel, which Lee at 14 pixels has many of. The port
 draws a pixel at half coverage. A pixel under that becomes a dropout one when it is the most covered

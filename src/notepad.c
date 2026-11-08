@@ -135,3 +135,69 @@ void Notepad_Toggle(void)
     Play_SetState(1);
     /* 0x468a40: the music driver's resume, not ported */
 }
+
+/* ---- the map (0x44f7f0) ---- */
+
+static const Texture *map_pic;   /* 0x55f6e8 */
+static char map_used[32];
+
+/* 0x41e8c0: a picture onto the screen (scaled by Sprite_Draw's mode 0 when its size differs: not ported,
+   the port's screen is the pictures' 640 x 480), shown */
+static int screen_show(const Surface *p)
+{
+    if (!g_screen || !g_screen->pixels) return 0;
+    Surface_Blit(g_screen, p, 0, 0, 0);
+    /* the hook 0x58dc58 is not ported */
+    plat_present(g_screen->pixels, g_screen->w, g_screen->h, g_screen->pitch, g_shown_pal);   /* 0x58dc7c */
+    return 1;
+}
+
+static void map_free(void)
+{
+    if (map_pic) Tex_PixelsRelease(map_used);
+    map_pic = NULL;
+}
+
+void Map_Toggle(void)
+{
+    if (g_play_state != 4) {
+        if (!g_world.zmap[0]) {
+            plat_log(exe_str(0x4db094));   /* "No map specified for this mission" */
+            return;
+        }
+        /* Res_LoadScreen at 1, 4: the name with its fifth character the screen mode's digit
+           (zmap6t01.map), else as it is */
+        const uint8_t *d = exe_data(0x4eb557u + g_detail.b[DET_SCREEN], 1);
+        snprintf(map_used, sizeof map_used, "%s", g_world.zmap);
+        if (strlen(map_used) > 4) map_used[4] = d ? (char)*d : '6';
+        map_pic = Tex_Pixels(map_used);
+        if (!map_pic) {
+            snprintf(map_used, sizeof map_used, "%s", g_world.zmap);
+            map_pic = Tex_Pixels(map_used);
+        }
+        if (!map_pic) {
+            char m[96];
+            snprintf(m, sizeof m, exe_str(0x4db068), g_world.zmap);   /* "Can't load Map %s" */
+            plat_log(m);
+            return;
+        }
+        Surface s = Surface_Make(map_pic->w, map_pic->h, (uint8_t *)map_pic->pixels);
+        if (!screen_show(&s)) {
+            plat_log(exe_str(0x4db020));
+            map_free();
+            return;
+        }
+        /* 0x468a50: the music driver's pause, not ported */
+        Sound_PausePlaying();                                   /* 0x4679a0 */
+        Sound_Play(exe_str(0x4db0c4), NULL, NULL, NULL);       /* cmap2.wav */
+        Sound_Play(exe_str(0x4db0b8), NULL, NULL, NULL);       /* gdsgc26.wav */
+        Play_SetState(4);
+        return;
+    }
+    Sound_Free(Sound_FindPlaying(exe_str(0x4db0c4), NULL));
+    Sound_Free(Sound_FindPlaying(exe_str(0x4db0b8), NULL));
+    map_free();
+    Sound_ResumePlaying();   /* 0x467a20 */
+    Play_SetState(1);
+    /* 0x468a40: the music driver's resume, not ported */
+}

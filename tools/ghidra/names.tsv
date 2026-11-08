@@ -157,7 +157,7 @@
 004843d0	Chunk_Exit
 004929c0	Res_ScreenName
 004928f0	Res_LoadScreen
-0044f7f0	Map_Load
+0044f7f0	Map_Load	mission	med	the in-game map shown (state 4) or put away; ported (src/notepad.c Map_Toggle)
 0048d710	Queue_Init	render	high	the render queue's pools and buckets (docs/re/render.md, "The render queue")
 0048e0b0	Queue_Free	render	high	frees the queue's pools
 0048e060	Queue_New	render	high	the record at the cursor, n and next cleared
@@ -1418,3 +1418,4 @@
 0041ef60	Notepad_Text	mission	med	the objectives not hidden into the notepad's bitmap, succeeded ones struck; ported (src/notepad.c)
 0041eeb0	Notepad_Free	mission	med	the notepad's bitmap, picture, font and DC freed, its state cleared; ported
 00453b90	Text_Box	menu	med	text broken at spaces into a box, an indent after the first line, a strike line; ported (src/menu.c)
+0041e8c0	Screen_ShowPicture	mission	med	a picture onto the screen, shown; ported (src/notepad.c)
