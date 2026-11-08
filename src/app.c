@@ -88,11 +88,6 @@ static uint8_t *pixels;
 static bool viewer_init(const char *mission)
 {
     char err[200], m[300];
-    static bool once;
-    if (!once) {   /* the pak index, once (WinMain's start-up, Files_Init 0x484db0) */
-        Res_Init();
-        once = true;
-    }
     Sound_Enable(0);    /* 0x466dd0 while the mission loads */
     Radio_On(1);        /* 0x46fa50, each mission */
     InvSqrt_Init();
@@ -351,6 +346,7 @@ bool app_init(void)
         snprintf(m, sizeof m, "OpenI76: %s", err);
         plat_log(m);
     }
+    Res_Init();             /* the pak and file index (WinMain's start-up, Files_Init 0x484db0), before the shell */
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
     Gamma_Build();          /* 0x43c1e0, early in WinMain */
     Sound_Defaults();       /* and the audio's (0x44d660) */
@@ -413,6 +409,7 @@ static void shell_frame(void)
     snprintf(m, sizeof m, "OpenI76: the shell ends with %d", shell_result);
     plat_log(m);
     Shell_End();
+    Input_MouseSync();
     g_game_state = 5;   /* ShellMain's SendMessage 0x432 as it ends: the window procedure's state 5 */
     /* Shell_Load's end: with the game's kind 2-4 the vehicle chosen (0x58d849) as the user's (0x58dcd0) (5,
        network play's, is not ported); the sounds stopped and parked, the sound off */

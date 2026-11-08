@@ -36,6 +36,9 @@ bool Input_Init(void);
 void Input_Keys(void);
 /* the window's left button (WM_LBUTTONDOWN, WM_LBUTTONUP): a movie skipped, the menu's click */
 void Input_Mouse(void);
+/* the port's: the buttons as they are taken as already seen (a press the shell's window had as its message
+   is not the game's: the button still held when the shell ends) */
+void Input_MouseSync(void);
 /* Kb_Clear 0x4812b0: the keyboard's queue of typed keys emptied */
 void Kb_Clear(void);
 /* Input_Update 0x480290, each frame: the analog sinks' resets, the actions cleared, every present device

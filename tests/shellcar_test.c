@@ -5,6 +5,7 @@
 #include "exe.h"
 #include "res.h"
 #include "shellcar.h"
+#include "shell/trip.h"
 #include "vfs.h"
 #include "vfs_host.h"
 #include "vfs_zfs.h"
@@ -101,6 +102,39 @@ int main(void)
     ShellCar_State(st, "shtest.vsf", on_salv);
     CHECK(st[0] == 9 && st[8] == 5 && st[9] == 3 && st[9 + 0x1e] == 40);
     CHECK(salvs == 1 && !strcmp(salv_name, "eng02"));
+    /* the shell's NEW TRIP: vppt01.vcf's record written by the shell (0x1001d6a0, 0x1001de30), read back
+       by the exe's reader as the original car */
+    CHECK(dll_init(err, sizeof err));
+    if (dll_loaded()) {
+        static uint8_t t1[SHELL_VCF], t2[SHELL_VCF];
+        CHECK(ShellCar_ReadVcf("vppt01.vcf", t1));
+        g_sh_car = 0;
+        CHECK(ShellCar_Record(g_sh_recs, "vppt01.vcf", 0) > 0);
+        g_sh_ncat = ShellCar_Catalogue(g_sh_cat);
+        Parts_Lists();
+        Car_WriteVcf("addon\\shtest2.vcf", NULL);
+        Car_WriteVsf("addon\\shtest2.vsf", NULL, NULL, NULL, NULL);
+        Parts_ListsFree();
+        CHECK(ShellCar_ReadVcf("shtest2.vcf", t2));
+        printf("the shell's vppt01: \"%s\" %s, engine \"%s\" brakes \"%s\" suspension \"%s\", wheels %s %s, "
+               "%d hard points: %s %s\n", (char *)t2 + 0x50, (char *)t2 + 0xf0, (char *)t2 + 0x137,
+               (char *)t2 + 0x147, (char *)t2 + 0x157, (char *)t2 + 0x2b8, (char *)t2 + 0x338, rd32(t2 + 0xa60),
+               (char *)t2 + 0x3c8, (char *)t2 + 0x3c8 + 0xfc);
+        CHECK(!strcmp((char *)t2 + 0x50, (char *)t1 + 0x50) && !strcmp((char *)t2 + 0xf0, (char *)t1 + 0xf0));
+        CHECK(!strcmp((char *)t2 + 0x137, (char *)t1 + 0x137) && !strcmp((char *)t2 + 0x147, (char *)t1 + 0x147) &&
+              !strcmp((char *)t2 + 0x157, (char *)t1 + 0x157));
+        CHECK(!memcmp(t2 + 0x2b8, t1 + 0x2b8, 0x40) && !memcmp(t2 + 0x338, t1 + 0x338, 0x40));
+        CHECK(rd32(t2 + 0xa60) == rd32(t1 + 0xa60));
+        for (int i = 0; i < rd32(t1 + 0xa60); i++) {
+            printf("  hard point %d: \"%s\" (the file's \"%s\")\n", i, (char *)t2 + 0x3c8 + i * 0xfc, (char *)t1 + 0x3c8 + i * 0xfc);
+            CHECK(!strcmp((char *)t2 + 0x3c8 + i * 0xfc, (char *)t1 + 0x3c8 + i * 0xfc));
+        }
+        int32_t ts[0x4e] = {0};
+        ShellCar_State(ts, "shtest2.vsf", NULL);
+        printf("  its state: engine %d brakes %d suspension %d, wheels %d %d %d %d, gun 0 on %d (%d)\n", ts[0], ts[1],
+               ts[2], ts[3], ts[4], ts[7], ts[8], ts[9], ts[0x27]);
+        CHECK(ts[0] > 0 && ts[1] > 0 && ts[2] > 0 && ts[3] > 0 && ts[0x27] > 0);
+    }
     printf("shellcar_test: %s\n", fails ? "FAILED" : "ok");
     return fails != 0;
 }

@@ -119,8 +119,12 @@ The menus' and screens' meanings are to be found as each is ported.
   is missing it opens the insert-disc dialog (0x1000fc80; stubbed: the port logs and cancels, back to the
   main menu). Then it quits with 0xc001. ShellMain's end makes the game's kind 0 or 1 into 2 and returns 3.
   Shell_Load copies the car's file into the exe's (0x58d849 to 0x58dcd0), and the app loads the mission
-  and plays it. The original writes the car out as `addon\vehscn.vcf` for the exe to read back; the port
-  hands over the name.
+  and plays it. Before that, TRAINING and NEW TRIP write the car out as `addon\vehscn.vcf` and `.vsf`
+  (step 8 below) and name `vehscn.vcf`, which the exe reads back.
+- **The file index** must be loaded before the shell runs (WinMain's 0x484db0): the shell's catalogue
+  reads compnent.cdf through it. A press the shell's window took as its message is not the game's: the
+  port takes the buttons still held when the shell ends as already seen (else the click on NEW TRIP
+  would skip the intro's movie).
 - **Checked:** the main menu's first frame is identical to a Python render of the formats. Scripted
   pointer input lights TRIP, opens its panel and shows a label under the mouse.
 - gasm's headless pointer (`PTR(x,y)`) is in drawable pixels: 1280 × 720 with the frame scaled by 1.5
@@ -168,5 +172,60 @@ shell runs, in order:
 6. **0xc00f (0x10003fe0; screen 0x100043d0, 5.8 KB)**: the car's set-up (paint, the guns on their hard
    points), then the car written (+0xc, +0x1c) and the mission (0xc010).
 7. **0xc015 (0x10033c60)**: the salvage screen.
+8. **The car written (0x1001d6a0 .vcf, 0x1001de30 .vsf; ported, src/shell/carwrite.c)**, also by NEW
+   TRIP and TRAINING. Confirmed from the disassembly (the decompiler drops the wheels' branches).
+   - **0x1001d380** sorts every catalogue part not named EMPTY into lists by its first kind: 0x100614b8
+     all, 0x10066d20 engines (2), 0x10066d34 suspensions (3), 0x10066d30 brakes (4, and 1), 0x10066d2c
+     wheels (5), 0x10066d28 guns (6-0xb), 0x10066d24 specials (0xc, 0xd). Each part gets a new node
+     (0x20 bytes: +0 the part, +0xc its condition = the part's +0x4c, +0x10 = 1). 0x1001d250 frees the
+     lists, but not the nodes.
+   - **The marker 0x1005c920** stands for an EMPTY slot: a node with condition 0 whose part (0x1006b250,
+     filled by 0x10003c80) is "Empty" with "null" at +0x2e and +0x3b. Other code sets its +0x1e kind.
+   - **0x1001bc80(kind, list)** walks the car's slots: it returns the marker at the first EMPTY slot of
+     any kind, else the first list part named as the first slot of that kind, else NULL.
+   - **0x1001be10(pred, out, list)** walks the slots up to the count plus 3 (past the end: a quirk). For
+     each slot whose kind pred accepts, it adds the marker (EMPTY, case-insensitive), or the first list
+     part of that name not yet in out, or failing that the first of that name again.
+   - **0x1001c2d0** does the same for the wheels. The part must also match the first 7 characters of the
+     car's front .wdf (record +0x83a) for the first two wheels, and its rear one (+0x854, the front's
+     when empty) after that. 0x1001d6a0 uses it instead of 0x1001be10 when 0x1006b050 is set (the
+     trip's map 0x10013040 sets it; the garage's screen clears it). 0x1001de30 always uses it.
+   - **The predicates:** 0x1001c6c0 accepts kind 5, 0x1001c660 kinds 6, 7, 8 and 0xb (not 9 or 10),
+     0x1001c6d0 kinds 0xc and 0xd.
+   - **0x1001d6a0(path, name)** builds the VCFC:
+     - From the record: the car's name (+0x14), the .vdf and .vtf, the armour (+0x7fc, 9 words).
+     - The engine, suspension and brakes numbers: atoi of the picked part's +0x31, less one. So all
+       three are kept, unlike the exe's 0x48aa60, which keeps only the engine's.
+     - The wheels. The first collected part's file goes to +0x36, after strncpy of the record's front
+       .wdf over its first 7 characters (this writes into the catalogue). The middle (+0x43) is "null"
+       unless the record has a middle .wdf, else the third part's file, overwritten the same way. The
+       rear (+0x50) is the third part's file again, with the rear .wdf. With no parts all three are
+       "null".
+     - The guns, those whose +0x2e is not "null". Each goes on the hard point (+0x784) of the next slot
+       of its name (strcmpi), searching from just after the last one found, at most 30 slots; 0 when
+       none is found.
+     - If the .vdf is vstank.vdf, gtktank.gdf goes in as the second gun on hard point 1. With exactly
+       two guns the second moves to the third place. With fewer than two the count grows by one and the
+       turret is not written (a quirk).
+     - The specials: the first three collected. Each SPEC is 0 for none or "null", else atoi of +0x3e
+       when +0x2e is "", else of +0x31.
+     It writes through the exe's +0x20 (0x487d60), then puts the file in the index (+8): name in the
+     player's directory 0x101098c4, or without a name the part of path after its first '\' in addon.
+   - **0x1001de30(path, name, comps, guns, more)** builds the VCST and the rest:
+     - The VCST: named vehscn.vcf (0x10061578) whatever the path. +0xd and +0x1d hold the record's
+       armour words +0x7fc and +0x80c (16 bytes each). +0x2d-0x3c are zeroed.
+     - The components' conditions: +0x3d the engine, +0x45 the suspension, +0x41 the brakes, taken
+       from comps' items 0-2 or the picked parts. The three bytes at +0x49 are 1.
+     - The WLST: comps' items 3-6, or the first four collected wheels, at +0x4c, +0x50, +0x5c and +0x60.
+       +0x54 and +0x58 are -1.
+     - The WPSTs at +0x64, from guns and then more (more is read without a check), or the collected
+       guns. Each gets the hard point as above, its condition, then -1. A gun whose +0x2e is "null" (or
+       an empty item) still takes an entry, with its count -1, but is not counted in n. The writer
+       (+0x24, 0x487c90) writes only the first n entries, so the last guns are then lost (a quirk).
+     - +0xbc is the record's +0x864.
+     Then it puts the file in the index as 0x1001d6a0 does.
+   - **NEW TRIP and TRAINING** load the car's record (+0x14: vppt01.vcf, vppa01.vcf), the catalogue (+0)
+     and the lists. They write addon\vehscn.vcf and .vsf with no lists given, free the lists, and name
+     vehscn.vcf as the user's vehicle.
 
 Other screens: the melee's, the options, the bookmarks, network play.

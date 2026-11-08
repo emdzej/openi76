@@ -2,6 +2,7 @@
    the parts catalogue the exe fills (shellcar.h), the list of parts the garage moves between the car and
    the salvage, and the message 0xc01e (Trip_Next) that sets them up after a mission. */
 #pragma once
+#include "shell/button.h"
 #include "shellcar.h"
 #include <stdint.h>
 
@@ -42,5 +43,20 @@ void Parts_Free(void);
 void Garage_Load(void);
 /* 0x10020fb0: the state's conditions onto the slots' parts */
 void Garage_State(void);
+/* the EMPTY slots' part (0x1005c920: its part "Empty" with "null" files, its condition 0) */
+extern ShPart g_sh_empty;
+extern int g_sh_from_map;           /* 0x1006b050: set by the trip's map (0x10013040), cleared by the garage */
+extern char g_sh_player_dir[16];    /* 0x101098c4: the saved game's directory (not ported: empty) */
+
+/* 0x1001d380: every part of the catalogue but the EMPTYs, new and whole, into the lists by kind */
+void Parts_Lists(void);
+void Parts_ListsFree(void);   /* 0x1001d250 */
+/* 0x1001d6a0: the car (record g_sh_car) with the lists' parts as a .vcf at path, then into the file
+   index (name in the player's directory, else path's name in addon) */
+void Car_WriteVcf(const char *path, const char *name);
+/* 0x1001de30: as a .vsf: the components' and wheels' conditions from comps (its items 0-6) or the car's
+   parts, the guns' from guns and more or the car's */
+void Car_WriteVsf(const char *path, const char *name, const ShList *comps, const ShList *guns, const ShList *more);
+
 /* 0x10020d30 (0xc01e) */
 void Trip_Next(int prev_state);

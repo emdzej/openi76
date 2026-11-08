@@ -4,7 +4,8 @@ In a trip the player's car carries over from one mission to the next: its parts'
 ammunition, and the salvage the mission left. The exe and the shell pass it through two files they write
 into the install directory's `addon` folder:
 - `addon\vehscn.vsf`, the car's state, written by the exe when a trip's mission is won;
-- `addon\vehscn.vcf`, the car's make-up, written by the shell's garage before the next mission.
+- `addon\vehscn.vcf` (with a `.vsf`), the car's make-up, written by the shell (i76shell 0x1001d6a0 and
+  0x1001de30, docs/re/shell.md) for a new trip or training and by its garage before the next mission.
 
 The exe's code for both is 0x487c90-0x48b7f0, reached by the shell through the table of exe functions
 it is given (docs/re/shell.md). The garage's side is not ported yet.

@@ -342,9 +342,18 @@ static void key_up(uint32_t lparam)
    (0x44d7f0) or counts as the script's key (0x4df010); a release goes to the menu */
 void Kb_Clear(void) { kb_clear(); }
 
+static uint32_t mouse_before;
+
+void Input_MouseSync(void)
+{
+    int x, y;
+    uint32_t b;
+    if (plat_pointer(&x, &y, &b)) mouse_before = b;
+}
+
 void Input_Mouse(void)
 {
-    static uint32_t before;
+    uint32_t before = mouse_before;
     int x, y;
     uint32_t b;
     if (!plat_pointer(&x, &y, &b)) return;
@@ -354,7 +363,7 @@ void Input_Mouse(void)
         else Menu_Mouse(0x201, x, y);
     } else if (!(b & 1) && (before & 1) && g_play_state == 0x10)
         Menu_Mouse(0x202, x, y);
-    before = b;
+    mouse_before = b;
 }
 
 void Input_Keys(void)

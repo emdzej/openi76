@@ -49,5 +49,11 @@ void ShellCar_WriteState(const char *path, const int32_t st[0x4e], int guns);
 /* 0x48b620 (+0x10): a state over the .vsf from (its WPST count kept) as a .vsf at path */
 void ShellCar_RewriteState(const int32_t st[0x4e], const char *path, const char *from);
 
+/* 0x487d60 (+0x20): a VCFC, the three SPECs and n WEPNs (0x11 each: the hard point, the .gdf; those
+   without a file skipped) as a .vcf at path; 0 when it cannot be written */
+int ShellCar_PutVcf(const char *path, const uint8_t vcfc[0x81], const uint8_t *wepn, int n, const uint8_t spec[12]);
+/* 0x487c90 (+0x24): a .vsf scratch (VCST, WLST, n WPSTs at +0x64, those counted -1 skipped) at path */
+int ShellCar_PutVsf(const char *path, const uint8_t *s, int n);
+
 /* the port's tables are the exe's (tests) */
 bool ShellCar_CheckTables(void);

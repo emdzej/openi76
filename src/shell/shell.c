@@ -130,31 +130,41 @@ static int insert_disc(void)
     return 0;
 }
 
+/* the user's car new from file: its record (the exe's +0x14), the catalogue (+0), the lists, and the car
+   written as addon\vehscn.vcf and .vsf for the exe to read back (0x1001d6a0, 0x1001de30) */
+static void new_car(uint32_t file, uint32_t vcf, uint32_t vsf)
+{
+    g_sh_car = 0;
+    ShellCar_Record(g_sh_recs, dll_str(file), g_sh_car);
+    memset(g_sh_cat, 0, sizeof g_sh_cat);   /* the port's: the catalogue counted from empty */
+    g_sh_ncat = ShellCar_Catalogue(g_sh_cat);
+    Parts_Lists();
+    Car_WriteVcf(dll_str(vcf), NULL);
+    Car_WriteVsf(dll_str(vsf), NULL, NULL, NULL, NULL);
+    Parts_ListsFree();
+}
+
 /* i76shell 0x10001680, TRAINING: the trip's record new (the mission 1 of a trip, none played), the
-   training's car vppa01.vcf loaded through the exe (+0x14, then +0) and written as the user's
-   (addon\vehscn.vcf, 0x1001d6a0/0x1001de30), the trip's number 1, the mission a01.msn (0x1005c444), the
-   game record from the trip's with vehscn.vcf (0x1005c44c) as the user's vehicle. The port keeps the
-   records; the car's file round trip (the exe's vcf reader and the shell's writer) is not ported, the
-   car taken as vppa01.vcf (0x1005c410) itself, which training writes back unchanged */
+   training's car vppa01.vcf (0x1005c410) written as the user's, the mission a01.msn (0x1005c444), the
+   game record from the trip's with vehscn.vcf (0x1005c44c) as the user's vehicle */
 void Training_Start(void)
 {
     g_sh_rec.trip = 1;
+    new_car(0x1005c410, 0x1005c41c, 0x1005c430);
     snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", dll_str(0x1005c444));   /* a01.msn */
     g_sh_rec.kind = 0;
-    /* the original reads vppa01.vcf (0x1005c410) into its vehicle record, writes it out as
-       addon\vehscn.vcf and .vsf, and names vehscn.vcf (0x1005c44c) for the exe to read back; the port
-       hands over the file it was read from */
-    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c410));
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c44c));
 }
 
 /* NEW TRIP (0x100017b0, 0xc022): the trip's record (its first mission, the game's kind 2), the car
-   vppt01.vcf (0x1005c458; as TRAINING's, the original's round trip through addon\vehscn.vcf is not
-   ported), then the mission's start (0xc010; 0xc020 first with 0x100637a0, which nothing sets) */
+   vppt01.vcf (0x1005c458) written as the user's, vehscn.vcf (0x1005c48c) the vehicle, then the mission's
+   start (0xc010; 0xc020 first with 0x100637a0, which nothing sets) */
 void Trip_Start(void)
 {
     g_sh_rec.trip = 1;
     g_sh_rec.kind = 2;
-    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c458));
+    new_car(0x1005c458, 0x1005c464, 0x1005c478);
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c48c));
     Shell_Post(0xc010, 0);
 }
 

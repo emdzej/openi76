@@ -647,7 +647,7 @@ static int part_of(const uint8_t *r, int i, const uint8_t *cat, int n)
 }
 
 /* 0x487d60: VCFC (0x81), the three SPECs, the WEPNs (0x11 each) with a file, last first, EXIT */
-static int vcf_write(const char *path, const uint8_t vcfc[0x81], const uint8_t *wepn, int n, const uint8_t spec[12])
+int ShellCar_PutVcf(const char *path, const uint8_t vcfc[0x81], const uint8_t *wepn, int n, const uint8_t spec[12])
 {
     Bwd2Out f;
     if (!Bwd2_Create(&f, path, 3)) return 0;
@@ -718,11 +718,11 @@ void ShellCar_WriteVcf(const uint8_t *recs, const uint8_t *cat, int n, const cha
         } while (guns < 10 && rd32(r + 0x40 + i * 0x20) > 6 && rd32(r + 0x40 + i * 0x20) < 0xc &&
                  i < rd32(r + 0x3c));
     }
-    vcf_write(path, v, w, guns, spec);
+    ShellCar_PutVcf(path, v, w, guns, spec);
 }
 
 /* 0x487c90: VCST, WLST, the WPSTs whose count is not -1 (last first), EXIT */
-static int vsf_write(const char *path, const uint8_t *s, int n)
+int ShellCar_PutVsf(const char *path, const uint8_t *s, int n)
 {
     Bwd2Out f;
     if (!Bwd2_Create(&f, path, 2)) return 0;
@@ -756,7 +756,7 @@ static void vsf_from_state(uint8_t *s, const int32_t st[0x4e], const char *path)
         put32(s + 0xd + 4 * i, st[0x46 + i]);
         put32(s + 0x1d + 4 * i, st[0x46 + i]);
     }
-    vsf_write(path, s, rd32(s + 0xbc));
+    ShellCar_PutVsf(path, s, rd32(s + 0xbc));
 }
 
 /* the scratch's +0: path's name as .vcf */

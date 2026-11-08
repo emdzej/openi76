@@ -57,6 +57,12 @@
 1001fe10	Parts_Add	trip	high	a part into the ring: kind 4 by file (its condition by chance for -1), 2 by name; ported
 100206a0	Garage_Load	trip	high	a record's slots and armour into the garage, each slot's part on the car; ported
 10020fb0	Garage_State	trip	high	the .vsf state's conditions onto the slots' parts; ported
-1001d380	Parts_Lists	trip	med	every non-EMPTY part into the lists by kind (0x100614b8 and the kinds')
-1001d6a0	Car_WriteVcf	trip	med	the garage's car as a .vcf (through the exe's +0x20)
-1001de30	Car_WriteVsf	trip	med	the garage's car as a .vsf (through the exe's +0x24)
+1001d380	Parts_Lists	trip	high	every non-EMPTY part into the lists by kind (0x100614b8 and the kinds'); ported (src/shell/carwrite.c)
+1001d6a0	Car_WriteVcf	trip	high	the garage's car as a .vcf (through the exe's +0x20); ported
+1001de30	Car_WriteVsf	trip	high	the garage's car as a .vsf (through the exe's +0x24); ported
+1001d250	Parts_ListsFree	trip	high	the kinds' lists cleared and freed, the all-parts list freed (its nodes not); ported
+1001bc80	Car_PickPart	trip	high	the car's part of a kind from a list by its slot's name; the EMPTY marker at the first EMPTY slot; ported
+1001be10	Car_CollectParts	trip	high	the slots of the kinds a predicate takes (to the count + 3), their parts from a list; ported
+1001c2d0	Car_CollectWheels	trip	high	as 0x1001be10, the wheels matched by the car's .wdf's 7 characters; ported
+1001c660	Kind_IsGun	trip	high	kinds 6, 7, 8, 0xb; ported
+10034bf0	ShList_IndexOf	list	high	an item's index or -1; ported
