@@ -1369,3 +1369,17 @@
 004880d0	ShellCar_Stbl	carfile	high	STBL: the suspension's name by number; ported
 0048b420	ShellCar_State	carfile	high	the table's +0x18: a .vsf as the shell's 0x4e-dword state; ported
 00489cf0	ShellCar_Record	carfile	high	the table's +0x14: a .vcf as the shell's 0x8c4 record (slots, names, armour, weight); ported
+004892e0	ShellCar_Catalogue	carfile	high	the table's +0: the garage's parts (EMPTYs, every .wdf .gdf .vtf, components, specials); ported
+0048a5a0	ShellCar_Empties	carfile	high	an EMPTY part of each slot kind; ported
+00489810	ShellCar_WheelPart	carfile	high	a .wdf as a part (kind 5); ported
+00489930	ShellCar_GunPart	carfile	high	a .gdf as a part by its class (9/10, 7, 8; none fatal); ported
+00489b60	ShellCar_PaintPart	carfile	high	a .vtf as a part (kind 0xe); ported
+00489400	ShellCar_Engines	carfile	high	the engines as parts (kind 2, their numbers); ported
+00489560	ShellCar_Brakes	carfile	high	the brakes as parts (kind 4); ported
+004896b0	ShellCar_Suspensions	carfile	high	the suspensions as parts (kind 3); ported
+00489c40	ShellCar_Specials	carfile	high	spc01-spc09 as parts (kind 0xd); ported
+00488320	ShellCar_Component	carfile	high	compnent.cdf with one component's number; the not-found messages; ported
+00486090	ShellCar_ReadWdf	carfile	high	a .wdf into a 0x40 record; ported
+00486aa0	ShellCar_ReadGdf	carfile	high	a .gdf (table 0x4e9f98); ported
+00485600	ShellCar_ReadVtf	carfile	high	a .vtf's name (table 0x4e9eb8); ported
+00487500	ShellCar_Vtfc	carfile	high	VTFC: 15 characters from +0x15; ported

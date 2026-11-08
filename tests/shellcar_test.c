@@ -60,6 +60,19 @@ int main(void)
     }
     CHECK(slots >= 3 + 4 && rd32(recs + 0x40) == 2 && rd32(recs + 0x864) == 4);
 
+    static uint8_t cat[SHELL_PARTS * SHELL_PART];
+    int parts = ShellCar_Catalogue(cat), by[16] = {0};
+    for (int i = 0; i < parts; i++) {
+        int k = rd32(cat + i * SHELL_PART + 0x1e);
+        if (k >= 0 && k < 16) by[k]++;
+    }
+    printf("catalogue: %d parts; engines %d, suspensions %d, brakes %d, wheels %d, guns %d+%d+%d, specials %d, "
+           "paints %d\n", parts, by[2], by[3], by[4], by[5], by[7], by[8], by[9], by[0xd], by[0xe]);
+    for (int i = 10; i < parts; i += parts / 8)
+        printf("  %3d %-20s kind %2d %s %s\n", i, (char *)cat + i * SHELL_PART, rd32(cat + i * SHELL_PART + 0x1e),
+               (char *)cat + i * SHELL_PART + 0x2e, (char *)cat + i * SHELL_PART + 0x3b);
+    CHECK(by[2] == 5 && by[3] == 5 && by[4] == 5 && by[0xd] == 10 && by[5] > 1 && by[7] > 1 && by[0xe] > 1);
+
     Bwd2Out f;
     uint8_t vcst[0x4c] = {0}, wlst[0x18] = {0}, wp[0xc] = {0}, sv[0x18] = {0};
     vcst[0x3d] = 9;

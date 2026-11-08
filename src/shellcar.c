@@ -4,6 +4,7 @@
 #include "exe.h"
 #include "objects.h"
 #include "platform.h"
+#include "res.h"
 #include "render/fpu.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -328,12 +329,6 @@ void ShellCar_State(int32_t out[0x4e], const char *name, SalvFn fn)
     for (int i = 0; i < 8; i++) out[0x46 + i] = rd32(s + 0xd + 4 * i);
 }
 
-bool ShellCar_CheckTables(void)
-{
-    return Chunks_Check(vdf_table, 13, 0x4e9d78) && Chunks_Check(wdf_table, 3, 0x4e9f08) &&
-           Chunks_Check(cdf_table, 13, 0x4ea118) && Chunks_Check(gdf_table, 6, 0x4e9f98) &&
-           Chunks_Check(vcf_table, 4, 0x4e9c68) && Chunks_Check(vsf_table, 5, 0x4e9e48);
-}
 
 /* ---- the shell's car record (0x489cf0) ---- */
 
@@ -463,4 +458,170 @@ int ShellCar_Record(uint8_t *recs, const char *name, int index)
     memcpy(r + 0x8bc, s + 0xaa0, 4);
     memcpy(r + 0x8c0, s + 0xaa4, 4);
     return hps;
+}
+
+/* ---- the parts catalogue (0x4892e0) ---- */
+
+static int vtfc(const uint8_t *c, void *arg, const uint8_t *end)   /* 0x487500: the paint's name */
+{
+    (void)end;
+    char *out = arg;
+    strncpy(out, (const char *)c + 0x15, 0xf);
+    out[0xf] = 0;
+    return 1;
+}
+
+static ChunkDesc vtf_table[] = {   /* 0x4e9eb8 */
+    {"VTFC", vtfc, 0x800}, {"EXIT", Objects_Exit, 0x1000},
+};
+
+static int ncat;   /* 0x582010 */
+
+/* an entry (0x54 bytes): +0 the name, +0x1e four kinds, +0x2e and +0x3b two file names, +0x48 an
+   engine's number, +0x4c, +0x50 */
+static uint8_t *entry(uint8_t *cat) { return cat + ncat * SHELL_PART; }
+
+static void kinds(uint8_t *e, int32_t k0)
+{
+    put32(e + 0x1e, k0);
+    for (int i = 1; i < 4; i++) put32(e + 0x1e + 4 * i, 0);
+}
+
+/* 0x48a5a0: an "EMPTY" of each kind a slot can be left with */
+static void empties(uint8_t *cat)
+{
+    static const int8_t k[10] = {2, 3, 4, 5, 7, 8, 9, 10, 0xb, 0xd};
+    for (int i = 0; i < 10; i++) {
+        uint8_t *e = entry(cat);
+        copy_exe(e, 0x4eacfc, 6);
+        put32(e + 0x1e, k[i]);
+        e[0x2e] = 0;
+        e[0x3b] = 0;
+        put32(e + 0x4c, 1);
+        ncat++;
+    }
+}
+
+static void wheel_part(uint8_t *cat, const char *name)   /* 0x489810 */
+{
+    uint8_t w[0x40] = {0};
+    Bwd2_Read(name, wdf_table, 3, w);   /* 0x486090 */
+    uint8_t *e = entry(cat);
+    strcpy((char *)e + 0x3b, name);
+    strcpy((char *)e, (const char *)w + 0x18);
+    kinds(e, 5);
+    strcpy((char *)e + 0x2e, (const char *)w + 0x2c);
+    memcpy(e + 0x4c, w + 0x28, 4);
+    memcpy(e + 0x50, w + 0x3c, 4);
+    ncat++;
+}
+
+static void gun_part(uint8_t *cat, const char *name)   /* 0x489930 */
+{
+    uint8_t g[0x168] = {0};
+    Bwd2_Read(name, gdf_table, 6, g);   /* 0x486aa0 */
+    int32_t second = rd32(g + 0x28) >= 10 ? 0xb : 0;
+    uint8_t *e = entry(cat);
+    strcpy((char *)e, (const char *)g + 0x14);
+    strcpy((char *)e + 0x2e, (const char *)g + 0x4c);
+    strcpy((char *)e + 0x3b, name);
+    memcpy(e + 0x4c, g + 0x44, 4);
+    switch (rd32(g + 0x24)) {   /* the gun's class */
+    case 1: put32(e + 0x1e, 9), put32(e + 0x22, 10); break;   /* the handguns */
+    case 2: case 3: case 4: case 5: put32(e + 0x1e, 7), put32(e + 0x22, second); break;
+    case 6: put32(e + 0x1e, 8); break;   /* a dropper */
+    default:
+        plat_log(exe_str(0x4eace0));   /* "ERROR weapon has no class" */
+        exit(0);
+    }
+    memcpy(e + 0x50, g + 0x48, 4);
+    ncat++;
+}
+
+static void paint_part(uint8_t *cat, const char *name)   /* 0x489b60 */
+{
+    char nm[16] = {0};
+    Bwd2_Read(name, vtf_table, 2, nm);   /* 0x485600 */
+    uint8_t *e = entry(cat);
+    strcpy((char *)e + 0x3b, name);
+    strcpy((char *)e, nm);
+    kinds(e, 0xe);
+    ncat++;
+}
+
+/* 0x488320: compnent.cdf with one component's number (0 the engine's, 1 the brakes', 2 the
+   suspension's), the others 0 */
+static void component_k(int32_t n, int which, uint8_t k[0xb0])
+{
+    memset(k, 0, 0xb0);
+    put32(k + 4, which == 0 ? n : 0);
+    put32(k + 0x3c, which == 1 ? n : 0);
+    put32(k + 0x74, which == 2 ? n : 0);
+    if (!Bwd2_Read(exe_str(0x4eaaf8), cdf_table, 13, k)) return;
+    char m[96];
+    if (!rd32(k + 8)) snprintf(m, sizeof m, exe_str(0x4eab44), rd32(k + 4), exe_str(0x4eaaf8)), plat_log(m);
+    if (!rd32(k + 0x40)) snprintf(m, sizeof m, exe_str(0x4eab28), rd32(k + 0x3c), exe_str(0x4eaaf8)), plat_log(m);
+    if (!rd32(k + 0x78)) snprintf(m, sizeof m, exe_str(0x4eab08), rd32(k + 0x74), exe_str(0x4eaaf8)), plat_log(m);
+}
+
+/* 0x489400 (engines, kind 2), 0x489560 (brakes, 4), 0x4896b0 (suspensions, 3): n of each, their names
+   from the tables and files from their records; only the engines keep their number */
+static void components_parts(uint8_t *cat, int which, int n)
+{
+    static const struct { uint8_t name, file, w4c, w50; int32_t kind; } f[3] = {
+        {0x2a, 0x1c, 0x10, 0x18, 2}, {0x62, 0x54, 0x48, 0x50, 4}, {0x9e, 0x90, 0x80, 0x8c, 3}};
+    for (int i = 0; i < n; i++) {
+        uint8_t k[0xb0];
+        component_k(i, which, k);
+        uint8_t *e = entry(cat);
+        strcpy((char *)e, (const char *)k + f[which].name);
+        kinds(e, f[which].kind);
+        strcpy((char *)e + 0x2e, (const char *)k + f[which].file);
+        strcpy((char *)e + 0x3b, (const char *)k + f[which].file);
+        if (which == 0) put32(e + 0x48, i);
+        memcpy(e + 0x4c, k + f[which].w4c, 4);
+        memcpy(e + 0x50, k + f[which].w50, 4);
+        ncat++;
+    }
+}
+
+static void specials_parts(uint8_t *cat)   /* 0x489c40: spc01-spc09, named from 0x4eac48 */
+{
+    for (uint32_t u = 0; u < 9; u++) {
+        uint8_t *e = entry(cat);
+        snprintf((char *)e + 0x3b, 13, exe_str(0x4eab60), exe_str(0x4eab68), (int)u + 1);
+        strcpy((char *)e, exe_str(exe_u32(0x4eac48 + 4 * u)));
+        kinds(e, 0xd);
+        ncat++;
+    }
+}
+
+int ShellCar_Catalogue(uint8_t *cat)
+{
+    ncat = 0;
+    empties(cat);
+    static const uint32_t ext[3] = {0x4e970c, 0x4e9734, 0x4e9714};   /* .wdf, .gdf, .vtf */
+    for (int x = 0; x < 3; x++) {
+        char pat[16];
+        snprintf(pat, sizeof pat, exe_str(0x4eacdc), exe_str(ext[x]));   /* "*%s" */
+        int i = 0;
+        for (const char *n; (n = Res_Next(pat, &i));) {
+            if (ncat >= SHELL_PARTS) break;   /* the port's bound: the shell's array */
+            if (x == 0) wheel_part(cat, n);
+            else if (x == 1) gun_part(cat, n);
+            else paint_part(cat, n);
+        }
+    }
+    components_parts(cat, 0, 4);
+    components_parts(cat, 1, 4);
+    components_parts(cat, 2, 4);
+    specials_parts(cat);
+    return ncat;
+}
+
+bool ShellCar_CheckTables(void)
+{
+    return Chunks_Check(vdf_table, 13, 0x4e9d78) && Chunks_Check(wdf_table, 3, 0x4e9f08) &&
+           Chunks_Check(cdf_table, 13, 0x4ea118) && Chunks_Check(gdf_table, 6, 0x4e9f98) &&
+           Chunks_Check(vcf_table, 4, 0x4e9c68) && Chunks_Check(vsf_table, 5, 0x4e9e48) && Chunks_Check(vtf_table, 2, 0x4e9eb8);
 }

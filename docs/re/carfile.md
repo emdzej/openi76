@@ -127,3 +127,29 @@ Two quirks are kept:
 
 The training car (vppa01.vcf) gives 12 slots: the three components, four wheels, four guns (Oil Slick,
 two 30cal MG, FireRite Rkt) and the special Structo Bmpr.
+
+## The parts catalogue (0x4892e0) — confirmed, tested
+
+The shell's +0 fills its array of parts (0x1010a048, 0x54 bytes each) and returns their count
+(0x582010):
+
+| Offset | Contents |
+|---|---|
+| +0 | the part's name ("13in Stock", "30cal MG", "police") |
+| +0x1e | four kinds: the slot kinds the part fits |
+| +0x2e, +0x3b | two file names (the mesh or the record's name, and the file) |
+| +0x48 | an engine's number |
+| +0x4c, +0x50 | two of its figures (a wheel's +0x28 and weight, a gun's GDFC +0x38 and weight, a component's first word and weight) |
+
+In order:
+1. An `EMPTY` of each kind a slot can be left with: 2, 3, 4, 5, 7, 8, 9, 10, 0xb, 0xd (+0x4c 1).
+2. Every `*.wdf` of the file index (kind 5), every `*.gdf` and every `*.vtf` (kind 0xe, the paints, by
+   their VTFC +0x15). A gun's kinds come from its class (GDFC +0x18): 1 the handguns (9 and 10), 2-5
+   (7, and 0xb when its slot is 10 or more), 6 a dropper (8). Any other class is the fatal "ERROR weapon
+   has no class".
+3. The four engines (kind 2), brakes (4) and suspensions (3) of compnent.cdf, read once each with that
+   one's number (0x488320, which logs "Engine %d not found in %s" and its like). Only the engines keep
+   their number at +0x48.
+4. The nine specials (kind 0xd), files `spc01`-`spc09`, named from the table at 0x4eac48.
+
+On disc 1 that is 223 parts: 71 wheels, 46 guns, 79 paints.

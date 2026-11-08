@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum { SHELL_VCF = 0xaa8, SHELL_VSF = 0xc0, SHELL_REC = 0x8c4 };
+enum { SHELL_VCF = 0xaa8, SHELL_VSF = 0xc0, SHELL_REC = 0x8c4, SHELL_PART = 0x54, SHELL_PARTS = 400 };
 
 /* 0x485210: name's .vcf into the scratch (SHELL_VCF bytes, cleared by the caller): +0x50 the car's name,
    +0xa0 the body's, +0xf0 the .vdf, +0xfd the .vtf, +0x10a the shell's VSHL, +0x137/+0x147/+0x157 the
@@ -34,6 +34,11 @@ void ShellCar_State(int32_t out[0x4e], const char *name, SalvFn salv);
    .vdf, +0x82d the .vtf, +0x83a the wheels' .wdf, +0x868 the hard points' words, +0x8bc the weight. The
    hard points' count goes to the array's +0x864. 0 when the file cannot be read */
 int ShellCar_Record(uint8_t *recs, const char *name, int index);
+
+/* 0x4892e0 (the table's +0): the parts the garage offers, SHELL_PART bytes each (+0 the name, +0x1e
+   their kinds, +0x2e and +0x3b their files): an EMPTY of each slot's kind, every .wdf, .gdf and .vtf of
+   the file index, the four engines, brakes and suspensions, the nine specials; their count */
+int ShellCar_Catalogue(uint8_t *cat);
 
 /* the port's tables are the exe's (tests) */
 bool ShellCar_CheckTables(void);
