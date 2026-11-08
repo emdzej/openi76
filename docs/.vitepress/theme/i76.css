@@ -1,0 +1,315 @@
+/* OpenI76 theme: the box's cover.
+   - the burst of orange and red behind the car: the navigation bar, a sunset gradient;
+   - the logo: yellow letters with a hard black outline and shadow, in a yellow and royal blue oval;
+     under the bar, the oval's two rings as a stripe (yellow over blue);
+   - type: heavy italic capitals for the headings, as the logo; plain Helvetica for the text.
+   Light mode is warm paper with near-black ink, the oval's blue for links, yellow buttons outlined in
+   black (the logo's letters). Dark mode is the night sky over the desert: deep navy, yellow headings,
+   the blue lightened for links. */
+
+:root {
+  --i76-paper: #fff6e6;
+  --i76-paper-2: #ffecc8;
+  --i76-paper-3: #ffe2ad;
+  --i76-ink: #15131f;
+  --i76-blue: #1d4fae;
+  --i76-blue-dark: #12347a;
+  --i76-yellow: #ffdf1e;
+  --i76-orange: #f26a21;
+  --i76-red: #d6331b;
+  --i76-night: #0f1430;
+  --i76-sunset: linear-gradient(100deg, #d6331b 0%, #f26a21 45%, #ffa52b 80%, #ffd25a 100%);
+  --i76-stripe: linear-gradient(var(--i76-yellow), var(--i76-yellow)) 0 0 / 100% 4px no-repeat,
+                linear-gradient(var(--i76-blue), var(--i76-blue)) 0 4px / 100% 6px no-repeat;
+
+  --vp-font-family-base: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --i76-display: "Arial Black", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --vp-c-brand-1: var(--i76-blue);
+  --vp-c-brand-2: var(--i76-blue-dark);
+  --vp-c-brand-3: #2b63cc;
+  --vp-c-brand-soft: rgba(29, 79, 174, 0.12);
+
+  --vp-c-bg: var(--i76-paper);
+  --vp-c-bg-alt: var(--i76-paper-2);
+  --vp-c-bg-elv: #fffaf0;
+  --vp-c-bg-soft: var(--i76-paper-2);
+  --vp-c-divider: rgba(21, 19, 31, 0.14);
+  --vp-c-gutter: var(--i76-paper-3);
+  --vp-c-border: rgba(21, 19, 31, 0.3);
+  --vp-c-text-1: var(--i76-ink);
+  --vp-c-text-2: #3d3a4a;
+  --vp-c-text-3: #625e70;
+
+  --vp-code-block-bg: #fff0d4;
+  --vp-code-bg: var(--i76-paper-2);
+  --vp-code-color: #5a2a00;
+
+  --vp-c-tip-1: var(--i76-blue);
+  --vp-c-tip-soft: rgba(29, 79, 174, 0.08);
+  --vp-c-warning-1: #8a5300;
+  --vp-c-warning-soft: rgba(255, 223, 30, 0.25);
+  --vp-c-danger-1: #b3200c;
+  --vp-c-danger-soft: rgba(214, 51, 27, 0.12);
+
+  --vp-button-brand-bg: var(--i76-yellow);
+  --vp-button-brand-hover-bg: #ffe94f;
+  --vp-button-brand-active-bg: #f5d000;
+  --vp-button-brand-border: var(--i76-ink);
+  --vp-button-brand-hover-border: var(--i76-ink);
+  --vp-button-brand-active-border: var(--i76-ink);
+  --vp-button-brand-text: var(--i76-ink);
+  --vp-button-brand-hover-text: var(--i76-ink);
+  --vp-button-brand-active-text: var(--i76-ink);
+  --vp-button-alt-bg: #ffffff;
+  --vp-button-alt-border: var(--i76-ink);
+  --vp-button-alt-hover-bg: var(--i76-paper-2);
+  --vp-button-alt-hover-border: var(--i76-ink);
+  --vp-button-alt-active-bg: var(--i76-paper-3);
+  --vp-button-alt-text: var(--i76-ink);
+  --vp-button-alt-hover-text: var(--i76-ink);
+  --vp-button-alt-active-text: var(--i76-ink);
+
+  --vp-home-hero-name-color: var(--i76-blue);
+  --vp-home-hero-image-background-image: none;
+
+  --vp-nav-bg-color: transparent;
+}
+
+.dark {
+  --vp-c-brand-1: #8fb3ff;
+  --vp-c-brand-2: #c2d5ff;
+  --vp-c-brand-3: #5d8ff0;
+  --vp-c-brand-soft: rgba(143, 179, 255, 0.14);
+
+  --vp-c-bg: var(--i76-night);
+  --vp-c-bg-alt: #0b0f26;
+  --vp-c-bg-elv: #161d42;
+  --vp-c-bg-soft: #161d42;
+  --vp-c-divider: #262f5c;
+  --vp-c-gutter: #070a1c;
+  --vp-c-border: #34407a;
+  --vp-c-text-1: #f4efe2;
+  --vp-c-text-2: #c9c3b4;
+  --vp-c-text-3: #9893a4;
+
+  --vp-code-block-bg: #0b0f26;
+  --vp-code-bg: #1b2350;
+  --vp-code-color: #ffd98a;
+
+  --vp-c-tip-1: #8fb3ff;
+  --vp-c-tip-soft: rgba(143, 179, 255, 0.1);
+  --vp-c-warning-1: #ffc66b;
+  --vp-c-danger-1: #ff8a73;
+
+  --vp-button-brand-border: #000;
+  --vp-button-brand-hover-border: #000;
+  --vp-button-brand-active-border: #000;
+  --vp-button-alt-bg: #161d42;
+  --vp-button-alt-border: #000;
+  --vp-button-alt-hover-bg: #1f2858;
+  --vp-button-alt-hover-border: #000;
+  --vp-button-alt-active-bg: #262f5c;
+  --vp-button-alt-text: #f4efe2;
+  --vp-button-alt-hover-text: #ffffff;
+  --vp-button-alt-active-text: #ffffff;
+
+  --vp-home-hero-name-color: var(--i76-yellow);
+}
+
+/* The bar: the cover's sunset, with the oval's yellow and blue rings as a stripe under it. */
+.VPNav .VPNavBar,
+.VPNav .VPNavBar.has-sidebar .content-body,
+.VPNav .VPNavBar .content-body,
+.VPNav .VPNavBar .divider-line {
+  background: transparent !important;
+}
+.VPNav {
+  background: var(--i76-sunset) !important;
+}
+.VPNav::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 10px;
+  background: var(--i76-stripe);
+  pointer-events: none;
+}
+.VPNavBar .divider { display: none; }
+.VPNavBarTitle .title {
+  color: var(--i76-yellow) !important;
+  font: italic 900 22px/1 var(--i76-display);
+  text-shadow: 2px 2px 0 var(--i76-ink);
+  border: 0 !important;
+}
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button,
+.VPNavBar .VPSocialLink,
+.VPNavBarAppearance,
+.VPNavBarHamburger .container > span,
+.VPNavBar .DocSearch-Button {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
+}
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--i76-yellow) !important;
+}
+.VPNavBarHamburger .top,
+.VPNavBarHamburger .middle,
+.VPNavBarHamburger .bottom {
+  background-color: #ffffff !important;
+}
+.VPNavBar .DocSearch-Button {
+  background: rgba(21, 19, 31, 0.22) !important;
+}
+.VPNavBar .DocSearch-Button .DocSearch-Search-Icon,
+.VPNavBar .DocSearch-Button-Placeholder {
+  color: #ffffff !important;
+}
+.VPSwitchAppearance {
+  background-color: rgba(21, 19, 31, 0.25) !important;
+  border-color: rgba(21, 19, 31, 0.4) !important;
+}
+.VPLocalNav {
+  margin-top: 10px;
+}
+
+/* The logo's lettering: heavy italic with a hard shadow. */
+.VPHero .name {
+  font-family: var(--i76-display);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-shadow: 3px 3px 0 var(--i76-yellow), 6px 6px 0 var(--i76-ink);
+}
+.dark .VPHero .name {
+  text-shadow: 4px 4px 0 #000;
+}
+.VPHero .text {
+  font-family: var(--i76-display);
+  font-style: italic;
+  font-weight: 900;
+  color: var(--vp-c-text-1);
+}
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPFeature .title {
+  font-family: var(--i76-display);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+.vp-doc h2 {
+  text-transform: uppercase;
+  font-size: 22px;
+  border-top: 0;
+  padding-top: 18px;
+  background: var(--i76-stripe);
+  background-size: 64px 4px, 64px 6px;
+}
+.vp-doc h1 {
+  color: var(--vp-c-brand-1);
+}
+.dark .vp-doc h1 {
+  color: var(--i76-yellow);
+}
+
+.VPButton {
+  border-radius: 4px !important;
+  border-width: 2px !important;
+  font-weight: 800 !important;
+}
+.VPButton.brand {
+  box-shadow: 3px 3px 0 var(--i76-ink);
+}
+.dark .VPButton.brand {
+  box-shadow: 3px 3px 0 #000;
+}
+
+/* Feature cards: white panels outlined in black with an orange drop shadow, as the cover's stickers. */
+.VPFeature {
+  background: #ffffff !important;
+  border: 2px solid var(--i76-ink) !important;
+  border-radius: 6px !important;
+  box-shadow: 4px 4px 0 var(--i76-orange);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+a.VPLink:hover > .VPFeature {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--i76-orange);
+}
+.dark .VPFeature {
+  background: #161d42 !important;
+  border-color: #000 !important;
+  box-shadow: 4px 4px 0 var(--i76-red);
+}
+.dark a.VPLink:hover > .VPFeature {
+  box-shadow: 6px 6px 0 var(--i76-red);
+}
+.VPFeature .link-text-value {
+  color: var(--vp-c-brand-1);
+}
+
+.VPSidebarItem.is-active > .item > .indicator {
+  background-color: var(--i76-orange);
+}
+
+.vp-doc table th {
+  background: var(--i76-paper-3);
+}
+.dark .vp-doc table th {
+  background: #1b2350;
+}
+
+.vp-doc a {
+  text-decoration-color: rgba(29, 79, 174, 0.35);
+  text-underline-offset: 3px;
+}
+.vp-doc a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* gasm's official "Built for gasm" badge (https://gasm.emdzej.pl/dev/badge): the variant that matches the theme. */
+.gasm-badge-dark { display: none; }
+.dark .gasm-badge-light { display: none; }
+.dark .gasm-badge-dark { display: inline; }
+
+.vp-doc kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border: 1px solid var(--i76-ink);
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  background: #ffffff;
+  color: var(--i76-ink);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85em;
+  line-height: 1.6;
+  text-align: center;
+}
+.dark .vp-doc kbd { border-color: #000; background: #1b2350; color: #f4efe2; }
+
+/* the home page's screenshots: framed like the cover's stickers */
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; margin: 16px 0 8px; }
+.shots figure { margin: 0; }
+.shots img { width: 100%; height: auto; display: block; border: 2px solid var(--i76-ink); border-radius: 4px;
+  box-shadow: 4px 4px 0 var(--i76-orange); }
+.dark .shots img { border-color: #000; box-shadow: 4px 4px 0 var(--i76-red); }
+.shots figcaption { font-size: 0.85em; color: var(--vp-c-text-2); margin-top: 8px; }
+
+/* The hero picture (docs/public/hero.svg, drawn for the site after the cover's composition). */
+.VPHero .image-bg { display: none; }
+.VPHero .image-container { width: 320px; height: 240px; }
+.VPHero .image-src { max-width: 100% !important; max-height: 100% !important; filter: drop-shadow(5px 5px 0 var(--i76-ink)); }
+@media (min-width: 640px) {
+  .VPHero .image-container { width: 440px; height: 330px; }
+}
+@media (min-width: 960px) {
+  .VPHero .image-container { width: 520px; height: 390px; }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- OpenI76's mark: an oval ring in the cover's yellow and blue around a heavy italic 76 -->
+  <ellipse cx="32" cy="32" rx="30" ry="21" fill="#ffdf1e" stroke="#15131f" stroke-width="3"/>
+  <ellipse cx="32" cy="32" rx="23" ry="15" fill="#1d4fae" stroke="#15131f" stroke-width="2"/>
+  <text x="33" y="42" text-anchor="middle" font-family="Arial Black, Helvetica, Arial, sans-serif" font-weight="900"
+        font-style="italic" font-size="27" fill="#ffffff" stroke="#15131f" stroke-width="2" paint-order="stroke">76</text>
+</svg>

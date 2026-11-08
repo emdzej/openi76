@@ -1,0 +1,42 @@
+# Status
+
+OpenI76 is **in progress**. The game's subsystems are ported and run; the missions are being played
+through and checked against the original. There are no releases yet.
+
+## What runs
+
+- **The discs.** ISO 9660 images, raw `.bin` images with their `.cue`, the extracted files, and the
+  `I76.ZFS` archive inside. The program is checked (size and CRC-32) and its tables are read from it.
+- **The shell** (`I76SHELL.DLL`). The main menu, the training, the trip with its garage, the set-up,
+  bookmarks and pop-ups, the melee's scenarios and the instant melee on their map, and the controls'
+  set-up.
+- **The movies.** The intro, the credits and the missions' cutscenes (Smacker), with Esc to skip them.
+- **The world.** The original's 8-bit software renderer: terrain, roads, sky, objects with their levels of
+  detail, dynamic lights and shadows. Checked against the original in an x86 emulator.
+- **The vehicles.** Loading, the physics with the engine and gears, collisions between vehicles and with
+  objects, damage, death and wrecks, the helicopters.
+- **The AI.** Pathfinding (over the bridges too), driving, avoiding, attacking and the tactics, under the
+  mission script's orders.
+- **The weapons.** Every kind of ordnance, the turrets and the artillery, the specials (nitro, blower,
+  jammer), the salvage list.
+- **The effects.** Explosions, smoke, contrails, flames, skid marks, debris and the wrecks' parts.
+- **The cockpit.** The 3D and the flat cockpit with their instruments, the weapons' panel, the radar, the
+  damage display, the HUD's target box and the rear-view mirror.
+- **The missions' scripts.** The state machines, conditions, orders, objectives, the notepad and the map.
+- **Sound.** Engines, tyres, weapons, the cockpit, the radar and the CB radio's queue, placed in 3D; the
+  music from disc 2's audio tracks.
+- **The menus in a mission.** The Esc menu, the end of a mission, replay and exit.
+
+## Played through
+
+The first four missions of the trip play to a win from start to end. The rest of the trip, the training and
+the melee's arenas run and are being played through; the details of each are still being checked.
+
+## Not ported yet
+
+- **Network play.**
+
+## Beyond the original
+
+Nothing yet. Additions (widescreen, higher resolutions) will come after the faithful game, and will
+always be opt-in: the default is the original.

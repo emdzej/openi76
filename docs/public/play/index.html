@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Play | OpenI76</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Run Interstate '76 (1997) in your browser with OpenI76, using the data from your own discs.">
+<meta name="theme-color" content="#f26a21">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="play.css">
+<script type="importmap">
+{ "imports": {
+  "@emdzej/csfs-core": "./vendor/csfs/core/index.js",
+  "@emdzej/csfs-fsa": "./vendor/csfs/fsa/index.js",
+  "@emdzej/csfs-opfs": "./vendor/csfs/opfs/index.js"
+} }
+</script>
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28"> OpenI76</a>
+  <nav>
+    <a href="/guide/">Guide</a>
+    <a href="/guide/status">Status</a>
+    <a href="/play/" aria-current="page">Play</a>
+    <a href="https://github.com/emdzej/openi76">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section id="setup">
+    <h1>Interstate '76 in your browser</h1>
+    <p class="lead">OpenI76 runs here as <code>openi76.wasm</code> on the
+      <a href="https://gasm.emdzej.pl">gasm</a> runtime: the same module as on the desktop, a port of the
+      original game's code, reading the missions, cars, sounds and music from <strong>your own Interstate
+      '76 discs</strong>. Nothing from the game is on this site, and nothing you pick leaves your
+      computer.</p>
+    <p class="lead small">A work in progress: the shell, the trip's and the training's missions run,
+      with the AI, the weapons, the cockpit and the sound; most missions have not been played through
+      yet and network play is not ported. See <a href="/guide/status">Status</a>.</p>
+
+    <div class="cols">
+      <div class="card">
+        <h2>What you need</h2>
+        <ul>
+          <li><strong>Interstate '76</strong> for PC (Activision, 1997; the program <code>I76.EXE</code>
+            version 1.0): disc 1 as an <code>.iso</code> image or its files copied off the disc, and disc 2
+            as an <code>.iso</code>, or as a <code>.bin</code> with its <code>.cue</code> for the music.
+            See <a href="/guide/game-data">Game data</a>.</li>
+          <li>A browser with WebAssembly and Web Workers: a recent Chrome, Edge, Firefox or Safari.</li>
+          <li>About 1.1 GB of browser storage to import both discs as images with the music (once; later
+            visits start at once), or none to play without importing.</li>
+          <li>A keyboard and a mouse; a gamepad works too.</li>
+        </ul>
+      </div>
+      <div class="card" id="choose">
+        <h2 id="choose-title">Choose your discs</h2>
+        <div id="imported" hidden>
+          <p><strong>Imported:</strong> <span id="imported-desc"></span></p>
+          <div class="row">
+            <button id="play-opfs" class="primary">Play</button>
+            <button id="remove">Remove imported discs</button>
+          </div>
+          <p class="small" id="storage"></p>
+          <p class="small" id="persist-row" hidden>The browser may clear site data when disk space runs low.
+            <button id="persist" class="link">Keep it</button></p>
+          <p class="small">Or choose the discs again below to replace them.</p>
+        </div>
+        <div class="row">
+          <button id="pick-image" class="primary">Choose the disc images</button>
+          <button id="pick-folder">Choose disc 1's folder</button>
+        </div>
+        <p class="small">Pick the images together: disc 1's <code>.iso</code>, disc 2's <code>.iso</code>
+          or <code>.bin</code>, and the <code>.cue</code> next to the <code>.bin</code>
+          (<a href="/howto/extract-cd">how to make them</a>). The discs are told apart by their labels. A
+          folder is disc 1's files (<code>I76.EXE</code>, <code>I76.ZFS</code>, <code>MISSIONS</code>,
+          ...), without disc 2.</p>
+        <input id="folder-input" type="file" webkitdirectory multiple hidden>
+        <input id="image-input" type="file" accept=".iso,.bin,.cue,.ISO,.BIN,.CUE" multiple hidden>
+
+        <div id="check" hidden>
+          <ul id="check-list" class="checks"></ul>
+          <div class="row" id="check-actions">
+            <button id="import" class="primary">Import and play</button>
+            <button id="play-direct">Play without importing</button>
+          </div>
+          <p class="small">Importing copies what you picked into this site's private browser storage
+            (OPFS). Playing without importing reads it from where it is, which you'll need to pick again
+            next time.</p>
+        </div>
+
+        <div id="progress" hidden>
+          <progress id="progress-bar" max="1" value="0"></progress>
+          <p class="small" id="progress-text"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="game" hidden>
+    <div id="stage" class="stage">
+      <canvas id="screen" width="640" height="480" aria-label="Interstate '76" tabindex="0"></canvas>
+    </div>
+    <div class="toolbar">
+      <button id="fullscreen">Fullscreen</button>
+      <button id="sound">Sound: on</button>
+      <button id="stop">Stop</button>
+      <span id="view-controls">
+        <select id="filter" aria-label="Scaling" title="How the picture is scaled up: sharp = even pixels at any size, nearest = plain pixel doubling, xbr = smooth edges, fsr = AMD FSR 1, crt = scanlines"></select>
+        <label class="small" title="Scale by whole multiples only (black border around)"><input id="integer" type="checkbox"> integer</label>
+      </span>
+      <span id="status" class="small"></span>
+    </div>
+  </section>
+
+  <p id="message" class="message" role="status" hidden></p>
+
+  <section id="controls">
+    <h2>Controls</h2>
+    <p>The mouse drives the shell's menus. In a mission the game reads the keyboard with the original's
+      default keys (<code>input.map</code>): the keypad's arrows drive (<kbd>8</kbd> throttle,
+      <kbd>2</kbd> brake, <kbd>4</kbd> <kbd>6</kbd> steer), <kbd>S</kbd> starts the engine,
+      <kbd>.</kbd> and <kbd>,</kbd> shift, <kbd>Space</kbd> (or the left mouse button) fires,
+      <kbd>Enter</kbd> picks the next weapon, <kbd>F1</kbd>-<kbd>F11</kbd> the cameras, <kbd>Esc</kbd> skips a movie or opens the menu. Change the keys in the Esc menu's Control
+      Configuration. More in <a href="/guide/playing">Playing</a>.</p>
+    <p class="small">Holding <kbd>Esc</kbd> for a second stops the game. In fullscreen the browser takes
+      <kbd>Esc</kbd> to leave fullscreen. The options and the keys are kept in this browser.</p>
+  </section>
+</main>
+
+<footer class="foot"><p class="powered">Powered by <a href="https://gasm.emdzej.pl"><img src="https://gasm.emdzej.pl/badge/built-for-gasm-light.svg" alt="Built for gasm" width="120" height="44"></a></p>
+  OpenI76 is released under the GPL-3.0. Interstate '76 is &copy; 1997 Activision, Inc. OpenI76 contains
+  no original code or assets and is not affiliated with Activision.</footer>
+
+<script type="module" src="play.js"></script>
+</body>
+</html>
