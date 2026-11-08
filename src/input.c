@@ -4,6 +4,7 @@
 #include "damage.h"
 #include "fsm.h"
 #include "notepad.h"
+#include "radio.h"
 #include "movie.h"
 #include "sound.h"
 #include "radar.h"
@@ -1158,7 +1159,7 @@ void User_Controls(void)
     if (*INPUT_AT(0x4defec)) Map_Toggle();       /* show_map, 0x44f7f0 */
     if (*INPUT_AT(0x4defed)) Notepad_Toggle();   /* Notepad_Init 0x41e950 */
     if (*INPUT_AT(0x4defee)) Horn_Held(n);   /* horn, 0x476420 */
-    /* the poetry (0x4defef, 0x4513c0) is not ported yet */
+    if (*INPUT_AT(0x4defef)) Poetry_Ask(n);   /* poetry, 0x4513c0 */
     if (*INPUT_AT(0x4deff0)) {   /* the binoculars: the cockpit's other view (0x480990, 0x4809a0, 0x407010) */
         g_view_cockpit = 0;
         g_view_preset = 0xc;

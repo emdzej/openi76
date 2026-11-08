@@ -200,6 +200,7 @@ static void show_frame(void)
    of the real one. */
 static bool play;
 static double tick_ms = -1;
+static char mission_name[64];   /* (defined below) */
 
 static bool play_init(void)
 {
@@ -218,6 +219,7 @@ static bool play_init(void)
     Tracers_Init(100);   /* 0x46c0e0 */
     Noise_Init();        /* 0x451510 */
     Smoke_Init();        /* 0x46dfb0 */
+    Poetry_Init(mission_name);   /* 0x451320, and 0x4513a0 by the mission */
     Clock_Init();
     if (!Input_Init()) {
         plat_log("OpenI76: the input's tables are missing");

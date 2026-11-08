@@ -1419,3 +1419,7 @@
 0041eeb0	Notepad_Free	mission	med	the notepad's bitmap, picture, font and DC freed, its state cleared; ported
 00453b90	Text_Box	menu	med	text broken at spaces into a box, an indent after the first line, a strike line; ported (src/menu.c)
 0041e8c0	Screen_ShowPicture	mission	med	a picture onto the screen, shown; ported (src/notepad.c)
+00451320	Poetry_Init	radio	med	the poems and answers shuffled at a mission's start; ported (src/radio.c)
+004513a0	Poetry_Decline	radio	med	the missions where Taurus declines (1) or is absent (2)
+004513c0	Poetry_Ask	radio	med	the poetry key: the asking, Taurus's poem, the answer on the CB; ported
+004512f0	Poetry_ShuffleCmp	radio	med	qsort's random comparison

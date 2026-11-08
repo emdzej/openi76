@@ -21,3 +21,9 @@ void Radio_On(int on);
 void Radio_Drop(Node *node);
 /* the port's, for the checks: the queue's length */
 int Radio_Count(void);
+/* the poetry: 0x451320 at each mission's start, the poems and the user's answers shuffled, then (WinMain's
+   0x4513a0) t04 and t06 have Taurus decline, t05 nothing */
+void Poetry_Init(const char *mission);
+/* 0x4513c0, the poetry key: on an empty CB queue the user asks (GDSGC40), Taurus recites the next poem and
+   the user answers, each list shuffled again once gone through */
+void Poetry_Ask(Node *user);

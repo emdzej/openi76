@@ -218,6 +218,22 @@ playing, cmike.wav (kind 2) cuts it. The manager empties the queue:
 - when everything stops (0x466de0);
 - when the voices are cut below a playing message (0x467100).
 
+### The poetry (0x451320-0x4513c0)
+
+Taurus recites poems on the `poetry` key (C).
+
+- At each mission's start (0x451320) two lists are made and shuffled: the 15 poems POSTA01-15.WAV
+  (0x4db150, names 0xd bytes apart) and the user's 5 answers GDSGC42-46.WAV (0x4db228).
+- The shuffle is the CRT's qsort with a comparison of ftol(rand / 32767 × 2 − 1) (0x4512f0). That is 0
+  except at rand's two ends, so qsort's own way with equal elements decides the order. crt_qsort
+  reproduces it.
+- WinMain then marks t04 and t06 as kind 1 and t05 as kind 2 (0x4513a0).
+- The key (0x4513c0) does nothing unless the CB queue is empty. Otherwise the user asks (GDSGC40.WAV,
+  kind 5). If that plays, Taurus (the script's actor `taurus`, 0x409b10) says the next poem and the user
+  answers with the next answer, both kind 6. A list that has been gone through is shuffled again.
+- In a kind 1 mission the user's GDSGC41.WAV follows the asking instead. In a kind 2 mission nothing
+  happens.
+
 ## The frame (0x466b70)
 
 WinMain calls it each frame in a mission with 1, after the camera's step, then 0x466dd0(1). Without the
