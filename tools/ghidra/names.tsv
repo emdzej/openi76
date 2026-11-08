@@ -1226,7 +1226,7 @@
 0045b3f0	Chunk_SpawnOne	effects	high	one random destruction chunk thrown, taken out of the record; ported
 0042e850	Node_PosIn	scene	high	a node's position in an ancestor's space, as floats; ported (Node_FrameIn)
 00488950	Salvage_Vehicle	salvage	high	an AI car's death: its parts salvaged; ported
-004883f0	Salvage_Parts	salvage	high	a car's 96 part records (condition, name); ported (records 0-63)
+004883f0	Salvage_Parts	salvage	high	a car's 96 part records (condition, name, a gun's, the armour); ported
 00488a40	Salvage_Add	salvage	high	a name at its tier into its group; ported
 00489120	Salvage_Tier	salvage	high	a name brought down to the tier the mission allows; ported
 00488d60	Salvage_Free	salvage	high	the list freed; ported
@@ -1335,3 +1335,12 @@
 004789f0	Cd_Position	music	high	MCI_STATUS_POSITION split to T, M, S, F; ported
 00478a90	Cd_Volume	music	high	auxSetVolume of level x 0xccc both channels (1 is 0); ported
 00492940	Res_ScreenPic	res	high	a picture by Res_ScreenName's name, else its own (Tex_Pixels)
+004848d0	Bwd2_Create	carfile	high	a BWD2 file opened for writing: the header and REV; ported (src/carfile.c)
+00484980	Bwd2_Chunk	carfile	high	a chunk written: the tag byte-swapped, the size + 8, the data; ported
+00484a30	Bwd2_Close	carfile	high	EXIT when asked, the file closed; ported
+004878b0	Vsf_WriteMission	carfile	high	a won trip mission's car as addon\vehscn.vsf: VCST, WLST, WPST, SALV; ported
+0048c220	Zix_Next	res	high	the next index name matching a pattern; ported (Res_Next)
+0048c290	Zix_AddPath	res	high	a name into the file index under a root added for its directory; ported (Res_AddPath)
+00495b70	Wild_Match	crt	high	a name against a pattern, no leading wildcard on a dot name; ported (Res_Match)
+00495bb0	Wild_Step	crt	high	the pattern matcher: 1, 0, or -1 the name ended first; ported
+00495d00	Wild_Star	crt	high	a star: the rest tried at each place, -1 counted as found by the caller; ported

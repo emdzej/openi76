@@ -27,3 +27,13 @@ bool Res_Exists(const char *name);
 int32_t Res_Size(const char *name);
 /* the pak holding a member, or NULL (for tools and tests) */
 const char *Res_PakOf(const char *name);
+/* 0x495b70 with 0x495bb0: name against a pattern (* ? [a-z] [!..] \x), case-sensitive; a leading
+   wildcard never matches a name that begins with '.'. A '*' takes the name ending before the rest of the
+   pattern as a match too (0x495d00 counts the -1 as found): "*.wdf" matches "wdf" */
+bool Res_Match(const char *name, const char *pattern);
+/* 0x48c220: the next name of the file index from *i that matches the pattern, *i past it; NULL after the
+   last */
+const char *Res_Next(const char *pattern, int *i);
+/* 0x48c290: a written file into the file index, in the directory dir (a root added for it when new);
+   the port also drops the name's cached bytes, so that the file is read again */
+bool Res_AddPath(const char *name, const char *dir);

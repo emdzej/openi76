@@ -39,6 +39,14 @@ uint8_t *vfs_read_all(const char *rel, size_t *size);
 typedef void (*VfsListFn)(const char *name, bool is_dir, void *user);
 bool vfs_list(const char *dir, VfsListFn fn, void *user);
 
+/* The files the game writes (its car between missions, its settings): kept over whatever is mounted, read
+   before it by the same paths (case-insensitive, '/' or '\'). The copy is the caller's; a second put
+   replaces the first. Persisting them is the app's (plat_save_user_file). false out of memory or for a
+   "CD:" path. */
+bool vfs_put(const char *rel, const void *data, size_t size);
+/* the i-th written file's path (normalized, lower case); false past the last */
+bool vfs_written(int i, const char **path);
+
 /* What is mounted, for messages ("cd", "I76_CD1.ISO (ISO 9660, 2048-byte sectors) + I76.ZFS (3847 files)", ...). */
 const char *vfs_describe(void);
 bool vfs_mounted(void);

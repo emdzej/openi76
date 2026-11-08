@@ -132,10 +132,6 @@ static int32_t scaled(int32_t a, float scale)
     return v >= 2147483648.0 ? INT32_MIN : (int32_t)v;
 }
 
-typedef struct {
-    int32_t count;
-    char name[8];
-} Part;
 
 /* sprintf over "null" (a longer one runs on into the record, cut here at 8) */
 static void set_name(char name[8], const char *s)
@@ -144,20 +140,26 @@ static void set_name(char name[8], const char *s)
     memcpy(name, s, n < 8 ? n : 8);
 }
 
-/* Salvage_Parts 0x4883f0 (its first 64 records of 0x60 bytes, those 0x488950 reads): a record's +0x40 the
+/* Salvage_Parts 0x4883f0 (96 records of 0x60 bytes; 0x488950 reads the first 64): a record's +0x40 the
    part's count over the scale (1 for the AI; the user's 4), its +0x58 the part's name ("null" for none):
    0-5 the wheels (their nodes' names), 7 the engine ("eng" and its kind + 1), 8 the suspension ("sus",
    +8), 9 the brakes ("bra", +0x14), 10 on the guns (their instances' +0xc, their nodes' names), 17-19
-   the specials (1 when there over the scale, "spc" and its kind). The records past 63 (the armour's) are
-   not ported */
-static void parts(Node *n, Part out[64])
+   the specials (1 when there over the scale, "spc" and its kind); 64-95 the armour's */
+void Salvage_Parts(Node *n, Part out[96])
 {
     uint8_t *d = n->data;
-    float scale = (n->flags & 0x10) ? exe_f32(0x4a7494) : exe_f32(0x4a7490);
-    for (int i = 0; i < 64; i++) {
-        out[i].count = 0;
-        memcpy(out[i].name, "null\0\0\0\0", 8);
+    bool user = (n->flags & 0x10) != 0;   /* 0x42e620 */
+    memset(out, 0, 96 * sizeof *out);
+    for (int i = 0; i < 96; i++) memcpy(out[i].name, "null\0\0\0\0", 8);
+    /* 64-79 and 80-95: the armour's words at +0x138 and +0x148, 16 each (so overlapping), signed, over
+       0x4a7484 for the user's, 0x4a7490 for the others */
+    float as = user ? exe_f32(0x4a7484) : exe_f32(0x4a7490);
+    for (int i = 0; i < 16; i++) {
+        double a = (double)rd32(d + 0x138 + 4 * i) / as, b = (double)rd32(d + 0x148 + 4 * i) / as;
+        out[64 + i].count = a >= 2147483648.0 || a <= -2147483649.0 ? INT32_MIN : (int32_t)a;
+        out[80 + i].count = b >= 2147483648.0 || b <= -2147483649.0 ? INT32_MIN : (int32_t)b;
     }
+    float scale = user ? exe_f32(0x4a7494) : exe_f32(0x4a7490);
     Node *eng = *(Node **)Data_Ptr(d, 0x3c4), *sus = *(Node **)Data_Ptr(d, 0x3c8), *bra = *(Node **)Data_Ptr(d, 0x3cc);
     char b[32] = {0};
     out[7].count = scaled(part_count(eng, 0), scale);
@@ -184,8 +186,14 @@ static void parts(Node *n, Part out[64])
     if (Weapons_Carrier(n, list) == 1)
         for (int j = 0; j < list[0] && 10 + j < 64; j++) {
             int32_t inst = list[1 + j];
-            if (inst >= 0 && inst < 350 && g_weapons[inst].index == inst)   /* 0x4551d0 */
-                out[10 + j].count = (int32_t)g_weapons[inst].v0c;
+            if (inst >= 0 && inst < 350 && g_weapons[inst].index == inst) {   /* 0x4551d0 */
+                const WeaponInst *w = &g_weapons[inst];
+                out[10 + j].count = w->v0c;
+                out[10 + j].w44 = (int32_t)w->v18;
+                out[10 + j].w48 = !((uint32_t)w->v1c & 0x7fffffff) && w->v3c == 1 && w->v40 == 1;
+                out[10 + j].w4c = w->v44;
+                out[10 + j].w50 = w->hp->slot[w->slot].id;
+            }
             Node *g = *(Node **)Data_Ptr(d, 0x3d0 + 4u * (uint32_t)j);
             if (g) memcpy(out[10 + j].name, g->name, 8);   /* the original's reads a null one */
         }
@@ -194,8 +202,8 @@ static void parts(Node *n, Part out[64])
 void Salvage_Vehicle(Node *n)
 {
     if (!n || !n->data || (g_game_options & 2)) return;
-    Part p[64];
-    parts(n, p);
+    Part p[96];
+    Salvage_Parts(n, p);
     for (int i = 0; i < 64; i++) {
         if (!memcmp(p[i].name, "null\0\0\0\0", 8) || p[i].count <= 0) continue;
         /* the extension by the record: the wheels' .wdf, the guns' (10-16) .gdf, none for the rest */

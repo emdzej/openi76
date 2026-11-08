@@ -34,6 +34,15 @@ void Salvage_ReadFile(const char *mission);
 /* Salvage_Pick 0x489000 (the shell's, a mission's end): of each group at random 4 wheels, 1 special, else
    2 give or take one */
 void Salvage_Pick(void);
+/* the records of 0x4883f0 (0x60 bytes each): +0x40 the count, +0x44-+0x50 a gun's (0x4551d0), +0x58 the
+   name, "null" for none */
+typedef struct {
+    int32_t count;              /* +0x40 */
+    int32_t w44, w48, w4c, w50; /* a gun's: its +0x18, unlimited, its +0x44, its hard point's id */
+    char name[8];               /* +0x58 */
+} Part;
+/* Salvage_Parts 0x4883f0: a vehicle's 96 records (docs/re/salvage.md) */
+void Salvage_Parts(Node *n, Part out[96]);
 /* Salvage_Free 0x488d60 */
 void Salvage_Free(void);
 /* the list */

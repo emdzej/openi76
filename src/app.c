@@ -14,6 +14,8 @@
 #include "menu.h"
 #include "movie.h"
 #include "music.h"
+#include "files.h"
+#include "carfile.h"
 #include "cdaudio.h"
 #include "shell/shell.h"
 #include "smoke.h"
@@ -339,6 +341,7 @@ static bool mission_start(const char *name);
 bool app_init(void)
 {
     char err[256], m[300];
+    Files_Restore();   /* what the game wrote in earlier runs */
     if (!exe_init(err, sizeof err)) {
         snprintf(m, sizeof m, "OpenI76: %s", err);
         plat_log(m);
@@ -482,8 +485,12 @@ static void mission_end(void)
     if (g_game_state == 1 && g_cheater) g_game_state = 0xb;
     if (g_game_state == 1) {   /* won: the salvage (but in t04), and the mission's last movie */
         if (crt_strnicmp(exe_str(0x4a833c), mission_name, 3)) {
-            /* 0x58dc84 (t12), the salvage's file (0x488e60) and the car written as addon\vehscn.vsf (0x4878b0,
-               0x48c290) for the shell: not ported yet */
+            /* after t12 no salvage is kept (0x58dc84); the mission's .fsi (0x488e60); the car written as
+               addon\vehscn.vsf for the shell (0x4878b0) and put in the file index (0x48c290) */
+            g_salvage_none = !crt_strnicmp(exe_str(0x4a8204), mission_name, 3);
+            Salvage_ReadFile(mission_name);
+            Vsf_WriteMission(exe_str(0x4a81f0), exe_str(0x4a81f8));
+            Res_AddPath(exe_str(0x4a81f8), exe_str(0x4a81f0));
         }
         /* 0x43b570: the palette faded to black over 0.01 s, the screen black (0x58dcbc) */
         memset(pixels, g_black, 640 * 480);

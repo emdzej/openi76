@@ -274,6 +274,106 @@ void Res_Release(const char *name)
     if (c && c->users) c->users--;
 }
 
+/* 0x495bb0 */
+static int wild(const char *s, const char *p);
+
+static int wild_star(const char *s, const char *p)   /* 0x495d00 */
+{
+    do {
+        if (wild(s, p)) return 1;
+        s++;
+    } while (*s);
+    return -1;
+}
+
+static int wild(const char *s, const char *p)
+{
+    while (*p) {
+        signed char c = (signed char)*s;
+        if (!c) return *p == '*' && !p[1] ? 1 : -1;
+        switch (*p) {
+        case '*':
+            if (!p[1]) return 1;
+            return wild_star(s, p + 1);
+        case '?':
+            break;
+        case '[': {
+            bool neg = p[1] == '!';
+            if (neg) p++;
+            p++;
+            int prev = 0x100;
+            bool hit = false;
+            while (*p && *p != ']') {
+                bool m;
+                if (*p == '-') {
+                    p++;
+                    m = !((signed char)*p < c || c < prev);
+                } else
+                    m = (signed char)*p == c;
+                if (m) hit = true;
+                prev = (signed char)*p;
+                p++;
+            }
+            if (hit == neg) return 0;
+            break;
+        }
+        case '\\':
+            p++;
+            /* fall through */
+        default:
+            if ((signed char)*p != c) return 0;
+        }
+        s++, p++;
+    }
+    return !*s;
+}
+
+bool Res_Match(const char *name, const char *pattern)
+{
+    if ((*pattern == '?' || *pattern == '*') && *name == '.') return false;
+    return wild(name, pattern) == 1;
+}
+
+const char *Res_Next(const char *pattern, int *i)
+{
+    if (!pattern || *i < 0) return NULL;
+    while (*i < nzix) {
+        const char *n = zix[(*i)++].name;
+        if (Res_Match(n, pattern)) return n;
+    }
+    return NULL;
+}
+
+bool Res_AddPath(const char *name, const char *dir)
+{
+    int r = 1;
+    while (r < nroots && crt_stricmp(zix_root[r], dir)) r++;
+    if (r == nroots) {
+        if (nroots >= 8) return false;   /* the original's bound is 256 ("More than %d zix paths specified") */
+        snprintf(zix_root[nroots++], 64, "%s", dir);
+    }
+    char key[16];
+    name16(key, name);
+    for (Cached **c = &cache; *c; c = &(*c)->next)   /* the port's: the bytes read again */
+        if (!strcmp((*c)->name, key) && !(*c)->users) {
+            Cached *o = *c;
+            *c = o->next;
+            free(o->data);
+            free(o);
+            break;
+        }
+    ZixName *z = (ZixName *)zix_find(name);
+    if (z) return true;   /* the original adds the root to its set (0x48bec0); the port's records keep one */
+    ZixName *nz = realloc(zix, (size_t)(nzix + 1) * sizeof *zix);
+    if (!nz) return false;
+    zix = nz;
+    memcpy(zix[nzix].name, key, 16);
+    zix[nzix].root = r;
+    nzix++;
+    qsort(zix, (size_t)nzix, sizeof *zix, cmp_zix);
+    return true;
+}
+
 bool Res_Exists(const char *name) { return find(name) || zix_find(name) != NULL; }
 
 int32_t Res_Size(const char *name)

@@ -71,9 +71,89 @@ static void normalize(const char *rel, char *out, size_t cap)
     out[n] = 0;
 }
 
+/* ---- the written files (vfs_put): kept in memory, by their normalized, lower-cased path ---- */
+
+typedef struct Written { struct Written *next; char path[256]; uint8_t *data; uint64_t size; } Written;
+static Written *written;
+
+static void written_key(const char *rel, char *key, size_t cap)
+{
+    normalize(rel, key, cap);
+    for (char *c = key; *c; c++)
+        if (*c >= 'A' && *c <= 'Z') *c = (char)(*c - 'A' + 'a');
+}
+
+static Written *written_find(const char *rel)
+{
+    char key[256];
+    written_key(rel, key, sizeof key);
+    for (Written *w = written; w; w = w->next)
+        if (!strcmp(w->path, key)) return w;
+    return NULL;
+}
+
+bool vfs_put(const char *rel, const void *data, size_t size)
+{
+    if (!rel || !strncasecmp(rel, "CD:", 3)) return false;
+    Written *w = written_find(rel);
+    uint8_t *d = malloc(size ? size : 1);
+    if (!d) return false;
+    memcpy(d, data, size);
+    if (!w) {
+        w = calloc(1, sizeof *w);
+        if (!w) { free(d); return false; }
+        written_key(rel, w->path, sizeof w->path);
+        w->next = written;
+        written = w;
+    } else
+        free(w->data);
+    w->data = d;
+    w->size = size;
+    return true;
+}
+
+bool vfs_written(int i, const char **path)
+{
+    for (Written *w = written; w; w = w->next)
+        if (i-- == 0) {
+            *path = w->path;
+            return true;
+        }
+    return false;
+}
+
+static void *written_open(void *ctx, const char *rel, uint64_t *size)
+{
+    (void)ctx;
+    Written *w = written_find(rel);
+    if (w) *size = w->size;
+    return w;
+}
+
+static int64_t written_read(void *ctx, void *file, uint64_t off, void *dst, size_t len)
+{
+    (void)ctx;
+    const Written *w = file;
+    memcpy(dst, w->data + off, len);
+    return (int64_t)len;
+}
+
+static void written_close(void *ctx, void *file) { (void)ctx, (void)file; }
+
+static const VfsBackend written_b = {NULL, written_open, written_read, written_close, NULL, NULL};
+
 VfsFile *vfs_open(const char *rel)
 {
     if (!rel) return NULL;
+    if (written && strncasecmp(rel, "CD:", 3)) {
+        Written *w = written_find(rel);
+        if (w) {
+            VfsFile *f = malloc(sizeof *f);
+            if (!f) return NULL;
+            f->h = w, f->size = w->size, f->b = &written_b;
+            return f;
+        }
+    }
     const VfsBackend *b = &mnt;
     if (!strncasecmp(rel, "CD:", 3)) {
         if (!drv_on) return NULL;
@@ -108,6 +188,10 @@ int64_t vfs_read_at(VfsFile *f, uint64_t off, void *dst, size_t len)
 void vfs_close(VfsFile *f)
 {
     if (!f) return;
+    if (f->b == &written_b) {
+        free(f);
+        return;
+    }
     if (f->b == &drv ? drv_on : mounted) f->b->close(f->b->ctx, f->h);
     free(f);
 }

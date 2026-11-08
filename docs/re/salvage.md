@@ -75,7 +75,7 @@ AI, 4 for the user's), and its name at +0x58 ("null" for none):
 | 9 | the brakes (+0x3cc) | +4 | `bra` and its +0x14 + 1 |
 | 10-16 | the guns (Weapons_Carrier's) | the instance's +0xc (0x4551d0) | the node at +0x3d0 + 4j |
 | 17-19 | the specials (+0x3ec-0x3f4) | 1 when there | `spc` and its kind |
-| 64-95 | the armour's two sets of 16 | | not salvaged (not ported) |
+| 64-95 | the armour's two sets of 16 | the words at +0x138 and +0x148, signed, over 0x4a7484 for the user's | not salvaged |
 
 A missing part counts 300. Records 0-63 that have a name and a condition above 0 are added. The wheels'
 records get `.wdf`, the guns' (10-16) `.gdf`, and the rest no extension (0x488a2c's jump table).
