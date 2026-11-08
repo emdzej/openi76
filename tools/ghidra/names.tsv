@@ -1505,3 +1505,35 @@
 0x40fe70	Nav_LinkNew
 0x40ff80	Nav_LinkInsert
 0x40ffe0	Nav_FindDeck
+00461900	Net_On	net	high	the network game's flag (0x4dc4e4); ported (src/net/netgame.c)
+00461910	Net_SetOn	net	high	sets it; ported
+00461990	Net_Session	net	high	the session's description: +0x90, the score limit +0x94, flag bits 2 and 3 (teams); ported
+004619d0	Net_ScoreLimit	net	high	the score to reach (0x573880); ported
+004619e0	Net_Flag4	net	med	the description's flag bit 2 (0x5738a0); ported
+004619f0	Net_Teams	net	high	teams (0x573898); ported
+00461a00	Net_Dropped	net	high	this player deleted from the session (0x5e29ec); ported
+00462670	Net_SetWinner	net	med	the first player to the score (0x573888); ported
+00463ac0	Net_TeamScore	net	med	a team's score, kills and deaths summed, -1 when empty; ported
+00464140	NetPl_Add	net	high	a player into the table: name, a minute to be heard, its team; ported
+004642f0	NetPl_Remove	net	high	a player out: results if the score was reached, its car killed, a new keeper; ported
+004644e0	NetPl_Count	net	high	the players (0x575bf8); ported
+004644f0	NetPl_Name	net	high	a player's name; ported
+00464550	NetPl_At	net	high	the table's i-th id and name; ported
+00464590	NetPl_SetFlags	net	high	ported
+004645e0	NetPl_Flags	net	high	ported
+00464630	NetPl_SetCar	net	high	a player's car file and node (the node's +0x480 the id); ported
+004646b0	NetPl_Node	net	high	ported
+004646f0	NetPl_Car	net	high	ported
+00464740	NetPl_Heard	net	high	a player's last-heard time moved up to now; ported
+004647a0	NetPl_Fresh	net	med	a message's time in the keeper's clock, taken unless older; searches twice; ported
+00464880	NetPl_ClockSample	net	med	the clock's offset to a player smoothed 0.2/0.8; a lower id becomes keeper; ported
+004649e0	NetPl_Clock	net	high	a player's clock offset (0 none, -1 unknown player); ported
+00464a40	NetPl_SetKeeper	net	med	the keeper changed: its key-2 data (the mission's name), the spawn re-asked; ported
+00464b30	NetPl_Keeper	net	high	0x575bf4; ported
+00464b40	NetPl_Group	net	high	0x575bf0; ported
+00464b50	NetPl_SetGroup	net	high	ported
+00464b60	NetPl_Me	net	high	0x4dc4dc; ported
+00464b70	NetPl_AmKeeper	net	high	ported
+00464b90	NetPl_AllHeard	net	med	0 while another player has never been heard; ported
+00464bd0	NetPl_SetScore	net	med	a player's score told, the limit checked (team sums with teams); ported
+00464ca0	NetPl_Score	net	high	ported
