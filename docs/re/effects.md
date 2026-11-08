@@ -3,8 +3,9 @@
 `src/effects.c`, with the node release in `src/scene.c` and the class unlisting in `src/entity.c`.
 Checked by `tools/emu/diff_objects.py`, which dumps the registered effects (0x55f7f8) with their node
 trees. They are identical to the original's in every mission (confirmed). Of the effects' running, the
-explosions, the smoke, the contrails, the skid marks and the debris' and particles' flight are ported;
-the dropped weapons (0x46ce90-0x46df40) are not yet.
+explosions, the smoke, the contrails, the skid marks, the flame throwers' flames (0x46ce90-0x46df40) and
+the debris' and particles' flight are ported; the dropped weapons' flight is the weapons'
+(docs/re/weapons.md, types 0xc-0x13).
 
 ## The file (.xdf, Xdf_Load 0x493210)
 
