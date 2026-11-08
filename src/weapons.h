@@ -183,3 +183,9 @@ Node *Muzzle_Pick(Node *muzzle, Node *vehicle);
 /* the port's: a weapon instance still points at n (its muzzle or gun): a freed one's memory is kept, as the
    original's reads it on (a wreck's thrown parts) */
 bool Weapons_UseNode(const Node *n);
+/* Weapons_Unarm 0x455370 (a death's): n's hard points record and its weapon instances taken out of their
+   arrays, the rest moved down and their indices and hard point pointers put right; then the guns' weapons
+   looked up again (0x428e70) and every AI told to choose again */
+void Weapons_Unarm(Node *n);
+/* Artillery_Dirty 0x428e70 */
+void Artillery_Dirty(void);

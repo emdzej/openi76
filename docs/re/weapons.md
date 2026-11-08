@@ -534,6 +534,15 @@ Any vehicle's removal (0x428d00, the artillery's removal callback, which also ta
 list) sets 0x550964, and the next frame repeats the look-up first. 0x428e70 sets the flag too, from a
 weapon's removal (0x455370).
 
+**A dead car's weapons (0x455370, at its death and its wreck's start).** Its hard points record is taken
+out of 0x566950 and the records after it move down. The original's move is one record longer, past the
+count. The remaining records' instances get their hard points pointer anew. The car's instances (its
+seven slots' +0x50 that are not -1) are sorted highest first (0x455530) and each is taken out of 0x55f9c0,
+the instances after it moving down. Each move is as long as against the count before the removal. Then
+every instance gets its index again, in its own +0 and in its slot. Last the guns' weapons are looked
+up again (0x428e70) and every AI chooses again (0x408bf0). The removal is checked through `--call hit`,
+`impact` and `wreck`, whose deaths run it.
+
 **The frame (0x428e80, after the AI's).** Outside network play, with a user:
 - each gun not off (0x200) and firing takes its weapon's muzzle frame (0x4551d0);
 - with +0x50 above 1, it goes on only when `rand() % (2 x +0x50 - 2)` is 0, one frame in eight;

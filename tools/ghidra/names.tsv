@@ -1235,3 +1235,5 @@
 00488db0	Salvage_Save	salvage	med	the list as SALV chunks (the shell's save); not ported
 0040b720	Fsm_Salvage	fsm	high	the script's salvage: a sound's name added; ported
 00453a70	Buf_ReadLine	text	high	a line of a buffer, past an end of line and the white space after it; ported
+00455370	Weapons_Unarm	weapons	high	a dead car's hard points record and weapon instances taken out; ported
+00455530	Inst_Cmp	weapons	high	qsort's: instance indices highest first

@@ -567,9 +567,10 @@ not ported. Then:
 
 - With +0x454 bit 0x4000 (killed through its tyres, `Damage_Parts`):
   - the timer +0x450 becomes 10 and the flags get 0x80008000;
-  - unported steps: 0x46fdb0 (a list at 0x4dd904), the AI's own death for others than the user (0x488950),
-    the guns (0x455370), the engine's sound (0x476440);
-  - `AI_Rethink` 0x408bf0, the sound 2 (0x4683c0) and `Node_SetFlags(n, 0x200)`;
+  - its CB messages dropped (0x46fdb0, audio.md), the parts of an AI's car salvaged (0x488950,
+    salvage.md), and its weapons taken out (0x455370, weapons.md "A dead car's weapons");
+  - `AI_Rethink` 0x408bf0, the sound 2 (0x4683c0), the horn looping (0x476440) and `Node_SetFlags(n,
+    0x200)`;
   - for the user's vehicle: only the menu keys (0x480680), the death camera (0x407010 with 0xfefe), the
     dashboard's swap off (`Dash_Off` 0x428890) and 0x4def9c = 8.
 - Otherwise the wreck starts: `Vehicle_Wreck(n, 1)` 0x42c580.
@@ -624,7 +625,8 @@ entity's cached sphere (0x4286c0).
    dashboard's swap off (`Dash_Off` 0x428890) and 0x4def9c = 8.
    **For the others, outside network play:** each of the 20 parts takes a packet of mask 2. Its +0xc is
    `((rand & 0x7f) + 0x81) × points >> 8`, the points as in `Damage_Parts`, through `Class_Damage`.
-7. Unless it is the user's: the AI's death (0x488950). Then the guns (0x455370) and `AI_Rethink`.
+7. Unless it is the user's: its parts salvaged (0x488950). Then its weapons taken out (0x455370, a
+   second time finds nothing) and `AI_Rethink`.
 
 **Each step**, by `rand & 0xf`:
 
@@ -652,8 +654,8 @@ and radius come from one of two places:
 
 It is dropped when the radius is about 0 (below 1e-4) or the debris pool is out.
 
-A wrecked car's weapons still point at its thrown muzzle nodes, which the original reads on as freed
-memory. The port keeps the memory of a node a weapon instance points to.
+Its weapons are taken out at the death, before any part flies. Should a weapon instance still point at a
+node that is freed, the original reads it on as freed memory; the port keeps the memory of such a node.
 
 Checked: `diff_objects.py --call wreck` (the start, then forty steps per vehicle: the timer, the flags,
 every part's flags, children and state, the kicks and throws) is identical on t01, s04, t15, s01, a01,

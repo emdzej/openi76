@@ -2051,7 +2051,7 @@ def original():
             exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
         for f, k in ((0x433240, 3), (0x452CD0, 0), (0x468A70, 0),
-                     (0x455370, 1)) + (() if CALL == "salvage" else ((0x488950, 1),)):
+                     ) + (() if CALL == "salvage" else ((0x488950, 1),)):
             exe.stub(f, lambda *a: 0, k)
         if CALL != "radio":   # a death's CB messages dropped
             exe.stub(0x46FDB0, lambda *a: 0, 1)

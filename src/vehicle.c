@@ -602,6 +602,8 @@ static void artillery_add(Entity *e)
 
 static int g_artillery_dirty;   /* 0x550964: the guns' weapons to be looked up again */
 
+void Artillery_Dirty(void) { g_artillery_dirty = 1; }   /* Artillery_Dirty 0x428e70 */
+
 /* 0x428d00 (0x428d80's): any vehicle removed has the guns' weapons looked up again; a gun leaves the list */
 static void artillery_remove(Entity *e)
 {

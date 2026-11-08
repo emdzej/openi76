@@ -1143,12 +1143,13 @@ static void sparks(const float at[3])
     const float up[3] = {0, 5.0f, 0};
     if (name) Particle_New(name, at[0], at[1], at[2], up, 2.5f);
 }
-/* the death's first steps: its CB messages dropped (0x46fdb0), an AI's parts salvaged (0x488950); not
-   ported yet: the guns' 0x455370 */
+/* the death's first steps: its CB messages dropped (0x46fdb0), an AI's parts salvaged (0x488950), its
+   weapons taken out (0x455370) */
 static void death_steps(Node *n, int user)
 {
     Radio_Drop(n);
     if (!user) Salvage_Vehicle(n);
+    Weapons_Unarm(n);
 }
 
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
@@ -1376,13 +1377,14 @@ void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at)
     if (by && live && is_vehicle(live)) ai_struck(by, 0x10, live, NULL);
 }
 
-/* the wreck's other steps: 0 its CB messages dropped (0x46fdb0), 3 an AI's parts salvaged (0x488950); not
-   ported yet: 4 the guns' (0x455370) */
+/* the wreck's other steps: 0 its CB messages dropped (0x46fdb0), 3 an AI's parts salvaged (0x488950), 4
+   its weapons taken out (0x455370) */
 static void wreck_fx(Node *n, int what, int a)
 {
     (void)a;
     if (what == 0) Radio_Drop(n);
     else if (what == 3) Salvage_Vehicle(n);   /* 0x488950 */
+    else if (what == 4) Weapons_Unarm(n);     /* 0x455370 */
 }
 
 /* the next part from a random start among count slots from first that is there and not hidden (bit 1);

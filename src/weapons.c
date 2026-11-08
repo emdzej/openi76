@@ -843,6 +843,50 @@ int32_t g_net_game;       /* 0x4dc4e4: a network game (0x461900) */
 void (*g_weapon_fire)(WeaponInst *w, const WeaponDef *d, int n, float late);   /* 0x458710 */
 void (*g_weapon_click)(void);   /* the checks' log of the empty click, instead of its sound */
 
+static int by_index(const void *a, const void *b)   /* 0x455530: descending */
+{
+    int32_t x = *(const int32_t *)a, y = *(const int32_t *)b;
+    return y > x ? 1 : x == y ? 0 : -1;
+}
+
+void Weapons_Unarm(Node *n)
+{
+    if (!n) return;
+    int i = 0;
+    while (i < g_hardpoint_count && g_hardpoints[i].vehicle != n) i++;
+    if (i >= g_hardpoint_count) return;
+    int32_t gone[7];
+    size_t m = 0;
+    for (int k = 0; k < 7; k++)
+        if (g_hardpoints[i].slot[k].inst != -1) gone[m++] = g_hardpoints[i].slot[k].inst;
+    /* the records after it moved down (the original's moves one more, past the count) */
+    int moved = g_hardpoint_count - i;
+    if (i + moved > 50 - 1) moved = 50 - 1 - i;
+    memmove(&g_hardpoints[i], &g_hardpoints[i + 1], (size_t)moved * sizeof g_hardpoints[0]);
+    g_hardpoint_count--;
+    for (int r = g_hardpoint_count - 1; r >= 0; r--)
+        for (int k = 0; k < 7; k++)
+            if (g_hardpoints[r].slot[k].inst != -1) g_weapons[g_hardpoints[r].slot[k].inst].hp = &g_hardpoints[r];
+    if (m > 1) qsort(gone, m, sizeof gone[0], by_index);
+    /* each removed, the highest first (so the others keep their places), each move as long as against the
+       count before */
+    for (size_t k = 0; k < m; k++) {
+        int32_t at = gone[k];
+        int len = g_weapon_count - at;
+        if (at + len > 350 - 1) len = 350 - 1 - at;
+        if (len > 0) memmove(&g_weapons[at], &g_weapons[at + 1], (size_t)len * sizeof g_weapons[0]);
+    }
+    g_weapon_count -= (int)m;
+    if (m > 0)
+        for (int j = g_weapon_count - 1; j >= 0; j--) {
+            WeaponInst *w = &g_weapons[j];
+            w->hp->slot[w->slot].inst = j;
+            w->index = j;
+        }
+    Artillery_Dirty();   /* 0x428e70 */
+    AI_Rethink();        /* 0x408bf0 */
+}
+
 bool Weapons_UseNode(const Node *n)
 {
     for (int i = 0; i < g_weapon_count; i++)
