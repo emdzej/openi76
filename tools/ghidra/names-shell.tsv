@@ -189,3 +189,9 @@
 10036eb0	Garage_StopWave	trip	high	the yard's wave stopped; ported
 10008130	Setup_StopWave	setup	high	the set-up's first wave stopped; ported
 10025320	MainMenu_Redraw	shell	high	the main menu's buttons drawn again; ported
+10033c60	Salvage_Open	trip	high	0xc015: before mission 12 (the new engine) or the trip's own car; ported (src/shell/tripend.c)
+10034460	Salvage_Screen	trip	high	0xc015's NEXT MISSION and SAVE BOOKMARK; ported
+100347f0	Stock_WriteKept	trip	high	a list's kept parts made whole into user.rpr; ported
+100337c0	FinalCar_Open	trip	high	0xc00d: the last mission's car; ported
+10033880	FinalCar_Screen	trip	high	the last mission's car lit and chosen; ported
+1003a960	Player_DefaultName	shell	medium	the player's default name (Jefferson Sovereign); not ported

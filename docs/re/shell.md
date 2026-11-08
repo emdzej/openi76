@@ -182,7 +182,20 @@ shell runs, in order:
    points), then the car written (+0xc, +0x1c) and the mission (0xc010). Ported in part
    (src/shell/setup.c, docs/re/setup.md): the boxes, their edits, the repairs, the armour and DONE's
    writes; the paint and the car's picture not yet.
-7. **0xc015 (0x10033c60)**: the salvage screen.
+7. **0xc015 (0x10033c60; screen 0x10034460; ported, src/shell/tripend.c)**: after mission 12 (trip
+   0xc), picture 0x1f, "You are unconscious": the car's first slot gets the catalogue's first engine
+   (kind 2) whose +0x32 is '4'; the ring's parts but EMPTY sorted into the lists (on the car made whole,
+   in repair made kept and whole; the engine on the car replaced by the new one; the field's left but
+   the engines); user.rpr read in. NEXT MISSION writes the car, then user.rpr with no repairs and each
+   list's kept parts made whole (0x100347f0), and starts the mission; SAVE BOOKMARK opens pop-up 1. With
+   "No Salv. Manag." (picture 0x1d) and on any other mission, NEXT MISSION loads the trip's own car,
+   `vppt%02d.vcf` of the next mission, writes it and starts it.
+   **0xc00d (0x100337c0; screen 0x10033880; ported)**: after mission 16, picture 0x1b "Choose your
+   vehicle": the rects 0x10066b60 (0 vcgcourf, 1 vgoonf, 2 vstankf, and a small one at the top left, 3
+   vhelif), each of the first three lit under the mouse by its frame of entry 0x40 (at 0x10066bb4's x, y,
+   w, h); a click empties the record's slots, loads the car, writes it and starts the last mission.
+   **0xc008** (after the last mission): pop-up 9, the credits, opened as from a trip's screen.
+   **0xc00e** removes user.rpr (0x1001d240) before the main menu.
 8. **The car written (0x1001d6a0 .vcf, 0x1001de30 .vsf; ported, src/shell/carwrite.c)**, also by NEW
    TRIP and TRAINING. Confirmed from the disassembly (the decompiler drops the wheels' branches).
    - **0x1001d380** sorts every catalogue part not named EMPTY into lists by its first kind: 0x100614b8

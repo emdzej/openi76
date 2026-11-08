@@ -162,7 +162,7 @@ static ShList *kind_list(int32_t kind)
    a split, the records (those before the split, after a won mission, whole and marked 2; those after it
    in the repairs' list too), then six blocks of a count and records, engines, suspensions, brakes, wheels,
    guns, specials, marked 2 */
-static void read_stock(void)
+void Garage_ReadStock(void)
 {
     if (g_sh_allparts) ShList_Free(g_sh_allparts);   /* its nodes not freed (the original's) */
     g_sh_allparts = ShList_New(0x40);
@@ -240,7 +240,7 @@ static void boxes_make(void)
     ShList_Add(box_list, &boxes[13], NULL);
     if (!repairs) repairs = ShList_New(0x40);
     sort_ring();
-    read_stock();
+    Garage_ReadStock();
 }
 
 /* ---- the drawing ---- */

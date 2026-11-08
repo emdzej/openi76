@@ -2,6 +2,7 @@
 #include "shell/shell.h"
 #include "crt.h"
 #include "exe.h"
+#include "files.h"
 #include "input.h"
 #include "shell/screen.h"
 #include "shell/font.h"
@@ -447,7 +448,8 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc002:   /* the shell's end: 0x1002a6d0, then the quit */
         Shell_Quit(0xc002);
         return;
-    case 0xc00e:   /* the main menu */
+    case 0xc00e:   /* the main menu: user.rpr removed (0x1001d240) */
+        Files_Remove(dll_str(0x100614f0));
         MainMenu_Open();
         return;
     case 0xc010:   /* the mission: a trip's or training's needs disc 2 in the drive (the exe's +0x44) */
@@ -474,7 +476,19 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc01d:   /* a bookmark's trip back (0x10002d80) */
         Bookmark_Restore();
         return;
-    case 0xc008: case 0xc00d: case 0xc015: case 0xc01c:
+    case 0xc008:   /* the trip's end: the credits (pop-up 9) */
+        g_sh_menu_from = 1;
+        g_sh_popup = 1;
+        g_sh_redraw = NULL;
+        g_sh_popup_item = 9;
+        return;
+    case 0xc00d:   /* the last mission's car */
+        FinalCar_Open();
+        return;
+    case 0xc015:   /* before mission 12, or the trip's own car */
+        Interlude_Open();
+        return;
+    case 0xc01c:
     case 0xc01f: case 0xc020: case 0xc021: case 0xc024: case 0xc025: case 0xc026:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
