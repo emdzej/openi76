@@ -2,6 +2,7 @@
 #include "camera.h"
 #include "cockpit.h"
 #include "clock.h"
+#include "crt.h"
 #include "exe.h"
 #include "input.h"
 #include "physics.h"
@@ -13,6 +14,7 @@
 #include "terrain.h"
 #include "world.h"
 #include "render/fpu.h"
+#include "render/sprite.h"
 #include <math.h>
 #include <string.h>
 
@@ -706,4 +708,57 @@ void Camera_SetMode(Entity *e, int32_t mode)
     if (g_camera_mode == 2) return;
     Dash_Off();   /* 0x428890 */
     View_SetZoom(&g_view, 1.0f);
+}
+
+/* ---- the screen's shake (0x452a90-0x452cd0) ---- */
+
+int32_t g_shake_on;                 /* 0x4db32c */
+static int32_t shake_knocked;       /* 0x4db330: a knock's (else wiggleburger's, at random) */
+static float shake_to, shake_at;    /* 0x4db334, 0x4db338: a knock's size, eased to */
+static float shake_x, shake_y;      /* 0x4db33c, 0x4db340: wiggleburger's offsets, eased to */
+
+void Shake_Toggle(void) { g_shake_on = !g_shake_on; }   /* 0x452a90 */
+
+void Shake_Knock(void)   /* 0x452cd0: in the cockpit only */
+{
+    if (g_cockpit != 1) return;
+    g_shake_on = shake_knocked = 1;
+    shake_to = 20.0f;
+    shake_at = 19.0f;
+}
+
+/* an eased offset: to the new value at once for a step out of [0, 0.95) or within 0.005 of it */
+static float shake_ease(float cur, int to, float dt)
+{
+    if (fbits(dt) > 0x80000000u || (int32_t)fbits(dt) > 0x3f733333) return (float)to;
+    float t = (float)to;
+    double e = SUB(t, cur);   /* compared unrounded, used as stored */
+    if (fabs(e) < 0.005) return t;   /* 0x4a6100 */
+    return F32(ADD(MUL(F32(e), dt), cur));
+}
+
+void Shake_Frame(Surface *s)
+{
+    float dt = g_clock_step;   /* 0x450f30 */
+    int x, y;
+    if (!shake_knocked) {   /* wiggleburger's: toward a random offset of 0-15 each way */
+        int rx = crt_rand() & 0xf, ry = crt_rand() & 0xf;
+        shake_x = shake_ease(shake_x, rx, dt);
+        shake_y = shake_ease(shake_y, ry, dt);
+        x = -(int32_t)(int64_t)shake_x, y = -(int32_t)(int64_t)shake_y;   /* ftol 0x496690 chops */
+    } else {
+        /* a knock's: its size drops to 0 once within 1 of where it eased to; that eases at twice the step
+           until both are 0 and under 1, the shake then off */
+        if (!(SUB(shake_to, 1.0f) > shake_at)) shake_to = 0;
+        float k = F32(MUL(dt, 2.0f));
+        double e = SUB(shake_to, shake_at);
+        if (below((double)MUL(dt, 2.0f), 0.0) || (int32_t)fbits(k) > 0x3f733333 || fabs(e) < 0.005)
+            shake_at = shake_to;
+        else
+            shake_at = F32(ADD(MUL(MUL(dt, F32(e)), 2.0f), shake_at));
+        if ((int32_t)fbits(shake_at) < 0x3f800000 && !(fbits(shake_to) & 0x7fffffffu)) shake_knocked = g_shake_on = 0;
+        x = -(int32_t)(int64_t)shake_at;
+        y = -(int32_t)(int64_t)MUL(shake_at, 0.5f);   /* 0x4a6108 */
+    }
+    Surface_Blit(s, s, x, y, 2);   /* onto itself through the translucency table */
 }

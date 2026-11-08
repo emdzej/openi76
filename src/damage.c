@@ -1292,9 +1292,24 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
     return 1;
 }
 
-/* not ported yet: the user's knock in the cockpit (0x433240 on the eye node, 0x452cd0 the screen's shake)
-   and the HUD's damage arrows (0x468a70) */
-static void knock(Node *n, const float nv[3], float k) { (void)n, (void)nv, (void)k; }
+/* the user's knock (0x45dbb0's, for a blow over 20): 0x433240 pushes the eye (the data's +0x398) along the
+   blow turned into its frame, times k within [0, 1], into its data's +0x2c-+0x34 (which nothing reads:
+   class 40's frame, 0x433330, is a bare return), and 0x452cd0 shakes the screen in the cockpit */
+static void knock(Node *n, const float nv[3], float k)
+{
+    if (!(n->flags & 0x10)) return;   /* Node_IsUser 0x42e620 */
+    Node *eye = n->data ? *Data_Ptr(n->data, 0x398) : NULL;
+    if (eye && eye->data) {
+        if ((int32_t)fb(k) > 0x3f800000) k = 1.0f;
+        else if (k < 0.0f) k = 0.0f;
+        const float *m = eye->frame.m;
+        for (int r = 0; r < 3; r++) {
+            double v = fpu_add(fpu_add(fpu_mul(m[3 * r + 2], nv[2]), fpu_mul(m[3 * r], nv[0])), fpu_mul(m[3 * r + 1], nv[1]));
+            putf(eye->data + 0x2c + 4 * (uint32_t)r, fpu_f32(fpu_add(fpu_mul(v, k), rdf(eye->data + 0x2c + 4 * (uint32_t)r))));
+        }
+    }
+    Shake_Knock();
+}
 
 /* 0x45ced0: a shot's packet: its kind's mask (+0x60) at +4, and the shot's damage (its record's +0x44)
    shared out evenly (unsigned) among the mask's four kinds at +8-+0x14 */

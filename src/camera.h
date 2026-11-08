@@ -88,3 +88,10 @@ void Camera_Missile(void);
 /* Camera_GlanceCmp 0x4034f0: the pilot's glance's yaw (0x4a86c8) against a: -1 below (or unordered), 0
    equal, 1 above */
 int Camera_GlanceCmp(float a);
+/* the screen's shake: 0x452a90 the cheat wiggleburger's toggle (random offsets), 0x452cd0 a knock's (in the
+   cockpit), 0x452ac0 each frame while on (Render_World's after the HUD): the screen onto itself through the
+   translucency table at the offset */
+extern int32_t g_shake_on;   /* 0x4db32c */
+void Shake_Toggle(void);
+void Shake_Knock(void);
+void Shake_Frame(Surface *s);

@@ -109,7 +109,7 @@ mirrors it. Without either the rate is 0.
 
 1. It returns at once after the menus' poll, or when the AI's flag 0x505494 is set.
 2. The cheats (0x480800): a key typed with Ctrl+Shift goes into a ring of 15 characters. `wiggleburger`
-   toggles the screen's shake (0x452a90: 0x4db32c, read by the shake 0x452ac0, which isn't ported yet).
+   toggles the screen's shake (0x452a90; docs/re/camera.md "The screen's shake").
    `freelance` toggles 0x4a846c (0x4034d0; WinMain's 0x403360 sets it to 1 and nothing else reads it).
    `thirdnostril` does nothing. `getdown` (0x408d30) works once, outside network play:
    - every team's helicopter but the user's climbs (setHeliHeight), the first to 25 and each next one 10

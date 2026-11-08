@@ -1427,3 +1427,8 @@
 00408d30	Cheat_GetDown	ai	med	getdown: helicopters up, gdsgc69, 1000 attackers, everyone on the user (0x505450); ported (src/fsm.c)
 00452a90	Cheat_Shake	camera	med	wiggleburger: the screen's shake toggled (0x4db32c); ported
 004034d0	Cheat_Freelance	app	med	freelance: 0x4a846c toggled; ported
+00452ac0	Shake_Frame	camera	med	the view's surface blitted onto itself at the shake's offset, mode 2; ported (src/camera.c)
+00452cd0	Shake_Knock	camera	med	a knock's shake in the cockpit; ported
+00452ab0	Shake_On	camera	med	0x4db32c
+00433240	Eye_Knock	camera	med	the blow into the eye's data +0x2c (unread); ported (src/damage.c knock)
+00468a70	ForceFeedback_Slot	input	med	a force-feedback effect's slot when the driver (0x4dc8ac) is loaded

@@ -180,6 +180,7 @@ static void viewer_frame(void)
     Queue_Flush(&view, 1);
     if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0 */
     Hud_Draw(&view, 0);                         /* 0x427db0; the hook 0x58dc58 is not ported */
+    if (g_shake_on) Shake_Frame(view.surface);   /* 0x452ab0, 0x452ac0 */
 }
 
 /* WinMain's end of a frame: with a menu open (it opened in this frame) the menu over the frame (0x44ce70),

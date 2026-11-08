@@ -995,7 +995,7 @@ static int cheat_typed(const char *s)
         if (s[n - 1 - i] != cheat_ring[14 - i]) return 0;
     return 1;
 }
-int32_t g_cheat_shake, g_cheat_free;   /* 0x4db32c (the screen's shake, 0x452ac0: not ported), 0x4a846c */
+int32_t g_cheat_free;   /* 0x4a846c */
 
 /* 0x480800: the cheats, typed with Ctrl+Shift: wiggleburger toggles the screen's shake (0x452a90),
    freelance the flag 0x4a846c (0x4034d0; 1 from 0x403360, read by nothing else), getdown sets everyone on
@@ -1005,7 +1005,7 @@ static void cheats(uint16_t key)
     if ((uint8_t)(key >> 8) != 3) return;
     memmove(cheat_ring, cheat_ring + 1, 14);
     cheat_ring[14] = (char)key;
-    if (cheat_typed(exe_str(0x4e8aa0))) g_cheat_shake = !g_cheat_shake;
+    if (cheat_typed(exe_str(0x4e8aa0))) Shake_Toggle();
     if (cheat_typed(exe_str(0x4e8a94))) g_cheat_free = !g_cheat_free;
     if (cheat_typed(exe_str(0x4e8a8c))) Cheat_GetDown();
     if (cheat_typed(exe_str(0x4e8a7c))) return;

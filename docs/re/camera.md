@@ -405,3 +405,25 @@ t05 and s01.
 The view's radii matter elsewhere too. `View_Distance` 0x4042c0 (the physics' and the AI's near/far test)
 adds the view's +0x18 and +0x14 (0x4a84a0, 0x4a849c). It measures from the eye (+0x160, 0x4a85e8), which
 the script's cameras move during the frame.
+
+## The screen's shake (0x452a90-0x452cd0, `src/camera.c`)
+
+Render_World runs 0x452ac0 after the HUD while 0x4db32c is set. It blits the view's surface onto itself
+at an offset through the translucency table (mode 2), so the frame shows a ghost of itself. The step is
+Clock_Step's.
+
+- **A knock** (0x452cd0, from an impact of more than 20 on the user's car; only in the cockpit view)
+  sets the shake on with a size of 20 eased from 19.
+  - Each frame the size drops to 0 once it is within 1 of where it eased to.
+  - Where it is eases toward the size at twice the step. It jumps there at once for a step out of
+    [0, 0.95) or within 0.005.
+  - The offset is (−ftol(at), −ftol(at × 0.5)).
+  - When the eased value is under 1 and the size is 0, the shake goes off.
+- **The cheat wiggleburger** (0x452a90) toggles the shake without a knock. Each frame it draws a
+  random target of 0-15 for each axis and eases toward it at the step (at once for a step out of
+  [0, 0.95), or within 0.005). The offset is minus each.
+
+The knock also pushes the eye (the user's data +0x398) along the blow, turned into the eye's frame,
+times the blow's 0.02 within [0, 1], into the eye's data +0x2c-+0x34 (0x433240). Nothing reads that: the
+eye's class 40 frame (0x433330) is a bare return. The force feedback's effects (0x468a70) need the
+joystick driver (0x4dc8ac), which the port doesn't have.
