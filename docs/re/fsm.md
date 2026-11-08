@@ -109,8 +109,10 @@ isEqualId, isArrived, isKeypress, teleport and teleportOffset.
 - `successAll` (1), `failAll` (0) and `failAllObj` (0): the end's state and time (`*a0` seconds from now).
   Then 0x41f280 notes failAllObj's objective (see "The objectives").
 - `isArrived` (0x40a9a0): the vehicle's AI block +0x9c is 1 (the goto's path ended); the test clears it.
-- `isKeypress`: the menu's poll (0x480720, `Input_MenuPoll`), true on a key; the intros end on Escape
-  this way and then teleport the user.
+- `isKeypress`: the menu's poll (0x480720, `Input_MenuPoll`). True once the typed key's command is
+  `MAIN_MENU` (0x20: Escape) or a left click set 0x4df010; any other typed key is dropped (PAUSE_GAME, 0x2c,
+  toggles the pause). So the intros end on Escape or a click, not on Space or Enter, and then teleport the
+  user. Escape taken this way does not open the menu.
 - `teleport` (0x40f0d0, `*a0` the vehicle, `*a1` the path's number, `*a2` the speed, `*a3` the angle):
   the path's first point at the terrain's height, the angle wrapped to a turn, the vehicle placed there
   with the speed along its heading. `teleportOffset` passes `*a4` and `*a5` too, offsets in hundredths.
@@ -219,13 +221,30 @@ swaps the dashboard back to the pilot's view.
 A mission's intro is such a sequence. It waits for `camIsArrived` or `isKeypress` (Esc), and while it
 polls `isKeypress` the typed keys go to the menus' poll, not to `Game_Command`.
 
-**Not ported yet** (the port answers 0):
-
-- playMovie 0x44e6e0.
+playMovie (0x44e6e0) plays the named movie (docs/re/movies.md).
 
 salvage 0x40b720 adds a sound's name to the salvage list (salvage.md).
 
 After the action, ip moves to the next pair and the arguments' pointer goes back to 0x1000.
+
+## An example: what wakes s01's enemies
+
+s01 shows how a mission's script holds its cars. All of this is read from `tools/fsm.py --code` and
+checked in a headless play run.
+
+- **The intro.** One machine teleports the user to a path's start at 25 m/s and orders it (`goto`) along
+  the path, and another runs the camera's move. Both end on `isKeypress` or on arrival: the user is
+  teleported to the path's end, and a shared variable is set to 1. Until then the user's keys do nothing,
+  since the user's car is the AI's.
+- **The waiting cars.** Each enemy's machine first sets its skill and aggression, then `sit`s, once a
+  frame, until it `isAttacked`, the user comes within 50 m (`isWithin`), or another machine sets a shared
+  variable (to 2 when a lead car dies or runs 500 m from its partner). Then it `race`s along its path or
+  `attack`s the user. The trailers' machines watch their hit points (`hpLesser`) and set a variable when
+  hit.
+- **The run.** With Escape at frame 60 and the throttle held, the user drives east past the nearest car.
+  That car sat still until the user passed within about 50 m, then turned and chased, attacking at 0.95
+  throttle until the user died. The other cars, beyond 1 km, stayed still. Without input no car moves.
+  The stillness is the script's, as in the original (`diff_fsm` is identical on s01).
 
 ## The port
 
