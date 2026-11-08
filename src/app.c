@@ -12,6 +12,7 @@
 #include "cockpit.h"
 #include "mirror.h"
 #include "movie.h"
+#include "shell/shell.h"
 #include "smoke.h"
 #include "contrail.h"
 #include "skid.h"
@@ -354,9 +355,34 @@ bool app_init(void)
     return true;
 }
 
+/* WinMain after the movies: the shell (Shell_Load 0x401000, ShellMain); its result 0xff ends the game,
+   3 a mission (not reached yet). --param shell=0 (the port's) shows the loading screen instead */
+static int shell_state;   /* 0 not started, 1 running, 2 over */
+
+static bool shell_frame(void)
+{
+    if (shell_state == 2) return false;
+    if (!shell_state) {
+        char v[8];
+        if (plat_param("shell", v, sizeof v) && !atoi(v)) return shell_state = 2, false;
+        if (!Shell_Start(5)) return shell_state = 2, false;
+        shell_state = 1;
+    }
+    Input_Keys();
+    if (Shell_Pass()) return true;
+    char m[64];
+    snprintf(m, sizeof m, "OpenI76: the shell ends with %d", Shell_Result());
+    plat_log(m);
+    Shell_End();
+    shell_state = 2;
+    return false;
+}
+
 bool app_frame(void)
 {
     if (intro_frame()) return true;
+    if (!viewer && !play && shell_frame()) return true;
+    if (shell_state == 2 && Shell_Result() == 0xff) return false;   /* WinMain's end */
     if (play) play_frame();
     else if (viewer) viewer_frame();
     else if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);

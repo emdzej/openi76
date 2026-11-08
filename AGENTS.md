@@ -29,7 +29,8 @@ terrain, the roads, the sky; `tools/emu/regress.sh` diffs them against the origi
 the objects (entities, node trees, levels of detail, collision set-up, and their drawing with the
 dynamic lights and the shadows; docs/re/objects.md), the lines of objects (LDEF), the vehicles' loading
 (docs/re/vehicles.md) with their weapons (docs/re/weapons.md), the effects' loading (docs/re/effects.md)
-the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app plays the intro and the credits, then shows disc 1's loading screen, or with `--param
+the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app plays the intro and the credits, then runs the shell (being ported: its main menu works with
+the mouse, docs/re/shell.md; `--param shell=0` shows disc 1's loading screen instead), or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the

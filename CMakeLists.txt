@@ -8,7 +8,7 @@ set(CMAKE_C_STANDARD 11)
 set(I76_WARN -Wall -Wextra -Wno-unused-parameter -ffp-contract=off)   # no fused multiply-adds: the x87 rounds each op
 
 # The portable core: everything except host backends (no platform headers).
-file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c src/render/*.c)
+file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c src/render/*.c src/shell/*.c)
 set(HOST_SRC src/vfs_host.c src/platform_host.c)
 foreach(f ${HOST_SRC} src/platform_gasm.c src/app.c)
   list(REMOVE_ITEM CORE_SRC "${CMAKE_SOURCE_DIR}/${f}")

@@ -1,0 +1,200 @@
+/* shell.h: ShellMain and ShellWindowProc */
+#include "shell/shell.h"
+#include "shell/screen.h"
+#include "platform.h"
+#include "sound.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+Mw2 *g_sh_db;
+ShMouse g_sh_mouse;
+int g_sh_popup;
+int g_sh_popup_item;
+uint32_t g_sh_screen_msg;
+int g_sh_mode;
+
+static ShScreenFn screen_fn;   /* 0x10063784 */
+static int active = 1;         /* 0x1005c8d8: WM_ACTIVATEAPP's */
+static int result = -1;
+static bool quit;
+static uint32_t quit_code;
+
+/* the window's queue */
+typedef struct { uint32_t msg, wparam; } Msg;
+static Msg queue[64];
+static int q_head, q_count;
+
+void Shell_Post(uint32_t msg, uint32_t wparam)
+{
+    if (q_count == (int)(sizeof queue / sizeof *queue)) return;
+    queue[(q_head + q_count++) % 64] = (Msg){msg, wparam};
+}
+
+void Shell_Quit(uint32_t code)
+{
+    quit = true;
+    quit_code = code;
+}
+
+void Shell_SetScreen(ShScreenFn fn) { screen_fn = fn; }
+
+/* 0x10026f00: the function cleared whatever it is ("UnregisterScreenFunction: pointer mismatch" when it
+   is NULL) */
+void Shell_UnsetScreen(ShScreenFn fn)
+{
+    if (!fn) plat_log("OpenI76: the shell's UnregisterScreenFunction without a function");
+    screen_fn = NULL;
+}
+
+/* the DLL's CRT rand (0x100414e0 srand, its rand): the Microsoft LCG, its own state */
+static uint32_t rand_state = 1;
+int Shell_Rand(void)
+{
+    rand_state = rand_state * 214013u + 2531011u;
+    return (int)(rand_state >> 16 & 0x7fff);
+}
+
+/* ---- the mouse (0x1001f380) ---- */
+
+/* The pointer when inside the window (GetCursorPos, the buttons by GetAsyncKeyState), else as it was;
+   the left's press 1, held after it 2; the right's and middle's presses; a left press within 200 ms of
+   the last a double click. (While the right is held and 0x10068c34 is 0 the coordinates would be printed
+   at 560, 20: it is 1 in the DLL's data and never set, so they never are.) */
+static void mouse_update(ShMouse *m)
+{
+    if (!active) return;
+    int was_l = m->left, was_r = m->right, was_m = m->middle;
+    int x, y;
+    uint32_t b;
+    if (m->on && plat_pointer(&x, &y, &b) && x >= 0 && x < 640 && y >= 0 && y < 480) {
+        m->x = x, m->y = y;
+        m->left = (b & 1) != 0, m->right = (b & 2) != 0, m->middle = (b & 4) != 0;
+    }
+    m->click = m->left == 1 ? (was_l == 0 ? 1 : was_l == 1 ? 2 : 0) : 0;
+    m->rclick = m->right == 1 && was_r == 0;
+    m->mclick = m->middle == 1 && was_m == 0;
+    m->dbl = 0;
+    if (m->left == 1 && was_l == 0) {
+        double now = plat_ms();
+        if (now - m->last_ms < 201) {
+            m->dbl = 1;
+            return;
+        }
+        m->last_ms = now;
+    }
+}
+
+/* ---- the window's procedure (0x10025bf0) ---- */
+
+static void unported(const char *what, uint32_t id)
+{
+    char m[96];
+    snprintf(m, sizeof m, "OpenI76: the shell's %s 0x%x is not ported yet", what, (unsigned)id);
+    plat_log(m);
+}
+
+/* the menu's pop-ups (0x1008ea10): 8 the end (the screen's function told 0xc002), 10 the main menu again
+   (0xc00e); the rest not ported */
+static bool popup(void)
+{
+    if (!g_sh_popup) return false;
+    /* the menu function 0x10063788 (0) first: none is registered by the screens ported */
+    g_sh_popup = 0;
+    switch (g_sh_popup_item) {
+    case 8:
+    case 10:
+        Gfx_Fill(&g_shs.scr, 0);   /* 0x1003e590 */
+        memset(g_shs.back, 0, sizeof g_shs.back);
+        if (screen_fn) screen_fn(g_sh_popup_item == 8 ? 0xc002 : 0xc00e);
+        else Shell_Post(g_sh_popup_item == 8 ? 0xc002 : 0xc00e, 0);
+        return true;
+    default:
+        unported("pop-up", (uint32_t)g_sh_popup_item);
+        return true;
+    }
+}
+
+static void message(uint32_t msg, uint32_t wparam)
+{
+    (void)wparam;
+    if (popup()) return;
+    switch (msg) {
+    case 0xc002:   /* the shell's end: 0x1002a6d0, then the quit */
+        Shell_Quit(0xc002);
+        return;
+    case 0xc00e:   /* the main menu */
+        g_sh_screen_msg = msg;
+        MainMenu_Open();
+        return;
+    case 0xc008: case 0xc00d: case 0xc00f: case 0xc010: case 0xc015: case 0xc017: case 0xc01c: case 0xc01d:
+    case 0xc01e: case 0xc01f: case 0xc020: case 0xc021: case 0xc022: case 0xc024: case 0xc025: case 0xc026:
+        unported("screen", msg);
+        Shell_Post(0xc00e, 0);
+        return;
+    }
+}
+
+/* ---- ShellMain (0x100264c0) ---- */
+
+/* The set-up the screens ported need: the CRT's seed from the time, the database (0x1001a510), the
+   display (0x1003c670), the mouse (0x1001f1c0, on). Then the first message: after the intro (the exe's
+   state 5) the main menu. Not ported yet: the player's defaults and I76PLYR.DEF (0x10039e20), the CD's
+   drive (0x10012a10), the tables (0x10032e20, 0x1003c4b0), the fonts (entries 0x42, 0x44-0x47), the
+   keyboard (0x10038530), the cursors (pencil.cur, nopencil.cur: the runner's own is shown), the exe's
+   music calls (+0x54, +0x50 with 15 and 1), the trip's and network play's ways in */
+bool Shell_Start(int prev_state)
+{
+    rand_state = (uint32_t)time(NULL);
+    g_sh_db = Mw2_Open("DATABASE.MW2");
+    if (!g_sh_db) {
+        plat_log("OpenI76: the shell's DATABASE.MW2 cannot be opened");
+        return false;
+    }
+    Scr_Init();
+    memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
+    g_sh_mouse.on = 1;
+    quit = false, result = -1, q_count = 0;
+    if (prev_state == 5) Shell_Post(0xc00e, 0);
+    else {
+        unported("way in from the state", (uint32_t)prev_state);
+        Shell_Post(0xc00e, 0);
+    }
+    return true;
+}
+
+/* A pass: the exe's +0x28 (Sound_Frame(0)), a message (WM_QUIT ends it), then while active the mouse,
+   the screen's function (0xc004), and unless a pop-up waits the present; 0x1002b090 polls network play
+   (none) */
+bool Shell_Pass(void)
+{
+    if (result >= 0) return false;
+    Sound_Frame(0);
+    if (quit) {
+        /* ShellMain's end: 0xc001 a mission to play (3), else 0xff */
+        result = quit_code == 0xc001 ? 3 : 0xff;
+        return false;
+    }
+    if (q_count) {
+        Msg m = queue[q_head];
+        q_head = (q_head + 1) % 64, q_count--;
+        message(m.msg, m.wparam);
+    } else if (g_sh_popup)
+        popup();   /* the port's: Windows always has a message for the pop-up to wait on */
+    if (active) {
+        mouse_update(&g_sh_mouse);
+        if (screen_fn) screen_fn(0xc004);
+        if (!g_sh_popup) Scr_Present();
+    }
+    return true;
+}
+
+int Shell_Result(void) { return result; }
+
+void Shell_End(void)
+{
+    Mw2_Close(g_sh_db);
+    g_sh_db = NULL;
+    screen_fn = NULL;
+}

@@ -1,1 +1,44 @@
 # addr	name	module	confidence	description
+100264c0	ShellMain	shell	high	the shell's set-up, loop and end; ported in part (src/shell/shell.c)
+10025bf0	ShellWindowProc	shell	high	the shell's messages: the pop-ups, the screens by message; ported in part
+1001a510	Mw2_Open	mw2	high	TMPackDataBase: DATABASE.MW2's offsets; ported
+1001a710	Mw2_Close	mw2	high	ported
+1001a7d0	Mw2_Raw	mw2	high	an entry whole, by its index from 1; ported
+1001a8b0	Mw2_Unpack	mw2	high	an entry through the LZSS (4 KB window from 0); ported
+1002dab4	Gfx_Frame	gfx	high	aw: a frame set's RLE frame through a view, clipped; ported
+1002df28	Gfx_FrameUnclipped	gfx	high	aw: the same all inside the window
+10031b44	Gfx_Pcx	gfx	high	aw: a PCX's rows through a view; ported
+100317ce	Gfx_PcxRow	gfx	high	aw: a row into a view, clipped; ported
+10031bc6	Gfx_PcxPalette6	gfx	high	aw: a PCX's palette at 6 bits (the windowed mode's)
+1002fa48	Gfx_Copy	gfx	high	aw: a view's window into another's, or filled; ported
+1002f945	Gfx_Fill	gfx	high	aw: a view's window filled; ported
+1003c670	Scr_Init	screen	high	the display: the driver, the surface and the background; ported
+1003d3b0	Scr_Background	screen	high	a database PCX as the background, its palette; ported
+1003dfe0	Scr_Frame	screen	high	a frame drawn, its rectangle marked; ported
+1003dc50	Scr_Restore	screen	high	the background over a rectangle; ported
+1003ca60	Scr_Present	screen	high	the rectangle flipped, a new palette set; ported
+10027680	Video_Mode	screen	high	the shell's video driver for a mode (1 full screen: 0x10063e68)
+10028a10	DDraw_SetPalette	screen	high	the full-screen driver's palette: at once, the fade ignored
+1003b8f0	Btn_Init	button	high	ported
+1003b950	Btn_Draw	button	high	its frame, its label or the label's place; ported
+1003b9c0	Btn_Hide	button	high	ported
+1003ba20	Btn_Hit	button	high	strictly inside; ported
+100348a0	ShList_New16	list	high	a list of 16; ported
+10034920	ShList_New	list	high	ported
+10034a30	ShList_Add	list	high	ported
+10034b70	ShList_Remove	list	high	ported
+10034c20	ShList_Clear	list	high	ported
+1001f1c0	Mouse_Init	mouse	high	ported
+1001f380	Mouse_Update	mouse	high	the pointer, presses, the double click; ported
+10026ef0	Shell_SetScreen	shell	high	RegisterScreenFunction; ported
+10026f00	Shell_UnsetScreen	shell	high	UnregisterScreenFunction; ported
+100236d0	MainMenu_Open	mainmenu	high	0xc00e: the title, the buttons; ported
+100237b0	MainMenu_Screen	mainmenu	high	the hover, the click, the panels; ported
+10024c20	MainMenu_Build	mainmenu	high	ported
+10024790	MainMenu_Reset	mainmenu	high	ported
+10024b20	MainMenu_OpenKinds	mainmenu	high	ported
+10010fb0	MenuSet_Load	mainmenu	high	entry 0x3e; ported
+100111f0	MenuSet_Free	mainmenu	high	ported
+100336d0	Click_Play	mainmenu	high	a wave played through the exe and waited out; ported as a wait across passes
+10001680	Training_Start	trip	high	the training trip's set-up before 0xc010
+1002b090	Net_Poll	net	medium	anet's dpReceive each pass

@@ -1,4 +1,4 @@
-# The shell (`I76SHELL.DLL`) — survey, not ported
+# The shell (`I76SHELL.DLL`) — being ported
 
 The front end: the main menu, the trip's screens, the garage and salvage, the options and network play.
 It is docs/re/port-plan.md step 4. This page is the survey the port starts from; addresses are the DLL's
@@ -64,11 +64,68 @@ Nine functions register a screen function (0x10026ef0) and its messages (0xc000-
 
 The menus' and screens' meanings are to be found as each is ported.
 
-## What the port needs first
+## Ported so far (src/shell/)
 
-- `DATABASE.MW2`'s frame sets (entries 33-64) and fonts (65-71) decoded (docs/formats/mw2.md).
-- The surface (0x1003c670: 640 × 480, 8-bit, shown at 0x1003ca60) on the 8-bit presentation path.
-- The mouse: gasm 0.16.1 has a pointer (position, buttons, presses), which the platform layer does not use
-  yet.
-- The exe's side: Shell_Load, the function table passed in, and WinMain's states around the shell (the
-  mission movie 0x58dc90, the salvage file, the trip's state).
+- **The database** (`mw2.c`; 0x1001a510-0x1001a8b0). Its LZSS window is written from position 0.
+- **The 2D library** (`gfx.c`, the DLL's "aw" sources):
+  - a view is a bitmap, plus a window whose corner is the drawing origin and which clips;
+  - the frame sets' RLE frames (0x1002dab4);
+  - the PCX rows (0x10031b44, 0x100317ce);
+  - the copies and fills (0x1002fa48, 0x1002f945).
+- **The display** (`screen.c`; 0x1003c670, 0x1003d3b0, 0x1003dfe0, 0x1003dc50, 0x1003ca60):
+  - the surface, the background copy, the palette and the rectangle drawn;
+  - a background with a palette of its own is set at the present, after the screen is cleared. Full
+    screen, the driver (table 0x10063e68) sets the palette at once (0x10028a10 ignores the fade), so the
+    black frame and the picture fall in one pass.
+- **The buttons and lists** (`button.c`). A button's record:
+  - +0 the id;
+  - +4..+0x10 its box;
+  - +0x14 and +0x18 its size;
+  - +0x1c the frame shown, +0x20 the hover frame (the frame - 1), +0x24 the normal frame;
+  - +0x28 lit while its panel is open;
+  - +0x2c its frame set;
+  - +0x30 a label drawn while the button is under the mouse.
+
+  A list is {capacity, count, items}, and inserting never grows it.
+- **The mouse** (0x1001f1c0, 0x1001f380) reads the platform's pointer. A left press is 1, held after it
+  2. A press within 200 ms of the last is a double click. The coordinates' debug print never shows:
+  0x10068c34 is 1 in the DLL's data.
+- **ShellMain's loop** (`shell.c`), one pass a frame:
+  - the exe's +0x28 (Sound_Frame(0));
+  - a message from the port's queue (PostMessage, PostQuitMessage);
+  - the mouse;
+  - the screen function with 0xc004;
+  - the present.
+
+  Pop-ups 8 (the end) and 10 (back to the main menu) are ported. A pop-up opens when a message arrives;
+  Windows always has one, so the port checks each pass.
+- **The main menu** (`mainmenu.c`; 0x100236d0-0x10025320): background entry 26, frame set 0x3e, and
+  the click (entry 0x51) played through the exe's 0x467390 and waited out. The port waits across passes
+  instead of blocking.
+
+  | Button | What it does |
+  |---|---|
+  | TRIP (0xd) | opens TRAINING (0xc: the training trip's set-up, then 0xc010, the mission's start), NEW TRIP (0xb, 0xc022) and LOAD BOOKMARK (10, pop-up 11) |
+  | MELEE (2) | opens two items (0xf and 1), each with its own panel of the melee's kinds |
+  | OPTIONS (0) | pop-up 0 |
+  | EXIT (0x11) | pop-up 8 |
+
+  A click on no button shuts the panels, as the original does (frame 0x1d for buttons 3 and 5 kept).
+- **The app** runs the shell after the movies. ShellMain's 0xff result ends the game. `--param shell=0`
+  (the port's) shows the loading screen instead.
+- **Checked:** the main menu's first frame is identical to a Python render of the formats. Scripted
+  pointer input lights TRIP, opens its panel and shows a label under the mouse.
+- gasm's headless pointer (`PTR(x,y)`) is in drawable pixels: 1280 × 720 with the frame scaled by 1.5
+  and centred (x + 160).
+- **Not ported yet:** every other screen and pop-up (each logs and goes back to the main menu), the
+  fonts and text, the keyboard, the cursors (the runner's is shown), the player's files, the music, and
+  network play.
+
+## What comes next
+
+- The training trip's set-up (0x10001680) and the mission's start (0xc010): the exe's CD check (+0x44, the
+  second disc's `int12f01.smk`), ShellMain's 0xc001 end, and Shell_Load's mission name (0x58d849 to
+  0x58dcd0), into WinMain's mission.
+- The fonts (entries 0x42, 0x44-0x47) and the text drawing (0x1003e200), which most screens need.
+- The exe's side around the shell: the function table, and WinMain's states (the mission's movie
+  0x58dc90, the salvage file, the trip's state).

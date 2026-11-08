@@ -400,6 +400,20 @@ double plat_ms(void)
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
 }
 
+static uint8_t ptr[GASM_POINTER_BYTES];
+static bool have_ptr;
+
+bool plat_pointer(int *x, int *y, uint32_t *buttons)
+{
+    if (!have_ptr) return false;
+    float fx, fy;
+    memcpy(&fx, ptr + GASM_POINTER_OFF_FX, 4);
+    memcpy(&fy, ptr + GASM_POINTER_OFF_FY, 4);
+    memcpy(buttons, ptr + GASM_POINTER_OFF_BUTTONS, 4);
+    *x = (int)fx, *y = (int)fy;
+    return true;
+}
+
 GASM_EXPORT("gasm_abi_version") int32_t i76_gasm_abi_version(void) { return GASM_ABI_VERSION; }
 
 GASM_EXPORT("gasm_init") int32_t i76_gasm_init(void)
@@ -427,6 +441,7 @@ GASM_EXPORT("gasm_frame") void i76_gasm_frame(void)
     if (!running) return;
     for (uint32_t p = 0; p < 4; p++) pads[p] = gasm_input_pad(p);
     poll_key_events();
+    have_ptr = gasm_pointer(ptr, sizeof ptr) == GASM_POINTER_BYTES;
     if (!app_frame()) {
         running = false;
         app_exit();

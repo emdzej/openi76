@@ -44,6 +44,9 @@ bool plat_gamepad_name(int slot, char *dst, size_t cap);   /* false for an empty
 bool plat_keys(uint8_t keys[KEY_COUNT]);
 /* Key presses since the previous frame, in order (no auto-repeat); count, at most cap. */
 int plat_key_presses(uint8_t *codes, int cap);
+/* The mouse, stable within a frame: its place in the frame's pixels (as plat_present's w x h; may be
+   outside it) and its buttons held (bit 0 left, 1 right, 2 middle). False if the runner has no pointer. */
+bool plat_pointer(int *x, int *y, uint32_t *buttons);
 /* Launch parameter (gasm --param / URL query); false if unset. */
 bool plat_param(const char *name, char *dst, size_t cap);
 /* Calls per second of app_frame from now on; the audio per frame follows. */

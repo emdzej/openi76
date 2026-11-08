@@ -56,6 +56,11 @@ struct Snd {
                               the caller's; the port's 0x80000000: to be freed (by its hook) */
 };
 
+/* the shell's waves in its memory (0x467390, 0x4674a0, 0x4674f0): played (vol 100, pan 0, freq -1 the
+   wave's), stopped, playing */
+bool Sound_PlayData(const uint8_t *wav, int vol, int pan, int freq);
+int Sound_StopData(const uint8_t *wav);
+bool Sound_DataPlaying(const uint8_t *wav);
 /* Sound_Init 0x466ab0 (WinMain's, once): DirectSound with 3D, the primary buffer 11,025 Hz 8-bit stereo,
    the listener, the voices and volumes from the settings, the volume table; 0 without sound */
 int Sound_Init(void);

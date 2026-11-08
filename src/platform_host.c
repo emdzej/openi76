@@ -18,6 +18,7 @@ double plat_ms(void)
 
 void plat_log(const char *msg) { fprintf(stderr, "%s\n", msg); }
 uint32_t plat_pad(int player) { return 0; }
+bool plat_pointer(int *x, int *y, uint32_t *buttons) { (void)x, (void)y, (void)buttons; return false; }
 
 /* the tests' game controllers (platform_host.h) */
 static PlatGamepad pads[4];

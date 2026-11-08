@@ -211,7 +211,15 @@ static Snd *find_loaded(const char *name)
     return NULL;
 }
 
-/* 0x4678c0 (by the caller's data) and its users 0x467390, 0x4674a0, 0x4674f0 are the shell's: with it */
+/* 0x4678c0: the record of the caller's data (0x467390's key), on the playing list then the parked */
+static Snd *find_data(const uint8_t *key)
+{
+    if (!sys) return NULL;
+    for (int l = 0; l < 2; l++)
+        for (Snd *s = l ? sys->park : sys->play; s; s = s->next)
+            if (s->wav && s->data == key) return s;
+    return NULL;
+}
 
 /* ---- the range (0x4681b0) ---- */
 
@@ -612,6 +620,56 @@ Snd *Sound_Play(const char *name, Node *node, const SndParams *p, SndGas *gas)
         plat_log(m);
     }
     return ok ? s : NULL;
+}
+
+/* Sound_PlayData 0x467390 (the shell's, through the exe's table +0x2c): a wave in the caller's memory, its
+   record keyed by the data (state 0x200). A record of the same data lends its part (the name, the
+   volume and the rest), else the part is the arguments' (the volume, the pan, the frequency: -1 the
+   wave's) with a made name (0x4dc790: a counter to 100 and ".sse"). Then loaded and admitted (0x477690) */
+bool Sound_PlayData(const uint8_t *wav, int vol, int pan, int freq)
+{
+    static int counter;   /* 0x4dc770 */
+    if (!sys) return false;
+    SndParams p;
+    Sound_ParamsInit(&p);
+    p.freq = (float)freq, p.vol = (float)vol, p.pan = (float)pan;
+    const Snd *had = find_data(wav);
+    Snd *s = snd_alloc(NULL, NULL, &p);
+    if (s) s->data = wav, s->state |= 0x200;
+    if (!had) {
+        if (s) {
+            snprintf(s->p.name, sizeof s->p.name, exe_str(0x4dc790), counter, exe_str(0x4dc798));
+            if (++counter > 100) counter = 0;
+        }
+    } else {
+        if (!s) return false;
+        s->p = had->p;
+    }
+    if (!s) return false;   /* the original writes the name through the missing record */
+    if (!snd_load(s, NULL)) return false;
+    return true;
+}
+
+/* Sound_StopData 0x4674a0: stopped and parked, a copy (or one whose buffer is lost) deleted */
+int Sound_StopData(const uint8_t *wav)
+{
+    Snd *s = find_data(wav);
+    if (!s) return 0;
+    if (!s->dup) {
+        if (!(s->state & 2)) {
+            snd_stop(s);
+            list_put(s, 0);
+        }
+    } else
+        snd_free(s);
+    return 1;
+}
+
+/* Sound_DataPlaying 0x4674f0: on the playing list */
+bool Sound_DataPlaying(const uint8_t *wav)
+{
+    const Snd *s = find_data(wav);
+    return s && (s->state & 1);
 }
 
 /* Sound_PlayAt 0x468580 */
