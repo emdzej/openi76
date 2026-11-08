@@ -77,7 +77,7 @@
 10034d20	Rect_Hit	shell	high	strictly inside a rectangle record; ported
 10034df0	Garage_Reset	garage	high	the garage's state dropped (each ShellMain, a new trip, a bookmark); ported
 1001d210	Garage_FreeStock	garage	high	user.rpr's nodes and parts freed; ported
-1001d240	Stock_Delete	garage	high	user.rpr deleted
+1001d240	Stock_Delete	garage	high	user.rpr deleted; ported (Files_Remove)
 1000fe00	Shell_YesNo	shell	high	the yes/no box (entry 0x24 frame 0xb), waited on; ported
 10035830	Garage_AskText	garage	high	"Leave without taking salvage?"; ported
 1000fb10	Shell_Note	shell	high	a note (frame k of set 0x24) waited on until its OK; ported
@@ -90,7 +90,6 @@
 10006110	Setup_GunLabels	setup	high	the guns' labels, Hand and .45 CAL; ported
 10006320	Setup_DrawList	setup	high	a box's rows to its capacity; ported (the picture's part not yet)
 100063e0	Setup_DrawDrops	setup	high	the droppers' box; ported
-100064a0	Setup_DrawRepairs	setup	medium	the repairs' box; not ported
 100065e0	Setup_Weight	setup	high	the car's weight, drawn as %d LBS; ported
 10006780	Setup_Redraw	setup	high	the set-up's redraw; ported (the repairs and the armour not yet)
 10006bd0	Setup_OrderOf	setup	high	a hard point id's place in the guns' box; ported
@@ -148,7 +147,6 @@
 10008170	Setup_DrawArmour	setup	high	the weight and the armour redrawn; ported
 1002bf00	Spc_Read	trip	high	reconfig.spc, trip4.spc or a bookmark's .cmp read back; ported (src/shell/trip.c)
 1001f8b0	Parts_FreeRing	trip	high	the salvage ring freed; ported (Parts_Free)
-1001d240	Stock_Remove	trip	high	user.rpr removed; ported
 10021fd0	Kb_Message	shell	high	a key message's typed code into the ring; ported
 100223b0	Kb_Next	shell	high	the next typed code (the ring, then the key messages); ported
 10038640	Kb_Read	shell	high	a typed code read: 0 none, 1 a key, 3 Esc; ported
@@ -172,7 +170,6 @@
 10002a40	Bookmark_LoadMenu	shell	high	the load's pass; ported
 10003070	Bookmark_LoadList	shell	high	the load's list or "No Games available"; ported
 10002d80	Bookmark_Restore	shell	high	0xc01d: the trip back from a bookmark; ported
-1000fe00	Shell_Ask	shell	high	the yes/no box waited on (with a text function); ported (Shell_YesNo)
 10007d40	Setup_ListsBack	setup	high	the set-up's boxes into the record when open; ported
 1000cc40	EscMenu_Open	shell	high	pop-up 0, the menu (Esc); ported (src/shell/escmenu.c)
 1000cde0	EscMenu_Pass	shell	high	the menu's pass; ported
