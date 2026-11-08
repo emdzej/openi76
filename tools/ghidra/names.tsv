@@ -169,7 +169,7 @@
 0048d670	Queue_SpanMin	render	high	the least occluder bucket whose span holds the x range's min or max; -1 if none
 0048d400	Queue_FindMember	render	high	the merge member of a node, its bucket set
 0048d450	Queue_MergeAdd	render	med	adds a node (its root) to the merges
-0048d530	Queue_Merge	render	med	merges two nodes (the "merge" property)
+0048d530	Queue_Merge	render	high	a moving node that touched a static entity into that entity's merge, with a "merge" reference; ported (src/render/queue.c)
 0048eaa0	Terrain_Visible	terrain	high	the view's ground footprint: bounds, quadtree depth, hull edges (0x5e3100); ported, diffed
 0048e450	Terr_Plane	terrain	high	the plane through three points (doubles) as a footprint edge
 0048e3f0	Terr_Key	terrain	high	the hull's key: atan2 angle (0-2pi) * 1e7 + distance squared
@@ -1485,7 +1485,7 @@
 004632c0	Scores_Init	melee	high	the scores' box made, hidden, filled; ported
 00463350	Scores_Fill	melee	high	the scores' lines (the melee's: the user's); ported
 004635d0	Scores_Toggle	melee	high	SCORE_TOGGLE: the box shown or hidden; ported
-00469db0	Collide_Frame	collide	high	each frame: the moving entities' boxes swept through the frame, then the entities' collisions; ported but the scenes' merge 0x48d530 (src/collide.c)
+00469db0	Collide_Frame	collide	high	each frame: the moving entities' boxes swept through the frame, then the entities' collisions and their merges; ported (src/collide.c)
 00469f30	Box_Overlap	collide	high	a segment's box against an entity's (+0x50) in x and z
 00469f80	Collide_Pair	collide	high	two entities' collision: boxes, spheres' sweep, meshes, the class's response and sounds; ported (src/contact.c), diffed (--call pair)
 00479b80	Contact_Test	collide	high	a COLP box entity against another by its collision kind: box both ways, always, or the node tree; ported

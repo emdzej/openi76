@@ -4,6 +4,7 @@
 #include "clock.h"
 #include "combat.h"
 #include "contact.h"
+#include "render/queue.h"
 #include "exe.h"
 #include "lod.h"
 #include "terrain.h"
@@ -18,6 +19,7 @@
 
 Cell *g_coll_static, *g_coll_moving, *g_coll_ground;
 static uint32_t coll_type;   /* 0x577178: the type for nodes without one */
+static int g_coll_kept;      /* 0x577184: no entity taken off the lists since it was set (Collide_Frame) */
 
 void Collide_Init(void)
 {
@@ -224,8 +226,8 @@ void Collide_Frame(void)
         box[5] = F32(ADD(box[5], e->r));
     }
     /* each moving entity against the moving after it and against every static one; a static one whose
-       box was overlapped and that was not taken off the lists meanwhile (0x577184) has its scene merged
-       with the moving one's (0x48d530, the drawing queue's: not ported) */
+       box was overlapped, no entity having been taken off the lists meanwhile (0x577184, cleared by
+       0x469cd0), gets the moving one in its merge in the drawing queue (0x48d530) */
     for (Cell *c = g_coll_moving, *next; c; c = next) {
         next = c->next;
         for (Cell *o = next, *on; o; o = on) {
@@ -235,7 +237,10 @@ void Collide_Frame(void)
         for (Cell *o = g_coll_static, *on; o; o = on) {
             on = o->next;
             g_coll_touch = 0;
-            Collide_Pair(c->value, o->value);
+            g_coll_kept = 1;
+            Entity *se = o->value;
+            Collide_Pair(c->value, se);
+            if (g_coll_touch && g_coll_kept) Queue_Merge(se, se->node, ((Entity *)c->value)->node);
         }
     }
 }
@@ -422,6 +427,7 @@ void Collide_Remove(Entity *e)
         for (Cell *c = *list; c; c = c->next)
             if (c->value == e) {
                 if (e->has_a == 3) meshes_free(e->node);
+                g_coll_kept = 0;   /* 0x577184 */
                 List_Remove(list, c);
                 break;
             }

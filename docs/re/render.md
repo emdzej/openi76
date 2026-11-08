@@ -546,8 +546,16 @@ Everything in a frame goes through a queue sorted by depth (0x48d0c0-0x48e110), 
 - **Not reproduced.** Type 0 or 1 records without vertices are only a header in the original, and the
   flush's clearing of their +0x3c writes into the records after them. The port's records have their own
   sizes, so this aliasing doesn't happen. The game queues those types with vertices only.
-- **Not ported yet.** The merge entry points 0x48d450 and 0x48d530 (scene nodes), and the object types'
-  draw functions.
+- **Merges from the collisions (0x48d530, ported).** Collide_Frame calls it for a static entity whose box a
+  moving one overlapped (0x577170), when no entity was taken off the collision lists during that test
+  (0x577184, cleared by 0x469cd0). Nothing happens when the moving node is already a recorded member
+  (0x48d400, which sets its bucket to 0), or when either node is the user's (flag 0x10) while in the
+  cockpit (0x4a847c). Otherwise the moving node joins the merge of the static node: a new merge has
+  the static entity as its arg, the bucket 1e6 and one member; a full one (8 members) is left as it is.
+  The first 20 members added this way are recorded (0x582120: the merge and the member). Each gets a
+  reference tagged "merge" (0x41f440, 0x4eb07c), and the flush that ends the merges drops it
+  (0x41f890, then 0x41f6f0). Members past the twentieth keep their reference (the original's).
+- **Not ported yet.** The merge entry point 0x48d450 (scene nodes), and the object types' draw functions.
 
 ## The frame, Render_World 0x407550
 

@@ -10,6 +10,8 @@
 #include "render/queue.h"
 #include "exe.h"
 #include "render/fpu.h"
+#include "scene.h"
+#include "camera.h"
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -348,8 +350,12 @@ void Queue_Flush(const View *view, int end_merges)
     memset(buckets, 0, sizeof buckets);
     cursor = pool;
     if (end_merges) {
-        /* the original clears each member node's "merge" property (0x41f890, 0x41f6f0): the scene's, not
-           ported yet */
+        /* each recorded member's "merge" reference dropped (0x41f890, then 0x41f6f0): those of 0x48d530's;
+           the members past the 20 records keep theirs (the original's) */
+        for (int i = 0; i < nrefs; i++) {
+            Node *n = Node_Live((Node *)refs[i].member->node);
+            if (n) Node_Unref(n);
+        }
         merge_end = merges;
         nrefs = 0;
         memset(merges, 0, sizeof merges);
@@ -388,6 +394,40 @@ void Queue_AddMerge(void *node, void *target)
         m->m[m->n].bucket = 1000000;
         m->n++;
     }
+}
+
+void Queue_Merge(void *stat_entity, void *stat_node, void *node)
+{
+    Node *s = stat_node, *m = node;
+    if (Queue_FindMember(m, 0)) return;   /* already a member (its bucket set to 0, as the original) */
+    if (((s->flags & 0x10) || (m->flags & 0x10)) && g_cockpit) return;   /* 0x42e620: the user's, in the cockpit */
+    if (merge_end >= merges + MERGES) return;   /* the original's limit 0x5f3184, past the table (see above) */
+    QMerge *e = NULL;
+    for (QMerge *q = merges; q < merge_end; q++)
+        if (q->node == s) {
+            e = q;
+            break;
+        }
+    if (e) {
+        if (e->n == 8) return;
+        e->m[e->n].node = m;
+        e->m[e->n].b = 0;
+        e->n++;
+    } else {
+        e = merge_end++;
+        e->node = s;
+        e->arg = stat_entity;
+        e->n = 1;
+        e->bucket = 1000000;
+        e->m[0].node = m;
+        e->m[0].b = 0;
+    }
+    if (nrefs < REFS) {
+        refs[nrefs].merge = e;
+        refs[nrefs].member = &e->m[e->n - 1];
+        nrefs++;
+    }
+    Node_Ref(m);   /* 0x41f440, tagged "merge" (0x4eb07c) */
 }
 
 QMerge *Queue_FindMerge(void *node)

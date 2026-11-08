@@ -84,6 +84,10 @@ void Queue_Poly(const View *view, void *verts, int n, PolyArg arg, int mode);
 /* Queue_AddMerge 0x48d450: node (a class 0x34 object) into the merge of target's root (at most 8 members, at
    most 20 merges) */
 void Queue_AddMerge(void *node, void *target);
+/* Queue_Merge 0x48d530: a moving node that touched a static entity's node (Collide_Frame) into the
+   merge of that node (a new one with the entity as its arg), unless it is a member already, or either is
+   the user's in the cockpit; up to 8 members; the first 20 recorded, with a reference the flush drops */
+void Queue_Merge(void *stat_entity, void *stat_node, void *node);
 /* Queue_FindMerge: a culled entity's merge, if any (the drawer clears its bucket and node) */
 QMerge *Queue_FindMerge(void *node);
 /* Queue_FindMember 0x48d400: the merge member for node, its bucket set; NULL if none */

@@ -136,7 +136,7 @@ first (0x469f30: the shots' 0x46a9b0, the avoidance's), so before this pass was 
 a vehicle (found by a t01 run: every impact on structures, the wagon and the attackers only scratched).
 Then each moving entity against every moving one after it and every static one (0x577170 cleared
 before each static one); a static one touched while 0x577184 is set has its scene merged with the
-moving one's in the drawing queue (0x48d530, **not ported**).
+moving one's in the drawing queue (0x48d530, ported; docs/re/render.md).
 
 **Two entities' collision (Collide_Pair 0x469f80, src/contact.c; confirmed by `diff_objects.py --call
 pair`: each vehicle moved onto every other entity, t01, t02, t05, t08, t11, t14, t17, a01 and s01-s07
