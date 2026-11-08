@@ -268,3 +268,5 @@
 100194b0	Map_SavedCar	melee	high	the instant melee's player given the saved car; ported
 100257c0	CarTypes_Write	melee	high	i76car.def written; ported
 10007bc0	Paint_Open	setup	high	the paint picker over the catalogue's paints of the car's .vtf; ported
+10041170	Catalog_Open	setup	high	PARTS CATALOG (0xc01f): background 4; ported
+10041190	Catalog_Screen	setup	high	its DONE (0x10068bc0) back to the set-up (0xc00f); ported

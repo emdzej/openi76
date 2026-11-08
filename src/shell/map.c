@@ -602,6 +602,24 @@ static void screen(uint32_t msg)
     }
 }
 
+/* ---- PARTS CATALOG (0xc01f: 0x10041170, its screen 0x10041190) ---- */
+
+static void catalog(uint32_t msg)
+{
+    if (msg == 0xc004) {
+        if (g_sh_mouse.click != 1 || !Rect_Hit(g_sh_mouse.x, g_sh_mouse.y, dll_data(0x10068bc0, 20))) return;
+        msg = 0xc00f;   /* back to the set-up */
+    }
+    Shell_Post(msg, 0xc017);
+    Shell_UnsetScreen(catalog);
+}
+
+void Catalog_Open(void)   /* the set-up's PARTS CATALOG from the map: background 4, a page to read */
+{
+    Scr_Background(g_sh_db, 4);
+    Shell_SetScreen(catalog);
+}
+
 /* ---- the open (0x10013040) ---- */
 
 void Map_Open(void)

@@ -1395,13 +1395,6 @@ static void asked(int yes)
     go();
 }
 
-static void unported(int id)
-{
-    char m[80];
-    snprintf(m, sizeof m, "OpenI76: the set-up's box %d is not ported yet", id);
-    plat_log(m);
-}
-
 static uint32_t map_msg(void)   /* back to the map: a scenario's, the instant melee's, network play's */
 {
     return g_sh_mode == 1 ? 0xc024 : g_sh_mode == 0 ? 0xc021 : 0xc026;
@@ -1529,10 +1522,10 @@ static void screen(uint32_t msg)
     int x = g_sh_mouse.x, y = g_sh_mouse.y, id = box_at(x, y);
     if (g_sh_mouse.click != 1) return;
     switch (id) {
-    case 7:   /* back to the salvage; from the map the saved cars' screen (0xc01f, 0x10041170) */
+    case 7:   /* back to the salvage; from the map PARTS CATALOG (0xc01f, 0x10041170) */
         Shell_Click(w_click);
-        if (g_sh_from_map) {
-            unported(id);
+        if (g_sh_from_map) {   /* PARTS CATALOG */
+            leave(0xc01f);
             return;
         }
         if (w_hello) Sound_StopData(w_hello);

@@ -9,8 +9,8 @@ with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's
 name puts EMPTY in its place; the repair order, SELECT REPAIRS, the armour's and chassis' buttons and
 BALANCE run, and the car's picture (0x100114d0, below) shows each part. The melee's path from the map
 runs too ("From the map" below), with its paint (box 10, 0x10007bc0: only the map's box list has box
-0x1005cb80, so a trip's set-up has no paint to choose). Not ported yet: PARTS CATALOG (box 7 from the
-map, 0xc01f, 0x10041170).
+0x1005cb80, so a trip's set-up has no paint to choose) and PARTS CATALOG (box 7 from the map: 0xc01f,
+0x10041170, background 4 with the parts' numbers, its DONE at 0x10068bc0 back to the set-up).
 
 ## From the map (0x1006b050 set)
 

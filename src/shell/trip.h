@@ -93,7 +93,8 @@ int Map_FindVariant(void);
 void Map_VariantFileAt(char out[32], int i);
 void Map_SavedCar(void);   /* the set-up's picture of the map's car (0x10016d70) */
 ShList *Map_CarList(int i);
-void Setup_UseMap(void);   /* the set-up's fills, the map's (its button 5) */
+void Setup_UseMap(void);
+void Catalog_Open(void);   /* i76shell 0x10041170 (0xc01f) */   /* the set-up's fills, the map's (its button 5) */
 /* 0x1001d6a0: the car (record g_sh_car) with the lists' parts as a .vcf at path, then into the file
    index (name in the player's directory, else path's name in addon) */
 void Car_WriteVcf(const char *path, const char *name);

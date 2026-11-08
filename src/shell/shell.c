@@ -516,8 +516,11 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc026:
         Map_Open();
         return;
+    case 0xc01f:   /* the set-up's PARTS CATALOG */
+        Catalog_Open();
+        return;
     case 0xc01c:
-    case 0xc01f: case 0xc020: case 0xc025:
+    case 0xc020: case 0xc025:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
         return;
