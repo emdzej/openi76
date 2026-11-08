@@ -7,6 +7,7 @@
 #include "exe.h"
 #include "files.h"
 #include "platform.h"
+#include "shell/picker.h"
 #include "shell/screen.h"
 #include "shell/shell.h"
 #include "sound.h"
@@ -686,85 +687,17 @@ static void spec_pass(void)
     pop_close();
 }
 
-/* 0x1000f5e0: the scrolling picker (0x1005cc48: 0xac x 0x10c centred, its list 0x11, 0x30 in with 11
-   rows; rects 0x1005cbf8 up, down, the list, cancel), the screen under it kept to scroll over; its pass
-   0x1000dc30 */
-static struct {
-    int x, y, w, h, lx, ly, rows, first, count, picked;
-    void (*done)(void);
-    void (*draw)(int x, int y, int first, int rows);
-    int held, wait;   /* the arrow held, the passes to its next step */
-} pk;
-static uint8_t pk_under[640 * 480];   /* 0x1006c2e0 */
-
-static void pk_step(void)
-{
-    pk.first += pk.held;
-    if (pk.first < 0 || pk.count < pk.rows + pk.first) {
-        pk.first -= pk.held;
-        pk.held = 0;
-        return;
-    }
-    for (int r = 0; r < pk.h && pk.ly + r < 480; r++)
-        for (int c = 0; c < pk.w && pk.lx + c < 640; c++) {
-            int at = (pk.ly + r) * 640 + pk.lx + c;
-            g_shs.px[at] = pk_under[at];
-        }
-    Scr_Dirty(pk.lx, pk.ly, pk.lx + pk.w - 1, pk.ly + pk.h - 1);
-    pk.draw(pk.lx, pk.ly, pk.first, pk.rows);
-    pk.wait = 6;   /* the original steps, presents and sleeps 100 ms while the button is held: 6 passes */
-}
-
-static void pk_close(void)
-{
-    g_sh_modal = NULL;
-    Scr_Restore(pk.x, pk.y, pk.w + 10, pk.h + 10);
-    if (pk.done) pk.done();
-}
-
-static void pk_pass(void)
-{
-    if (pk.held) {
-        if (!g_sh_mouse.left) pk.held = 0;
-        else if (--pk.wait <= 0) pk_step();
-        return;
-    }
-    if (g_sh_mouse.click != 1) return;
-    const uint8_t *r = dll_data(0x1005cbf8, 4 * 20);
-    int id = -1;
-    for (int i = 0; i < 4 && id < 0; i++)   /* 0x10034c60 */
-        if (Rect_Hit(g_sh_mouse.x - pk.x, g_sh_mouse.y - pk.y, r + 20 * i)) id = rd32(r + 20 * i);
-    switch (id) {
-    case 0: case 1:
-        pk.held = id ? 1 : -1;
-        pk_step();
-        return;
-    case 2: {
-        int i = pk.first + (g_sh_mouse.y - pk.ly) / row_h;
-        if (pk.count <= i) return;
-        pk.picked = i;
-        pk_close();
-        return;
-    }
-    case 3:
-        pk_close();
-        return;
-    }
-}
+/* the set-up's pickers' record (0x1005cc48: 0xac x 0x10c centred, the list 0x11, 0x30 in with 11 rows;
+   the buttons 0x1005cbf8 up, down, the list, cancel) */
+static ShPicker pk;
 
 static void pk_open(int frame, int count, int first, void (*draw)(int, int, int, int), void (*done)(void))
 {
     pk.w = (int32_t)dll_u32(0x1005cc50), pk.h = (int32_t)dll_u32(0x1005cc54);
-    pk.x = 0x140 - pk.w / 2, pk.y = 0xf0 - pk.h / 2;
-    pk.lx = 0x11 + pk.x, pk.ly = 0x30 + pk.y, pk.rows = (int32_t)dll_u32(0x1005cc60);
-    pk.count = count, pk.picked = -1, pk.draw = draw, pk.done = done, pk.held = 0;
-    Scr_Shadow(pk.x + 6, pk.y + pk.h, pk.w, 6);
-    Scr_Shadow(pk.x + pk.w, pk.y + 6, 6, pk.h);
-    Scr_Frame(Shell_Set24(), frame, pk.x, pk.y, pk.w, pk.h);
-    memcpy(pk_under, g_shs.px, sizeof pk_under);
-    pk.first = first < count ? first : 0;
-    draw(pk.lx, pk.ly, pk.first, pk.rows);
-    g_sh_modal = pk_pass;
+    pk.x = 0x140 - pk.w / 2, pk.y = 0xf0 - pk.h / 2;   /* the callers' (0x10007590, 0x10007930) */
+    pk.lx = 0x11, pk.ly = 0x30, pk.rows = (int32_t)dll_u32(0x1005cc60);
+    pk.count = count, pk.draw = draw, pk.done = done, pk.rects = 0x1005cbf8, pk.row_h = row_h;
+    Picker_Open(&pk, frame, first);   /* 0x1000f5e0 */
 }
 
 static void list_draw(const ShList *l, uint32_t fmt, int x, int y, int first, int rows)
@@ -1094,7 +1027,7 @@ static void rp_draw(int i)   /* 0x1000e640 */
     int x = rp.x + rp.r[i][1], y = rp.y + rp.r[i][3];
     int w = rp.r[i][2] - rp.r[i][1] + 1, h = rp.r[i][4] - rp.r[i][3] + 1;
     for (int r = 0; r < h && y + r < 480; r++)
-        for (int c = 0; c < w && x + c < 640; c++) g_shs.px[(y + r) * 640 + x + c] = pk_under[(y + r) * 640 + x + c];
+        for (int c = 0; c < w && x + c < 640; c++) g_shs.px[(y + r) * 640 + x + c] = g_sh_under[(y + r) * 640 + x + c];
     Scr_Dirty(x, y, x + w - 1, y + h - 1);
     char text[32] = "";
     const ShList *l = rp.lists[i];
@@ -1212,7 +1145,7 @@ static void select_repairs(void)
     Scr_Shadow(rp.x + 0xc, rp.y + rp.h, rp.w, 0xc);
     Scr_Shadow(rp.x + rp.w, rp.y + 0xc, 0xc, rp.h);
     Scr_Frame(Shell_Set24(), 6, rp.x, rp.y, rp.w, rp.h);
-    memcpy(pk_under, g_shs.px, sizeof pk_under);
+    memcpy(g_sh_under, g_shs.px, sizeof g_sh_under);
     for (int i = 0; i < 6; i++) rp_draw(i);
     g_sh_modal = rp_pass;
 }
