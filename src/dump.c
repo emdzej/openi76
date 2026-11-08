@@ -348,6 +348,7 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "skid.h"
 #include "flamer.h"
 #include "contact.h"
+#include "drive.h"
 #include "sound.h"
 #include "radio.h"
 #include "salvage.h"
@@ -2518,6 +2519,8 @@ int Dump_CallVehicles(int which, int upside)
             static const uint32_t fns[10] = {0x418b60, 0x418500, 0x418660, 0x418660, 0x418850, 0x418ad0,
                                              0x418ce0, 0x418d70, 0x418290, 0x418d80};
             for (int pass = 0; pass < 2; pass++) {
+                Rel_Clear();
+                (void)AI_Heading(n);   /* the frame's cache filled first, as in a game frame */
                 float sp = pass ? -9.0f : 15.0f, st = 0.3f, one = 1.0f, v[3];
                 for (int k = 0; k < 3; k++) v[k] = n->frame.m[6 + k] * sp;
                 memcpy(d + 0xbc, v, 12);

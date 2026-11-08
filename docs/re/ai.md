@@ -395,7 +395,7 @@ calls after 0x418ee0 would leave other words; with the horn not ported, the port
 **Stuck.** Enter (0x418500): no hand brake; +0x9d20 the steering and +0x9d3c the ground's height noted;
 backing out (0x417910: steer 0.95 of the tyres' limit against the steering as driven, the cruising speed
 up to 5 m/s else the brakes, the direction flipped, +0x9d34 in 2 s, the heading); then +0x9d34 = the time
-+ 4 and +0x9d38 the heading. Frame (0x418660): turned 1.5 from the noted heading: brake; going forward
++ 4 and +0x9d38 the heading. The heading in these (0x4182c0 for the back-out's, inline in 0x418500, 0x418660 and 0x418850) is worked out from the frame and the direction as it is then, flipped, not the frame's cached one (0x42e3f0, from before the flip, a half turn off): with the cached one the pop's "turned 1.5 while under 1 m/s" held at once and the car never backed out (found in a t01 run; `--call stuck` now fills the cache first). Frame (0x418660): turned 1.5 from the noted heading: brake; going forward
 faster than 0.1 m/s: brake, straight; backing slower than 8 m/s: full throttle (0x40a4b0, x 0.9999),
 straight; else 0.95 of the limit against the noted steering at the cruising speed. Pops: the ground under
 it 3 m from the noted height, or turned 1.5 while under 1 m/s (0x418850); the time (0x418290). Leave

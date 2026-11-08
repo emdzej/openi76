@@ -533,7 +533,7 @@ static void back_out(Node *n, uint8_t *d, uint8_t *ai)
     else AI_Stop(n);
     flip(n);
     putf(ai + 0x9d34, F32(ADD(g_clock_game, 2.0f)));   /* 0x4a54a4 */
-    putf(ai + 0x9d38, AI_Heading(n));   /* 0x4182c0 */
+    putf(ai + 0x9d38, AI_HeadingNow(n));   /* 0x4182c0: from the frame and the flipped direction, not the frame's cache */
 }
 
 /* stuck's enter 0x418500: no hand brake; the steering (+0x9d20) and the ground's height (+0x9d3c) noted;
@@ -547,7 +547,7 @@ static int stuck_enter(Node *n, Node *t)
     putf(ai + 0x9d3c, F32(Terrain_Height(n->frame.pos[0], n->frame.pos[2])));
     back_out(n, d, ai);
     putf(ai + 0x9d34, F32(ADD(g_clock_game, 4.0f)));   /* 0x4a55b0 */
-    putf(ai + 0x9d38, AI_Heading(n));
+    putf(ai + 0x9d38, AI_HeadingNow(n));   /* inline in the original, as below: the direction as flipped */
     return 0;
 }
 
@@ -562,7 +562,7 @@ static int stuck_frame(Node *n, Node *t)
     float vv[3];
     memcpy(vv, v, 12);
     float fwd = F32(ADD(ADD(MUL(vv[1], z[1]), MUL(vv[2], z[2])), MUL(vv[0], z[0])));
-    float h = AI_Heading(n);
+    float h = AI_HeadingNow(n);
     if (!below(fabs(Angle_Diff(h, rdf(ai + 0x9d38))), 1.5f)) {   /* 0x4a55b4 */
         AI_Stop(n);
         return 0;
@@ -600,7 +600,7 @@ static int unstuck(Node *n, Node *t)
 {
     (void)t;
     uint8_t *ai = ai_of(n), *d = n->data;
-    float h = AI_Heading(n);
+    float h = AI_HeadingNow(n);
     double diff = Angle_Diff(h, rdf(ai + 0x9d38));
     double g = Terrain_Height(n->frame.pos[0], n->frame.pos[2]);
     if (3.0 < fabs(SUB(rdf(ai + 0x9d3c), g))) return 1;   /* 0x4a55c8 */
