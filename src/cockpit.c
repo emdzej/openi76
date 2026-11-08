@@ -31,6 +31,11 @@
 #include "damage.h"
 #include "exe.h"
 #include "weapons.h"
+#include "math3d.h"
+#include "net/netgame.h"
+#include "melee.h"
+#include "textregion.h"
+#include "classes.h"
 
 Node *g_dash_alt, *g_dash_main;
 int32_t g_dash_on;
@@ -741,4 +746,54 @@ void Dash_Off(void)
     g_dash_on = 0;
     Node_ClearFlags(g_dash_main, 1);
     Node_SetFlags(g_dash_alt, 1);
+}
+
+/* ---- network play's names (0x428310) ---- */
+
+static int tags_all;   /* 0x54fa44 */
+static int tags_far;   /* 0x54f90c: only ever cleared */
+
+void Net_NameTagsToggle(void) { tags_all = tags_all == 0; }
+
+/* 0x4283a0: e's player's name over its car in the colour of its kind's corners, unless farther than the
+   view's range or with its box off the screen */
+static void name_tag(const View *view, Entity *e)
+{
+    if (!e || !Net_On()) return;
+    float c[3], s[3];
+    Frame_Points(&c, (const float(*)[3])e->c, 1, &e->node->frame);   /* 0x4240e0 */
+    View_ToCamera(view, s, c[0], c[1], c[2]);
+    if (MUL(view->range, view->zoom) < s[2] && !tags_far) return;
+    s[2] = F32(fpu_div(exe_f32(0x4a58d8), s[2]));
+    int32_t size = (int32_t)MUL(MUL(view->sx, e->r), s[2]);
+    if (size < 0) size = -size;
+    if (size < 0x17) size = 0x17;
+    if (size > 0x96) size = 0x96;
+    int32_t x, y;
+    if (on_screen(s, view, &x, &y)) return;
+    y -= (int32_t)MUL((double)size, exe_f32(0x4a5978)) + 9;   /* 0.533 */
+    if (y < 0) return;
+    char name[24];
+    uint16_t id;
+    memcpy(&id, e->node->data + 0x480, 2);
+    if (!NetPl_Name(id, name) || !g_game_font) return;
+    x -= BFont_Width(g_game_font, name) / 2;   /* 0x439a20 */
+    const Texture *cp = corner_pic[(e->node->flags & 0x70000) >> 16][0];
+    BFont_Colour(g_game_font, cp ? ((const uint8_t *)cp->pixels)[0] : 0);   /* the corner's first pixel */
+    BFont_DrawAt(g_game_font, view->surface, x, y - BFont_Height(g_game_font), name);   /* 0x439850 */
+}
+
+void Net_NameTags(const View *view)
+{
+    if (!tags_all) {
+        Entity *u = g_user_entity;
+        if (!u || !u->node || !(u->node->cls == 1 || u->node->cls == 8 || u->node->cls == 9)) return;
+        Node *t = Radar_Current(u->node);   /* 0x421ba0 */
+        if (t && (t->cls == 1 || t->cls == 8 || t->cls == 9)) name_tag(view, Entity_OfNode(t));
+        return;
+    }
+    for (int i = 0; i < Melee_Vehicles(); i++) {   /* 0x463140, 0x463180 */
+        Entity *e = Melee_Vehicle(i);
+        if (e && Vehicle_Targetable(e->node)) name_tag(view, e);
+    }
 }

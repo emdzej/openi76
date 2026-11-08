@@ -192,6 +192,7 @@ static void viewer_frame(void)
     Queue_Flush(&view, 1);
     if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0 */
     Hud_Draw(&view, 0);                         /* 0x427db0; the hook 0x58dc58 is not ported */
+    if (Net_On()) Net_NameTags(&view);          /* 0x428310 */
     if (g_shake_on) Shake_Frame(view.surface);   /* 0x452ab0, 0x452ac0 */
 }
 
@@ -440,7 +441,10 @@ static void play_frame(void)
         if (!(g_play_state & 0xc)) {
             viewer_frame();
             /* 0x428770 (the cockpit's mask) is not ported */
-            if (g_play_state == 1) Regions_Draw(&surf);   /* 0x450040; 0x450ae0 (network play's chat line) is not ported */
+            if (g_play_state == 1) {
+                Regions_Draw(&surf);     /* 0x450040 */
+                EditLines_Draw(&surf);   /* 0x450ae0: network play's chat line */
+            }
         }
         show_frame();
         }

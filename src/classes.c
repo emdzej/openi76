@@ -1,5 +1,6 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
+#include "net/netgame.h"
 #include "heli.h"
 #include "sound.h"
 #include "cockpit.h"
@@ -50,8 +51,15 @@ Entity *Entity_OfNode(Node *n)
 
 /* ---- the start handlers ---- */
 
-/* 0x4306c0 (structures; 0x434930 for class 4 when it is its own root): in network games only */
-static void start_structure(Node *n) { (void)n; }
+/* 0x4306c0 (structures; 0x434930 for class 4 when it is its own root): in network games only, the
+   structure's index among the destructible objects (0x4654e0) in its data's +8 */
+static void start_structure(Node *n)
+{
+    if (Net_On() && n->data) {
+        int32_t i = Net_ObjectAdd(n);
+        memcpy(n->data + 8, &i, 4);
+    }
+}
 
 /* 0x428910 (artillery): the entity into the data's first word; the user's node is the target (0x5ad1a0) */
 Node *g_artillery_target;   /* 0x5ad1a0 */

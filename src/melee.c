@@ -1,5 +1,6 @@
 /* melee.h */
 #include "melee.h"
+#include "net/anet.h"
 #include "net/netgame.h"
 #include "ai.h"
 #include "classes.h"
@@ -30,6 +31,9 @@
 int g_melee;                    /* 0x4a8760 */
 static Entity *vehicles[0x32];  /* 0x5748b0: the vehicles (class 1) in the world, for the spawn points */
 static int nvehicles;           /* 0x574978 */
+
+Entity *Melee_Vehicle(int i) { return i >= 0 && i < nvehicles ? vehicles[i] : NULL; }
+int Melee_Vehicles(void) { return nvehicles; }
 static float spawn_time;        /* 0x574984: the user's car's, by the clock */
 static int regen_away = 1;      /* 0x575994: the user's car off every regen point since the last */
 static int teams_shown = 1;     /* 0x575998: the teams' lines (not the players') with teams */
@@ -391,9 +395,65 @@ void Melee_Frame(void)
    flag (0), then the user's record of 0x54 bytes: its name and car (0x403130, 0x403160: the mission
    record's), +0x48 whether its car was dying or dead (+0x454's 0x8020), +0x4c the kills, +0x50 the
    points. The car's +0xa4 is read into +0x44, then 0 goes over it; with no user the flags are read
-   through the name (the port: 0). The network's records (dpGetPlayerData) are not ported */
+   through the name (the port: 0). In network play every player's record (the players' table's order, at
+   most its count): the name, the car from the player's data (key 1, from +6), +0x40 the team (with
+   teams, which also orders them by team 0-7, and a 1 after the count), +0x44 its car's +0xa4, +0x48 the
+   deaths, +0x4c the kills, +0x50 the score */
+static size_t net_results(uint8_t *b, size_t cap)
+{
+    int teams = Net_Teams() != 0;   /* 0x4619f0 */
+    uint32_t count = (uint32_t)NetPl_Count(), done = 0, t = 0;
+    int32_t tf = teams;
+    memcpy(b, &count, 4);
+    memcpy(b + 4, &tf, 4);
+    size_t at = 8;
+    do {
+        for (int i = 0; i < 0x10; i++) {
+            uint8_t r[0x54] = {0};
+            dpid_t id = NetPl_At(i, (char *)r);   /* 0x464550 */
+            if (!id) continue;
+            if (teams) {
+                uint32_t f = 0;
+                NetPl_Flags(id, &f);   /* 0x4645e0 */
+                if ((f & 0x70000) >> 16 != t) continue;
+                memcpy(r + 0x40, &t, 4);
+            }
+            int32_t score = 0;
+            int16_t kills = 0, deaths = 0;
+            NetPl_Score(id, &score, &kills, &deaths);   /* 0x464ca0 */
+            uint32_t k = (uint16_t)kills, d = (uint16_t)deaths;
+            memcpy(r + 0x4c, &k, 4);
+            memcpy(r + 0x48, &d, 4);
+            memcpy(r + 0x50, &score, 4);
+            Node *n = NetPl_Node(id);   /* 0x4646b0 */
+            if (n && n->data) {
+                float v;
+                memcpy(&v, n->data + 0xa4, 4);
+                int32_t iv = (int32_t)v;   /* 0x496690 */
+                memcpy(r + 0x44, &iv, 4);
+            }
+            uint8_t data[0x50] = {0};
+            size_t len = 0x50;
+            if (dpGetPlayerData(id, 1, data, &len) == dp_RES_OK) {
+                memcpy(r + 0x20, data + 6, 0x1f);
+                r[0x3f] = 0;
+            } else r[0x20] = 0;   /* 0x4a8454, "" */
+            if (at + 0x54 <= cap) memcpy(b + at, r, 0x54), at += 0x54;
+            if (++done >= count) return at;
+        }
+    } while (teams && ++t < 8);
+    return at;
+}
+
 void Melee_Results(const char *name, const char *car)
 {
+    if (Net_On()) {
+        uint8_t nb[8 + 0x10 * 0x54];
+        size_t n = net_results(nb, sizeof nb);
+        Files_Remove(exe_str(0x4dc63c));   /* 0x4965f0 */
+        Files_Write(exe_str(0x4dc63c), nb, n);
+        return;
+    }
     uint8_t b[8 + 0x54] = {0};
     int32_t one = 1;
     memcpy(b, &one, 4);

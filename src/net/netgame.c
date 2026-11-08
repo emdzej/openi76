@@ -1224,15 +1224,61 @@ static void car_free(const char car[8])
 /* ---- the messages' lines and the chat (0x463bd0-0x463ef0) ---- */
 
 /* 0x463bd0: the messages' box (50, 150), 540 x 90, red, three lines that last 15 s; the chat's line under
-   it (0x450430 at (50, 360), its Enter sending, 0x463ef0) is not ported */
+   it (0x450430 at (50, 360), its Enter sending, 0x463ef0) */
+static EditLine *g_chat;         /* 0x5e29e0: the line typed */
+
+/* 0x463ef0, the chat line's Enter: the line hidden and inactive, sent to the one it is for (0 everyone),
+   and put in the messages' box as from the user */
+static void chat_done(EditLine *l, const char *text)
+{
+    (void)l;
+    EditLine_Show(g_chat, 0);
+    EditLine_Activate(g_chat, 0);
+    Net_SendChat(g_chat_to, text);   /* 0x466470 */
+    g_chat_to = 0;
+    char name[24], line[80];
+    dpid_t me = NetPl_Me();   /* 0x464b60 */
+    if (!me || !NetPl_Name(me, name)) snprintf(name, sizeof name, "%s", exe_str(0x4dc664));   /* "Unknown Loser" */
+    if (!me) line[0] = 0;
+    else snprintf(line, sizeof line, exe_str(0x4dc658), name);   /* "From %s: " */
+    size_t n = strlen(line);
+    strncat(line, text, 0x4f - n);
+    Region_Add(g_msgs, line);
+    Region_Add(g_msgs, exe_str(0x4a8454));   /* "" */
+}
+
 void Net_ChatInit(void)
 {
     g_msgs = Region_New(0x32, 0x96, 0x21c, 0x5a, 0xff, 15.0f, 3);
+    g_chat = EditLine_New(0x32, 0x168, 0x21c, 0xff, 1, chat_done);   /* 0x450430 */
     g_msgs_shown = 1;
     g_chat_to = 0;
 }
 
-void Net_ChatFree(void) { g_msgs = NULL; }   /* 0x463ec0: freed with the regions (0x4503a0) */
+/* 0x463ec0: the region (0x450350; the port's are freed with the rest, 0x4503a0) and the line (0x450cf0) */
+void Net_ChatFree(void)
+{
+    EditLine_Free(g_chat);
+    g_msgs = NULL;
+    g_chat = NULL;
+}
+
+/* 0x463cb0: the chat line opened for a player ("To %s: ") or, at 0 or one unknown, everyone ("Say: ") */
+void Net_ChatTo(dpid_t to)
+{
+    char name[24], prompt[40];
+    if (to && NetPl_Name(to, name)) snprintf(prompt, sizeof prompt, exe_str(0x4dc648), name);
+    else {
+        to = 0;
+        snprintf(prompt, sizeof prompt, "%s", exe_str(0x4dc650));
+    }
+    if (!g_chat) return;
+    EditLine_Prompt(g_chat, prompt);
+    EditLine_Text(g_chat, exe_str(0x4a8454));   /* "" */
+    EditLine_Show(g_chat, 1);
+    EditLine_Activate(g_chat, 1);
+    g_chat_to = to;
+}
 
 /* 0x463d60: a line in the messages' box, "From %s: " before a player's ("Unknown Loser" unknown), cut to 79 */
 void Net_Message(dpid_t from, const char *text)

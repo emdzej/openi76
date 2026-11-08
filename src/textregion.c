@@ -12,6 +12,8 @@
 #include "render/view.h"
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include "render/line.h"
 
 struct BFont {
     int count, height;
@@ -125,6 +127,36 @@ void BFont_Draw(BFont *f, Surface *s, int x, int y, const char *str)
             at += glyph_w(f, *p) + 2;
         }
     }
+}
+
+/* 0x439850: str at (x, y) unscaled, the tab stops as they are */
+void BFont_DrawAt(BFont *f, Surface *s, int x, int y, const char *str)
+{
+    if (!f || !s) return;
+    int at = x, t = 0, past = 0;
+    for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
+        if (!past)
+            for (;;) {
+                if (at - x < tabs[t]) break;
+                if (tabs[t] == -1) past = 1;
+                t++;
+                if (past) break;
+            }
+        if (*p == 9) at = past ? at + 0x20 : tabs[t] + x;
+        else {
+            glyph(f, s, at, y, *p);
+            at += glyph_w(f, *p) + 2;
+        }
+    }
+}
+
+/* 0x439a20: str's width, each glyph's and 2 */
+int BFont_Width(const BFont *f, const char *str)
+{
+    int w = 0;
+    if (f && str)
+        for (const unsigned char *p = (const unsigned char *)str; *p; p++) w += glyph_w(f, *p) + 2;
+    return w;
 }
 
 /* ---- the regions ---- */
@@ -295,4 +327,165 @@ void Regions_Free(void)
         free(r->lines);
         free(r);
     }
+}
+
+/* ---- the edit lines (0x450410-0x450ae0) ---- */
+
+struct EditLine {
+    EditLine *next;           /* the list 0x55f734, the newest first */
+    int x, y, w, h;           /* +0-+0xc: h the font's */
+    Surface bmp;              /* +0x10 */
+    char text[0x54];          /* +0x40: the prompt, then the text (0x50; the shifts below reach 2 past it) */
+    uint32_t max;             /* +0x94: the characters that fit at 'W''s width and 2, at most 0x4f */
+    uint32_t plen, len, at;   /* +0x98 the prompt's length, +0x9c the text's, +0xa0 the caret */
+    uint32_t colour;          /* +0xa4 */
+    int mapped;               /* +0xa8: its palette index, -1 until drawn */
+    uint32_t flags;           /* +0xac: 1 shown, 0x100 active, 0x200 redraw */
+    EditLine_Done done;       /* +0xb0 */
+};
+
+static EditLine *lines;
+
+EditLine *EditLine_New(int x, int y, int w, uint32_t colour, uint32_t flags, EditLine_Done done)
+{
+    EditLine *l = calloc(1, sizeof *l);
+    if (!l) return NULL;
+    l->x = x, l->y = y, l->w = w;
+    l->flags = flags | 0x200;
+    l->colour = colour;
+    l->mapped = -1;
+    l->done = done;
+    l->h = BFont_Height(g_game_font);
+    l->max = (uint32_t)w / (uint32_t)(glyph_w(g_game_font, 'W') + 2);   /* the glyph 0x57 */
+    if (l->max > 0x4e) l->max = 0x4f;
+    l->bmp = Surface_Make(l->w, l->h, NULL);
+    if (!l->bmp.pixels) {
+        plat_log(exe_str(0x4db100));   /* "Can't create bitmap for input region" */
+        free(l);
+        return NULL;
+    }
+    Surface_Fill(&l->bmp, 0xff);
+    l->next = lines;
+    lines = l;
+    return l;
+}
+
+void EditLine_Show(EditLine *l, int on)
+{
+    if (l) l->flags = (l->flags & ~1u) | (on != 0);
+}
+
+void EditLine_Activate(EditLine *l, int on)
+{
+    if (!l) return;
+    if (on)
+        for (EditLine *o = lines; o; o = o->next) o->flags &= ~0x100u;
+    l->flags = (l->flags & ~0x100u) | (on ? 0x100u : 0);
+}
+
+void EditLine_Prompt(EditLine *l, const char *prompt)
+{
+    uint32_t n = (uint32_t)strlen(prompt), keep = l->len - l->plen, room = l->max - n;
+    if (room < keep) keep = room;
+    memmove(l->text + n, l->text + l->plen, keep);
+    l->len += n - l->plen;
+    l->at += n - l->plen;
+    memcpy(l->text, prompt, n);
+    l->plen = n;
+    l->flags |= 0x200;
+}
+
+void EditLine_Text(EditLine *l, const char *text)
+{
+    strncpy(l->text + l->plen, text, l->max - l->plen);
+    l->flags |= 0x200;
+    l->len = (uint32_t)strlen(l->text) - 1;   /* one short, as the original counts it */
+    l->at = l->len + 1;
+}
+
+int EditLine_Key(EditLine *l, uint32_t key)
+{
+    if (!key || !(l->flags & 0x100) || (key & 0x500)) return 0;
+    signed char c = (signed char)key;
+    /* the switch's table is reached through the character as signed: the arrows (200, 0xc9) fall outside
+       it and do nothing */
+    switch (c) {
+    case 8:   /* backspace: the character before the caret, not into the prompt */
+        if (l->plen < l->at) {
+            memmove(l->text + l->at - 1, l->text + l->at, l->max - l->at + 2);
+            l->at--, l->len--;
+        }
+        l->flags |= 0x200;
+        return 1;
+    case 0xd:
+        if (l->done) l->done(l, l->text + l->plen);
+        l->flags |= 0x200;
+        return 2;
+    case 0x1b:   /* the whole line cleared, its prompt with it (the prompt's length kept) */
+        memset(l->text, 0, 0x50);
+        l->len = l->at = 0;
+        l->flags |= 0x200;
+        return 1;
+    }
+    if (key & 0x200) {   /* Shift: a US keyboard's */
+        static const char shifted[16] = {'<', '_', '>', '?', ')', '!', '@', '#', '$', '%', '^', '&', '*', '(', ':', ':'};
+        c = (signed char)toupper((unsigned char)c);
+        if (c == '\'') c = '"';
+        else if (c >= ',' && c <= ';') c = shifted[c - ','];
+        else if (c > 'Z' && c < '^') c += 0x20;
+        if (c == '`') c = '~';
+    }
+    if (c > 0x1f && c != 0x7f) {
+        if (l->len == l->max) return 1;
+        memmove(l->text + l->at + 1, l->text + l->at, l->max - l->at + 2);
+        l->text[l->at] = (char)c;
+        l->at++, l->len++;
+        l->flags |= 0x200;
+        return 1;
+    }
+    return 0;
+}
+
+EditLine *EditLine_Active(void)
+{
+    for (EditLine *l = lines; l; l = l->next)
+        if (l->flags & 0x100) return l;
+    return NULL;
+}
+
+void EditLines_Draw(Surface *screen)
+{
+    float kx = fpu_f32(fpu_mul((double)screen->pitch, exe_f32(0x4a604c))), ky = fpu_f32(fpu_mul((double)screen->h, exe_f32(0x4a6050)));
+    for (EditLine *l = lines; l; l = l->next) {
+        if (!(l->flags & 1)) continue;
+        if (l->flags & 0x200) {
+            Surface_Fill(&l->bmp, 0xff);
+            if (l->mapped == -1)
+                l->mapped = Color_Match((float)(l->colour & 0xff) * 0.00390625f, (float)(l->colour >> 8 & 0xff) * 0.00390625f,
+                                        (float)(l->colour >> 16 & 0xff) * 0.00390625f);   /* 0x4a6054 */
+            BFont_Colour(g_game_font, l->mapped);
+            BFont_Draw(g_game_font, &l->bmp, 0, 0, l->text);
+            if (l->flags & 0x100) {   /* the caret: a line under the character at it ('w''s width at the end) */
+                int x = 0;
+                for (uint32_t i = 0; i < l->at; i++) x += glyph_w(g_game_font, (unsigned char)l->text[i]) + 2;
+                unsigned char at = (unsigned char)l->text[l->at];
+                int cw = glyph_w(g_game_font, at ? at : 'w');
+                /* in the colour's low byte as an index: 0xff for the chat's, the bitmap's clear colour */
+                Line_Draw(&l->bmp, x, l->h - 1, cw + x, l->h - 1, (uint8_t)l->colour, 0);
+            }
+            l->flags &= ~0x200u;
+        }
+        Surface_Blit(screen, &l->bmp, (int)fpu_mul((double)l->x, kx), (int)fpu_mul((double)l->y, ky), 1);
+    }
+}
+
+void EditLine_Free(EditLine *l)
+{
+    for (EditLine **p = &lines; *p; p = &(*p)->next)
+        if (*p == l) {
+            *p = l->next;
+            free(l->bmp.pixels);
+            free(l);
+            return;
+        }
 }

@@ -75,3 +75,7 @@ int32_t Dash_IsOn(void);
 /* Dash_Off 0x428890 (Camera_SetMode's after any start but the view 0xc's): the flag 0, the main part shown,
    the other hidden */
 void Dash_Off(void);
+/* Net_NameTags 0x428310 (Render_World's in network play): the players' names over their cars, the radar
+   target's alone or (key 0x28, 0x428580) every targetable one's */
+void Net_NameTags(const View *view);
+void Net_NameTagsToggle(void);   /* 0x428580 */

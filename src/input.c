@@ -1,6 +1,8 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "textregion.h"
+#include "net/netgame.h"
 #include "melee.h"
 #include "damage.h"
 #include "fsm.h"
@@ -935,9 +937,9 @@ void Input_Update(void)
     for (int i = 0; i < ACTIONS; i++)
         if (actions[i].kind) *actions[i].state = 0;
     if (!g_input_held) {
-        /* the keyboard is skipped while a window takes the keys (0x450ab0): none are ported */
+        /* the keyboard is skipped while a line typed in takes the keys (0x450ab0) */
         for (int i = 0; i < dev_count; i++)
-            if (dev_present[i]) dev_driver[i]->poll(devices[i].handle, dev_state[i].analog, dev_state[i].discrete);
+            if (dev_present[i] && (i != keyboard_dev || !EditLine_Active())) dev_driver[i]->poll(devices[i].handle, dev_state[i].analog, dev_state[i].discrete);
         for (int i = 0; i < discrete_count; i++) {
             Discrete *b = &discretes[i];
             if (!g_input_menu && !b->menu) continue;
@@ -1261,24 +1263,33 @@ void Cockpit_Views(void)
 }
 
 
-/* 0x4809b0: a typed key's command. Ported: the menu, the preset views, the mirror, the self-destruct and the pause; the rest (the
-   rear view, the video mode, network play's) is not yet */
+/* 0x4809b0: a typed key's command. Ported but for the screenshot (0xa, 0x4a3f00) and the video mode (0x55) */
 static void game_command(int c)
 {
     Entity *u = g_user_entity;
-    if (g_net_game && !u) return;   /* only the chat and its invitation (0x2d, 0x2e) */
-    if (c == 0x2c) {   /* PAUSE_GAME */
-        Pause_Toggle();   /* 0x44fc00 */
+    if (Net_On() && !u) {   /* network play without a car: only the quit keys */
+        if (c == 0x2d || c == 0x2e) g_game_state = 2;   /* 0x401280 */
         return;
     }
-    if (c == 0x20) {   /* the menu: opened, or closed when it is open */
+    switch (c) {   /* the first table's */
+    case 0:
+    case 0xa:
+        return;
+    case 0x20:   /* the menu: opened, or closed when it is open */
         if (!(g_play_state & 0x10)) GameMenu_Open();   /* 0x44b8f0 */
         else GameMenu_Close();                          /* 0x44b9c0 */
         return;
+    case 0x24:   /* network play: a dead user's new car, after the respawn's wait */
+        if (Net_On() && user_dead()) Net_Respawn(1);   /* 0x462d60 */
+        return;
+    case 0x2c:   /* PAUSE_GAME */
+        Pause_Toggle();   /* 0x44fc00 */
+        return;
+    case 0x2d:   /* quit: the state 2 */
+        g_game_state = 2;   /* 0x401280 */
+        return;
     }
-    /* the first table's: 0xa, 0x24 and 0x2d end here, as does 0 */
-    if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2d) return;
-    if (user_dead()) return;   /* and while network play's chat line takes the keys (0x462690) */
+    if (user_dead() || Net_Winner()) return;   /* 0x423fd0, 0x462690 */
     if (c == 0xb) {
         Mirror_Toggle(u ? u->node : NULL);   /* 0x4712e0; the original reads the entity unchecked */
     } else if (c == 0xd) {
@@ -1290,8 +1301,19 @@ static void game_command(int c)
         Camera_SetMode(u, c);
     } else if (c == 0x23)
         *INPUT_AT(0x4deff9) = 1;   /* self_destruct */
-    else if (c == 0x27 && g_melee)   /* SCORE_TOGGLE, in the melee (0x407370) or network play */
+    else if (c == 0x25 && Net_On())
+        Net_ChatToggle();   /* 0x463e80 */
+    else if (c == 0x26 && Net_On())
+        Net_ChatTo(0);   /* 0x463cb0: to everyone */
+    else if (c == 0x27 && (Net_On() || g_melee))   /* SCORE_TOGGLE */
         Scores_Toggle();   /* 0x4635d0 */
+    else if (c == 0x28 && Net_On())
+        Net_NameTagsToggle();   /* 0x428580 */
+    else if (c >= 0x29 && c <= 0x2b && Net_On() && NetPl_AmKeeper() && !Net_Flag4()) {
+        if (c == 0x29) Net_Accept();        /* 0x465a80 */
+        else if (c == 0x2a) Net_Refuse();   /* 0x465b40 */
+        else Net_Defer();                   /* 0x465bf0 */
+    }
     /* the last command, 0x4e8ab4, is not kept */
 }
 
@@ -1307,10 +1329,19 @@ void Input_Poll(void)
         return;
     }
     cheats((uint16_t)k);
-    /* a window taking the keys (0x450ab0, 0x450720) would get it first: none are ported */
+    EditLine *l = EditLine_Active();   /* 0x450ab0: a line typed in takes the key first */
+    int took = l ? EditLine_Key(l, (uint16_t)k) : 0;   /* 0x450720 */
+    if (took) {
+        if (took == 2) EditLine_Activate(l, 0);
+        kb_clear();   /* 0x4812b0 */
+        return;
+    }
     int c = Input_GameKey(k);
     if (c) game_command(c);
-    /* network play without a vehicle stops here (0x461900) */
+    if (Net_On() && !g_user_entity) {   /* network play without a vehicle stops here */
+        g_input_main = 0;
+        return;
+    }
     Cockpit_Views();   /* 0x481c10 */
     User_Controls();
     g_input_main = 0;
@@ -1345,7 +1376,11 @@ void User_Controls(void)
     Node *n = g_user_entity->node;
     uint8_t *d = n->data;
     if (!d) return;
-    /* network play: the throttle at -1 and no steering while 0x462690 or 0x463120 */
+    if (Net_On() && (Net_Winner() || Net_Waiting())) {   /* 0x462690, 0x463120: a won game or a car asked for */
+        putf(d + 0xe4, -1.0f);
+        putf(d + 0xe0, 0);
+        return;
+    }
     double w = fpu_sub(target_wait, step);   /* 0x482e50 */
     target_wait = w > 0.0 ? fpu_f32(w) : 0.0f;
     uint8_t up = *INPUT_AT(0x4defd0), down = *INPUT_AT(0x4defd1), right = *INPUT_AT(0x4defd9),

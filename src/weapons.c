@@ -27,6 +27,7 @@
 #include "render/fpu.h"
 #include "render/sprite.h"
 #include "cockpit.h"
+#include "net/netgame.h"
 #include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -1719,6 +1720,8 @@ void Turrets_Aim(void)
     }
 }
 
+static double weapon_health(int i);
+
 void Weapons_Frame(void)
 {
     Turrets_Aim();
@@ -1736,8 +1739,31 @@ void Weapons_Frame(void)
             else weapons_unlink(hp);
         }
     }
-    /* network play's triggers (0x4624a0) and messages (0x462580) are not ported */
+    if (Net_On()) {
+        /* in network play a weapon below 0.7 of its health may misfire when it fires: a chance of
+           (1 - health) - 0.3, at most 0.5, against rand() over 32767, losing the trigger and a frame's
+           worth of its rate (the definition's +0x68) from +0x18 */
+        int32_t list[8];
+        if (g_user_entity && Weapons_Carrier(g_user_entity->node, list) == 1) {
+            for (int i = 0; i < list[0]; i++) {
+                WeaponInst *w = &g_weapons[list[1 + i]];
+                if (!w->v44) continue;   /* (the free ammunition's test cannot hold in network play) */
+                if (w->v18 == 0) { w->v44 = 0; continue; }
+                float x = F32(SUB(SUB(exe_f32(0x4a61a4), weapon_health(list[1 + i])), exe_f32(0x4a61e8)));
+                if (!(x <= exe_f32(0x4a61ec))) x = 0.5f;
+                int32_t bits;
+                memcpy(&bits, &x, 4);
+                if (bits <= 0) continue;   /* the float's bits tested as an integer */
+                if (MUL(x, exe_f32(0x4a61f0)) > (double)crt_rand()) {
+                    w->v44 = 0;
+                    w->v18 -= (uint32_t)(int32_t)MUL(g_clock_step, getf(&g_weapon_defs[w->def].v[4]));   /* _ftol */
+                }
+            }
+        }
+        Net_Fire();   /* 0x4624a0 */
+    }
     Weapons_Tick();
+    if (Net_On()) Net_Aims();   /* 0x462580 */
     if (hp) Weapons_DisplayFrame(hp);
 }
 

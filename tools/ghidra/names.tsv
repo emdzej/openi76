@@ -511,7 +511,7 @@
 00480790	Cheat_Push	input	high	a Ctrl+Shift character into the ring 0x5e2fd0; ported
 004807c0	Cheat_Typed	input	high	the ring ends with a string; ported
 00480800	Cheat_Check	input	high	wiggleburger freelance getdown thirdnostril; ported (their effects not)
-004809b0	Game_Command	input	med	a typed key's command: views, pause, menus (a switch); the views and self-destruct ported
+004809b0	Game_Command	input	high	a typed key's command: views, pause, menus, quit, network play's keys
 00480db0	Kb_Count	input	high	keyboard driver: 1
 00480dc0	Kb_Describe	input	high	keyboard driver: 121 channels; ported
 00480e50	Kb_Poll	input	high	keyboard driver: the set out, releases applied, Alt quirk; ported
@@ -535,7 +535,7 @@
 0042d500	Vehicle_SetMode	vehicle	high	+0x104 for class 1
 0042d520	Vehicle_GearUp	vehicle	high	+0x104 up to 5; ported inline
 0042d540	Vehicle_GearDown	vehicle	high	+0x104 down to 0; ported inline
-00450ab0	Ui_KeyWindow	ui	med	the first window with flag 0x100 (takes the keys)
+00450ab0	EditLine_Active	ui	high	the first edit line with flag 0x100 (takes the keys)
 0042d660	Vehicle_Lights	damage	high	the headlamps, beam and brake lamps by the flag 0x40 and the lamps' health; ported
 0042e2d0	Node_SetFlags	scene	high	bits on the node, its first child and all after and under it; ported
 0042e320	Node_ClearFlags	scene	high	the same, cleared; ported
@@ -1537,3 +1537,20 @@
 00464b90	NetPl_AllHeard	net	med	0 while another player has never been heard; ported
 00464bd0	NetPl_SetScore	net	med	a player's score told, the limit checked (team sums with teams); ported
 00464ca0	NetPl_Score	net	high	ported
+00428310	Net_NameTags	cockpit	high	network play's names over the cars: the radar target's, or every targetable one's (0x54fa44)
+004283a0	Net_NameTag	cockpit	high	one car's player name above its box, in its kind's corner colour
+00428580	Net_NameTagsToggle	cockpit	high	0x54fa44 toggled (key 0x28)
+00439850	BFont_DrawAt	ui	high	a string unscaled at (x, y), with the tab stops
+00439a20	BFont_Width	ui	high	a string's width: each glyph's and 2
+00450430	EditLine_New	ui	high	an edit line (0xb4 bytes) in the list 0x55f734
+00450570	EditLine_Show	ui	high	flag 1
+004505a0	EditLine_Activate	ui	high	flag 0x100, the others cleared when set
+00450600	EditLine_Prompt	ui	high	the prompt replaced, the text moved after it
+004506b0	EditLine_Text	ui	high	the text after the prompt
+00450720	EditLine_Key	ui	high	a typed key: 0 not taken, 1 taken, 2 Enter (the done callback)
+00450ae0	EditLines_Draw	ui	high	the shown lines with the caret, blitted scaled from 640x480
+00450cf0	EditLine_Free	ui	high	an edit line freed
+00463140	NetCars_First	net	high	the vehicles list (0x5748b0) iteration start
+00463180	NetCars_Next	net	high	the next vehicle of the list
+00463cb0	Net_ChatTo	net	high	the chat line opened: "To %s: " or "Say: "
+00463ef0	Net_ChatDone	net	high	the chat line's Enter: sent (CH) and shown as from the user

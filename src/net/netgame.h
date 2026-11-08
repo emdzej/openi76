@@ -132,6 +132,7 @@ void Net_Message(dpid_t from, const char *text);   /* 0x463d60 */
 void Net_ChatClear(void);     /* 0x463e40 */
 void Net_ChatShow(int on);    /* 0x463e50 */
 void Net_ChatToggle(void);    /* 0x463e80 */
+void Net_ChatTo(dpid_t to);   /* 0x463cb0: the chat line opened, for one player or (0) everyone */
 
 void Net_Reckon(void);        /* 0x464fc0: the others' cars stepped to now */
 

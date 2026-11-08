@@ -1,5 +1,6 @@
 /* The helicopters (class 9): their flight and their crash (docs/re/vehicles.md "The helicopters") */
 #include "heli.h"
+#include "net/netgame.h"
 #include "ai.h"
 #include "camera.h"
 #include "classes.h"
@@ -22,6 +23,9 @@
 #include "render/fpu.h"
 #include <math.h>
 #include <string.h>
+#include <string.h>
+
+static uint16_t rd16(const uint8_t *p) { uint16_t v; memcpy(&v, p, 2); return v; }
 
 #define ADD fpu_add
 #define MUL fpu_mul
@@ -240,7 +244,7 @@ void Heli_Frame(Node *n)
         Dash_Off();                               /* 0x428890 */
         int32_t eight = 8;
         memcpy(INPUT_AT(0x4def9c), &eight, 4);
-        /* network play's 0x462d50 is not ported */
+        if (Net_On()) Net_Died();   /* 0x462d50 */
     }
     for (int i = 0; i < 3; i++) at[i] = F32(n->frame.pos[i]);   /* 0x432a70 */
     explode(n, at, NULL);
@@ -259,8 +263,9 @@ void Heli_Frame(Node *n)
     Weapons_Unarm(n);          /* 0x455370 */
     AI_Rethink();              /* 0x408bf0 */
     Sound_Event(7, n, NULL);   /* 0x4683c0 */
-    /* a computer's in the melee (0x407370; or in network play, not ported) is taken out of the world */
-    if (!(n->flags & 0x10) && g_melee) {
+    /* a computer's in the melee (0x407370), or a gone player's in network play (0x4644f0), is taken out
+       of the world */
+    if (!(n->flags & 0x10) && (g_melee || (Net_On() && !NetPl_Name(rd16(d + 0x480), NULL)))) {
         Vehicle_TakeOut(e);   /* 0x42b7d0 */
         return;
     }

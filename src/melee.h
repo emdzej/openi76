@@ -3,11 +3,16 @@
    time the last opponent is gone they all come back, a little more aggressive. */
 #pragma once
 #include "scene.h"
+#include "entity.h"
 #include <stdint.h>
 
 extern int g_melee;   /* 0x4a8760 (0x407370 reads it) */
 
-void Melee_Set(int on);   /* 0x4072d0: WinMain's, by the game's kind */
+void Melee_Set(int on);
+/* 0x463140, 0x463180: the world's vehicles (the list kept by the entities' callbacks), i from 0; NULL past
+   the end or at a freed entry */
+Entity *Melee_Vehicle(int i);
+int Melee_Vehicles(void);   /* 0x4072d0: WinMain's, by the game's kind */
 /* 0x4626a0, before a melee's mission loads: no spawn points yet, the vehicles' list kept by the
    entities' callbacks (0x4631f0, 0x463260) */
 void SpawnLoc_Init(void);

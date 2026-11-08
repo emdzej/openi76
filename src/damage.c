@@ -120,7 +120,7 @@ void Vehicle_Lights(Node *n, int toggle)
     }
 }
 
-/* 0x4683c0 a vehicle's sound by number; not ported yet: 0x462d60 network play's */
+/* 0x4683c0 a vehicle's sound by number */
 static void sound(int id, Node *n) { Sound_Event(id, n, NULL); }
 
 void Vehicle_State(Node *n, float dt)
@@ -163,7 +163,10 @@ void Vehicle_State(Node *n, float dt)
             Engine_StarterStop(n);   /* 0x476580 */
         } else if ((f & 0x8c08) == 0x8000) {   /* the wreck's time is up */
             f &= ~0x8000u;
-            if (f & 0x100000) return;   /* network play (0x462d60); the flags stay as they were */
+            if (f & 0x100000) {   /* the user's in network play: a new car asked for; the flags stay as they were */
+                Net_Respawn(0);   /* 0x462d60 */
+                return;
+            }
             Entity *e = Entity_OfNode(n);
             if (!(n->flags & 0x10)) {
                 if (rd32(d + 0x454) & 0x4000) {
@@ -172,9 +175,19 @@ void Vehicle_State(Node *n, float dt)
                     Vehicle_Lights(n, 0);
                     if (n->flags & 0x800) Light_Remove(n, &n->flags);
                 }
-                /* 0x407370 (0x4a8760) and network play choose between hiding the wreck and freeing its
-                   entity (0x423eb0, 0x455370, 0x41f4b0); single play hides it */
-                if (e && e->node) {
+                /* single play, and in network play a player's still in the game (0x4644f0), hides the wreck;
+                   the melee (0x407370) and a gone player's free its entity */
+                if (g_melee || (Net_On() && !NetPl_Name(rd16(d + 0x480), NULL))) {
+                    if (e && e->node) {
+                        Node *v = e->node;
+                        Engine_SoundStop(v);   /* 0x4763b0 */
+                        Horn_Stop(v);          /* 0x476480 */
+                        Entity_Remove(e);      /* 0x423eb0 */
+                        Weapons_Unarm(v);      /* 0x455370 */
+                        Node_Free(v);          /* 0x41f4b0 ("vhcl") */
+                        return;   /* the original then writes the flags into the freed data; the port does not */
+                    }
+                } else if (e && e->node) {
                     Engine_SoundStop(e->node);   /* 0x4763b0 */
                     Horn_Stop(e->node);          /* 0x476480 */
                     Node_SetFlags(e->node, 1);   /* 0x42e2d0 */
@@ -609,7 +622,7 @@ static void root_explodes(Node *n)
         put32(pd + 0x28, 2);
     }
     if (p->flags & 0x800) Light_Remove(p, &p->flags);
-    /* network play's message (0x461900, 0x465520 with the data's +8) is not ported */
+    if (Net_On() && pd) Net_ObjectGone(rd32(pd + 8));   /* 0x465520: for the others (SC) */
 }
 
 /* 0x45c030: the first face (along the list) whose texture is a chunk's skin, "VC C<c> TP" by the
@@ -772,14 +785,14 @@ static void destroy_part(Node *n)
     if (flag_root(n)) root_explodes(n);
     node_wrecks(n, 1);
     Lod_SetState(n, 1);
-    /* network play's message (0x465520 with the data's +8) is not ported */
+    if (Net_On() && Class_IsStructure(n->cls)) Net_ObjectGone(rd32(d + 8));   /* 0x465520 */
 }
 
 /* Structure_Destroy 0x430750 (the script's destroy): a crash packet (mask 8, the points plus one at +0x14)
    at no place (0x425df0). A structure is then marked (+0x28 = 1) and its first node flagged 0x1000000
    explodes: a class 3 does not; the others by the data's +0x10 (x1_bldx1, 0x4d539c, for "null") with the
-   data's +0x18 sound (not ported), and +0x28 = 2. Its light goes (flag 0x800); network play's message is
-   not ported */
+   data's +0x18 sound (not ported), and +0x28 = 2. Its light goes (flag 0x800), and in network play the
+   others are told (0x465520 with the data's +8) */
 void Structure_Destroy(Node *n)
 {
     uint8_t p[0x1c];
@@ -806,6 +819,7 @@ void Structure_Destroy(Node *n)
         put32(d + 0x28, 2);
     }
     if (n->flags & 0x800) Light_Remove(n, &n->flags);   /* 0x43a400 */
+    if (Net_On()) Net_ObjectGone(rd32(d + 8));   /* 0x465520 */
 }
 
 /* 0x430900's lethal branch: as a part (0x430e40), from the entity's sphere dropped and the points at 0,
@@ -822,6 +836,7 @@ static void structure_destroy(Node *n)
     if (flag_root(n)) root_explodes(n);
     node_wrecks(n, 0);
     Lod_SetState(n, 1);
+    if (Net_On() && Class_IsStructure(n->cls)) Net_ObjectGone(rd32(d + 8));   /* 0x465520 */
     Collide_Refit(n);
 }
 
@@ -862,7 +877,6 @@ static int damage_4(Node *n, uint8_t *p)
     memcpy(&m, p + 4, 2);
     if (!(m & 0xa)) return 0;
     put32(root->data, 0);
-    /* network play's message (0x461900, 0x465520 with the data's +8) is not ported */
     Entity *e = Entity_OfNode(root);
     float v[3];
     v[0] = fpu_f32(fpu_mul(fpu_sub(fpu_mul((double)crt_rand(), exe_f32(0x4a5e34)), exe_f32(0x4a5e38)), exe_f32(0x4a5e3c)));
@@ -1424,7 +1438,23 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
     double h = fpu_mul(Vehicle_Health(n), exe_f32(0x4a59fc));
     if (h < 1.0 || h != h) Vehicle_Smoke(d, fpu_f32(h));
     if (!(rd32(d + 0x454) & 0x20)) return 0;
-    /* the death; network play's messages (0x461900, "%s has been killed") are not ported */
+    if (Net_On() && NetPl_Me() == rd16(d + 0x480)) {   /* this player's car died: its killer (+0x482), the death */
+        dpid_t by = p ? Net_NodePlayer(packet_by) : 0;   /* 0x464f80 */
+        memcpy(d + 0x482, &by, 2);
+        if (n->flags & 0x10) {   /* Node_IsUser 0x42e620 */
+            uint32_t a = 0, b = 0;
+            if (by) NetPl_Flags(rd16(d + 0x480), &a), NetPl_Flags(by, &b);
+            if (!by || ((a ^ b) & 0x70000)) Net_Death(by);   /* 0x464eb0; a team mate's kill is no death */
+        }
+        char vn[24] = {0}, kn[24] = {0}, line[80];
+        NetPl_Name(rd16(d + 0x480), vn);
+        if (!by) snprintf(line, sizeof line, exe_str(0x4d5794), vn);   /* "*** %s has been killed" */
+        else {
+            NetPl_Name(by, kn);
+            snprintf(line, sizeof line, exe_str(0x4d57ac), vn, kn);   /* "*** %s was killed by %s" */
+        }
+        Net_Message(0, line);
+    }
     if (rd32(d + 0x454) & 0x4000) {
         putf(d + 0x450, 10.0f);
         put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x80008000u));
@@ -1439,6 +1469,7 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
             Dash_Off();   /* 0x428890 */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
+            if (Net_On()) Net_Died();   /* 0x462d50 */
         }
     } else
         Vehicle_Wreck(n, 1);
@@ -1689,7 +1720,8 @@ void Vehicle_Wreck(Node *n, int start)
             Dash_Off();   /* 0x428890 */
             int32_t eight = 8;
             memcpy(INPUT_AT(0x4def9c), &eight, 4);
-        } else {
+            if (Net_On()) Net_Died();   /* 0x462d50 */
+        } else if (!Net_On()) {
             /* outside network play every part takes a blow of its points times (129 + rand & 127) / 256 */
             for (uint32_t i = 0; i < 20; i++) {
                 Node *p = slot(d, 0x3a8 + i * 4);
