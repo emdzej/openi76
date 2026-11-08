@@ -261,7 +261,7 @@ static void boxes_make(void)
    set 0x21 under 0x10059bf8 of whole, 0x23 under 0x10059c00 of that, else 0x22), its name; the car's
    side marks it by where it is ({ 1 on the car, | 2 kept, } 3), the yard's shows the rows from its
    scroll */
-void Part_Bar(const ShPart *p, int x, int y)
+void Part_Bar(const ShPart *p, int x, int y)   /* i76shell 0x10036600 */
 {
     int32_t full = rd32(p->part + 0x4c);
     if (full == p->count) return;

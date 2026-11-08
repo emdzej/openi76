@@ -139,12 +139,13 @@ static bool waiting(void)
 }
 
 void (*g_sh_redraw)(void);   /* 0x10063790: the screen's redraw after a box */
+void (*g_sh_modal)(void);    /* 0x1006378c: a pop-up's pass, in the screen's place */
 
 static const uint8_t *box_set;          /* 0x1005fae0: entry 0x24 */
 static void (*box_done)(int yes);
 static bool box_open;
 
-static void box_shadow(int x, int y, int w, int h)   /* 0x1003d7c0 with a block of 0x0f */
+void Scr_Shadow(int x, int y, int w, int h)   /* 0x1003d7c0 with a block of 0x0f */
 {
     for (int r = 0; r < h; r++)
         for (int c = 0; c < w; c++)
@@ -166,8 +167,8 @@ void Shell_YesNo(void (*text)(int x, int y), void (*done)(int yes))
     Shell_Set24();
     Scr_Frame(box_set, 0xb, 0x73, 0x82, 0x19a, 0xdc);
     if (text) text(0x73, 0x82);
-    box_shadow(0x79, 0x15e, 0x19a, 6);
-    box_shadow(0x20d, 0x88, 6, 0xdc);
+    Scr_Shadow(0x79, 0x15e, 0x19a, 6);
+    Scr_Shadow(0x20d, 0x88, 6, 0xdc);
     Scr_Present();
     box_done = done;
     box_open = true;
@@ -373,7 +374,7 @@ bool Shell_Start(int prev_state)
     Scr_Init();
     fonts_load();
     Garage_Reset();        /* 0x10034df0 */
-    nwaits = 0, box_open = false, g_sh_redraw = NULL;
+    nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;
     quit = false, result = -1, q_count = 0;
@@ -438,7 +439,8 @@ bool Shell_Pass(void)
         popup();   /* the port's: Windows always has a message for the pop-up to wait on */
     if (active) {
         mouse_update(&g_sh_mouse);
-        if (screen_fn) screen_fn(0xc004);
+        if (g_sh_modal) g_sh_modal();
+        else if (screen_fn) screen_fn(0xc004);
         if (!g_sh_popup) Scr_Present();
     }
     return true;

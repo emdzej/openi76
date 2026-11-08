@@ -114,3 +114,19 @@
 100374b0	Refresh_Guns	trip	high	the guns refilled; ported
 10037910	Fill_Specs	trip	high	the set-up's specials; ported
 10037960	Refresh_Specs	trip	high	the specials refreshed; ported
+1000d6d0	Pop_Open	setup	high	the set-up's list pop-up; ported
+1000d4c0	Pop_CompPass	setup	high	the components' pop-up's pass; ported
+1000f0b0	Pop_SpecPass	setup	high	the specials' pop-up's pass; ported
+1000eb00	Setup_PickComp	setup	high	the components' arrows; ported
+1000f310	Setup_PickSpec	setup	high	the specials' arrow; ported
+1000f5e0	Picker_Open	setup	high	the scrolling picker; ported
+1000dc30	Picker_Pass	setup	high	the scrolling picker's pass; ported
+10007930	Setup_PickWheel	setup	high	the wheels' picker; ported
+100076c0	Wheels_Done	setup	high	the wheels' picker's end; ported
+100077f0	Wheels_Draw	setup	high	the wheels' picker's rows; ported
+10007590	Setup_PickGun	setup	high	the guns' and droppers' picker; ported
+10007120	Guns_Done	setup	high	the guns' picker's end; ported
+10007220	Guns_Draw	setup	high	the guns' picker's rows; ported
+10007360	Drops_Done	setup	high	the droppers' picker's end; ported
+10007450	Drops_Draw	setup	high	the droppers' picker's rows; ported
+10036600	Part_Bar	trip	high	a part's damage bar; ported

@@ -32,6 +32,7 @@ static int32_t order[16];       /* 0x1006b2a8: the guns' hard point ids in the b
 static int row_h;               /* 0x1006b0f0 */
 static int32_t weight;          /* 0x1006af3c */
 static uint8_t *w_click, *w_done, *w_hello;   /* entries 0x52, 0x50, 0x4e (0x4f's with the edits) */
+static int changed;             /* 0x1006b204: a part changed (read by the melee's DONE, not ported) */
 static int trip_fns;            /* the garage's six functions set (0x1006b0ac and the rest) */
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
@@ -383,6 +384,287 @@ static void build(void)
     redraw();
 }
 
+/* ---- the pickers ---- */
+
+static int wheels_first, guns_first;   /* 0x1006b120, 0x1006b1f8: the pickers' first rows, kept */
+static int pick_slot;                  /* 0x1006af98 */
+
+/* the van's parts' rows: the damage bar, the name marked by where it is (a part in none of the three
+   shows the row before's text, quirk kept) */
+static void part_row(const ShPart *p, int x, int y, char *text, uint32_t fmt)
+{
+    Part_Bar(p, x, y);
+    if (p->where >= 1 && p->where <= 3) snprintf(text, 32, dll_str(fmt + 8 * (uint32_t)(p->where - 1)), pname(p));
+    Scr_Text(x, y, &g_sh_font45, text, NULL);
+}
+
+/* 0x1000d6d0: a list's pop-up (frame k of set 0x24, 0xac wide, centred on y 0xf0): its two rects
+   (the list, the cancel), the list's parts; the pass (0x1000d4c0, 0x1000f0b0) in the screen's place */
+static struct {
+    int x, y, w, h, slot;
+    ShList *list;
+    int32_t r[2][4];   /* x0, x1, y0, y1 */
+} pop;
+
+static void pop_open(int k, ShList *list, uint32_t rects, uint32_t rects2, void (*pass)(void))
+{
+    pop.h = (int32_t)dll_u32(0x1005f8c8 + 4 * (uint32_t)k);
+    pop.x = 0xea, pop.y = 0xf0 - pop.h / 2, pop.w = 0xac, pop.slot = k, pop.list = list;
+    memcpy(pop.r[0], dll_data(rects, 16), 16);
+    memcpy(pop.r[1], dll_data(rects2, 16), 16);
+    Scr_Shadow(pop.x + 6, pop.y + pop.h, pop.w, 6);
+    Scr_Shadow(pop.x + pop.w, pop.y + 6, 6, pop.h);
+    Scr_Frame(Shell_Set24(), k, pop.x, pop.y, pop.w, pop.h);
+    int x = pop.r[0][0] + 3 + pop.x, y = pop.r[0][2] + 1 + pop.y;
+    char text[32] = "";
+    for (int i = 0; i < list->count; i++, y += row_h) part_row(list->items[i], x, y, text, 0x1005fa98);
+    g_sh_modal = pass;
+}
+
+static int pop_hit(void)   /* the rect under the pointer, or -1 */
+{
+    for (int i = 0; i < 2; i++)
+        if (pop.r[i][0] + pop.x < g_sh_mouse.x && g_sh_mouse.x < pop.r[i][1] + pop.x &&
+            pop.r[i][2] + pop.y < g_sh_mouse.y && g_sh_mouse.y < pop.r[i][3] + pop.y)
+            return i;
+    return -1;
+}
+
+static void pop_close(void)   /* 0x10034d80 calls the redraw */
+{
+    g_sh_modal = NULL;
+    Scr_Restore(pop.x, pop.y, pop.w + 10, pop.h + 10);
+    redraw();
+}
+
+static void comp_pass(void)   /* 0x1000d4c0: a part for the slot, the old one to the van */
+{
+    if (g_sh_mouse.click != 1) return;
+    int hit = pop_hit();
+    if (hit == 0) {
+        int row = (g_sh_mouse.y - pop.r[0][2] - pop.y) / row_h;
+        if (row >= pop.list->count) return;
+        ((ShPart *)comps->items[pop.slot])->where = 2;
+        ShPart *p = pop.list->items[row];
+        p->where = 1;
+        comps->items[pop.slot] = p;
+        if (g_sh_stock_repairs) ShList_Remove(g_sh_stock_repairs, p);
+        changed = 1;
+    } else if (hit != 1)
+        return;
+    pop_close();
+}
+
+/* 0x1000f0b0: a special for the slot; EMPTY is not taken, one already in a slot leaves it */
+static void spec_pass(void)
+{
+    if (g_sh_mouse.click != 1) return;
+    int hit = pop_hit();
+    if (hit == 0) {
+        int row = (g_sh_mouse.y - pop.r[0][2] - pop.y) / row_h;
+        if (row >= pop.list->count) return;
+        ShPart *p = pop.list->items[row];
+        if (p && !strcmp(pname(p), dll_str(0x1005fac8))) return;
+        ((ShPart *)specs->items[pop.slot])->where = 2;
+        int at = index_of(specs, p);
+        ((uint8_t *)g_sh_empty.part)[0x1e] = 0xc;
+        if (at == -1) {
+            for (int i = 0; i < 3; i++) {
+                ShPart *q = specs->items[i];
+                if (!crt_stricmp(pname(q), pname(p))) {
+                    q->where = 2;
+                    specs->items[i] = &g_sh_empty;
+                    break;
+                }
+            }
+        } else
+            specs->items[at] = &g_sh_empty;
+        specs->items[pop.slot] = p;
+        p->where = 1;
+        changed = 1;
+    } else if (hit != 1)
+        return;
+    pop_close();
+}
+
+/* 0x1000f5e0: the scrolling picker (0x1005cc48: 0xac x 0x10c centred, its list 0x11, 0x30 in with 11
+   rows; rects 0x1005cbf8 up, down, the list, cancel), the screen under it kept to scroll over; its pass
+   0x1000dc30 */
+static struct {
+    int x, y, w, h, lx, ly, rows, first, count, picked;
+    void (*done)(void);
+    void (*draw)(int x, int y, int first, int rows);
+    int held, wait;   /* the arrow held, the passes to its next step */
+} pk;
+static uint8_t pk_under[640 * 480];   /* 0x1006c2e0 */
+
+static void pk_step(void)
+{
+    pk.first += pk.held;
+    if (pk.first < 0 || pk.count < pk.rows + pk.first) {
+        pk.first -= pk.held;
+        pk.held = 0;
+        return;
+    }
+    for (int r = 0; r < pk.h && pk.ly + r < 480; r++)
+        for (int c = 0; c < pk.w && pk.lx + c < 640; c++) {
+            int at = (pk.ly + r) * 640 + pk.lx + c;
+            g_shs.px[at] = pk_under[at];
+        }
+    Scr_Dirty(pk.lx, pk.ly, pk.lx + pk.w - 1, pk.ly + pk.h - 1);
+    pk.draw(pk.lx, pk.ly, pk.first, pk.rows);
+    pk.wait = 6;   /* the original steps, presents and sleeps 100 ms while the button is held: 6 passes */
+}
+
+static void pk_close(void)
+{
+    g_sh_modal = NULL;
+    Scr_Restore(pk.x, pk.y, pk.w + 10, pk.h + 10);
+    if (pk.done) pk.done();
+}
+
+static void pk_pass(void)
+{
+    if (pk.held) {
+        if (!g_sh_mouse.left) pk.held = 0;
+        else if (--pk.wait <= 0) pk_step();
+        return;
+    }
+    if (g_sh_mouse.click != 1) return;
+    const uint8_t *r = dll_data(0x1005cbf8, 4 * 20);
+    int id = -1;
+    for (int i = 0; i < 4 && id < 0; i++)   /* 0x10034c60 */
+        if (Rect_Hit(g_sh_mouse.x - pk.x, g_sh_mouse.y - pk.y, r + 20 * i)) id = rd32(r + 20 * i);
+    switch (id) {
+    case 0: case 1:
+        pk.held = id ? 1 : -1;
+        pk_step();
+        return;
+    case 2: {
+        int i = pk.first + (g_sh_mouse.y - pk.ly) / row_h;
+        if (pk.count <= i) return;
+        pk.picked = i;
+        pk_close();
+        return;
+    }
+    case 3:
+        pk_close();
+        return;
+    }
+}
+
+static void pk_open(int frame, int count, int first, void (*draw)(int, int, int, int), void (*done)(void))
+{
+    pk.w = (int32_t)dll_u32(0x1005cc50), pk.h = (int32_t)dll_u32(0x1005cc54);
+    pk.x = 0x140 - pk.w / 2, pk.y = 0xf0 - pk.h / 2;
+    pk.lx = 0x11 + pk.x, pk.ly = 0x30 + pk.y, pk.rows = (int32_t)dll_u32(0x1005cc60);
+    pk.count = count, pk.picked = -1, pk.draw = draw, pk.done = done, pk.held = 0;
+    Scr_Shadow(pk.x + 6, pk.y + pk.h, pk.w, 6);
+    Scr_Shadow(pk.x + pk.w, pk.y + 6, 6, pk.h);
+    Scr_Frame(Shell_Set24(), frame, pk.x, pk.y, pk.w, pk.h);
+    memcpy(pk_under, g_shs.px, sizeof pk_under);
+    pk.first = first < count ? first : 0;
+    draw(pk.lx, pk.ly, pk.first, pk.rows);
+    g_sh_modal = pk_pass;
+}
+
+static void list_draw(const ShList *l, uint32_t fmt, int x, int y, int first, int rows)
+{
+    char text[32] = "";
+    for (int i = first; i < l->count && i < first + rows; i++, y += row_h) part_row(l->items[i], x, y, text, fmt);
+}
+static void wheels_draw(int x, int y, int first, int rows) { list_draw(g_sh_wheels, 0x1005d110, x, y, first, rows); }   /* 0x100077f0 */
+static void guns_draw(int x, int y, int first, int rows) { list_draw(free_guns, 0x1005d0e0, x, y, first, rows); }      /* 0x10007220 */
+static void drops_draw(int x, int y, int first, int rows) { list_draw(free_drops, 0x1005d0f8, x, y, first, rows); }    /* 0x10007450 */
+
+/* 0x100076c0: the wheel for the slot; the same wheel in another slot leaves it */
+static void wheels_done(void)
+{
+    wheels_first = pk.first;
+    if (pk.picked != -1) {
+        ShPart *p = g_sh_wheels->items[pk.picked];
+        p->where = 1;
+        for (int i = 3; i < 7; i++)
+            if (comps->items[i] == p) comps->items[i] = &g_sh_no_wheel;
+        ((ShPart *)comps->items[pick_slot])->where = 2;
+        comps->items[pick_slot] = p;
+        if (g_sh_stock_repairs) ShList_Remove(g_sh_stock_repairs, p);
+        changed = 1;
+    }
+    redraw();
+}
+
+/* 0x10007120 and 0x10007360: the gun (dropper) for the row; the same one in another row leaves it (only
+   the guns' keep their first row: the droppers' picker opens at the guns', quirk kept) */
+static void gun_done(ShList *from, ShList *to, int keep)
+{
+    if (keep) guns_first = pk.first;
+    if (pk.picked != -1) {
+        ShPart *p = from->items[pk.picked];
+        p->where = 1;
+        int at = index_of(to, p);
+        if (at != -1) {
+            ((uint8_t *)g_sh_empty.part)[0x1e] = 7;
+            to->items[at] = &g_sh_empty;
+        }
+        ((ShPart *)to->items[pick_slot])->where = 2;
+        to->items[pick_slot] = p;
+        if (g_sh_stock_repairs) ShList_Remove(g_sh_stock_repairs, p);
+        changed = 1;
+    }
+    redraw();
+}
+static void guns_done(void) { gun_done(free_guns, guns, 1); }
+static void drops_done(void) { gun_done(free_drops, drops, 0); }
+
+static void pick_wheel(int row)   /* 0x10007930 */
+{
+    pick_slot = row;
+    pk_open(10, g_sh_wheels->count, wheels_first, wheels_draw, wheels_done);
+}
+
+static void pick_gun(int row, int kind)   /* 0x10007590 */
+{
+    pick_slot = row;
+    if (kind == 1) pk_open(8, free_guns->count, guns_first, guns_draw, guns_done);
+    else pk_open(8, free_drops->count, guns_first, drops_draw, drops_done);
+}
+
+/* 0x1000eb00: the components' arrows: the engine's, suspension's and brakes' lists, the wheels' picker */
+static void pick_comp(const SBox *b, int x, int y)
+{
+    if (x <= b->x1 - 0xc) return;
+    int row = (y - b->y0) / row_h;
+    if (row == 0) pop_open(0, g_sh_engines, 0x1005f828, 0x1005f838, comp_pass);
+    else if (row == 1) pop_open(1, g_sh_susps, 0x1005f8a8, 0x1005f8b8, comp_pass);
+    else if (row == 2) pop_open(2, g_sh_brakes, 0x1005f888, 0x1005f898, comp_pass);
+    else pick_wheel(row);
+}
+
+static void pick_spec(const SBox *b, int x, int y)   /* 0x1000f310 */
+{
+    if (x <= b->x1 - 0xc) return;
+    pop_open(5, g_sh_specials, 0x1005f848, 0x1005f858, spec_pass);
+    pop.slot = (y - b->y0) / row_h;
+}
+
+/* a click on a gun's or special's name: it goes back to the van, EMPTY in its place (a dropper's stays
+   marked on the car, quirk kept) */
+static void unmount(ShList *l, const SBox *b, int y, uint32_t null_name, int mark)
+{
+    int row = (y - b->y0) / row_h;
+    ShPart *p = row < l->cap ? l->items[row] : NULL;
+    if (!p) return;
+    if (mark) p->where = 2;
+    if (!strcmp((const char *)p->part + 0x2e, dll_str(null_name))) return;
+    l->items[row] = &g_sh_empty;
+    ((uint8_t *)g_sh_empty.part)[0x1e] = l == guns ? 7 : l == drops ? 8 : 0xc;
+    changed = 1;
+    if (l == drops) draw_drops(l, b);
+    else draw_list(l, b);
+    draw_weight();
+}
+
 /* ---- the writes ---- */
 
 /* 0x10017920: part into the record's first slot of kind (or that pred takes) from slot 0, index on;
@@ -688,7 +970,24 @@ static void screen(uint32_t msg)
         g_sh_popup = 1;
         g_sh_popup_item = 1;
         return;
-    case 0: case 1: case 2: case 3: case 4: case 5: case 10:
+    case 0:
+        Shell_Click(w_click);
+        pick_comp(&sb[0], x, y);
+        return;
+    case 1: case 2: {
+        Shell_Click(w_click);
+        ShList *l = id == 1 ? guns : drops;
+        int row = (y - sb[id].y0) / row_h;
+        if (x < 0xfe) unmount(l, &sb[id], y, id == 1 ? 0x1005d0d8 : 0x1005d0b0, id == 1);
+        else if (row < l->cap && (id == 2 || l->items[row])) pick_gun(row, id);
+        return;
+    }
+    case 3:
+        Shell_Click(w_click);
+        if (x < 0xfe) unmount(specs, &sb[3], y, 0x1005d0d8, 1);
+        else pick_spec(&sb[3], x, y);
+        return;
+    case 4: case 5: case 10:   /* the repairs (0x10007040, 0x1000e7d0), the armour (0x1001ee50), 0x10007bc0 */
         Shell_Click(w_click);
         unported(id);
         return;

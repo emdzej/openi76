@@ -5,9 +5,38 @@ the labels, the parts with their damage bars, the car's name and its weight, and
 (the notes are logged, 0x1000fb10 is not ported), asks its question on the trip's first mission, writes the
 record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf` and `.vsf`, `user.rpr`,
 and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
-with vehscn.vcf. Not ported yet: the boxes' edits (the clicks on the parts, the repairs, the armour and
-chassis buttons, the car's picture 0x100114d0 and its sets 0x25-0x3f, the name's edit), the melee's
-path from the map. The garage's six functions are a flag here (`Setup_UseTrip`), the only fills ported.
+with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's
+name puts EMPTY in its place. Not ported yet: the repairs (0x10007040, 0x1000e7d0), the armour and
+chassis buttons (0x1001ee50, 0x1001eec0), box 10 (0x10007bc0), the car's picture 0x100114d0 and its sets
+0x25-0x3f, the name's edit, the melee's path from the map.
+
+## The pickers
+
+Both run as the shell loop's modal pass (0x1006378c, called in the screen's place while set).
+
+- **The list pop-up (0x1000d6d0)**: frame k of set 0x24 at x 0xea, 0xac wide, its height from the table
+  0x1005f8c8 by k (0x88, 0x88, 0x98, 0xfc, 0xfc, 0xdc), centred on y 0xf0, with the two shadows. It takes
+  two rectangles {x0, x1, y0, y1} relative to it: the list and CANCEL (engines 0x1005f828/838, frame 0;
+  suspensions 0x1005f8a8/8b8, frame 1; brakes 0x1005f888/898, frame 2; specials 0x1005f848/858, frame 5).
+  Its rows are the kind's whole list (the van's and the car's), each with its damage bar and "(C)/(V)/(R)
+  %s" (0x1005fa98, by +0x10; a part in none shows the row before's text). Its pass for the components
+  (0x1000d4c0): a row's part goes in slot k (the frame index doubles as the slot), the old part's +0x10
+  set 2, the new one's 1, and it leaves the repairs; the specials' (0x1000f0b0, the slot the clicked row)
+  refuses "Empty" and moves a special already in another slot out. Either closes on CANCEL; the close
+  restores the rectangle 10 larger each way and calls the record's +0x1c, the set-up's redraw.
+- **The scrolling picker (0x1000f5e0, its record 0x1005cc48)**: 0xac x 0x10c centred on (0x140, 0xf0),
+  the list at 0x11, 0x30 in with 11 rows (0x1005cc60); four rectangles {id, x0, x1, y0, y1} at 0x1005cbf8:
+  0 up, 1 down, 2 the list, 3 CANCEL. It keeps a copy of the screen to scroll over; while an arrow is held
+  it steps, presents and sleeps 100 ms (the port: a step each 6 passes). The wheels' (0x10007930, frame
+  10, the list g_sh_wheels, its first row kept in 0x1006b120; done 0x100076c0 puts the wheel in the slot,
+  the same wheel in another slot becomes the "no wheel" marker), the guns' and droppers' (0x10007590,
+  frame 8, the free lists 0x1005c914/918; done 0x10007120/0x10007360, the same part in another row
+  becomes EMPTY; both open at 0x1006b1f8, only the guns' keep it).
+- **The boxes' clicks**: box 0's arrow column (x past x1 - 0xc, 0x1000eb00) opens the engine's,
+  suspension's or brakes' list by row, else the wheels' picker. Boxes 1-3 left of x 0xfe take the row's
+  part off (its +0x10 set 2, but not a dropper's: quirk kept, the dropper stays marked on the car) unless
+  its file is "null", EMPTY in its place; right of it the guns' or droppers' picker (the guns' only on a
+  row with a part), or the specials' list. The garage's six functions are a flag here (`Setup_UseTrip`), the only fills ported.
 
 
 The salvage's choice (0xc017, docs/re/garage.md) goes on to 0xc00f once ACCEPT SALVAGE is pressed. It
