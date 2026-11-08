@@ -317,6 +317,21 @@ shell runs, in order:
   track 16. Each 30 ms every line moves up a pixel (its place restored first); one past the top leaves
   the list, and the next is then skipped that time (kept). The end (none left, a click or Esc): track 15
   again; from the trip's end (0xc008) user.rpr is removed and the main menu opens, else the menu again.
-- Not ported yet: pop-ups 3 (modem), 4 (play options), 5 (graphic detail), 6 (audio), 7 (controls).
+- **Pop-up 4, the play options** (0x10021860, its pass 0x10021900, records 0x10061910): six labels
+  (0x10021810, font 0x46) and six boxes (0x100217d0: "x" in font 0x47 when the options word 0x10068fe0
+  has the record's bit 1, 2, 4, 8, 0x10 or 0x20), Done and Cancel (0x10021840, the choice). A click on a
+  box flips its bit (0x10021850); after any click every piece is made again (0x10008520). Done with a
+  cheat (0x1c) on asks first (0x1000fe00, the text 0x10021a80); yes, or Done without one, writes the
+  player's file (0x10039f30) and goes back to the menu, no opens the options again. Cancel puts the word
+  back as it was; Esc goes back keeping the change unwritten. In the port the shell's word is the exe's
+  (`g_game_options`); the original keeps two and the exe reads I76PLYR.DEF again after every Shell_Load
+  (0x44d660), which the port does too, so a change reaches the game only through the file, as there.
+  The player's file holds the shell's trip record (0x101098a0, the first 0x40 bytes) as well; the port
+  keeps the trip in memory and writes the head as it was read. Checked: Arcade Phys. and No Salv. Manag.
+  ticked and Done write the word 3; Unlim. Ammo asks.
+- **The player's file** (0x10039e20 read, 0x10039f30 write): I76PLYR.DEF's 0x58 bytes, as the exe's
+  block (docs/re/menus.md). The bookmark's load writes it after setting or clearing No Salv. Manag.
+- Not ported yet: pop-ups 3 (modem), 5 (graphic detail, 0x1003e7c0), 6 (audio, 0x10039a90), 7
+  (controls, 0x100093a0).
 
 Other screens: the melee's, network play.

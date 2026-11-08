@@ -422,6 +422,7 @@ static void shell_frame(void)
     Sound_StopPlaying();   /* 0x468380 */
     Sound_FreeParked();
     Sound_Enable(0);
+    Settings_Init();       /* WinMain after Shell_Load: 0x44d660, the shell's changes read back */
     if (shell_result == 0xff) {
         phase = S_OVER;
         return;

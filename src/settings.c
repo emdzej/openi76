@@ -31,7 +31,8 @@ static void pack(uint8_t *b)
 
 void Settings_Init(void)
 {
-    memset(head, 0, sizeof head);
+    memset(head, 0, sizeof head);   /* the block cleared */
+    g_game_options = 0;
     Settings_Defaults(3);   /* 0x44e260 */
     Sound_Defaults();       /* 3, 5, 10, 8 */
     more[0] = 1, more[1] = 0;

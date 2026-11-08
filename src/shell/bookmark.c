@@ -5,6 +5,7 @@
    from the list to overwrite after asking); loading picks one, and the shell restores the trip from it
    at 0xc01d. */
 #include "shell/trip.h"
+#include "settings.h"
 #include "crt.h"
 #include "exe.h"
 #include "files.h"
@@ -487,12 +488,14 @@ void Bookmark_Restore(void)
     g_sh_prev = picked.state;
     g_sh_rec.kind = 2;
     g_sh_bookmark = 1;
+    Settings_Save();   /* 0x10039f30, the player's file, and again at each way out */
     if (g_sh_rec.trip == 0x10 && picked.state == 1) {
         Shell_Post(0xc00d, 0xc01e);
         return;
     }
     if (!(picked.nosalv & 2)) {
         g_game_options &= ~2u;
+        Settings_Save();
         Shell_Post(g_sh_rec.trip == 0xc ? 0xc015 : 0xc017, g_sh_rec.trip == 0xc ? 0xc01e : 0xc01d);
         return;
     }
@@ -504,5 +507,6 @@ void Bookmark_Restore(void)
     snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c874));
     Parts_ListsFree();
     g_game_options |= 2;
+    Settings_Save();
     Shell_Post(0xc015, 0xc01e);
 }

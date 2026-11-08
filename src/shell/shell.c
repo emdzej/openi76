@@ -333,6 +333,10 @@ static bool popup(void)
         QuitMenu_Open();
         g_sh_popup_up = 1;
         return true;
+    case 4:   /* the play options (0x10021860) */
+        PlayOptions_Open();
+        g_sh_popup_up = 1;
+        return true;
     case 9:   /* the credits (0x10032790) */
         Credits_Open();
         g_sh_popup_up = 1;

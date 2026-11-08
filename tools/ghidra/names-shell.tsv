@@ -203,3 +203,13 @@
 1000f370	Picker_Open2	setup	high	the scrolling picker with its own record and frame (the paint's)
 10007a50	Paint_Done	setup	high	the paint's choice into the record's .vtf and the name
 10007b50	Paint_Draw	setup	high	the paints' names in the picker
+10021860	PlayOptions_Open	options	high	pop-up 4, the play options; ported (src/shell/escmenu.c)
+10021900	PlayOptions_Pass	options	high	the play options' boxes, Done (asking on a cheat) and Cancel; ported
+10021810	Item_Text46	menu	high	a menu item's text piece in font 0x46, none without a text
+100217d0	Item_OptionBox	menu	high	a play option's box: "x" with its bit set
+10021850	Item_FlipBit	menu	high	a click flipping the record's bit in its word
+10021840	Item_Choice	menu	high	a click taking the play options' choice
+10021a80	PlayOptions_Ask	options	high	the cheat question's four lines
+10008520	Menu_Remake	menu	high	every piece of a menu taken off and made again
+10039e20	Player_Read	player	high	I76PLYR.DEF read into the shell's settings and trip record
+10039f30	Player_Write	player	high	I76PLYR.DEF written from the shell's settings and trip record

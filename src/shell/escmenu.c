@@ -8,7 +8,9 @@
 #include "exe.h"
 #include "files.h"
 #include "music.h"
+#include "physics.h"
 #include "platform.h"
+#include "settings.h"
 #include "shell/font.h"
 #include "shell/screen.h"
 #include "shell/shell.h"
@@ -29,6 +31,33 @@ typedef struct {
     int n;
     uint8_t map[256];
 } Menu;
+
+/* the shell's word a record points to: the play options' (0x10068fe0, the exe's 0x5e14e4 in the port) */
+static uint32_t *word_at(uint32_t va) { return va == 0x10068fe0 ? &g_game_options : NULL; }
+
+/* an item's piece, by its function: text in font 46 (0x10008730, and 0x10021810 when it has a text) or
+   47 (0x100086a0), a play option's box (0x100217d0: "x" (0x10061ba4) with its bit set, else
+   0x10061ba8's empty text, in font 47); none for the rest */
+static void item_make(Menu *m, MItem *it)
+{
+    const char *s = NULL;
+    if (it->create == 0x10008730 || it->create == 0x100086a0 || it->create == 0x10021810) {
+        if (!it->text) return;
+        s = dll_str(it->text);
+        it->font = it->create == 0x100086a0 ? &g_sh_font47 : &g_sh_font46;
+    } else if (it->create == 0x100217d0) {
+        const uint32_t *w = word_at(it->text);
+        s = dll_str(w && (*w & (uint32_t)it->id) ? 0x10061ba4 : 0x10061ba8);
+        it->font = &g_sh_font47;
+    } else
+        return;
+    int centre = s[0] == '~';
+    if (centre) s++;
+    it->pw = Text_Width(it->font, s), it->ph = it->font->height;
+    it->px = centre ? it->x - it->pw / 2 : it->x;
+    Scr_Text(it->px, it->y, it->font, s, m->map);   /* 0x1003c1b0 */
+    it->shown = 1;
+}
 
 /* 0x10008430: the records read and laid out (a y with bit 31 set is relative: bits 4-11 times the last
    height, or with bit 28 that many halves of it after the first, plus bits 0-3, from the last y), each
@@ -58,15 +87,8 @@ static void menu_make(Menu *m, uint32_t at)
             }
             it->y = off + (int)(u & 0xf) + last_y;
         }
-        if (it->text && (it->create == 0x10008730 || it->create == 0x100086a0)) {
-            const char *s = dll_str(it->text);
-            it->font = it->create == 0x10008730 ? &g_sh_font46 : &g_sh_font47;
-            int centre = s[0] == '~';
-            if (centre) s++;
-            it->pw = Text_Width(it->font, s), it->ph = it->font->height;
-            it->px = centre ? it->x - it->pw / 2 : it->x;
-            Scr_Text(it->px, it->y, it->font, s, m->map);   /* 0x1003c1b0 */
-            it->shown = 1;
+        item_make(m, it);
+        if (it->shown) {
             if (it->w == -1) it->w = it->pw;
             if (it->h == -1) it->h = it->ph;
         }
@@ -89,6 +111,12 @@ static void menu_free(Menu *m)   /* 0x10008590: the pieces taken off */
 {
     for (int i = 0; i < m->n; i++)
         if (m->it[i].shown) Scr_Restore(m->it[i].px, m->it[i].y, m->it[i].pw + 1, m->it[i].ph), m->it[i].shown = 0;
+}
+
+static void menu_remake(Menu *m)   /* 0x10008520: every piece taken off, then made again in its place */
+{
+    menu_free(m);
+    for (int i = 0; i < m->n; i++) item_make(m, &m->it[i]);
 }
 
 static void map_make(Menu *m)   /* the map: each colour itself, 1 made 200 (0 stays 0) */
@@ -296,4 +324,81 @@ void Credits_Open(void)   /* 0x10032790 */
     Music_Stop();          /* the exe's +0x54 */
     Music_Play(0x10, 0);   /* +0x50 */
     last_ms = plat_ms();
+}
+
+/* ---- pop-up 4, the play options (0x10021860, its pass 0x10021900) ---- */
+
+static Menu popt;
+static uint32_t popt_bak;          /* 0x1008e280: the options as they were */
+static int popt_choice;            /* 0x1008e284: 1 Done, 2 Cancel */
+static uint8_t popt_pal[768];      /* 0x1008df80 */
+static void popt_menu(int on);
+
+static void popt_ask(int x, int y)   /* 0x10021a80 */
+{
+    Scr_Text(x + 0x6d, y + 0x24, &g_sh_font45, dll_str(0x10061bac), NULL);
+    Scr_Text(x + 0x6d, y + 0x32, &g_sh_font45, dll_str(0x10061bc8), NULL);
+    Scr_Text(x + 0x70, y + 0x40, &g_sh_font45, dll_str(0x10061be4), NULL);
+    Scr_Text(x + 0x76, y + 0x54, &g_sh_font45, dll_str(0x10061bfc), NULL);
+}
+
+static void popt_asked(int yes)   /* yes: written, the menu; no: the options again */
+{
+    if (yes) Settings_Save();   /* 0x10039f30 */
+    g_sh_popup = 1, g_sh_popup_item = yes ? 0 : 4;
+}
+
+/* a click on a box flips its bit (0x10021850), on Done or Cancel takes the choice (0x10021840), the
+   pieces made again; Done with a cheat (0x1c) asks first (0x1000fe00), then writes the player's file
+   (0x10039f30); Cancel puts the options back; both, and Esc (the options kept as they are, unwritten),
+   go back to the menu */
+static void popt_menu(int on)
+{
+    if (on) {
+        if (g_sh_mouse.click == 1) {
+            const MItem *it = menu_hit(&popt, g_sh_mouse.x, g_sh_mouse.y);
+            if (!it) return;
+            if (it->click == 0x10021850) {
+                uint32_t *w = word_at(it->text);
+                if (w) *w ^= (uint32_t)it->id;
+            } else if (it->click == 0x10021840)
+                popt_choice = it->id;
+            menu_remake(&popt);
+            if (popt_choice == 1) {
+                if (g_game_options & 0x1c) {
+                    Shell_YesNo(popt_ask, popt_asked);
+                    return;
+                }
+                Settings_Save();
+                g_sh_popup = 1, g_sh_popup_item = 0;
+            } else if (popt_choice == 2) {
+                g_game_options = popt_bak;
+                g_sh_popup = 1, g_sh_popup_item = 0;
+            }
+            return;
+        }
+        if (Shell_KbRead() == 3) g_sh_popup = 1, g_sh_popup_item = 0;
+        return;
+    }
+    Shell_UnsetMenu(popt_menu);
+    g_sh_popup_up = 0;
+    menu_free(&popt);
+    g_shs.fill = -1;
+    Scr_Restore(0, 0, 0x280, 0x1e0);
+    memcpy(g_shs.pal, popt_pal, sizeof popt_pal);   /* 0x1003d100 with 1 */
+    g_shs.pal_new = 1, g_shs.fade = 1;
+}
+
+void PlayOptions_Open(void)   /* 0x10021860 */
+{
+    popt_bak = g_game_options;
+    popt_choice = 0;
+    memcpy(popt_pal, g_shs.pal, sizeof popt_pal);
+    g_shs.fill = 0x10;
+    Scr_Restore(0x177, 0x7c, 0x102, 0x160);
+    Scr_Overlay(g_sh_db, 10);
+    map_make(&popt);
+    Shell_KbFlush();
+    menu_make(&popt, 0x10061910);
+    Shell_SetMenu(popt_menu);
 }
