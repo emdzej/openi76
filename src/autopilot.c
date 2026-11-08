@@ -11,7 +11,8 @@
    - with "enemies@k" written, once objective k shows, the nearest enemy at any range hunted;
    - a gate written @a-b holds from objective a's showing until objective b's;
    - with "hold@k" written, none of the above until objective k shows (t04's race, where shooting fails it),
-     with "flee@k" none from objective k on (t05's run to Skeeter);
+     with "flee@k" none from objective k on (t05's run to Skeeter); any gate written "@k!" opens once
+     objective k is done rather than shown;
      meanwhile with "navsN" the script's paths nav1 .. navN driven in turn at 60 (goto), each passed within
      25 m (t04's laps);
    - "to:path@k" written: the script's path driven (goto, at 60) once objective k shows, until within 30 m
@@ -43,7 +44,7 @@ static int on = -1, started, skilled;
 int g_ap_invincible;
 static Node *focus;   /* the guarded target's attacker taken on */
 static char names[24][32];
-static int gate[24], until[24], guard[24], lead[24], reached[24];   /* guard: name:guard, the guard order (0x20) before any
+static int gate[24], gate_done[24], until[24], guard[24], lead[24], reached[24];   /* guard: name:guard, the guard order (0x20) before any
                                                      attack; lead: name:lead, the leader once shown */
 static int gate_ok(int k);   /* a target's objective (name@k): attacked once that one is shown, -1 always */
 static int nnames;
@@ -121,6 +122,7 @@ static int gate_ok(int k)   /* its objective shown (bit 1 clear), or none given 
 {
     int k0 = gate[k], k1 = until[k];
     if (k1 >= 0 && k1 < g_objectives.count && !(g_objectives.flags[k1] & 1)) return 0;   /* @a-b: b shown */
+    if (k0 >= 0 && gate_done[k]) return k0 < g_objectives.count && (g_objectives.flags[k0] & 2);
     return k0 < 0 || (k0 < g_objectives.count && !(g_objectives.flags[k0] & 1));
 }
 
@@ -140,6 +142,7 @@ void Autopilot_Frame(void)
             if (l) memmove(l, l + 5, strlen(l + 5) + 1);
             char *at = strchr(p, '@');
             gate[nnames] = at ? (*at = 0, atoi(at + 1)) : -1;
+            gate_done[nnames] = at && strchr(at + 1, '!') != NULL;   /* "@k!": once objective k is done */
             char *dash = at ? strchr(at + 1, '-') : NULL;
             until[nnames] = dash ? atoi(dash + 1) : -1;
             snprintf(names[nnames++], sizeof names[0], "%s", p);

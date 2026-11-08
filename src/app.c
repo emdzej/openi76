@@ -28,6 +28,7 @@
 #include "radar.h"
 #include "salvage.h"
 #include "classes.h"
+#include "damage.h"
 #include "clock.h"
 #include "collide.h"
 #include "combat.h"
@@ -424,14 +425,17 @@ static void play_frame(void)
         }
         if (aitrace > 0 && frames % aitrace == 0)   /* the port's: --param aitrace=<frames>, the other vehicles */
             for (int i = 0; i < g_entity_count; i++) {
-                const Node *v = g_entities[i].node;
+                Node *v = g_entities[i].node;
                 if (!v || v->cls != 1 || (g_user_entity && v == g_user_entity->node) || !v->data) continue;
                 float sp, th;
+                uint32_t vf;
                 memcpy(&sp, v->data + 0xac, 4);
                 memcpy(&th, v->data + 0xe4, 4);
-                char m[160];
-                snprintf(m, sizeof m, "OpenI76: frame %d vehicle %d at %.1f %.1f %.1f speed %.2f throttle %.2f", frames, i,
-                         v->frame.pos[0], v->frame.pos[1], v->frame.pos[2], sp, th);
+                memcpy(&vf, v->data + 0x454, 4);
+                char m[200];
+                snprintf(m, sizeof m, "OpenI76: frame %d vehicle %d %.8s at %.1f %.1f %.1f speed %.2f throttle %.2f health %.0f%s",
+                         frames, i, v->name, v->frame.pos[0], v->frame.pos[1], v->frame.pos[2], sp, th,
+                         Vehicle_Health(v), (vf & 0x20) ? " dead" : "");
                 plat_log(m);
             }
         /* 0x404170 (the objects' detail by distance) is not ported yet */

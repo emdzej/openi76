@@ -1049,9 +1049,9 @@ static void action(uint32_t m, int32_t index)
         g_fsm_end_time = fpu_f32(fpu_add((double)I(m, 0), g_clock_total));
         {   /* the port's note of how the mission ends */
             char msg[140];
-            snprintf(msg, sizeof msg, "OpenI76: the script ends the mission (%s) in %d s at %.1f s (objective %d)",
+            snprintf(msg, sizeof msg, "OpenI76: the script ends the mission (%s) in %d s at %.1f s (objective %d; ip %d)",
                      code == 15 ? "successAll" : code == 17 ? "failAll" : "failAllObj", (int)I(m, 0), g_clock_total,
-                     code == 18 ? (int)I(m, 1) : -1);
+                     code == 18 ? (int)I(m, 1) : -1, (int)((W(m + M_IP) - W(m + M_CODE)) / 8));
             plat_log(msg);
         }
         Objectives_FailExcept(code == 18 ? I(m, 1) : -1);   /* 0x41f280 */
