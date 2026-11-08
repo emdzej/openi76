@@ -24,6 +24,8 @@ apply() {
   # project the analysis' functions a few bytes into 0x100237b0, 0x100043d0, 0x100136d0, 0x10033880 go first)
   if [ "$prog" = i76shell.dll ]; then
     ghidra script run tools/ghidra/CreateFunctions.java "${P[@]}" -- "$PWD/tools/ghidra/shell-entries.txt"
+  else   # the exe's functions only data refers to (the in-game menus' item handlers)
+    ghidra script run tools/ghidra/CreateFunctions.java "${P[@]}" -- "$PWD/tools/ghidra/exe-entries.txt"
   fi
   ghidra script run tools/ghidra/ApplyNames.java "${P[@]}" -- "$PWD/$names"
   ghidra script run tools/ghidra/DumpAllNamed.java "${P[@]}" -- "$PWD/re/$prog.c"

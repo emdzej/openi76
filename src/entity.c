@@ -48,6 +48,13 @@ void Entity_Init(void)
     Names_Add(NULL, NULL);   /* 0x492ac0: a new table */
 }
 
+void Entities_Free(void)
+{
+    for (int i = 0; i < MAX_ENTITIES; i++)
+        if (g_entities[i].node) Entity_Remove(&g_entities[i]);
+    g_entity_count = 0;
+}
+
 void Entity_OnAdd(EntityFn fn) { on_add[on_add_count++] = fn; }
 void Entity_OnRemove(EntityFn fn) { on_remove[on_remove_count++] = fn; }   /* 0x423d10 */
 

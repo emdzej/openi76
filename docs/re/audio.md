@@ -4,8 +4,7 @@
 port's DirectSound). `tools/emu/diff_objects.py --call sound` runs the original's manager against a fake
 DirectSound that logs every call. The port's `dsound.c` logs the same lines, and the two logs must be
 identical frame by frame. `--call engine` does the same for the engines, horns and siren, and `--call
-radio` for the CB radio. Not ported yet:
-- the music (MCI CD audio, 0x4782b0-0x478a90);
+radio` for the CB radio. The music is `src/music.c` on `src/cdaudio.c` (below). Not ported yet:
 - the shell's sounds (0x467390, 0x4674a0, 0x4674f0);
 - the poetry's and the cheats' CB calls (0x4513c0, 0x408d30).
 
@@ -281,6 +280,54 @@ frees the parked (0x468340).
 **The pause (0x4688d0, 0x4688e0).** Outside network play each playing record that is not marked to play on
 (flag 8), or every record in state 0x20, is stopped. It is then kept paused (flag 1), parked, or freed. The
 resume restarts those not sounding.
+
+## The music (0x4686b0-0x468830, 0x4782b0-0x478a90, `src/music.c`) — confirmed
+
+The music is disc 2's audio tracks, played by the CD drive through MCI's `cdaudio` device. The drive's
+analogue output goes to the sound card's CD line, whose volume is set with `auxSetVolume`. The exe never
+reads the samples itself.
+
+**The drive (0x4782b0-0x478a90).**
+- The open (0x4782b0) needs disc 2 in the drive (0x484cf0, the label `I76_CD2`). It then opens the
+  device, sets the time format to TMSF (track, minutes, seconds, frames, one byte each) and finds the
+  aux device of the CD line (0x478200).
+- The mode (0x478590): 1 open (no disc), 2 stopped, 3 playing, 4 paused, 5 no device. A failing status
+  closes the device.
+- The tracks (0x478900): at most 50, each one's TMSF position, then a last entry, the count + 1.
+- A track t plays to the start of track 15, or to t + 1 from 15 on (0x4787f0). Tracks 2-14 thus play to
+  the end of the disc's mission music, without stopping between them.
+- Pause and resume share one function (0x478650): from stopped it plays, from playing it notes the
+  position and pauses, from paused it resumes.
+- The volume (0x478a90): the music's level (1 counts as 0) times 0xccc, at most 0xffff, on both channels.
+
+**The game's side (0x4686b0-0x468830).**
+- A mission's track is the WRLD chunk's dword at +8 (0x4686b0, from the world's load).
+- Play (0x4686c0) closes and reopens the drive each time. The track is kept unless -1 is given. Without
+  the track on the disc, it is forgotten (-1). The track plays only when forced or when the music's
+  level is above 1. It notes whether this is the shell (state 6).
+- Stop (0x468800), pause (0x468780) and resume (0x4687c0). The pause and resume act on the drive only
+  when the music's level is above 1.
+- The frame (0x468830, from the sound frame) looks every 60 s, or 5 s in the shell (GetTickCount). With
+  the drive open or gone, the music is off. When the mode changed (the play ran out), the shell plays
+  its track again and a mission plays from track 2.
+
+**Who calls it:**
+- WinMain stops the music before a mission's first movie and plays the mission's track after it; a
+  won mission stops it before the last movie; a Replay stops it and plays it again.
+- The shell (through the exe's table, +0x54 and +0x50) stops it and plays track 15, forced.
+- The game menu (0x44b8f0) plays it forced (so a music level of 1 can be heard while it is set); its
+  closer (0x44b9c0) stops it when the level is below 2, and in a mission plays it again.
+- The pause key's pause and resume (0x4688d0, 0x4688e0) pause the effects and then the music.
+
+**The port's drive (`src/cdaudio.c`).** The gasm runner passes disc 2 as the asset `cd2`. The BIN image
+(`I76_CD2.BIN`) holds the audio tracks as 2352-byte sectors of 44.1 kHz 16-bit stereo PCM, and its CUE
+sheet, passed as `cd2cue`, gives each track's start (INDEX 01). The MCI calls are answered from those, and
+the playing sectors are read and added into the output on the audio thread, through the aux volume.
+Without a CUE, or with the data track's ISO alone, the drive has no audio tracks and the game plays
+none, as with a disc without them:
+
+    gasm-run openi76.wasm --headless 600 --asset cd=I76_CD1.ISO \
+        --asset cd2=I76_CD2.BIN --asset cd2cue=I76_CD2.CUE
 
 ## The port's DirectSound
 

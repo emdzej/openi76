@@ -99,6 +99,9 @@ void Sound_StopPlaying(void);
 /* 0x4688d0 / 0x4688e0: the pause's (the music's part not ported) */
 void Sound_Pause(void);
 void Sound_Resume(void);
+/* 0x4679a0 / 0x467a20: the effects' alone (the menus') */
+void Sound_PausePlaying(void);
+void Sound_ResumePlaying(void);
 /* 0x467100: at most n playing (1 is 0); the speech kept */
 void Sound_SetVoices(int n);
 /* 0x4671d0: the music's, the effects' and the speech's volumes (-1 the settings', -2 unchanged; 1 is 0) */

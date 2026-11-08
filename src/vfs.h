@@ -78,4 +78,7 @@ bool vfs_mount_image(const VfsSource *src, int sector_hint, const char *desc);
 bool vfs_drive_mount_image(const VfsSource *src, int sector_hint, const char *desc);
 void vfs_drive_unmount(void);
 const char *vfs_drive_label(void);      /* NULL with the drive empty */
+/* the drive's image's raw bytes at off (its audio tracks' sectors): count, 0 past the end, -1 empty */
+int64_t vfs_drive_read_raw(uint64_t off, void *dst, size_t len);
+uint64_t vfs_drive_size(void);
 const char *vfs_drive_describe(void);

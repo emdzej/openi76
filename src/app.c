@@ -11,7 +11,10 @@
 #include "camera.h"
 #include "cockpit.h"
 #include "mirror.h"
+#include "menu.h"
 #include "movie.h"
+#include "music.h"
+#include "cdaudio.h"
 #include "shell/shell.h"
 #include "smoke.h"
 #include "contrail.h"
@@ -21,9 +24,11 @@
 #include "radio.h"
 #include "dsound.h"
 #include "radar.h"
+#include "salvage.h"
 #include "classes.h"
 #include "clock.h"
 #include "combat.h"
+#include "crt.h"
 #include "input.h"
 #include "physics.h"
 #include "exe.h"
@@ -43,6 +48,7 @@
 #include "vfs_zfs.h"
 #include "world.h"
 #include "render/draw.h"
+#include "render/light.h"
 #include "render/obj_draw.h"
 #include "render/palette.h"
 #include "render/poly.h"
@@ -80,8 +86,11 @@ static uint8_t *pixels;
 static bool viewer_init(const char *mission)
 {
     char err[200], m[300];
-    Res_Init();
-    Sound_Init();       /* 0x466ab0, WinMain's first */
+    static bool once;
+    if (!once) {   /* the pak index, once (WinMain's start-up, Files_Init 0x484db0) */
+        Res_Init();
+        once = true;
+    }
     Sound_Enable(0);    /* 0x466dd0 while the mission loads */
     Radio_On(1);        /* 0x46fa50, each mission */
     InvSqrt_Init();
@@ -95,6 +104,9 @@ static bool viewer_init(const char *mission)
     g_shadow_mask = shadow_mask;
     g_shadow_stride = SHADOW_STRIDE;
     Objects_Init();
+    /* WinMain: t01, t13 and t17 (0x4a8348, 0x4a8344, 0x4a8340) mark the first of a trip (0x58dc88) */
+    g_first_trip = !crt_strnicmp(mission, exe_str(0x4a8348), 3) || !crt_strnicmp(mission, exe_str(0x4a8344), 3) ||
+                   !crt_strnicmp(mission, exe_str(0x4a8340), 3);
     if (!Mission_Load(mission)) {
         snprintf(m, sizeof m, "OpenI76: mission %s not loaded", mission);
         plat_log(m);
@@ -113,7 +125,7 @@ static bool viewer_init(const char *mission)
     Lum_Ramp(0xe0, 0xef, 0xef);
     Glow_Build(g_shown_pal);
     Terrain_LoadTextures();
-    pixels = calloc(640 * 480, 1);
+    if (!pixels) pixels = calloc(640 * 480, 1);
     Movie_SetScreen(pixels, 640);
     surf = (Surface){640, pixels, 0, 0, 639, 479, 1, 640, 480};
     /* 0x403360: fov pi/2, aspect (h * 4) / (w * 3), the world's range with DET_RANGE (else 150), zoom 1 */
@@ -167,7 +179,14 @@ static void viewer_frame(void)
     Queue_Flush(&view, 1);
     if (g_cockpit == 1) Cockpit_Draw(&view);   /* 0x4279c0 */
     Hud_Draw(&view, 0);                         /* 0x427db0; the hook 0x58dc58 is not ported */
-    plat_present(pixels, 640, 480, 640, g_shown_pal);
+}
+
+/* WinMain's end of a frame: with a menu open (it opened in this frame) the menu over the frame (0x44ce70),
+   else the frame shown unless the map or the notepad has the screen (0x4db008 & 0xc) */
+static void show_frame(void)
+{
+    if (g_play_state & 0x10) Menu_Show();
+    else if (!(g_play_state & 0xc)) plat_present(pixels, 640, 480, 640, g_shown_pal);
 }
 
 /* The game in a mission (WinMain's loop while the state 0x4a80f4 is 5), its ported parts: after the load the
@@ -191,6 +210,7 @@ static bool play_init(void)
     Class_StartAll();
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
+    Objects_Detail();     /* 0x424320 */
     Skids_Init(16);      /* 0x46bba0, with WinMain's inits after the classes' start */
     Contrails_Init(8);   /* 0x46e980 */
     Flamers_Init(16);    /* 0x46ce90 */
@@ -212,9 +232,11 @@ static void play_frame(void)
 {
     if (tick_ms >= 0) g_clock_fake_ms += tick_ms;
     Input_Keys();
+    Input_Mouse();
     Clock_Tick();
     Input_Update();
     if (g_play_state & 0x3e) {   /* WinMain's loop with the play stopped: 0x44fab0, then a movie's frame */
+        if (g_play_state == 0x10) Menu_Keys();     /* 0x44fab0's menu (its map's and notepad's are not ported) */
         if (g_play_state == 0x20) Movie_Frame();   /* 0x44ed90 */
         else {
             Sound_Frame(1);   /* 0x466b70 */
@@ -280,15 +302,9 @@ static void play_frame(void)
         /* 0x404170 (the objects' detail by distance) is not ported yet */
         Sound_Frame(1);    /* 0x466b70 */
         Sound_Enable(1);   /* 0x466dd0 */
-        viewer_frame();
+        if (!(g_play_state & 0xc)) viewer_frame();
+        show_frame();
         Rel_Clear();   /* 0x421fc0 after the frame's drawing */
-        static int32_t shown_state = 5;
-        if (g_game_state != shown_state) {   /* the mission's end: WinMain's loop would leave (not ported yet) */
-            char m[64];
-            snprintf(m, sizeof m, "OpenI76: the game's state is now %d", (int)g_game_state);
-            plat_log(m);
-            shown_state = g_game_state;
-        }
     }
 }
 
@@ -308,6 +324,7 @@ static bool intro_frame(void)
 {
     if (intro_at == 0 || (intro_at == 2 && !Movie_Playing())) return false;
     Input_Keys();
+    Input_Mouse();
     if (Movie_Playing()) {
         if (g_play_state == 0x20) Movie_Frame();   /* 0x44ed90 */
         else Sound_Frame(1);                        /* the pause (2) holds it */
@@ -317,6 +334,8 @@ static bool intro_frame(void)
     return false;
 }
 
+static bool mission_start(const char *name);
+
 bool app_init(void)
 {
     char err[256], m[300];
@@ -325,21 +344,25 @@ bool app_init(void)
         plat_log(m);
         return false;
     }
+    if (!dll_init(err, sizeof err)) {   /* the shell's tables and strings; without it no shell */
+        snprintf(m, sizeof m, "OpenI76: %s", err);
+        plat_log(m);
+    }
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
     Gamma_Build();          /* 0x43c1e0, early in WinMain */
     Sound_Defaults();       /* and the audio's (0x44d660) */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
     char mission[32], v[16];
+    Sound_Init();        /* 0x466ab0, before the intro */
+    Movie_SoundUse();    /* 0x44e6b0 */
     if (plat_param("mission", mission, sizeof mission)) {
-        if (!(viewer = viewer_init(mission))) return false;
-        if (plat_param("play", v, sizeof v) && atoi(v)) play = play_init();
-        return true;
+        g_no_shell = 1;   /* 0x4a80e0: the command line's mission */
+        if (plat_param("play", v, sizeof v) && atoi(v)) return mission_start(mission);
+        return (viewer = viewer_init(mission));
     }
     /* WinMain before the shell: the sound (0x466ab0), the movies' (0x44e6b0), then introf01 and credf01, each
        to its end or Esc. --param intro=0 (the port's) leaves them out */
-    Sound_Init();
-    Movie_SoundUse();
     Input_Tables();
     if (!plat_param("intro", v, sizeof v) || atoi(v)) {
         intro[0] = exe_str(0x4a8364), intro[1] = exe_str(0x4a8358);
@@ -355,54 +378,226 @@ bool app_init(void)
     return true;
 }
 
-/* WinMain after the movies: the shell (Shell_Load 0x401000, ShellMain); its result 0xff ends the game,
-   3 a mission (not reached yet). --param shell=0 (the port's) shows the loading screen instead */
-static int shell_state;   /* 0 not started, 1 running, 2 over */
+/* ---- WinMain's loop (0x401290): the shell, a mission, its end, and again ---- */
 
-static bool shell_frame(void)
+static enum { S_NONE, S_SHELL, S_MOVIE_IN, S_PLAY, S_END_MENU, S_MOVIE_OUT, S_OVER } phase;
+static char mission_name[64];   /* WinMain's mission record's +0x5d (and 0x4ed830) */
+static int shell_result = -1;
+
+/* Shell_Load 0x401000: the state 6 while the shell runs, ShellMain with the state before it. Its end, below */
+static bool shell_open(void)
 {
-    if (shell_state == 2) return false;
-    if (!shell_state) {
-        char v[8];
-        if (plat_param("shell", v, sizeof v) && !atoi(v)) return shell_state = 2, false;
-        if (!Shell_Start(5)) return shell_state = 2, false;
-        shell_state = 1;
-    }
+    char v[8];
+    if (plat_param("shell", v, sizeof v) && !atoi(v)) return false;   /* the port's: the loading screen instead */
+    if (!dll_loaded()) return false;
+    int prev = g_game_state;
+    Sound_FreeParked();   /* 0x468340 */
+    Sound_Enable(1);      /* 0x466dd0 */
+    g_game_state = 6;
+    if (!Shell_Start(prev)) return false;
+    phase = S_SHELL;
+    return true;
+}
+
+static bool mission_start(const char *name);
+
+static void shell_frame(void)
+{
     Input_Keys();
-    if (Shell_Pass()) return true;
+    if (Shell_Pass()) return;
+    shell_result = Shell_Result();
     char m[64];
-    snprintf(m, sizeof m, "OpenI76: the shell ends with %d", Shell_Result());
+    snprintf(m, sizeof m, "OpenI76: the shell ends with %d", shell_result);
     plat_log(m);
     Shell_End();
-    shell_state = 2;
-    return false;
+    g_game_state = 5;   /* ShellMain's SendMessage 0x432 as it ends: the window procedure's state 5 */
+    /* Shell_Load's end: with the game's kind 2-4 the vehicle chosen (0x58d849) as the user's (0x58dcd0) (5,
+       network play's, is not ported); the sounds stopped and parked, the sound off */
+    if (shell_result != 0xff && g_sh_rec.kind >= 2 && g_sh_rec.kind <= 4)
+        snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
+    Sound_StopPlaying();   /* 0x468380 */
+    Sound_FreeParked();
+    Sound_Enable(0);
+    if (shell_result == 0xff) {
+        phase = S_OVER;
+        return;
+    }
+    snprintf(m, sizeof m, "OpenI76: the shell starts %s with %s", g_sh_rec.mission, g_user_vcf);
+    plat_log(m);
+    if (!mission_start(g_sh_rec.mission)) phase = S_OVER;
+}
+
+/* after the mission's movie: the keys typed during it dropped (0x4812b0), the music (0x4686c0), the view
+   (0x403360) */
+static void after_movie(void)
+{
+    Kb_Clear();
+    Music_Play(-1, 0);
+    View_Init(1, &surf);
+    phase = S_PLAY;
+}
+
+/* the loop's top (the set-up, the load) and, after the classes' start, the mission's movie (0x58dc90) */
+static bool mission_start(const char *name)
+{
+    if (name != mission_name) snprintf(mission_name, sizeof mission_name, "%s", name);
+    if (!(viewer = viewer_init(mission_name))) return false;
+    if (!(play = play_init())) return false;
+    char m[200];
+    snprintf(m, sizeof m, "OpenI76: loaded: entities %d, classes %d %d, AI %d %d %d %d, weapons %d %d %d %d, zones %d, lights %d",
+             g_entity_count, g_class_count[0], g_class_count[1], g_team_count[0], g_team_count[1], g_team_count[2],
+             g_team_count[3], g_weapon_def_count, g_weapon_count, g_hardpoint_count, g_ordnance_count, g_zone_count, g_light_count);
+    plat_log(m);
+    Music_Stop();   /* 0x468800 */
+    if (g_world.intro[0] && Movie_Play(g_world.intro)) phase = S_MOVIE_IN;
+    else after_movie();
+    return true;
+}
+
+/* the movies' loop: the window's keys, the frame (or the sound under a pause) */
+static bool movie_frame(void)
+{
+    Input_Keys();
+    Input_Mouse();
+    if (!Movie_Playing()) return false;
+    if (g_play_state == 0x20) Movie_Frame();   /* 0x44ed90 */
+    else Sound_Frame(1);
+    return true;
+}
+
+/* the end of WinMain's loop (the state no longer 5): its frees (0x44d7b0-0x425580), then by the state */
+static void mission_finish(void);
+
+static void mission_end(void)
+{
+    char m[64];
+    snprintf(m, sizeof m, "OpenI76: the mission ends with the state %d", (int)g_game_state);
+    plat_log(m);
+    /* 0x44d7b0: I76PLYR.DEF written (the port keeps no files yet) */
+    Sound_StopPlaying();   /* 0x468380 */
+    Sound_StopAll();       /* 0x466de0 */
+    Sound_FreeParked();    /* 0x468340 */
+    /* 0x428660: the links' heap (the port's links are freed with their nodes) */
+    Class_EndAll();        /* 0x425580 */
+    if (g_game_state == 1 && g_cheater) g_game_state = 0xb;
+    if (g_game_state == 1) {   /* won: the salvage (but in t04), and the mission's last movie */
+        if (crt_strnicmp(exe_str(0x4a833c), mission_name, 3)) {
+            /* 0x58dc84 (t12), the salvage's file (0x488e60) and the car written as addon\vehscn.vsf (0x4878b0,
+               0x48c290) for the shell: not ported yet */
+        }
+        /* 0x43b570: the palette faded to black over 0.01 s, the screen black (0x58dcbc) */
+        memset(pixels, g_black, 640 * 480);
+        plat_present(pixels, 640, 480, 640, g_shown_pal);
+        Music_Stop();   /* 0x468800 */
+        if (g_world.outro[0] && Movie_Play(g_world.outro)) {
+            phase = S_MOVIE_OUT;
+            return;
+        }
+    } else if (g_game_state == 0 || g_game_state == 0xb) {   /* lost (or won as a cheater): the end menu */
+        if (EndMenu_Open()) {
+            phase = S_END_MENU;
+            return;
+        }
+        g_game_state = 2;
+        memset(pixels, g_black, 640 * 480);
+    } else
+        memset(pixels, g_black, 640 * 480);   /* 0x43b570 */
+    mission_finish();
+}
+
+/* WinMain's frees after the state's part, in its order, then the next: again (7), the shell, or the end */
+static void mission_finish(void)
+{
+    int state = g_game_state;
+    if (state == 7) {   /* the music stopped and started again (0x468800, 0x4686c0); the screen mode back to 640 x 480 */
+        Music_Stop();
+        Music_Play(-1, 0);
+    }
+    Salvage_Free();          /* 0x488d60 */
+    /* 0x47ba70 (the cursor), 0x468a60, 0x468a50 (the music) */
+    Input_Reset();           /* 0x480520 */
+    Terrain_FreeTextures();  /* 0x48e650 */
+    Light_Shutdown();        /* 0x43a1c0 */
+    Contrails_Free();        /* 0x46eb70 */
+    Smoke_Free();            /* 0x46e0c0 */
+    Flamers_Free();          /* 0x46d050 */
+    Tracers_Free();          /* 0x46c1e0 */
+    Skids_Free();            /* 0x46bc00 */
+    /* 0x426260 (the cockpit's pictures), 0x407b10: */
+    Sky_Free();
+    Roads_Free();            /* 0x490da0, the pieces with the mission's heap (0x44e350) */
+    /* 0x48e1e0 (the terrain's nodes), 0x45c880, 0x45bba0 (the chunks), 0x425660: */
+    Classes_Free();
+    Terrain_Free();          /* 0x494d20 */
+    /* 0x458a80 (the ordnance), 0x454b50: */
+    Weapons_Init();
+    /* 0x454610, 0x454ac0 (the explosions, the muzzle flashes), 0x423c30: */
+    Entities_Free();
+    /* 0x408d10 (the AI's heap), 0x469d40 (the collisions), 0x47ea70, 0x47e5a0 (the animated textures, the
+       pixels), 0x454730, 0x421fc0: */
+    Rel_Clear();
+    /* 0x47deb0, 0x47d2b0 (the levels of detail), 0x41fca0 (the radar's mask), 0x47c550 (the textures), 0x48e0b0: */
+    Queue_Free();
+    /* 0x41f2f0, 0x450e30, 0x450d30, 0x4503a0 (the heaps of the panels), 0x41e850 (the objectives),
+       0x44e350, 0x44e320. The port's set-up empties its own tables as the next mission loads */
+    viewer = play = false;
+    if (state == 7 && !crt_strnicmp(mission_name, exe_str(0x4a8340), 3)) state = g_game_state = 8;   /* t17 */
+    if (state == 7) {   /* again: the vehicle as the shell chose it (kind 3: 0x4072d0, network play's) */
+        if (!g_no_shell && (g_sh_rec.kind == 2 || g_sh_rec.kind == 4 || g_sh_rec.kind == 3))
+            snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
+        g_game_state = 5;
+        if (!mission_start(mission_name)) phase = S_OVER;
+        return;
+    }
+    if (g_no_shell || state == 10 || !shell_open()) phase = S_OVER;
 }
 
 bool app_frame(void)
 {
     if (intro_frame()) return true;
-    if (!viewer && !play && shell_frame()) return true;
-    if (shell_state == 2 && Shell_Result() == 0xff) return false;   /* WinMain's end */
-    if (shell_state == 2 && Shell_Result() == 3 && !viewer) {
-        /* Shell_Load's end: with the game's kind 2-4 the vehicle chosen (0x58d849) as the user's (0x58dcd0);
-           then WinMain's mission (the record's +0x5d): loaded and played */
-        if (g_sh_rec.kind >= 2 && g_sh_rec.kind <= 4) snprintf(g_user_vcf, sizeof g_user_vcf, "%s", g_sh_rec.vehicle);
-        char m[128];
-        snprintf(m, sizeof m, "OpenI76: the shell starts %s with %s", g_sh_rec.mission, g_user_vcf);
-        plat_log(m);
-        if (!(viewer = viewer_init(g_sh_rec.mission))) return false;
-        play = play_init();
-        return true;
+    if (phase == S_NONE && !viewer && !play) {   /* after the start-up's movies: the shell, or the loading screen */
+        if (!shell_open()) {
+            if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);
+            return true;
+        }
     }
-    if (play) play_frame();
-    else if (viewer) viewer_frame();
-    else if (screen.pixels) plat_present(screen.pixels, screen.w, screen.h, screen.w, screen.pal);
+    switch (phase) {
+    case S_SHELL: shell_frame(); return phase != S_OVER;
+    case S_MOVIE_IN:
+        if (!movie_frame()) after_movie();
+        return true;
+    case S_MOVIE_OUT:
+        if (!movie_frame()) mission_finish();
+        return phase != S_OVER;
+    case S_END_MENU:   /* WinMain's wait while the end menu is open (the state 0) */
+        Input_Keys();
+        Input_Mouse();
+        Input_Update();   /* 0x480290 */
+        if (g_play_state == 0x10) Menu_Keys();   /* 0x44fab0 */
+        if (g_play_state == 0x20) Movie_Frame();
+        else Sound_Frame(1);
+        plat_present(pixels, 640, 480, 640, g_shown_pal);
+        if (g_game_state != 0) {
+            memset(pixels, g_black, 640 * 480);   /* 0x43b570 */
+            mission_finish();
+        }
+        return phase != S_OVER;
+    case S_OVER: return false;
+    default: break;
+    }
+    if (play) {
+        play_frame();
+        if (g_game_state != 5) mission_end();   /* WinMain's while (state 5) */
+        return phase != S_OVER;
+    }
+    if (viewer) viewer_frame(), plat_present(pixels, 640, 480, 640, g_shown_pal);
     return true;
 }
 
 void app_audio(float *stereo, unsigned frames)
 {
-    Dsb_Mix(stereo, frames);   /* the port's DirectSound */
+    Dsb_Mix(stereo, frames);       /* the port's DirectSound */
+    Cd_AudioMix(stereo, frames);   /* the CD's audio line */
     static int alog = -1;   /* the port's: --param audiolog=1 logs each second's level */
     static double sum, peak;
     static unsigned n;

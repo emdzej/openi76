@@ -40,6 +40,8 @@ void Entity_OnRemove(EntityFn fn);
 /* Entity_Remove 0x423eb0: the removal callbacks, the node's reference dropped, the entry cleared (the last
    one dropped from the count) */
 void Entity_Remove(Entity *e);
+/* Entities_Free 0x423c30 (the mission's end): every entity removed (its removal hooks, its node let go) */
+void Entities_Free(void);
 /* Entity_Add 0x423d30: the first free entry (or a new one) for the node; its centre and radius from the
    node's meshes. A node with flag 0x10 is the user's. NULL when full (the original's fatal at 256). */
 Entity *Entity_Add(Node *n, void *a, const int32_t *b);

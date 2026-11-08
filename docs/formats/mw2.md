@@ -19,7 +19,7 @@ from 1 (i76shell 0x1001a7d0: index 1 to n, read whole into a heap block; out of 
 |---|---|---|
 | 1-32 | a dword (the unpacked size), then LZSS: compressed PCX images, 640 × 480 except entry 17 (408 × 406) | confirmed: every stream decodes to its size exactly |
 | 33-64 | `1.10`, a count, then a dword pair per frame (an offset and 0): frame sets (entry 62 is the menus') | confirmed for 62 |
-| 65-71 | `1.`, then tables of 256 entries (a count of 0x100 and 0xff, then dword offsets): probably the fonts | inferred |
+| 65-71 | `1.`, the fonts (below) | confirmed for the reader (src/shell/font.c) |
 | 72-82 | RIFF WAVE, 8-bit mono PCM at 22,050 or 11,025 Hz: the shell's sounds | confirmed |
 | 83 | text, CR LF lines: the credits ("PRODUCTION TEAM") | confirmed |
 
@@ -52,3 +52,17 @@ its rows from +0x18, y0 to y1. Each row is a run of codes; a byte c gives n = c 
 - c even, n = 0: the row's end.
 
 The buttons use frame pairs: the normal frame k, lit k - 1.
+
+## A font (entries 65-71) — confirmed (the shell's 0x1003c040, the aw library's 0x100315d9-0x1003160c)
+
+| Offset | Field |
+|---|---|
+| 0 | `1.` and a version |
+| 8 | the height of every glyph |
+| 0x10 + 4c | character c's glyph, as an offset from the font's start |
+
+A glyph is its width (a dword), then width × height bytes, row by row. Text is drawn character by
+character through a 256-byte colour map. A map entry of 0xff leaves the pixel as it is; the default map
+(0x1009b0a8) makes colour 0 see-through and keeps the rest. Each character's width is the step to the
+next. ShellMain makes fonts of entries 0x42 and 0x44-0x47 (0x44, 0x42, 0x45, 0x46, 0x47 in its order);
+0x47 serves four of its slots.

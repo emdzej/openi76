@@ -26,6 +26,8 @@ void Terrain_SetTextures(const char *name);
 int Terrain_Tdef(const uint8_t *payload, void *name, const uint8_t *end);
 /* Terrain_Setup 0x48e820: the level of detail (0x48e300), the cell size, and the zone grid (0x48e860) */
 void Terrain_Setup(int on, int detail, float cell);
+/* Terrain_SetLod 0x48e300: the terrain's level of detail, 0 low, 1 medium, 2 high */
+void Terrain_SetLod(int detail);
 /* the .ter's mapping (0x494d20 frees the original's) */
 void Terrain_Free(void);
 

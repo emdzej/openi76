@@ -1091,7 +1091,7 @@
 00424550	Objects_DrawMirror	render	high	Objects_Draw without shadows, merges, headlights; ported, diffed
 00424000	Node_FindClassAll	scene	high	depth first by class, the root's siblings too; ported
 00429da0	Vehicle_End	classes	high	class 1's end (word 11): the mirror's flag, texture copy and mask; ported as Mirror_End
-00425580	Class_EndAll	classes	med	every listed node's end handler (the class table's word 11)
+00425580	Class_EndAll	classes	high	every listed node's end handler (the class table's word 11: class 1 Mirror_End, 0x22 the radar's); ported
 0047c890	Tex_Restore	tex	high	an owner's private texture copy given back (or refreshed from the shared); ported
 0046e950	Smoke_DrawPuffs	effects	high	every puff drawn into another view (the mirror's, the radar's); ported
 0046e650	Smoke_DrawPuff	effects	high	one puff: a 0.8 m screen-space square, type 9 mode 0x8c, within 60; ported, diffed
@@ -1182,8 +1182,8 @@
 00468580	Sound_PlayAt	sound	high	a sound at a node (none: the user's); ported
 004685d0	Sound_PlayHeld	sound	high	a sound looping while asked each frame; ported
 00468640	Sound_PlayPlaced	sound	high	a sound placed once at a node; ported
-004688d0	Sound_Pause	sound	high	the pause (the music's part not ported); ported
-004688e0	Sound_Resume	sound	high	the resume (the music's part not ported); ported
+004688d0	Sound_Pause	sound	high	the pause: the effects', then the music's (0x468780); ported
+004688e0	Sound_Resume	sound	high	the resume: the effects', then the music's (0x4687c0); ported
 00468910	Sound_AmmoVolume	sound	high	the effects' volume set and cammo.wav played; ported
 00468970	Sound_RogerVolume	sound	high	the speech's volume set and croger.wav played; ported
 004765d0	Sound_PlayUser	sound	high	a sound flat when its node is the user's; ported
@@ -1251,3 +1251,87 @@
 0044fc00	Pause_Toggle	clock	high	the pause on and off (the state 2), the movie's or the game's sounds; ported
 0044fab0	Play_StoppedKeys	clock	medium	WinMain's pass with the play stopped: the pause's, map's and notepad's keys, the menu
 00484d10	Cd_Disc2	files	high	the disc-2 check: the CD drive's label I76_CD2, then int12f01.smk on it; ported (src/cd.c)
+00401270	Game_State	app	high	0x4a80f4
+00401290	WinMain	app	high	the start-up, the intro movies, then the loop: Shell_Load, a mission's set-up and play while the state is 5, its end by the state (7 again, 10 the end, else the shell); ported (src/app.c, docs/re/menus.md)
+00402c90	Main_WindowProc	app	high	the exe's window: 0x432 the state 5 (the shell's end), the keys by the play state, the left button (a movie skipped, the menu's click, the script's key 0x4df010); ported in part (src/input.c)
+0041f290	Objectives_FailText	objectives	high	the failAllObj text (an index past them gives the number itself: quirk); ported (the end menu's)
+00423c30	Entities_Free	entity	high	each entity's removal hooks, its node let go, the table zeroed; ported
+00424320	Objects_Detail	objects	high	the entities' faces' masks from the object detail bytes 4 (moving) and 5 (others); ported (src/menu.c)
+004244b0	FaceMasks_Set	objects	high	a node list's and its children's masks (classes 0x1e, 0x34, 0x3e, 0x4b -1); ported
+00425660	Classes_Free	classes	high	the class lists emptied, the nodes let go; ported
+00439ad0	Font_Create	gfx	high	CreateFontIndirectA from a font record's size for the screen mode (weight 100, proof quality); ported (src/gdi.c)
+00439b80	Dib_Make	gfx	high	an 8-bit DIB section with the read palette (0x4d6900) as its colours, and a surface over it
+0043c2d0	Gamma_Reapply	render	medium	the read palette's colours first..end through the gamma row, to the display's palette (0x58dc60); ported (the menu's)
+0044b8f0	GameMenu_Open	menu	high	the command 0x20: the main menu (0x4d9678), the settings copied (0x5e14f0), the sounds paused, the state 0x10; ported (src/menu.c)
+0044b9c0	GameMenu_Close	menu	high	the menu's closer: the screen mode, I76PLYR.DEF, the cheater mark, the voices and volumes, the sounds resumed, the state 1; ported
+0044bb10	Menu_Free	menu	high	the menu's pictures, DC and fonts freed; ported
+0044bc40	Menu_Open	menu	high	the boxes made corners once, the menus' numbers, the DC and its seven fonts, x1.map, the boxes' table by the mode, the first menu; ported
+0044bf30	Menu_Set	menu	high	a menu shown (0: the closer): its picture (Res_ScreenName), centred, the text layer (a DIB section), each item's 6; ported
+0044c1a0	MenuItem_Abort	menu	high	Abort Mission: its page with or without Reconfigure; ported
+0044c210	MenuItem_PlayOptions	menu	high	ported
+0044c230	MenuItem_Detail	menu	high	ported
+0044c250	MenuItem_Audio	menu	high	ported
+0044c270	MenuItem_Replay	menu	high	the state 7 (network play: the vehicle put back); ported but network play's
+0044c300	MenuItem_Reconfigure	menu	high	the state 8; ported
+0044c330	MenuItem_ExitGame	menu	high	are you sure, then the state 10; ported
+0044c360	MenuItem_AbortSure	menu	high	are you sure, then the state 2; ported
+0044c390	MenuOpt_Arcade	menu	high	ported
+0044c410	MenuOpt_NoSalvage	menu	high	ported
+0044c4b0	MenuOpt_Ammo	menu	high	ported
+0044c520	MenuOpt_Armor	menu	high	ported
+0044c590	MenuOpt_Chassis	menu	high	ported
+0044c600	MenuOpt_Wiper	menu	high	ported
+0044c670	MenuDet_Screen	menu	high	the modes the machine has (0x4d65c8); ported (640 x 480 alone)
+0044c7a0	MenuDet_Gamma	menu	high	ported
+0044c830	MenuDet_Range	menu	high	ported
+0044c8b0	MenuDet_Mirror	menu	high	ported
+0044c930	MenuDet_Clouds	menu	high	ported
+0044c9c0	MenuDet_Objects	menu	high	Done and Cancel use the wrong bytes (quirk); ported
+0044ca30	MenuDet_TerrTex	menu	high	ported
+0044caa0	MenuDet_TerrRes	menu	high	ported
+0044cb20	MenuDet_TerrDetail	menu	high	no Done case (quirk); ported
+0044cb70	MenuDet_Shadows	menu	high	ported
+0044cbe0	MenuAud_Music	menu	high	ported
+0044cc70	MenuAud_Sfx	menu	high	ported
+0044cd00	MenuAud_Voice	menu	high	ported
+0044cd90	MenuAud_Channels	menu	high	ported
+0044cdf0	MenuYes_Exit	menu	high	ported
+0044ce20	MenuYes_Abort	menu	high	ported
+0044ce50	MenuItem_No	menu	high	ported
+0044ce70	Menu_Show	menu	high	the text layer drawn (the number, each item), the picture and the layer blitted, shown; ported
+0044d090	Item_Draw	menu	high	an item's font by its kind, the chosen box, the label in its box, the value (names, levels, ticks); ported
+0044d3b0	Menu_Keys	menu	high	the typed key as the menu's next, previous, up, down, choose (Done by default) or cancel; ported
+0044d7f0	Menu_Mouse	menu	high	the left button's press (choose, a bar's tick) and release (act); ported
+0044db80	Menu_Cheater	menu	high	I'm a cheater: the options kept; ported
+0044dbb0	Menu_Swinger	menu	high	I'm a swinger: back to the play options; ported
+0044dbe0	EndMenu_NoCheats	menu	high	Turn off Cheater Options: the options without 0x1c saved, the respectable text; ported
+0044dc80	EndMenu_Open	menu	high	the mission's end menu (0x4da958): the cheater's text (state 0xb) or the failure's; ported
+0044dd80	EndMenu_Close	menu	high	the end menu's closer: state 0 made 2, the play 1; ported
+0044de80	Menu_Done	menu	high	each item's 8, then the parent (the play options with a cheat on: the cheater's menu 0x4da628); ported
+0044df20	Menu_Cancel	menu	high	each item's 9, then the parent; ported
+0044df90	Menu_Reset	menu	high	the detail's preset (0x44e260) but the screen mode; ported
+00453b90	Text_Box	menu	high	text in a box broken at spaces (GetTextExtentExPointA), a line apart, optionally underlined; ported (the menus')
+004686b0	Music_SetTrack	music	high	the mission's track (the WRLD chunk's +8); ported
+004686c0	Music_Play	music	high	the drive opened again, the track played (forced, or with the music's level above 1); ported
+00468780	Music_Pause	music	high	the CD paused; ported
+004687c0	Music_Resume	music	high	the CD resumed; ported
+00468800	Music_Stop	music	high	the CD stopped; ported
+00468830	Music_Frame	music	high	every 60 s (5 s in the shell) the drive looked at, the track again when it ran out; ported
+00475c70	Physics_Arcade	physics	high	the user's vehicle's +0x454 bit 0x10000 on or off; ported (the menu's)
+004782b0	Cd_MciOpen	music	high	MCI cdaudio opened for disc 2, time format TMSF, the aux device found; ported (cdaudio.c)
+004783e0	Cd_MciClose	music	high	MCI_CLOSE; ported
+00478410	Cd_MciPause	music	high	MCI_PAUSE; ported
+00478430	Cd_MciResume	music	high	MCI_RESUME; ported
+00478450	Cd_MciStop	music	high	MCI_STOP; ported
+00478470	Cd_MciPlay	music	high	MCI_PLAY from, to; ported
+004784b0	Cd_Open	music	high	the drive opened, its mode, tracks and volume; ported
+00478560	Cd_Close	music	high	the drive closed; ported
+00478590	Cd_Status	music	high	the mode: 1 open, 2 stopped, 3 playing, 4 paused, 5 none; ported
+00478650	Cd_Toggle	music	high	play from stopped, pause playing, resume paused; ported
+00478700	Cd_Where	music	high	the position, or the pause's; ported
+00478770	Cd_Changed	music	high	the mode changed since the last look; ported
+004787f0	Cd_PlayTrack	music	high	a track to the start of track 15 (t + 1 from 15); ported
+00478900	Cd_Toc	music	high	the tracks' positions, at most 50; ported
+004789f0	Cd_Position	music	high	MCI_STATUS_POSITION split to T, M, S, F; ported
+00478a90	Cd_Volume	music	high	auxSetVolume of level x 0xccc both channels (1 is 0); ported
+00492940	Res_ScreenPic	res	high	a picture by Res_ScreenName's name, else its own (Tex_Pixels)

@@ -12,6 +12,7 @@
 #include "app.h"
 #include "platform.h"
 #include "vfs.h"
+#include "cdaudio.h"
 #include "vfs_zfs.h"
 #include <gasm.h>
 #include <stdio.h>
@@ -380,6 +381,15 @@ static void mount_drive(void)
         snprintf(m, sizeof m, "OpenI76: in the CD drive: %s, %s", vfs_drive_label(), vfs_drive_describe());
         plat_log(m);
     }
+    /* its CUE sheet as asset cd2cue: the audio tracks' places in the BIN (src/cdaudio.h) */
+    int64_t n = gasm_asset_size64("cd2cue", 6);
+    if (n <= 0 || n > 65536) return;
+    char *cue = malloc((size_t)n + 1);
+    if (!cue) return;
+    int32_t k = gasm_asset_read_at64("cd2cue", 6, 0, (uint8_t *)cue, (uint32_t)n);
+    cue[k > 0 ? k : 0] = 0;
+    if (Cd_SetCue(cue)) plat_log("OpenI76: disc 2's CUE sheet read: its audio tracks play");
+    free(cue);
 }
 
 static bool mount_game(void)

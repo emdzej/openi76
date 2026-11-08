@@ -14,7 +14,7 @@ extern int32_t g_mirror_on;     /* 0x4dd928 */
    the view, a sixth of pi wide, its scales negated (the texture's rows are bottom up, and a mirror's
    picture is reversed); shown with the detail byte 13, else hidden */
 void Mirror_Setup(void);
-/* Mirror_End 0x429da0 (class 1's end, the class table's word 11, run by the end pass 0x425580, which is not
+/* Mirror_End 0x429da0 (class 1's end, the class table's word 11, run by the end pass 0x425580, Class_EndAll; formerly not
    ported yet): on the user's vehicle the flag 0, the texture's own copy given up (Tex_Restore), the mask
    freed */
 void Mirror_End(Node *n);

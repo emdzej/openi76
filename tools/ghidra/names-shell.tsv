@@ -43,3 +43,13 @@
 10001680	Training_Start	trip	high	the training trip's set-up before 0xc010: a01.msn, vppa01.vcf; ported
 1002b090	Net_Poll	net	medium	anet's dpReceive each pass
 1000fc80	InsertDisc	shell	medium	the dialog that asks for disc 2 (Retry, Cancel); stubbed: the port logs and cancels
+100017b0	Trip_Start	trip	high	NEW TRIP (0xc022): the trip's record (number 1, the game's kind 2), vppt01.vcf, then 0xc010; ported
+1003c040	Font_Init	font	high	a font object over a database entry: its data, its height; ported (src/shell/font.c)
+100315d9	Font_Height	font	high	the font's +8; ported
+100315ec	Font_Width	font	high	character c's glyph's width; ported
+1003160c	Gfx_Char	font	high	a glyph through a view, clipped, through a colour map (0xff see-through) or copied; ported
+10031797	Gfx_Text	font	high	a string's glyphs one after the other; ported (in Scr_Text)
+1003e200	Scr_Text	font	high	a string on the display through a map (the default 0x1009b0a8), the rectangle marked; ported
+10020d30	Trip_Next	trip	medium	0xc01e: the trip's way to its next mission (the reconfigure file, the briefing's vehicles, then 0xc017 or 0xc015, 0xc00d after the last); not ported (the port goes to the mission)
+10034eb0	Garage_Open	garage	medium	0xc017: the garage screen's sounds (entries 0x49-0x52), frame sets 0x21-0x23, background, screen function 0x100352c0; not ported
+10033c60	Salvage_Open	garage	medium	0xc015: the salvage screen (EMPTY slots); not ported

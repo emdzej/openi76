@@ -119,6 +119,9 @@ Write one page per format under `docs/formats/` (internal; not published).
 - Port the shell as its own module (`src/fe/`). It talks to the game through
   whatever interface the DLL exports. Map those exports first.
 - **Check:** headless screenshots of each screen against the originals.
+- **Started:** the database, the 2D library, the main menu, TRAINING into a01, and back to the main menu
+  after the mission (docs/re/shell.md). The exe's side of the loop runs: WinMain's mission end by its
+  state, its teardown, Replay, and the in-game menus over the frame (docs/re/menus.md).
 
 ## 5. World mode: mission load, terrain, objects on screen
 
@@ -241,7 +244,11 @@ decode through `gasm:media` instead of the core.
 **Done: the data track.** The port has a CD drive (src/vfs.c, the drive slot; `CD:` paths open from it).
 The gasm runner mounts its asset `cd2` there (`--asset cd2=I76_CD2.ISO`). The exe's disc-2 check
 (0x484d10, src/cd.c) asks the drive for the label and the probe movie, as the original asks Windows' CD
-drives; the movies are read from `CD:CUTSCENE/`. The music is still to come.
+drives; the movies are read from `CD:CUTSCENE/`.
+
+**Done: the music, from the BIN and CUE** (option 1 above; src/cdaudio.c, docs/re/audio.md "The music").
+`--asset cd2=I76_CD2.BIN --asset cd2cue=I76_CD2.CUE`: the drive mounts the BIN's data track (raw 2352)
+and plays the audio tracks' PCM. The FLAC and Ogg track files (option 2) are for the browser, later.
 
 ## Open questions
 

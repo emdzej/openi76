@@ -495,3 +495,30 @@ void Class_Frame(int which)
         if (i >= 0 && handlers[i].update[which]) handlers[i].update[which](n);
     }
 }
+
+void Class_EndAll(void)
+{
+    for (Cell *c = g_class_nodes; c; c = c->next) {
+        Node *n = c->value;
+        if (!n || n->state == 1) continue;   /* gone: 0x41f890 finds nothing (its cells dropped below) */
+        int cls = n->cls;
+        if (Class_IsStructure(cls) && cls != 4) cls = 2;   /* 0x42e5e0 */
+        if (cls == 1) Mirror_End(n);   /* 0x429da0 */
+        /* class 0x22's, 0x420120 (the radar's texture given back to the user's vehicle), is not needed: the
+           textures are freed after */
+    }
+}
+
+void Classes_Free(void)
+{
+    while (g_class_cells) {
+        List_Remove(&g_class_cells, g_class_cells);
+        g_class_count[0]--;
+    }
+    while (g_class_nodes) {
+        Node *n = Node_Live(g_class_nodes->value);
+        if (n) Node_Unref(n);
+        List_Remove(&g_class_nodes, g_class_nodes);
+        g_class_count[1]--;
+    }
+}

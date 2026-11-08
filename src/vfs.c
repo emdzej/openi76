@@ -414,3 +414,15 @@ bool vfs_mount_image(const VfsSource *src, int sector_hint, const char *desc)
     vfs_mount(&b, d);
     return true;
 }
+
+/* the drive's image's own bytes (an audio track's sectors), past the file system */
+int64_t vfs_drive_read_raw(uint64_t off, void *dst, size_t len)
+{
+    if (!drv_on || !drv.ctx) return -1;
+    Iso *iso = drv.ctx;
+    if (off >= iso->src.size) return 0;
+    if (len > iso->src.size - off) len = (size_t)(iso->src.size - off);
+    return iso->src.read_at(iso->src.ctx, off, dst, len);
+}
+
+uint64_t vfs_drive_size(void) { return drv_on && drv.ctx ? ((Iso *)drv.ctx)->src.size : 0; }

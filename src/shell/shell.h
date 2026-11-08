@@ -40,6 +40,7 @@ typedef struct {
 extern ShellRecords g_sh_rec;
 
 void Training_Start(void);       /* i76shell 0x10001680 */
+void Trip_Start(void);           /* i76shell 0x100017b0 (0xc022) */
 
 /* ShellMain's set-up: prev_state the exe's state (0x4a80f4; 5 after the intro); false if the database
    cannot be opened */

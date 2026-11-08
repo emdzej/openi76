@@ -9,11 +9,14 @@
    virtual address, raw size, raw offset. */
 enum { MAX_SECTIONS = 8 };
 
-static uint8_t *image;
-static size_t image_size;
-static uint32_t image_base;
-static struct { uint32_t va, vsize, raw, rsize; } sec[MAX_SECTIONS];
-static int nsec;
+typedef struct {
+    uint8_t *image;
+    size_t size;
+    uint32_t base;
+    struct { uint32_t va, vsize, raw, rsize; } sec[MAX_SECTIONS];
+    int nsec;
+} Pe;
+static Pe exe, dll;
 
 static uint32_t rd32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
@@ -33,53 +36,69 @@ uint32_t crc32(const void *data, size_t len)
     return c ^ 0xffffffffu;
 }
 
-static bool fail(char *err, size_t cap, const char *msg)
+static void pe_free(Pe *p)
 {
-    if (err) snprintf(err, cap, "%s: %s", EXE_PATH, msg);
-    exe_free();
+    free(p->image);
+    memset(p, 0, sizeof *p);
+}
+
+static bool pe_load(Pe *p, const char *path, size_t size, uint32_t crc, const char *version, char *err, size_t cap)
+{
+    pe_free(p);
+    p->image = vfs_read_all(path, &p->size);
+    const char *why = NULL;
+    if (!p->image) why = "not found (the game program is needed for its tables)";
+    else if (p->size != size || crc32(p->image, p->size) != crc) why = version;
+    else {
+        uint32_t pe = rd32(p->image + 0x3c);
+        p->nsec = rd16(p->image + pe + 6);
+        uint32_t opt = rd16(p->image + pe + 20);
+        p->base = rd32(p->image + pe + 24 + 28);
+        if (p->nsec > MAX_SECTIONS) why = "too many sections";
+        else
+            for (int i = 0; i < p->nsec; i++) {
+                const uint8_t *s = p->image + pe + 24 + opt + i * 40;
+                p->sec[i].vsize = rd32(s + 8);
+                p->sec[i].va = p->base + rd32(s + 12);
+                p->sec[i].rsize = rd32(s + 16);
+                p->sec[i].raw = rd32(s + 20);
+            }
+    }
+    if (!why) return true;
+    if (err) snprintf(err, cap, "%s: %s", path, why);
+    pe_free(p);
     return false;
+}
+
+static const uint8_t *pe_data(const Pe *p, uint32_t va, size_t len)
+{
+    for (int i = 0; i < p->nsec; i++) {
+        uint32_t n = p->sec[i].rsize < p->sec[i].vsize ? p->sec[i].rsize : p->sec[i].vsize;
+        if (va >= p->sec[i].va && (uint64_t)va - p->sec[i].va + len <= n) return p->image + p->sec[i].raw + (va - p->sec[i].va);
+    }
+    return NULL;
+}
+
+static const char *pe_str(const Pe *p, uint32_t va)
+{
+    for (int i = 0; i < p->nsec; i++) {
+        uint32_t n = p->sec[i].rsize < p->sec[i].vsize ? p->sec[i].rsize : p->sec[i].vsize;
+        if (va < p->sec[i].va || va >= p->sec[i].va + n) continue;
+        const char *s = (const char *)p->image + p->sec[i].raw + (va - p->sec[i].va);
+        return memchr(s, 0, p->sec[i].va + n - va) ? s : "";
+    }
+    return "";
 }
 
 bool exe_init(char *err, size_t errcap)
 {
-    exe_free();
-    image = vfs_read_all(EXE_PATH, &image_size);
-    if (!image) return fail(err, errcap, "not found (the game program is needed for its tables)");
-    if (image_size != EXE_SIZE || crc32(image, image_size) != EXE_CRC32)
-        return fail(err, errcap, "unsupported version (expected v1.0: 1,019,392 bytes, CRC-32 4129421d)");
-    uint32_t pe = rd32(image + 0x3c);
-    nsec = rd16(image + pe + 6);
-    uint32_t opt = rd16(image + pe + 20);
-    image_base = rd32(image + pe + 24 + 28);
-    if (nsec > MAX_SECTIONS) return fail(err, errcap, "too many sections");
-    for (int i = 0; i < nsec; i++) {
-        const uint8_t *s = image + pe + 24 + opt + i * 40;
-        sec[i].vsize = rd32(s + 8);
-        sec[i].va = image_base + rd32(s + 12);
-        sec[i].rsize = rd32(s + 16);
-        sec[i].raw = rd32(s + 20);
-    }
-    return true;
+    return pe_load(&exe, EXE_PATH, EXE_SIZE, EXE_CRC32, "unsupported version (expected v1.0: 1,019,392 bytes, CRC-32 4129421d)",
+                   err, errcap);
 }
 
-bool exe_loaded(void) { return image != NULL; }
-
-void exe_free(void)
-{
-    free(image);
-    image = NULL;
-    image_size = 0;
-    nsec = 0;
-}
-
-const uint8_t *exe_data(uint32_t va, size_t len)
-{
-    for (int i = 0; i < nsec; i++) {
-        uint32_t n = sec[i].rsize < sec[i].vsize ? sec[i].rsize : sec[i].vsize;
-        if (va >= sec[i].va && (uint64_t)va - sec[i].va + len <= n) return image + sec[i].raw + (va - sec[i].va);
-    }
-    return NULL;
-}
+bool exe_loaded(void) { return exe.image != NULL; }
+void exe_free(void) { pe_free(&exe); }
+const uint8_t *exe_data(uint32_t va, size_t len) { return pe_data(&exe, va, len); }
 
 uint32_t exe_u32(uint32_t va)
 {
@@ -101,13 +120,21 @@ float exe_f32(uint32_t va)
     return f;
 }
 
-const char *exe_str(uint32_t va)
+const char *exe_str(uint32_t va) { return pe_str(&exe, va); }
+
+bool dll_init(char *err, size_t errcap)
 {
-    for (int i = 0; i < nsec; i++) {
-        uint32_t n = sec[i].rsize < sec[i].vsize ? sec[i].rsize : sec[i].vsize;
-        if (va < sec[i].va || va >= sec[i].va + n) continue;
-        const char *s = (const char *)image + sec[i].raw + (va - sec[i].va);
-        return memchr(s, 0, sec[i].va + n - va) ? s : "";
-    }
-    return "";
+    return pe_load(&dll, SHELL_PATH, SHELL_SIZE, SHELL_CRC32, "unsupported version (expected v1.0: 471,552 bytes, CRC-32 eee0a66d)",
+                   err, errcap);
 }
+
+bool dll_loaded(void) { return dll.image != NULL; }
+const uint8_t *dll_data(uint32_t va, size_t len) { return pe_data(&dll, va, len); }
+
+uint32_t dll_u32(uint32_t va)
+{
+    const uint8_t *p = dll_data(va, 4);
+    return p ? rd32(p) : 0;
+}
+
+const char *dll_str(uint32_t va) { return pe_str(&dll, va); }

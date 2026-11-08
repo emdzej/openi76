@@ -107,7 +107,7 @@ void Terrain_Free(void)
 }
 
 /* 0x48e300 */
-static void set_lod(int detail)
+void Terrain_SetLod(int detail)
 {
     uint32_t b = detail == 0 ? 0x40cccccd : detail == 2 ? 0x42200000 : 0x41800000;   /* 6.4, 40, 16 */
     memcpy(&g_terrain_lod, &b, 4);
@@ -115,7 +115,7 @@ static void set_lod(int detail)
 
 void Terrain_Setup(int on, int detail, float cell)
 {
-    set_lod(detail);
+    Terrain_SetLod(detail);
     g_inv_cell = fpu_f32(fpu_div(1.0f, cell));   /* 0x4a7510: rounded in the current mode */
     g_cell = cell;
     g_terrain_on = on;

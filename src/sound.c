@@ -1,5 +1,6 @@
 /* The sound manager (sound.h). */
 #include "sound.h"
+#include "music.h"
 #include "camera.h"
 #include "classes.h"
 #include "clock.h"
@@ -910,7 +911,7 @@ void Sound_SetVolumes(int music, int sfx, int speech)
     if (music == 1) music = 0;
     if (sfx == 1) sfx = 0;
     if (speech == 1) speech = 0;
-    (void)music;   /* 0x478a90: the CD's aux volume, not ported */
+    if (music != -2) Music_Volume(music);   /* 0x478a90 */
     if (sys) {
         if (sfx != -2) sys->sfx = sfx;
         if (speech != -2) sys->speech = speech;
@@ -1023,7 +1024,7 @@ static void trim(void)
 /* Sound_Frame 0x466b70 */
 int Sound_Frame(int full)
 {
-    /* 0x468830: the music's tick, not ported */
+    Music_Frame();   /* 0x468830 */
     if (!enabled) return 1;
     if (!sys) return 0;
     if (full) {
@@ -1162,9 +1163,9 @@ void Sound_StopPlaying(void)
         }
 }
 
-/* Sound_Pause 0x4688d0 (0x4679a0; the music's 0x468780 not ported): outside network play each playing record not marked to play on (or all in state 0x20)
+/* Sound_Pause 0x4688d0 (0x4679a0, then the music's 0x468780): outside network play each playing record not marked to play on (or all in state 0x20)
    stopped: kept paused (flag 1), else parked or freed */
-void Sound_Pause(void)
+void Sound_PausePlaying(void)
 {
     if (!sys || g_net_game) return;
     for (Snd *s = sys->play, *next; s; s = next) {
@@ -1176,17 +1177,28 @@ void Sound_Pause(void)
             else snd_free(s);
         }
     }
-    /* 0x468780: the music paused, not ported */
 }
 
-/* Sound_Resume 0x4688e0 (0x467a20; the music's 0x4687c0 not ported) */
-void Sound_Resume(void)
+void Sound_Pause(void)
+{
+    Sound_PausePlaying();   /* 0x4679a0 */
+    Music_Pause();          /* 0x468780 */
+}
+
+/* Sound_Resume 0x4688e0 (0x467a20, then the music's 0x4687c0) */
+void Sound_ResumePlaying(void)
 {
     if (!sys) return;
     for (Snd *s = sys->play; s; s = s->next) {
         if (!(s->state & 4)) snd_start(s, 1);
         s->state &= ~8u;
     }
+}
+
+void Sound_Resume(void)
+{
+    Sound_ResumePlaying();   /* 0x467a20 */
+    Music_Resume();          /* 0x4687c0 */
 }
 
 void Sound_Defaults(void)

@@ -30,13 +30,13 @@ the objects (entities, node trees, levels of detail, collision set-up, and their
 dynamic lights and the shadows; docs/re/objects.md), the lines of objects (LDEF), the vehicles' loading
 (docs/re/vehicles.md) with their weapons (docs/re/weapons.md), the effects' loading (docs/re/effects.md)
 the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with their physics set-up and engine (docs/re/classes.md). The app plays the intro and the credits, then runs the shell (being ported: its main menu works with
-the mouse and TRAINING starts a01 with disc 2 passed as `--asset cd2=I76_CD2.ISO`, docs/re/shell.md; `--param shell=0` shows disc 1's loading screen instead), or with `--param
+the mouse and TRAINING starts a01 with disc 2 passed as `--asset cd2=I76_CD2.ISO`, docs/re/shell.md, and the mission's end comes back to it; `--param shell=0` shows disc 1's loading screen instead), or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
 (docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
 cameras: every mode of the presets F1-F11, the death's and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
-trace=<frames>` logs the user's vehicle. The 3D and the flat cockpit with their instruments, the weapons' and specials' panels, the radar's
+trace=<frames>` logs the user's vehicle. Esc's in-game menus and the mission's end menu run, with Replay, Abort and Exit through WinMain's teardown (docs/re/menus.md; their text through src/gdi.c and the disc's LEE_____.TTF). The 3D and the flat cockpit with their instruments, the weapons' and specials' panels, the radar's
 display, the HUD's target box and the rear-view mirror run (docs/re/cockpit.md). The salvage list
 fills (docs/re/salvage.md). The Smacker movies play (docs/re/movies.md, docs/formats/smk.md): the intro and
 credits at start-up (`--param intro=0` leaves them out) and the script's `playMovie`, Esc skipping them, the
@@ -44,7 +44,9 @@ pause (2) holding them; the mission's script's machines, conditions, orders, obj
 its actions run (docs/re/fsm.md). Not ported yet: the effects but the weapons' (every kind of ordnance flies and hits, with the tracers, explosions and
 splash; the turrets turn and the artillery fires: docs/re/weapons.md; the damaged vehicles' smoke, the
 rockets' contrails, the flame throwers' flames, the skid marks and the debris run: docs/re/effects.md, with the wrecks' kicks,
-thrown parts and chunks), the shell and the music. The sound manager runs, with the engines,
+thrown parts and chunks) and most of the shell (its main menu, training's and a new trip's start and the
+way back from a mission run: docs/re/shell.md). The music plays disc 2's audio tracks from its BIN and CUE
+(`--asset cd2=I76_CD2.BIN --asset cd2cue=I76_CD2.CUE`; docs/re/audio.md "The music"). The sound manager runs, with the engines,
 horns, siren, tyres, the cockpit's, weapons' and radar's sounds and the CB radio's queue (docs/re/audio.md:
 every sound's record, its admission by priority and voices, its 3D place, through the port's DirectSound
 mixed into the gasm audio). Read
@@ -88,7 +90,7 @@ CI and don't tag releases until the game is ported and the user asks.
 
 The user's images: `~/Downloads/interstate-76-activision-1997/` (`I76_CD1.ISO`; disc 2 as `I76_CD2.ISO`,
 its data track, and `I76_CD2.BIN`/`.CUE`, which alone hold the 16 CD-audio tracks: **don't delete them**;
-how the port plays the music is undecided, docs/re/port-plan.md "Disc 2 and CD audio"). Development copy:
+the port plays the music from them, docs/re/port-plan.md "Disc 2 and CD audio"). Development copy:
 `./cd` (`bsdtar -xf I76_CD1.ISO -C cd --exclude 'DEMO/*' --exclude 'DIRECTX/*'`). Tests and tools read
 `OPENI76_DATA=<dir|image>` (default `./cd`) and skip without data.
 

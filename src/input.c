@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "menu.h"
 
 uint8_t g_input[0xa0];
 int32_t g_input_menu = 1, g_input_held, g_input_main;
@@ -335,6 +336,25 @@ static void key_down(int vk, uint32_t lparam)
 static void key_up(uint32_t lparam)
 {
     if (g_play_state != 2 && g_play_state != 0x20) kb_message(lparam, 0);
+}
+
+/* the window procedure's (0x402c90) left button: a press skips a movie (0x44f170), goes to the open menu
+   (0x44d7f0) or counts as the script's key (0x4df010); a release goes to the menu */
+void Kb_Clear(void) { kb_clear(); }
+
+void Input_Mouse(void)
+{
+    static uint32_t before;
+    int x, y;
+    uint32_t b;
+    if (!plat_pointer(&x, &y, &b)) return;
+    if ((b & 1) && !(before & 1)) {
+        if (g_play_state == 0x20) Movie_Skip();
+        else if (g_play_state != 0x10) g_input_main = 1;   /* 0x4df010, the script's isKeypress */
+        else Menu_Mouse(0x201, x, y);
+    } else if (!(b & 1) && (before & 1) && g_play_state == 0x10)
+        Menu_Mouse(0x202, x, y);
+    before = b;
 }
 
 void Input_Keys(void)
@@ -985,8 +1005,8 @@ static int user_dead(void)
     return u && (rd32(u->node->data + 0x454) & 0x20);
 }
 
-/* 0x4809b0: a typed key's command. Ported: the preset views, the mirror, the self-destruct and the pause; the rest (the
-   menus, the rear view, the video mode, network play's) is not yet */
+/* 0x4809b0: a typed key's command. Ported: the menu, the preset views, the mirror, the self-destruct and the pause; the rest (the
+   rear view, the video mode, network play's) is not yet */
 static void game_command(int c)
 {
     Entity *u = g_user_entity;
@@ -995,7 +1015,12 @@ static void game_command(int c)
         Pause_Toggle();   /* 0x44fc00 */
         return;
     }
-    /* the first table's: 0xa, 0x20, 0x24 and 0x2d end here, as does 0 */
+    if (c == 0x20) {   /* the menu: opened, or closed when it is open */
+        if (!(g_play_state & 0x10)) GameMenu_Open();   /* 0x44b8f0 */
+        else GameMenu_Close();                          /* 0x44b9c0 */
+        return;
+    }
+    /* the first table's: 0xa, 0x24 and 0x2d end here, as does 0 */
     if (c == 0 || c == 0xa || c == 0x20 || c == 0x24 || c == 0x2d) return;
     if (user_dead()) return;   /* and while network play's chat line takes the keys (0x462690) */
     if (c == 0xb) {

@@ -129,8 +129,15 @@ The menus' and screens' meanings are to be found as each is ported.
   fonts and text, the keyboard, the cursors (the runner's is shown), the player's files, the music, and
   network play.
 
+- **The way back:** when a mission ends with a state other than 7 or 10, WinMain frees it and calls
+  Shell_Load again with that state (docs/re/menus.md). ShellMain opens the main menu after the
+  start-up's state 5 or after a01.msn. A trip's way back by its state (0xc01e, 0xc008, 0xc017, the
+  trip's file) and the melee's (0xc024, 0xc025) are not ported yet: they log and open the main menu.
+  ShellMain's end sends the exe's window 0x432, which sets the state 5 again.
+- The DLL is read at run time like the exe (src/exe.c: dll_init, dll_str; 471,552 bytes, CRC-32
+  eee0a66d), for the shell's strings and tables.
+
 ## What comes next
 
-- The mission's end back into the shell (WinMain's states, the salvage file, the trip's state).
 - The fonts (entries 0x42, 0x44-0x47) and the text drawing (0x1003e200), which most screens need.
 - NEW TRIP (0xc022), the melee's screens, the options and the bookmarks.

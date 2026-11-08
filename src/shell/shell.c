@@ -1,9 +1,12 @@
 /* shell.h: ShellMain and ShellWindowProc */
 #include "shell/shell.h"
+#include "crt.h"
+#include "exe.h"
 #include "shell/screen.h"
 #include "platform.h"
 #include "sound.h"
 #include "cd.h"
+#include "music.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -135,10 +138,26 @@ static int insert_disc(void)
 void Training_Start(void)
 {
     g_sh_rec.trip = 1;
-    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", "a01.msn");
+    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", dll_str(0x1005c444));   /* a01.msn */
     g_sh_rec.kind = 0;
-    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", "vppa01.vcf");
+    /* the original reads vppa01.vcf (0x1005c410) into its vehicle record, writes it out as
+       addon\vehscn.vcf and .vsf, and names vehscn.vcf (0x1005c44c) for the exe to read back; the port
+       hands over the file it was read from */
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c410));
 }
+
+/* NEW TRIP (0x100017b0, 0xc022): the trip's record (its first mission, the game's kind 2), the car
+   vppt01.vcf (0x1005c458; as TRAINING's, the original's round trip through addon\vehscn.vcf is not
+   ported), then the mission's start (0xc010; 0xc020 first with 0x100637a0, which nothing sets) */
+void Trip_Start(void)
+{
+    g_sh_rec.trip = 1;
+    g_sh_rec.kind = 2;
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x1005c458));
+    Shell_Post(0xc010, 0);
+}
+
+static int prev;   /* ShellMain's argument 11: the exe's state before the shell */
 
 static void message(uint32_t msg, uint32_t wparam)
 {
@@ -161,8 +180,16 @@ static void message(uint32_t msg, uint32_t wparam)
                 }
         Shell_Quit(0xc001);
         return;
+    case 0xc022:
+        Trip_Start();
+        return;
+    case 0xc01e:   /* the trip's next mission (0x10020d30): its briefing, the garage and the salvage are not
+                      ported yet; the port goes straight to the mission */
+        unported("screen (the trip's, straight to the mission)", msg);
+        Shell_Post(0xc010, 0);
+        return;
     case 0xc008: case 0xc00d: case 0xc00f: case 0xc015: case 0xc017: case 0xc01c: case 0xc01d:
-    case 0xc01e: case 0xc01f: case 0xc020: case 0xc021: case 0xc022: case 0xc024: case 0xc025: case 0xc026:
+    case 0xc01f: case 0xc020: case 0xc021: case 0xc024: case 0xc025: case 0xc026:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
         return;
@@ -175,8 +202,8 @@ static void message(uint32_t msg, uint32_t wparam)
    display (0x1003c670), the mouse (0x1001f1c0, on). Then the first message: after the intro (the exe's
    state 5) the main menu. Not ported yet: the player's defaults and I76PLYR.DEF (0x10039e20), the CD's
    drive (0x10012a10), the tables (0x10032e20, 0x1003c4b0), the fonts (entries 0x42, 0x44-0x47), the
-   keyboard (0x10038530), the cursors (pencil.cur, nopencil.cur: the runner's own is shown), the exe's
-   music calls (+0x54, +0x50 with 15 and 1), the trip's and network play's ways in */
+   keyboard (0x10038530), the cursors (pencil.cur, nopencil.cur: the runner's own is shown), network
+   play's ways in */
 bool Shell_Start(int prev_state)
 {
     rand_state = (uint32_t)time(NULL);
@@ -189,8 +216,27 @@ bool Shell_Start(int prev_state)
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;
     quit = false, result = -1, q_count = 0;
-    if (prev_state == 5) Shell_Post(0xc00e, 0);
-    else {
+    Music_Stop();          /* the exe's +0x54 (0x468800) */
+    Music_Play(0xf, 1);    /* +0x50 (0x4686c0): track 15, whatever the music's level */
+    prev = prev_state;
+    /* from the start (5) or after the training mission (a01.msn, 0x100637e8): the main menu */
+    if (prev_state == 5 || !crt_stricmp(g_sh_rec.mission, dll_str(0x100637e8))) Shell_Post(0xc00e, 0);
+    else if (g_sh_rec.kind == 2) {   /* a trip's (its file read, 0x10039e20: not ported) */
+        if (prev_state == 2) {   /* aborted: the main menu (the trip's file saved one back: not ported) */
+            Shell_Post(0xc00e, 0);
+        } else if (prev_state == 8) {   /* Reconfigure: the trip's screen again */
+            Shell_Post(0xc01e, 0xc01e);
+        } else if (prev_state == 1) {   /* won: the end of the game after the last, else the next */
+            if (g_sh_rec.trip == 0x11) {
+                g_sh_screen_msg = 0xc01e;
+                Shell_Post(0xc008, 0xc01e);
+            } else if (g_sh_rec.trip == 4) {   /* trip4.spc, "You must play trip 3 before trip 4": not ported */
+                Shell_Post(0xc017, 0xc01e);
+            } else
+                Shell_Post(0xc01e, 0xc01e);
+        }
+        /* any other state posts nothing (the original's: no screen) */
+    } else {
         unported("way in from the state", (uint32_t)prev_state);
         Shell_Post(0xc00e, 0);
     }
@@ -208,6 +254,10 @@ bool Shell_Pass(void)
         /* ShellMain's end: 0xc001 a mission to play (3; a trip's next t%02d.msn, the game's kind 0 or 1
            made 2), else 0xff (0x1002a6d0) */
         if (quit_code == 0xc001) {
+            if (g_sh_rec.kind == 2) {   /* a trip's: after a won mission the next, t%02d.msn (0x10063828) */
+                if (prev == 1) g_sh_rec.trip++;   /* and the best (0x101098bc) saved: not ported */
+                snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, dll_str(0x10063828), (int)g_sh_rec.trip);
+            }
             if (g_sh_rec.kind == 0 || g_sh_rec.kind == 1) g_sh_rec.kind = 2;
             result = 3;
         } else

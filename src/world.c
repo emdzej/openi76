@@ -1,5 +1,6 @@
 /* The world definition (world.h). */
 #include "world.h"
+#include "music.h"
 #include "objects.h"
 #include "chunks.h"
 #include "res.h"
@@ -26,6 +27,9 @@ static void name(char *dst, size_t cap, const uint8_t *src)
 int World_Wrld(const uint8_t *c, void *arg, const uint8_t *end)
 {
     (void)arg, (void)end;
+    int32_t music;
+    memcpy(&music, c + 8, 4);
+    Music_SetTrack(music);   /* 0x4686b0 */
     const uint8_t *p = c + 8;
     char pal_name[14], lum_name[14], tbl_name[14];
     name(pal_name, sizeof pal_name, p + 0x1e);

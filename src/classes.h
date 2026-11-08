@@ -11,6 +11,10 @@ void Class_StartAll(void);
 /* Class_Frame 0x425a20 (which 0) and 0x425b00 (which 1): every listed node's per-frame handler (the
    class table's word 3 or 4); a freed node leaves both lists */
 void Class_Frame(int which);
+/* Class_EndAll 0x425580 (the mission's end): every listed node's end handler (class 1's, Mirror_End) */
+void Class_EndAll(void);
+/* Classes_Free 0x425660: both lists emptied, the nodes' references let go */
+void Classes_Free(void);
 /* the entity of n's root (0x424060), NULL if none */
 struct Entity *Entity_OfNode(Node *n);
 /* 0x5ad1a0: the artillery's contact, its node the user's (0x428910) */

@@ -34,6 +34,10 @@ bool Input_Init(void);
 /* Input_Keys (the port's, for the window's messages 0x480f60): the platform's keys since the last call
    as WM_KEYDOWN and WM_KEYUP: the keyboard's set (0x4810e0) and its typed keys (0x481030) */
 void Input_Keys(void);
+/* the window's left button (WM_LBUTTONDOWN, WM_LBUTTONUP): a movie skipped, the menu's click */
+void Input_Mouse(void);
+/* Kb_Clear 0x4812b0: the keyboard's queue of typed keys emptied */
+void Kb_Clear(void);
 /* Input_Update 0x480290, each frame: the analog sinks' resets, the actions cleared, every present device
    polled, the chords evaluated into the actions, the analog values ramped and scaled; the typed key */
 void Input_Update(void);
