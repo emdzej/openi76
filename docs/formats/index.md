@@ -17,5 +17,6 @@ matters) or inferred. The census of what exists is in [../re/inventory.md](../re
 | Terrain | `.ter` | | to do |
 | Sound | `.wav` (RIFF PCM), `.gpw` (`GAS0`) | | to do |
 | Text | `.npt`, `.rtm`, `.fsi`, `*.map`/`*.def` key bindings | | to do |
-| Smacker 2 movies | `CUTSCENE/*.SMK` | | to do (step 10) |
-| Unknown | `DATABASE.MW2`, `CDROM.SPD` | | to identify |
+| Smacker 2 movies | `CUTSCENE/*.SMK` | [smk.md](smk.md) | confirmed; decoder in `src/smacker.c`, frames and samples identical to ffmpeg's |
+| The shell's database | `DATABASE.MW2` | [mw2.md](mw2.md) | container and LZSS confirmed; the PCX screens, WAVs and credits identified, the frame sets and fonts inferred |
+| Unknown | `CDROM.SPD` | | to identify |
