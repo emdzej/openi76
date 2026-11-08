@@ -361,5 +361,41 @@ shell runs, in order:
   player's file; Cancel puts the 14 bytes back. Checked: Clouds turned off and Done write +0x41 = 0.
 - Not ported yet: pop-ups 3 (modem, network play's) and 7 (controls, 0x100093a0).
 
+### Pop-up 7, the controls (0x100093a0; read, not ported yet)
+
+- **The table (0x1005d3e0, 40 records of 0x58 bytes):** +0 the device (0 none, 1 keyboard, 2 joystick,
+  3 mouse), +4 a skip flag (records with it are not written), +8 the action's name (input.map's, from
+  "throttle"), +0x28 the bound input's name (0x20 bytes; the empty name 0x1005e5a0 when none), +0x48 its
+  hit rectangle (x0, x1, y0, y1). Records 1-2 are the throttle's analog halves, 4-19 the first column
+  (names at x 0xbe, rectangles 0xb1-0x138), 21-39 the second (x 0x1e6, 0x1db-0x264); rows from y 0x2f, a
+  row the font 0x10068c08's height plus 5, rectangles 0x10 high. The labels are in the picture.
+- **The open (0x100093a0):** some colour indices set (0x1005e488-0x1005e518), the palette kept, the fill
+  0x10, the keys flushed; four buttons (0x1005e650-0x1005e68c: Done, the joystick's control panel,
+  Defaults, Save); every record's device 0 and name emptied; input.map read (0x10009cb0); each record's
+  name drawn and its rectangle set; the pass 0x10009630 (0x1000963d) runs in the screen's place.
+- **input.map's read (0x10009cb0):** the devices noted first (0x1000acc0: the exe's device list,
+  0x10022790/0x10022900, names starting k, j, m set 0x8000, 0x4000, 0x2000 in 0x1006b430 and copy the
+  device's name). A missing input.map is copied from keyboard.map (or joystick.map with a joystick).
+  Lines lose '#' comments; blank ones are skipped. Each "name {" finds its record by name, then its first
+  binding line "+ device input" sets the device by its first letter (m 3, j 2, else 1), warns when that
+  device is not there, and copies the input's name; the rest up to "}" is skipped. "throttle" and
+  "steer" (an axis) also fill their two half-records' labels by the axis' kind (four-letter matches:
+  Down/Up, Left/Right, Throttle, Rudder), joystick and mouse axes clearing the halves' devices.
+- **The pass:** with the window active, a left click on a button: Done (0) closes; 1 runs
+  control.exe joy.cpl; Defaults (2) empties the table and reads keyboard.map (joystick.map) instead;
+  Save (3) writes input.map (0x1000a6c0) and closes. A left click on a record opens the scrolling picker
+  (0x1000c020: Picker over every device's inputs, 0x1000af20, the axes too for the analog area x < 0x136,
+  y < 0x87). A right click on a record waits for a press (0x1000c160, "Press any key or button..."; a
+  key's name from the exe's names, the grey keys "Grey %s"; mouse buttons; joystick buttons, hat
+  directions), takes that name off any other record and binds it (0x1000b180); the throttle's and
+  steer's halves give up the other half's binding when it is of another device. Esc closes. The close
+  frees the lists and puts the palette back.
+- **input.map's write (0x1000a6c0):** a header line, then each bound record not skipped: the four
+  glances each written three times (the pilot's glance, the track camera's and the overview's
+  matching action, with the same binding); axes as "throttle" / "steer" with Down/Up or Left/Right halves;
+  keys with "- Keyboard Shift" and "- Keyboard Control" exclusions unless the key is Shift or Control
+  itself; then input.def appended as it is.
+
+
 The melee's map (AUTO MELEE's SCENARIO, 0xc024, and INSTANT MELEE, 0xc021) and the instant melee's
 STANDINGS (0xc025): docs/re/map.md. Not ported yet: network play.
