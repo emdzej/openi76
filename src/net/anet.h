@@ -22,7 +22,7 @@
 
 typedef uint16_t dpid_t;
 
-/* the results (dp_RES_EMPTY confirmed by the game's retries; the others the port's, non-zero) */
+/* the results (dp_RES_EMPTY confirmed by the game's retries, dp_RES_FULL by the shell's assertion in shnet.cpp; the others the port's, non-zero) */
 enum {
     dp_RES_OK = 0,
     dp_RES_NOMEM = 1,
@@ -36,7 +36,7 @@ enum {
 
 #define dp_ID_SYSTEM 0u
 #define dp_ID_NONE 0xfa01u   /* the end of an enumeration (the game's callbacks stop on it) */
-#define dp_ID_BROADCAST 0xffffu
+#define dp_ID_BROADCAST 0u   /* as a destination: every other player (the shell sends its RE to 0); as a sender, 0 is Activenet itself */
 
 #define dp_PACKET_ADDPLAYER 0x3164u      /* "d1" */
 #define dp_PACKET_DELPLAYER 0x3264u      /* "d2" */

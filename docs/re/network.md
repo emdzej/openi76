@@ -68,3 +68,22 @@ Elsewhere in the game, network play's branches are marked in the port as not por
 (0x461900 checks in src/clock.c), the damage's messages (0x465520), the triggers and messages of the
 weapons (0x4624a0, 0x462580), the helicopters (0x462d50), the vehicles' sounds (0x462d60), the menus'
 replay (state 7), the score's records (dpGetPlayerData in 0x463670).
+
+## The shell's side (shnet.cpp, 0x100298b8-0x1002ba60)
+
+MULTI MELEE's four items post 0xc026 with the mode 0x1008e9fc set: 2-5 to host, 6-9 to join, one per
+transport (0x10029700 picks it: 2/6 0x10001380, 3/7 0x100012c0, 4/8 0x10001410, 5/9 0x100014b0, then
+0x10001040 makes the Activenet with `dpCreate`, and `dpSetGameServer` for a game server's address). The
+melee's map (0x100136d0) runs them: in the joining modes it lists the sessions (0x100297e0, at most once a
+second: 0x1002c980's `dpEnumSessions` of species 0x53, 2 s, the callback 0x1002ca30 filling 0x10090bb0),
+and its start (0x100298b8):
+
+- joining (6-9): the session's record (+0x20 the 0x53 bytes given to `dpOpen`, +0x78 its maximum and +0x7c
+  its players: "The game is full."), `dpOpen` with a callback that sets a flag (2: "Cannot open connection
+  to game"), then `dpCreatePlayer` with the player's name (24 characters) and a callback that gives the id
+  (dp_ID_NONE: "Could not create player"; dp_RES_FULL 3: "The game is full."); the player's data under
+  key 1 (0x50 bytes: the car, 0x10027ee0); then the request `RE` (0x4552, 0x10 bytes) sent to 0, every
+  player (an assertion accepts dp_RES_OK or dp_RES_FULL). The answer comes through Net_Poll (0x1002b090:
+  "You've been rejected!", "Your request timed out.").
+- hosting (2-5): 0x1002a830 (`dpOpen` creating, `dpCreatePlayer`, `dpCreateGroup`, `dpSetPlayerData`;
+  "Could not start game").
