@@ -95,8 +95,9 @@ It is read by 0x484300, in sequence, with the table 0x4eb798 and the node as the
 
 Ported in src/render/obj_draw.c and checked against the original by `tools/emu/diff_objdraw.py`: every
 polygon drawn (colour or texture, mode, vertices with their light) is identical in all 40 missions, in
-both rounding modes, shadows included (confirmed). The headlights and the group entities' records (types
-5 and 7) are not covered: the first is not ported, and no mission has a group child at load.
+both rounding modes, shadows included (confirmed). The night missions' headlights (t06, m04) are
+covered too, but not the cockpit's own beam (the check draws without a cockpit). The group entities'
+records (types 5 and 7) are not covered: no mission has a group child at load.
 
 - **Render_World 0x407550** first makes the heading frame 0x58c4a0: the camera's forward (−m2, −m8)
   normalised in the ground plane with Fast_InvSqrt (straight down, under 1e-5 squared, gives (0, −1)), as
@@ -122,15 +123,31 @@ both rounding modes, shadows included (confirmed). The headlights and the group 
     0x33 always 0.
   - **Shadows** (detail byte 6), static list then moving list, within z < 50 (the bits as an integer):
     types 0xb and 3, the entity as the node, level 3 with byte 6 = 1.
-  - **Type 6 records**: the static list, the user's headlights (0x4919e0, vehicles), the moving list,
-    each at z − r with the entity at +0x40.
+  - **Type 6 records**: the static list, then the moving list, each at z − r with the entity at +0x40.
+    Between them, by night (`Light_IsSun` 0x43a090 is 0), the cockpit's vehicle's beam: its data's +0x440
+    when not hidden (flag 1), at level 4 (`hdlv_msk.geo`), at depth −5. After the moving list, by night,
+    each vehicle's (0x42e570: classes 1, 8, 9) beam at level 0, at its entity's z − r.
+  - **A beam (0x4919e0).** Its node (on the world list, +0x68 the vehicle) is kept alive by a reference
+    tagged "hlight": with the vehicle freed (0x41f890), the beam leaves the world list. Otherwise:
+    1. its frame in the vehicle's (0x4527c0) takes its centre (+0x84) to the world, then to camera space;
+    2. with its sphere (+0x90) in view and its mesh with three vertices or more and faces, a type 10 record:
+       the beam, its centre and radius (in its own space: the queue's span test reads them as camera
+       space, a quirk), 0, then its frame in camera space (+0x34, 0x40 bytes);
+    3. it is queued at the depth given, or at its camera-space centre's z less the radius when that is
+       nearer.
 - **The queue's draw functions** (the table 0x4eb010):
   - 0x48cd20 (type 5): "no children" → 0x4352e0; an entity → 0x4356f0; else 0x434f10.
   - 0x48ccd0 (type 6): "no children" → 0x4352e0, else 0x4356f0.
   - 0x48cef0 (type 7, and the merged class 0x34 nodes): the mesh in the heading frame at the node's
     position, q 0.9 (0x3f666666), the mode `0x4d6078[flag1 + flag0·8]` (with flag2: & ~0x60 | 0xa0),
     & the node's +0x14 & 0xff; drawn face by face.
-  - 0x48cd60 (types 3, 11): the shadow, 0x4a3c20 (below). 0x48cd80 (type 10).
+  - 0x48cd60 (types 3, 11): the shadow, 0x4a3c20 (below).
+  - 0x48cd80 (type 10, a beam): its vertices through the record's frame (0x452740), and each face turned
+    to the camera (its plane through the frame, d not positive as an integer) drawn with q 0.85
+    (0x3f59999a) and the face's u, v: its colour byte with mode 0x80, or with detail byte 3 and its
+    texture found on the beam (0x47c320), that texture with mode 0xc4. The flush clears every object's
+    +0x3c before it draws it (the type 6 merge's word): in a beam's record that is its frame's m[2], so
+    every beam is drawn with m[2] = 0 (a quirk, kept). The port keeps the record's body in a side table.
 - **The mesh drawers** share the view 0x5509f0, the level 0x550a08 (record +0x30), a mode or-ed into
   every face 0x550a04 (record +0x34: 0x100 when crossing the frustum), the camera-space vertex buffer
   0x58dcb0 (its q after the vertices) and a face-record cursor 0x5509e4 into the pool 0x58dcb4:

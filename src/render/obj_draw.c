@@ -377,10 +377,110 @@ static void type6(QRec *r, const View *v)
     else draw_entity(r, v);
 }
 
+/* ---- the headlights' beams (0x4919e0, drawn as type 10 by 0x48cd80) ---- */
+
+/* a type 10 record's body (+0x1c in the original): the beam, its centre and radius, a zero word, then its
+   frame in camera space. The port keeps the body in this table (the record's a its index), so that the
+   record keeps the size of the other objects' */
+typedef struct {
+    Node *node;
+    float c[3], r;
+    int32_t zero;
+    Frame cam;
+} QBeam;
+#define BEAMS 256
+static QBeam beams[BEAMS];
+static int nbeams;
+
+/* 0x48cd80: the beam's mesh through its frame, each face turned to the camera drawn with the light 0.85:
+   its colour (mode 0x80), or with the textured objects on (0x5e14d3) and a texture found on the beam, that
+   texture (mode 0xc4) */
+static void draw_beam(QRec *r, const View *v)
+{
+    if (r->u.obj.a < 0 || r->u.obj.a >= nbeams) return;
+    QBeam b = beams[r->u.obj.a];
+    /* the flush clears an object's +0x3c (the type 6 merge's word) before drawing it: in a beam's record that
+       is the frame's third word, m[2] (a quirk, kept) */
+    b.cam.m[2] = 0;
+    Geom *g = b.node->geom;
+    if (g->nverts > MAXV) return;
+    float (*cv)[3] = (float (*)[3])cvbuf;
+    Frame_Points(cv, (const float (*)[3])g->verts, g->nverts, &b.cam);
+    for (GeomFace *f = g->faces; f; f = f->next) {
+        float pl[4];
+        Plane_Transform(pl, f->plane, &b.cam);
+        if ((int32_t)fbits(pl[3]) >= 1) continue;
+        PolyArg arg;
+        arg.colour = f->colour;
+        int mode = 0x80;
+        if (g_detail.b[3] && f->texture[0]) {
+            const Texture *t = Tex_Get((uintptr_t)b.node, f->texture);
+            if (t) arg.tex = t, mode = 0xc4;
+        }
+        CamVert vs[64];
+        int n = f->nrefs < 64 ? f->nrefs : 64;
+        for (int k = 0; k < n; k++) {
+            const GeomRef *ref = &f->refs[k];
+            memcpy(&vs[k].x, cv[ref->vertex], 12);
+            vs[k].u = ref->u;
+            vs[k].v = ref->v;
+            vs[k].q = 0.85f;   /* 0x3f59999a */
+        }
+        Queue_Poly(v, vs, f->nrefs, arg, mode);
+    }
+}
+
+/* 0x4919e0: a vehicle's beam (its data's +0x440, a world-list node whose +0x68 is the vehicle), queued
+   at depth, or at its own centre's depth less its radius when that is nearer. A vehicle freed takes its
+   beam off the world list instead. The beam is queued when its sphere is in view and its mesh has three
+   vertices or more and faces */
+static void headlight(Node *hl, const View *view, float depth)
+{
+    Node *veh = Node_Live(hl->prev);   /* tagged "hlight" */
+    if (!veh) {
+        if (hl == g_world_nodes) {
+            g_world_nodes = hl->next;
+            return;
+        }
+        Node *p = g_world_nodes;
+        while (p->next != hl) p = p->next;
+        p->next = hl->next;
+        return;
+    }
+    Frame w;
+    Frame_Mul(&w, &hl->frame, &veh->frame);
+    double c[3];
+    Point_ToWorld(c, hl->centre, &w);
+    float cp[3];
+    View_ToCamera(view, cp, c[0], c[1], c[2]);
+    if (View_TestSphere(view, cp, hl->radius) > 0) return;
+    Geom *g = hl->geom;
+    if (!g || g->nverts < 3 || !g->faces) return;
+    if (nbeams >= BEAMS) return;   /* the port's bound */
+    QBeam b;
+    Frame_Mul(&b.cam, &w, &view->cam);
+    Point_ToWorld(c, hl->centre, &b.cam);
+    b.node = hl;
+    memcpy(b.c, hl->centre, sizeof b.c);
+    b.r = hl->radius;
+    b.zero = 0;
+    QRec *q = Queue_New();
+    q->type = 10;
+    memset(&q->u.obj, 0, sizeof q->u.obj);
+    q->u.obj.node = hl;
+    q->u.obj.x = b.c[0], q->u.obj.y = b.c[1], q->u.obj.z = b.c[2];
+    q->u.obj.r = b.r;
+    q->u.obj.a = nbeams;
+    beams[nbeams++] = b;
+    if (depth < c[2]) Queue_Add(depth);
+    else Queue_Add(F32(SUB(F32(c[2]), hl->radius)));
+}
+
 void Objects_DrawInit(void)
 {
-    /* types 3 and 0xb (the shadows, 0x48cd60 / 0x4a3c20) and 10 (0x48cd80) are not ported yet */
+    /* types 3 and 0xb (the shadows, 0x48cd60 / 0x4a3c20) are not ported yet */
     Queue_SetDraw(5, type5);
+    Queue_SetDraw(10, draw_beam);
     Queue_SetDraw(6, type6);
     Queue_SetDraw(7, draw_flat);
 }
@@ -427,6 +527,7 @@ static void queue_obj(int type, void *node, const float cp[3], float r, int32_t 
 
 void Objects_Draw(const View *view)
 {
+    nbeams = 0;
     Light_Frame(view);
     Entity *target = NULL;
     if (g_cockpit) {   /* 0x4a847c: in the cockpit the camera's entity (0x4a8660) is drawn by the cockpit */
@@ -515,10 +616,27 @@ void Objects_Draw(const View *view)
     }
     for (int i = 0; i < ns; i++)
         queue_obj(6, stat[i]->node, sc[i], stat[i]->r, lod_of(stat[i], 0, sc[i][2], k, 1), sx[i], 0, stat[i]);
-    /* the followed vehicle's headlight (0x4919e0, its data +0x440) is not ported yet */
+    /* by night (0x43a090) the cockpit's vehicle's beam, its level 4, in front of everything */
+    if (target && !Light_IsSun() && target->node && target->node->data) {
+        Node *hl = *(Node **)Data_Ptr(target->node->data, 0x440);
+        if (hl && !(hl->flags & 1)) {
+            Lod_Select(hl, 4);
+            headlight(hl, view, -5.0f);   /* 0xc0a00000 */
+        }
+    }
     for (int i = 0; i < nm; i++)
         queue_obj(6, mov[i]->node, mc[i], mov[i]->r, lod_of(mov[i], 0, mc[i][2], k, 1), mx[i], 0, mov[i]);
-    /* the vehicles' headlights at night (0x4919e0) are not ported yet */
+    /* by night each moving vehicle's beam (0x42e570: classes 1, 8, 9) at its level 0, at most at the
+       entity's depth */
+    if (!Light_IsSun())
+        for (int i = 0; i < nm; i++) {
+            Node *n = mov[i]->node;
+            if (n->cls != 1 && n->cls != 8 && n->cls != 9) continue;
+            Node *hl = *(Node **)Data_Ptr(n->data, 0x440);
+            if (!hl || (hl->flags & 1)) continue;
+            Lod_Select(hl, 0);
+            headlight(hl, view, F32(SUB(mc[i][2], mov[i]->r)));
+        }
 }
 
 /* Objects_DrawMirror 0x424550: Objects_Draw for the rear-view mirror. The same lists, but no shadows, no

@@ -65,7 +65,7 @@ def main():
     lib.Objects_DrawInit()
     ctypes.c_int.in_dll(lib, "g_cockpit").value = 0   # as 0x4a847c below
     lib.Shadow_Init()
-    exe.stub(0x4919E0, lambda *a: 0, 0)   # the headlights (vehicles only)
+    # the headlights (0x4919e0, by night) run in both
     exe.write(0x4A847C, bytes(4))         # the camera follows no entity
     exe.write(0x58DCB0, struct.pack("<I", exe.put(bytes(0x40000))))
     exe.write(0x58DCB4, struct.pack("<I", exe.put(bytes(0x200000))))

@@ -1439,3 +1439,5 @@
 004346b0	Damage_Class10	damage	high	class 0xa's damage (+0xc): as class 7's; ported, diffed
 00425be0	Class_Velocity	combat	high	a node's velocity and speed by its class's table slot (+0x1c); 0 without one; ported
 00428c70	Velocity_Artillery	combat	high	class 8's velocity: class 1's (0x42a740)
+004919e0	Headlight_Queue	render	high	a vehicle's beam (+0x440) queued as type 10 by night, or off the world list with the vehicle freed; ported, diffed
+0048cd80	Draw_Beam	render	high	type 10: the beam's faces through its frame, q 0.85, mode 0x80 or 0xc4; the frame's m[2] cleared by the flush (quirk); ported, diffed
