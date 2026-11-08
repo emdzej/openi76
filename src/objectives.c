@@ -1,5 +1,6 @@
 /* The mission's objectives (objectives.h). */
 #include "objectives.h"
+#include "sound.h"
 #include "crt.h"
 #include "exe.h"
 #include "res.h"
@@ -94,6 +95,7 @@ void Objective_Reveal(int32_t i)
     int32_t k = i - 1;
     if (!exists(i) || k < 0 || k >= g_objectives.count) return;   /* "Objective %d does not exist" */
     g_objectives.flags[k] &= ~1u;   /* "not hidden" when it was not */
+    Sound_Play(exe_str(0x4d379c), NULL, NULL, NULL);   /* cnote.wav, flat (0x467260) */
 }
 
 void Objective_Succeed(int32_t i)
@@ -104,6 +106,7 @@ void Objective_Succeed(int32_t i)
     if (f & 2) return;   /* "already succeeded" */
     if (f & 4) return;   /* "already failed" */
     g_objectives.flags[k] = f | 2;
+    Sound_Play(exe_str(0x4d379c), NULL, NULL, NULL);   /* cnote.wav */
 }
 
 void Objective_Fail(int32_t i)

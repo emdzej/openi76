@@ -182,7 +182,40 @@ or a new one at the table's end named `NoLabel<count>`, with a reference on the 
   `reveal` (0x41f0b0) clears bit 1.
 - `failAllObj`'s objective less one goes to 0x5ad258. `successAll` and `failAll` pass -1, so it is -2
   then.
-- The chime (cnote.wav) and the Notepad are not ported.
+- `reveal` and `success` play cnote.wav, flat (0x467260).
+
+### The notepad (0x41e950, src/notepad.c)
+
+`show_notepad` (N) opens it and closes it again.
+
+**Opening.**
+
+- It warns when the mission had no objectives (count < 1) but goes on.
+- The font is the record 0x4d36e8's for the screen mode: Lee 14 at 640 × 480.
+- The text goes into an 8-bit bitmap of 0x1c0 × 0x13d (0xe4 × 199 in the low modes), filled with 0xff
+  (0x41ef60). Each objective that isn't hidden is written with the menus' text box (0x453b90). Its lines
+  are 16 apart (14 in the low modes), the lines after its first are 10 further in, and the next
+  objective starts a line below.
+- A succeeded objective is struck through in 0.2 grey, each line at half its height, from its start to x
+  equal to its width (kept). A failed one is written like any other.
+- The picture is `zhpd.map` by its screen name: Res_ScreenName at 4 puts the mode's digit after the
+  name's first four characters, giving `zhpd6.map`. The text goes onto it at 0x52, 0x66 (0x28, 0x29 in
+  the low modes) through the remap (mode 1), and the picture onto the screen. Sprite_Draw would scale
+  it when the sizes differ; the port's screen is the picture's size.
+- The screen is shown, the playing sounds are paused (0x4679a0) and the play's state becomes 8. The
+  music driver's pause (0x468a50) is not ported.
+
+**Closing.**
+
+- In state 8, Play_StoppedKeys closes it on any typed key but the notepad's own, then runs Input_Poll
+  (0x480870), whose User_Controls closes it for that key.
+- The close stops cnote.wav, frees everything, resumes the sounds (0x467a20) and sets the state back to
+  1.
+
+The port's glyphs: GDI's rasterizer turns a pixel on when its centre is inside the outline, and its
+dropout control keeps the strokes thinner than a pixel, which Lee at 14 pixels has many of. The port
+draws a pixel at half coverage. A pixel under that becomes a dropout one when it is the most covered
+across its row or column and neither neighbour is on (src/gdi.c).
 
 **The scripted driving** (0x41a820-0x41abf0) is a queue of 100 controls in the AI block. Each entry at
 +0x9d68 is 0x18 bytes: +0 the throttle, +4 the steering, +8 the gear's sign, +0xc the handbrake, and

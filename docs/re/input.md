@@ -188,7 +188,8 @@ The actions go into the user's vehicle's data:
   - 4, the blower: +0xf4 = 1 for good (the throttle doubled).
 - Then the horn (0x476420) and the binoculars (0x4deff0: the last view not the cockpit, preset 0xc, camera
   mode 0xc), before the radar's keys.
-- **Not ported yet:** the map, the notepad, the poetry and the combat view.
+- `show_notepad` toggles the notepad (docs/re/fsm.md "The notepad"), after the specials and before the horn.
+- **Not ported yet:** the map, the poetry and the combat view.
 
 The shipped `input.map` drives with the keypad's arrows (scan codes 0x48, 0x50, 0x4b, 0x4d: `UpArrow` and
 the others are the keypad's). The grey arrows and the grey Page Up and Page Down move the pilot's glance

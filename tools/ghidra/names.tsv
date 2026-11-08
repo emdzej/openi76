@@ -1415,3 +1415,6 @@
 0042d970	Special_UseCharge	vehicles	med	the special's data +4 less one
 00409420	AI_NearestTarget	ai	med	nearestEnemy's vehicle, or for the user the nearest artillery when nearer; ported (src/fsm.c Fsm_NearestTarget)
 004290c0	Artillery_Nearest	vehicle	med	the nearest artillery gun in 3D; ported
+0041ef60	Notepad_Text	mission	med	the objectives not hidden into the notepad's bitmap, succeeded ones struck; ported (src/notepad.c)
+0041eeb0	Notepad_Free	mission	med	the notepad's bitmap, picture, font and DC freed, its state cleared; ported
+00453b90	Text_Box	menu	med	text broken at spaces into a box, an indent after the first line, a strike line; ported (src/menu.c)

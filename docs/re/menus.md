@@ -238,7 +238,7 @@ Replay as on the first load.
 
 ## Not ported yet
 
-- The map's and the notepad's states (4, 8) of Play_StoppedKeys.
+- The map's state (4) of Play_StoppedKeys (the notepad's, 8: docs/re/fsm.md).
 - The screen modes other than 640 × 480.
 - Network play's Replay.
 - The salvage and the car written after a won mission.

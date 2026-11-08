@@ -30,3 +30,6 @@ void Menu_Show(void);
    byte 4, the others byte 5; 0 drops the faces' bit 0x14, the ones of classes 0x1e, 0x34, 0x3e, 0x4b
    never) */
 void Objects_Detail(void);
+#include "gdi.h"
+/* 0x453b90: str broken into lines in the box r on s (see menu.c); the height used */
+int Text_Box(Surface *s, const GdiFont *f, const int r[4], const char *str, int line, int indent, Surface *strike);

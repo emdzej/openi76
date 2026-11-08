@@ -3,6 +3,7 @@
 #include "input.h"
 #include "damage.h"
 #include "fsm.h"
+#include "notepad.h"
 #include "movie.h"
 #include "sound.h"
 #include "radar.h"
@@ -1154,9 +1155,10 @@ void User_Controls(void)
     }
     int sp[3] = {*INPUT_AT(0x4defe3) != 0, *INPUT_AT(0x4defe4) != 0, *INPUT_AT(0x4defe5) != 0};
     Specials_Use(n, sp);   /* 0x4821e0 with the vehicle's data */
+    /* the map (0x4defec, 0x44f7f0) is not ported yet */
+    if (*INPUT_AT(0x4defed)) Notepad_Toggle();   /* Notepad_Init 0x41e950 */
     if (*INPUT_AT(0x4defee)) Horn_Held(n);   /* horn, 0x476420 */
-    /* the map (0x4defec, 0x44f7f0), the notepad (0x4defed, 0x41e950) and the poetry (0x4defef, 0x4513c0) are
-       not ported yet */
+    /* the poetry (0x4defef, 0x4513c0) is not ported yet */
     if (*INPUT_AT(0x4deff0)) {   /* the binoculars: the cockpit's other view (0x480990, 0x4809a0, 0x407010) */
         g_view_cockpit = 0;
         g_view_preset = 0xc;

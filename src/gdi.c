@@ -139,7 +139,20 @@ static const Glyph *glyph(const GdiFont *cf, unsigned char c)
         return g;
     }
     stbtt_MakeGlyphBitmap(&f->info, cov, g->w, g->h, g->w, f->scale, f->scale, gi);
+    /* a pixel is drawn when its centre is inside (coverage at least half); then GDI's dropout control,
+       roughly: a stroke that misses every centre across it keeps its most covered pixel */
     for (int i = 0; i < g->w * g->h; i++) g->bits[i] = cov[i] >= 128;
+    for (int y = 0; y < g->h; y++)
+        for (int x = 0; x < g->w; x++) {
+            int i = y * g->w + x, c = cov[i];
+            if (g->bits[i] || c < 24) continue;
+            int l = x > 0 ? cov[i - 1] : 0, r = x + 1 < g->w ? cov[i + 1] : 0;
+            int u = y > 0 ? cov[i - g->w] : 0, d = y + 1 < g->h ? cov[i + g->w] : 0;
+            int lo = x > 0 && g->bits[i - 1], ro = x + 1 < g->w && g->bits[i + 1];
+            int uo = y > 0 && g->bits[i - g->w], dn = y + 1 < g->h && g->bits[i + g->w];
+            if ((c >= l && c > r && !lo && !ro) || (c >= u && c > d && !uo && !dn)) g->bits[i] = 2;
+        }
+    for (int i = 0; i < g->w * g->h; i++) g->bits[i] = g->bits[i] != 0;
     free(cov);
     return g;
 }

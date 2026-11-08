@@ -20,6 +20,7 @@
 #include "sound.h"
 #include "tex.h"
 #include "world.h"
+#include "render/line.h"
 #include "render/palette.h"
 #include "render/sky.h"
 #include "render/sprite.h"
@@ -270,27 +271,37 @@ static int menu_set(uint32_t menu)
     return 1;
 }
 
-/* 0x453b90: text in a box, broken at spaces into lines line apart; the height used */
-static int text_box(const int *r, const char *s, int line)
+/* 0x453b90: text in the box r (x0, y0, x1, y1) on s, broken at spaces into lines line apart, the first
+   line from x0 and the rest indent further in (and as much narrower); with strike each line is struck
+   through at half its height in 0.2 grey, from its start to x = its width (quirk, kept). The height used */
+int Text_Box(Surface *s, const GdiFont *f, const int r[4], const char *str, int line, int indent, Surface *strike)
 {
-    int x = r[0], y = r[1], w = r[2] - r[0];
+    int x = r[0], y = r[1], w = r[2] - r[0], sx = x, sy = y;
     uint8_t ink = Gdi_Nearest(g_world_pal, 0x10, 0x10, 0x10);
     for (;;) {
-        int n = (int)strlen(s), fit, cx, cy;
-        Gdi_ExtentEx(dc_font, s, n, w, &fit, &cx, &cy);
+        int n = (int)strlen(str), fit, cx, cy;
+        Gdi_ExtentEx(f, str, n, w, &fit, &cx, &cy);
+        if (strike) sx = x, sy = y + cy / 2;
         if (w < cx) {
             int k = fit;
             do
                 if (--k < 1) break;
-            while (!isspace((unsigned char)s[k]));
+            while (!isspace((unsigned char)str[k]));
             if (k < 1) k = fit;
-            Gdi_TextOut(&s_text, dc_font, x, y, s, k, ink);
+            Gdi_TextOut(s, f, x, y, str, k, ink);
+            if (strike) {
+                int lcy;
+                int lw = Gdi_Extent(f, str, k, &lcy);
+                Line_Draw(strike, sx, sy, lw, sy, (uint8_t)Color_Match(0.2f, 0.2f, 0.2f), 0);
+            }
             y += line;
-            s += k;
-            while (*s && isspace((unsigned char)*s)) s++;
+            str += k;
+            while (*str && isspace((unsigned char)*str)) str++;
+            if (indent) x += indent, w -= indent, indent = 0;
         } else {
             if (fit) {
-                Gdi_TextOut(&s_text, dc_font, x, y, s, n, ink);
+                Gdi_TextOut(s, f, x, y, str, n, ink);
+                if (strike) Line_Draw(strike, sx, sy, cx, sy, (uint8_t)Color_Match(0.2f, 0.2f, 0.2f), 0);
                 y += line;
             }
             return y - r[1];
@@ -319,7 +330,7 @@ static void item_draw(uint32_t it, int chosen)
         int line;
         if (hires()) r[0] += 3, r[1] += 3, line = 0x18;
         else r[0] += 1, line = 0xb;
-        text_box(r, S(R(it + I_LABEL)), line);
+        Text_Box(&s_text, dc_font, r, S(R(it + I_LABEL)), line, 0, NULL);
     }
     const char *str = NULL;
     char num[16];
