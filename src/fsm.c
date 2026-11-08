@@ -362,6 +362,26 @@ Node *Fsm_Named(const char *name)
     return NULL;
 }
 
+/* the port's (the autopilot's): the user's car sent along the path named name (the first of that name), as
+   the script's goto at speed; 1 when n stands within r of its first point, -1 when there is no such path */
+static int32_t within_nav(uint32_t path, Node *n, int32_t r, int square);
+int Fsm_GotoNamed(Node *n, const char *name, float speed, int32_t r)
+{
+    if (!g_fsm_loaded || !n || !n->data) return -1;
+    for (int32_t i = 0; i < g_fsm.n_paths; i++) {
+        uint32_t p = g_fsm.paths + (uint32_t)i * 0x58;
+        if (crt_strnicmp((const char *)at(p), name, 0x50)) continue;
+        if (within_nav(p, n, r, 0)) return 1;
+        uint8_t *ai = *Data_Ptr(n->data, 0x108);
+        int32_t pa = (int32_t)p;
+        memcpy(ai + 0x8c, &pa, 4);
+        memcpy(ai + 0x80, &speed, 4);
+        AI_Order(n, NULL, 0x16, 0);
+        return 0;
+    }
+    return -1;
+}
+
 /* ---- the actions (0x40d0d0) ---- */
 
 /* argument k: its address (the arguments' stack), the int there */

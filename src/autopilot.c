@@ -4,11 +4,16 @@
    - a target written name:guard (once its objective shows, within 200 m): the live enemy nearest to it
      (within 300 m of it) attacked, the same one until it dies or leaves, at the AI's best skill; with
      none near, the guard order (0x20);
-   - the nearest live vehicle of another team within 300 m attacked (order 0);
-   - the first named target not yet destroyed within 500 m (a structure: the fireworks stand) attacked;
+   - the nearest live vehicle of another team within 300 m attacked (order 0), the same one until it dies
+     or leaves;
+   - the first named target not yet destroyed (a structure: the fireworks stand) attacked, at any range;
      one written name@k only once objective k is shown;
    - with "enemies@k" written, once objective k shows, the nearest enemy at any range hunted;
-   - else the leader (a script entity: taurus) followed in formation (order 0x1e), 15 m behind, avoiding
+   - with "hold@k" written, none of the above until objective k shows (t04's race, where shooting fails it);
+     meanwhile with "navsN" the script's paths nav1 .. navN driven in turn at 60 (goto), each passed within
+     25 m (t04's laps);
+   - else the leader (a script entity: taurus) followed in formation (order 0x1e), 15 m behind (20 m ahead
+     with "ahead[@k]" written, to win a race), avoiding
      (+0x9d14) as the script has the leader avoid.
    Whatever it attacks, a person's trigger is pulled while the target is straight ahead. The engine is
    started, the gear put in drive and (--param apskill) the skill set once. Off by default: the play is
@@ -48,16 +53,19 @@ static int dead(const Node *n)
     return (f & 0x20) != 0;
 }
 
-void Autopilot_Reset(void) { started = skilled = 0, focus = NULL; }
+static Node *prey;   /* the enemy attacked, kept until it dies or leaves 300 m (the damage not spread) */
+void Autopilot_Reset(void) { started = skilled = 0, focus = prey = NULL; }
 
-/* a person's trigger: the five slots' weapons fired while the target is within 250 m and 6 degrees of
-   straight ahead, as weapon_fire and the hardpoint keys do (0x4577c0; skipped while the AI drives the
+/* a person's trigger: the five slots' weapons fired while the target is within 250 m and straight ahead
+   (6 degrees, or 3 m of the line near by), as weapon_fire and the hardpoint keys do (0x4577c0; skipped while the AI drives the
    user's car, whose own aim, 0x40f410, fires as rarely as its skill makes it) */
 static void trigger(Node *u, const Node *o)
 {
     double dx = o->frame.pos[0] - u->frame.pos[0], dz = o->frame.pos[2] - u->frame.pos[2];
     double d = sqrt(dx * dx + dz * dz), fx = u->frame.m[6], fz = u->frame.m[8], f = sqrt(fx * fx + fz * fz);
-    if (!(d > 1.0 && d < 250.0 && f > 0.0 && (dx * fx + dz * fz) / (d * f) > 0.9945)) return;
+    /* straight ahead: within 6 degrees, or near by within 3 m of the line (a car's half width and more) */
+    double cone = cos(fmax(0.1047, atan(3.0 / (d > 1.0 ? d : 1.0))));
+    if (!(d > 1.0 && d < 250.0 && f > 0.0 && (dx * fx + dz * fz) / (d * f) > cone)) return;
     for (int h = 0; h < g_hardpoint_count; h++) {
         if (g_hardpoints[h].vehicle != u) continue;
         for (int k = 0; k < 5; k++) {   /* the five slots, as weapon_fire and hardpoint1-5_fire */
@@ -119,6 +127,22 @@ void Autopilot_Frame(void)
         if (sk > 0) Fsm_SetSkill(u, sk, sk);   /* --param apskill=1-5: as setSkill gives, the user's car having none */
     }
     int team = (int)((u->flags & 0x70000) >> 16);
+    int hold = 0;
+    for (int k = 1; k < nnames; k++)
+        if (!strcmp(names[k], "hold") && !gate_ok(k)) hold = 1;
+    if (hold) {   /* "navsN": while holding, nav1 .. navN driven in turn (t04's laps), each passed within 25 m */
+        static int nav = 1;
+        for (int k = 1; k < nnames; k++) {
+            int last = !strncmp(names[k], "navs", 4) ? atoi(names[k] + 4) : 0;
+            if (last <= 0) continue;
+            char p[16];
+            snprintf(p, sizeof p, "nav%d", nav);
+            int r = Fsm_GotoNamed(u, p, 60.0f, 25);
+            if (r == 1) nav = nav % last + 1;
+            if (r >= 0) return;
+        }
+        goto follow;
+    }
     for (int k = 1; k < nnames; k++) {   /* a guarded target first, while it stands: its nearest attacker */
         Node *o = guard[k] && gate_ok(k) ? Fsm_Named(names[k]) : NULL;
         if (!o || dead(o) || dist2(o, u) >= 200.0 * 200.0) continue;
@@ -129,8 +153,10 @@ void Autopilot_Frame(void)
         if (near) trigger(u, near);
         return;
     }
-    Node *best = enemy_near(u, team, 300.0);
+    if (prey && (dead(prey) || dist2(prey, u) >= 300.0 * 300.0)) prey = NULL;
+    Node *best = prey ? prey : enemy_near(u, team, 300.0);
     if (best) {
+        prey = best;
         AI_Order(u, best, 0, 0);
         trigger(u, best);
         return;
@@ -146,16 +172,20 @@ void Autopilot_Frame(void)
     }
     for (int k = 1; k < nnames; k++)   /* "enemies": every enemy hunted at any range once its objective shows */
         if (!strcmp(names[k], "enemies") && gate_ok(k) && (best = enemy_near(u, team, 1e6))) {
+            prey = best;
             AI_Order(u, best, 0, 0);
             trigger(u, best);
             return;
         }
+follow:;
     Node *lead = nnames ? Fsm_Named(names[0]) : NULL;
     if (lead && !dead(lead)) {
         uint8_t *ai = *Data_Ptr(u->data, 0x108);
         *(Node **)Data_Ptr(ai, 0xa990) = lead;
         int32_t w = 0;
         float across = 0.0f, along = -15.0f;   /* its place in the leader's frame: 15 m behind */
+        for (int k = 1; k < nnames; k++)
+            if (!strcmp(names[k], "ahead") && gate_ok(k)) along = 20.0f;   /* or 20 m ahead (t04's race) */
         memcpy(ai + 0xa98c, &w, 4);
         memcpy(ai + 0xa980, &across, 4);
         memcpy(ai + 0xa984, &along, 4);
