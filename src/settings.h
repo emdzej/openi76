@@ -23,3 +23,9 @@ enum {
 
 /* Settings_Defaults 0x44e260 for a machine class 0-3 (the exe's presets) */
 void Settings_Defaults(int cls);
+
+/* Settings_Init 0x44d660: the block cleared, the machine's preset and the audio's defaults, then
+   I76PLYR.DEF read over them if it is there; a cheat option on marks the player a cheater */
+void Settings_Init(void);
+/* I76PLYR.DEF written with the block's 0x58 bytes (0x4965a0, mode 0x4d5370; 0x44d7b0 and the menus) */
+void Settings_Save(void);

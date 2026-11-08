@@ -349,7 +349,7 @@ bool app_init(void)
     Res_Init();             /* the pak and file index (WinMain's start-up, Files_Init 0x484db0), before the shell */
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
     Gamma_Build();          /* 0x43c1e0, early in WinMain */
-    Sound_Defaults();       /* and the audio's (0x44d660) */
+    Settings_Init();        /* 0x44d660: the defaults, then I76PLYR.DEF */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
     char mission[32], v[16];
@@ -477,7 +477,7 @@ static void mission_end(void)
     char m[64];
     snprintf(m, sizeof m, "OpenI76: the mission ends with the state %d", (int)g_game_state);
     plat_log(m);
-    /* 0x44d7b0: I76PLYR.DEF written (the port keeps no files yet) */
+    Settings_Save();       /* 0x44d7b0: I76PLYR.DEF */
     Sound_StopPlaying();   /* 0x468380 */
     Sound_StopAll();       /* 0x466de0 */
     Sound_FreeParked();    /* 0x468340 */

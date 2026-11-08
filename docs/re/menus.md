@@ -149,6 +149,15 @@ The settings block is 0x5e1490, 0x58 bytes, saved as I76PLYR.DEF. The handlers c
 - its sound at +0x4e;
 - its options at +0x54.
 
+The block (`Settings_Init` 0x44d660, src/settings.c): +0 0x40 bytes copied from 0x58d820 (the port
+holds none and keeps the file's), +0x40 the detail (14 bytes), +0x4e the four audio levels and voices
+(3, 5, 10, 8 by default), +0x52 two bytes (1, 0), +0x54 the play options. At start-up it is cleared,
+given the machine's preset and the audio's defaults, then I76PLYR.DEF is read over it (as much as the
+file has); a cheat option on marks the player a cheater. It is written whole, 0x58 bytes, when the
+in-game menu closes, when the cheat options are turned off, and at the mission's end (0x44d7b0). The
+port keeps it with the game's other files (src/files.c, the gasm storage). Checked: a gamma and a music
+level written into the stored file are read back, shown, and written again.
+
 When the main menu opens, the whole block is copied to 0x5e14f0. Cancel puts each value back from that
 copy, and Done keeps it there.
 
@@ -231,6 +240,5 @@ Replay as on the first load.
 
 - The map's and the notepad's states (4, 8) of Play_StoppedKeys.
 - The screen modes other than 640 × 480.
-- I76PLYR.DEF's writing.
 - Network play's Replay.
 - The salvage and the car written after a won mission.

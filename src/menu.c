@@ -378,10 +378,7 @@ void Menu_Show(void)
 
 /* ---- the handlers (by their addresses in the items) ---- */
 
-static void settings_save(void)
-{
-    /* I76PLYR.DEF written with the 0x58 bytes (0x4965a0, mode 0x4d5370): the port keeps no files yet */
-}
+static void settings_save(void) { Settings_Save(); }   /* I76PLYR.DEF, the block's 0x58 bytes */
 
 static int done(uint32_t it, int msg);
 static int cancel(uint32_t it, int msg);
