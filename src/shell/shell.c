@@ -519,8 +519,11 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc01f:   /* the set-up's PARTS CATALOG */
         Catalog_Open();
         return;
+    case 0xc025:   /* the instant melee's results */
+        Results_Open();
+        return;
     case 0xc01c:
-    case 0xc020: case 0xc025:
+    case 0xc020:
         unported("screen", msg);
         Shell_Post(0xc00e, 0);
         return;
@@ -585,6 +588,10 @@ bool Shell_Start(int prev_state)
     } else if (g_sh_rec.kind == 4) {   /* a scenario's: its map again */
         Melee_Reset();   /* 0x10012d90 */
         Shell_Post(0xc024, 0);
+    } else if (g_sh_rec.kind == 3) {   /* the instant melee's: its results */
+        Melee_Reset();
+        g_sh_mode = 0;
+        Shell_Post(0xc025, 0);
     } else {
         unported("way in from the state", (uint32_t)prev_state);
         Shell_Post(0xc00e, 0);

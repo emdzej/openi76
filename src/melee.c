@@ -6,6 +6,7 @@
 #include "crt.h"
 #include "entity.h"
 #include "exe.h"
+#include "files.h"
 #include "fsm.h"
 #include "input.h"
 #include "objects.h"
@@ -262,6 +263,36 @@ void Melee_Frame(void)
             if (u) AI_Order(e->node, u->node, 0, 0);
             else AI_Stop(e->node);
         }
+}
+
+/* 0x463670, at the mission's end in a melee: NSCR.DAT for the shell's results, its count (1) and teams'
+   flag (0), then the user's record of 0x54 bytes: its name and car (0x403130, 0x403160: the mission
+   record's), +0x48 whether its car was dying or dead (+0x454's 0x8020), +0x4c the kills, +0x50 the
+   points. The car's +0xa4 is read into +0x44, then 0 goes over it; with no user the flags are read
+   through the name (the port: 0). The network's records (dpGetPlayerData) are not ported */
+void Melee_Results(const char *name, const char *car)
+{
+    uint8_t b[8 + 0x54] = {0};
+    int32_t one = 1;
+    memcpy(b, &one, 4);
+    uint8_t *r = b + 8;
+    snprintf((char *)r, 32, "%s", name);
+    snprintf((char *)r + 0x20, 32, "%s", car);
+    int32_t pts, dead = 0, k;
+    int16_t kl;
+    Melee_Score(&pts, &kl);
+    Entity *u = g_user_entity;
+    if (u && u->node && u->node->data) {
+        uint32_t f;
+        memcpy(&f, u->node->data + 0x454, 4);
+        dead = (f & 0x8020) != 0;
+    }
+    k = (uint16_t)kl;
+    memcpy(r + 0x48, &dead, 4);
+    memcpy(r + 0x4c, &k, 4);
+    memcpy(r + 0x50, &pts, 4);
+    Files_Remove(exe_str(0x4dc63c));   /* 0x4965f0 */
+    Files_Write(exe_str(0x4dc63c), b, sizeof b);
 }
 
 void Melee_End(void)   /* 0x4072b0: and 0x463aa0, the scores' display freed, and NVCL*.vcf removed */

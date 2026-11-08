@@ -80,6 +80,7 @@ void Car_CollectWheels(ShList *out, const ShList *l);
    melee's mission back), 0x10013040 opened (0xc021, 0xc024, 0xc026) */
 void Melee_Reset(void);
 void Map_Open(void);
+void Results_Open(void);   /* i76shell 0x1003bb50 (0xc025): the instant melee's results */
 /* the map's car as its redraw found it: 0x1006c7b4, 0x1006c7bc, 0x1006c7b8 the engine, suspension and
    brakes (i 0-2); 0x1006c7a8, 0x1006c7ac, 0x1006c7b0 its guns, wheels and specials (i 0-2) */
 ShPart *Map_Part(int i);
@@ -98,6 +99,7 @@ void Catalog_Open(void);   /* i76shell 0x10041170 (0xc01f) */   /* the set-up's 
 /* 0x1001d6a0: the car (record g_sh_car) with the lists' parts as a .vcf at path, then into the file
    index (name in the player's directory, else path's name in addon) */
 void Car_WriteVcf(const char *path, const char *name);
+void Car_MeleeRecord(uint8_t out[0xeb], const uint8_t *rec);   /* i76shell 0x10025820 */
 /* 0x1001de30: as a .vsf: the components' and wheels' conditions from comps (its items 0-6) or the car's
    parts, the guns' from guns and more or the car's */
 void Car_WriteVsf(const char *path, const char *name, const ShList *comps, const ShList *guns, const ShList *more);

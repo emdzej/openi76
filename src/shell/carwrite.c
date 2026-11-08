@@ -3,6 +3,7 @@
 #include "crt.h"
 #include "exe.h"
 #include "res.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -48,7 +49,8 @@ static void empty_init(void)
     if (!g_sh_empty.part) Markers_Init();
 }
 
-static const uint8_t *car(void) { return g_sh_recs + g_sh_car * SHELL_REC; }
+static const uint8_t *rec_of;   /* the record 0x1001c040, 0x1001c150 and 0x1001c500 are given, else g_sh_car's */
+static const uint8_t *car(void) { return rec_of ? rec_of : g_sh_recs + g_sh_car * SHELL_REC; }
 static int nslots(void) { return rd32(car() + 0x3c); }
 static int32_t slot_kind(int i) { return rd32(car() + 0x40 + i * 0x20); }
 static const char *slot_name(int i) { return (const char *)car() + 0x400 + i * 0x1e; }
@@ -208,6 +210,48 @@ ShPart *Car_PickPart(int32_t kind, const ShList *l) { return pick_or_empty(kind,
 void Car_CollectGuns(ShList *out, const ShList *l) { collect(is_gun, out, l); }
 void Car_CollectSpecials(ShList *out, const ShList *l) { collect(is_special, out, l); }
 void Car_CollectWheels(ShList *out, const ShList *l) { collect_wheels(is_wheel, out, l); }
+
+/* i76shell 0x10025820: a melee player's car (its record rec) as multicar.def's record for the exe's
+   Opponents_Load: its parts picked from the map's lists by 0x1001c040, 0x1001c500 and 0x1001c150, the
+   counterparts of 0x1001bc80, 0x1001c2d0 and 0x1001be10 given the record */
+void Car_MeleeRecord(uint8_t out[0xeb], const uint8_t *rec)
+{
+    uint8_t b[0x200] = {0};   /* the original's 0xeb on its stack: the guns run on past six (see below) */
+    ShList *l = ShList_New(16);
+    if (!l) return;
+    rec_of = rec;
+    snprintf((char *)b + 0x6a, 16, "%s", (const char *)rec + 0x14);
+    snprintf((char *)b + 0x7a, 13, "%s", (const char *)rec + 0x820);
+    snprintf((char *)b + 0x87, 13, "%s", (const char *)rec + 0x82d);
+    put32(b + 0x94, file_number(pick_or_empty(2, g_sh_engines), 0x31) - 1);
+    put32(b + 0x98, file_number(pick_or_empty(3, g_sh_susps), 0x31) - 1);
+    put32(b + 0x9c, file_number(pick_or_empty(4, g_sh_brakes), 0x31) - 1);
+    /* the wheels: the first part's file in front, the third's at the back (the original reads through a
+       missing third: here none), "null" between */
+    collect_wheels(is_wheel, l, g_sh_wheels);
+    ShPart *front = l->count > 0 ? l->items[0] : NULL, *third = l->count > 2 ? l->items[2] : NULL;
+    if (front) snprintf((char *)b + 0xa0, 13, "%s", part_at(front, 0x3b));
+    snprintf((char *)b + 0xad, 13, "%s", dll_str(0x10063760));
+    if (third) snprintf((char *)b + 0xba, 13, "%s", part_at(third, 0x3b));
+    memcpy(b + 0xc7, rec + 0x7fc, 9 * 4);
+    /* the guns with a file, each 0x11 bytes from +4: its place in the list (the hard point the exe takes)
+       and its file; no bound, so a seventh runs over the name at +0x6a (quirk, kept) */
+    ShList_Clear(l);
+    collect(is_gun, l, g_sh_guns);
+    int32_t n = 0;
+    for (int i = 0; i < l->count && 4 + (n + 1) * 0x11 <= (int)sizeof b; i++) {
+        ShPart *p = l->items[i];
+        if (!p || !strcmp(part_at(p, 0x2e), dll_str(0x10063768))) continue;
+        put32(b + 4 + n * 0x11, i);
+        snprintf((char *)b + 8 + n * 0x11, 13, "%s", part_at(p, 0x3b));
+        n++;
+    }
+    put32(b, n);
+    memcpy(out, b, 0xeb);
+    ShList_Clear(l);
+    ShList_Free(l);
+    rec_of = NULL;
+}
 
 void Car_WriteVcf(const char *path, const char *name)   /* i76shell 0x1001d6a0 */
 {

@@ -142,7 +142,8 @@ The menus' and screens' meanings are to be found as each is ported.
   Shell_Load again with that state (docs/re/menus.md). ShellMain opens the main menu after the
   start-up's state 5 or after a01.msn. A trip's way back goes by its state (0xc01e, 0xc008, 0xc017, the
   trip's file); a scenario's (the game's kind 4) resets the melee's state (0x10012d90) and opens its map
-  again (0xc024). The instant melee's (kind 3: mode 0, 0xc025, its results) is not ported yet.
+  again (0xc024). The instant melee's (kind 3) does the same, then sets mode 0 and opens its STANDINGS
+  (0xc025, docs/re/map.md).
   ShellMain's end sends the exe's window 0x432, which sets the state 5 again.
 - The DLL is read at run time like the exe (src/exe.c: dll_init, dll_str; 471,552 bytes, CRC-32
   eee0a66d), for the shell's strings and tables.
@@ -360,5 +361,5 @@ shell runs, in order:
   player's file; Cancel puts the 14 bytes back. Checked: Clouds turned off and Done write +0x41 = 0.
 - Not ported yet: pop-ups 3 (modem, network play's) and 7 (controls, 0x100093a0).
 
-The melee's map (AUTO MELEE's SCENARIO, 0xc024): docs/re/map.md. Other screens: the instant melee and
-its results, network play.
+The melee's map (AUTO MELEE's SCENARIO, 0xc024, and INSTANT MELEE, 0xc021) and the instant melee's
+STANDINGS (0xc025): docs/re/map.md. Not ported yet: network play.

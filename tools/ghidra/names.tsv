@@ -1406,3 +1406,6 @@
 004631f0	SpawnLoc_VehicleIn	objects	med	a vehicle into the spawn module's list; ported
 00463260	SpawnLoc_VehicleOut	objects	med	a vehicle out of it; ported
 0042b7d0	Vehicle_TakeOut	vehicle	med	sounds stopped, entity removed, unarmed, node freed; ported
+00463670	Melee_Results	score	med	NSCR.DAT at a melee's end: the user's name, car, death, kills, points; the network's records not ported; ported (src/melee.c)
+00403130	User_Name	app	med	the mission record's player name (0x4ed870)
+00403160	User_CarName	app	med	the mission record's car name (0x4ed810)

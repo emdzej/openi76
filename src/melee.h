@@ -20,6 +20,8 @@ Node *Spawn_Vehicle(int at, int kind, const uint8_t name8[8], int user);
    (Opponents_Load 0x407070) */
 void Melee_Start(void);
 void Melee_Frame(void);   /* 0x408e20 */
+/* 0x463670: NSCR.DAT, the user's score (name and car the mission record's) */
+void Melee_Results(const char *name, const char *car);
 void Melee_End(void);   /* 0x4072b0 at the mission's end */
 void Melee_Kill(void);  /* 0x4072e0: a kill by the user */
 void Melee_Score(int32_t *points, int16_t *kills);   /* 0x407340 */

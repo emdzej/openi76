@@ -489,6 +489,7 @@ static void mission_end(void)
     Sound_FreeParked();    /* 0x468340 */
     /* 0x428660: the links' heap (the port's links are freed with their nodes) */
     Class_EndAll();        /* 0x425580 */
+    if (g_melee) Melee_Results(g_sh_rec.player, g_sh_rec.car);   /* 0x463670 */
     if (g_melee) Melee_End();   /* 0x4072b0 (and 0x463130) */
     if (g_game_state == 1 && g_cheater) g_game_state = 0xb;
     if (g_game_state == 1) {   /* won: the salvage (but in t04), and the mission's last movie */

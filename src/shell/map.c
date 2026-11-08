@@ -56,13 +56,19 @@ static uint8_t *w_click;                /* entry 0x52 (0x1008a528) */
 static const uint8_t *pic_set, *top_set; /* entries 0x3c (0x1005fb48) and 0x3d (0x1005fb4c) */
 static ShPicker pk;                     /* 0x100604d8 */
 static int editing;
-static struct { int dir, wait; } hold;  /* a scroll arrow held */
+static struct { int id, wait; } hold;   /* a button held (the scroll arrows, the players' count) */
+static int user_type;                   /* 0x1006c7a0: the instant melee's player's type */
+static int user_sel = 1;                /* 0x1006cbe0: the player (not an opponent) shown */
+static ShList *drivers;                 /* 0x100603a8: the drivers' names not taken */
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static uint8_t *car_rec(int i) { return g_sh_recs + i * SHELL_REC; }
 static int row_h(void) { return g_sh_font45.height + 2; }   /* 0x1006b0f0 (0x1006af60) */
 static void text(int x, int y, const char *s) { Scr_Text(x, y, &g_sh_font45, s, NULL); }
 static const char *scen_name(int i) { return dll_str(0x100608b8 + 0x2d * (uint32_t)i); }
+/* the instant melee's levels, "The Crater" on (the addon levels past 15 are not ported) */
+static const char *level_name(int i) { return dll_str(0x100605e8 + 0x2d * (uint32_t)i); }
+static const char *driver(int i) { return dll_str(dll_u32(0x10060510 + 4 * (uint32_t)i)); }   /* 53 */
 
 static void load_rec(int index, uint32_t fmt, int n)   /* the exe's +0x14 with "%s%d.vcf" */
 {
@@ -114,11 +120,12 @@ void Melee_Reset(void)   /* 0x10012d90 */
     }   /* and 0x1008a4d8, whether it was read (the network's levels' name): not kept */
     players[0].variant = variant, players[0].type = g_sh_car;
     nplayers = 0, player_at = 0;   /* the count read is dropped (quirk, kept) */
-    type_at = g_sh_car;   /* and 0x1006c7a0, the instant melee's own type */
+    type_at = user_type = g_sh_car;
+    drivers = NULL;   /* unfreed, as the original */
     /* not ported: the network's names (0x1006c770 "Unknown", 0x10001030, 0x10001000) and options
        (0x1006c794, 0x1006c798), the addon levels (addon\*.lvl through the exe's +0x58 into 0x100603a4,
        counted into 0x100603c4) */
-    first = 0;   /* and 0x1006cbe0 = 1, the instant melee's */
+    first = 0, user_sel = 1;
     pic_set = top_set = NULL;   /* 0x10010d20 (with the car picture's sets) */
     Markers_Init(), Setup_Reset();   /* 0x10003c80 */
 }
@@ -248,7 +255,11 @@ static void init(void)
     for (int i = 0; i < 16; i++) ShList_Add(buttons, btn[i], NULL);
     if (g_sh_mode == 1)
         for (int i = 8; i <= 13; i++) ShList_Remove(buttons, btn[i]);
-    /* modes 0 and 2-9 (their buttons moved and taken out): not ported */
+    else if (g_sh_mode == 0) {   /* the players' count up to 0x120, no scenarios */
+        btn[8][3] = btn[9][3] = 0x120, btn[8][4] = btn[9][4] = 0x12f;
+        for (int i = 0; i <= 2; i++) ShList_Remove(buttons, btn[i]);
+    }
+    /* the network's modes 2-9 (their buttons moved and taken out): not ported */
     types = read_types(&ntypes);
     if (!types) return;
     for (int i = 0; i < ntypes; i++) load_rec(i, 0x10061018, 1);   /* "%s1.vcf" */
@@ -259,6 +270,55 @@ static void init(void)
 }
 
 /* ---- the drawing ---- */
+
+/* ---- the instant melee's players and levels (mode 0) ---- */
+
+/* a driver drawn from those not taken (never the list's last: quirk, kept), with a random type's first
+   variant and the type's record as it is */
+static void opponent_new(int i)
+{
+    const char *d = drivers->items[Shell_Rand() % (drivers->count - 1)];
+    ShList_Remove(drivers, d);
+    snprintf(players[i].name, sizeof players[i].name, "%s", d);
+    players[i].type = Shell_Rand() % ntypes;
+    players[i].variant = 1;
+    memcpy(players[i].rec, car_rec(players[i].type), SHELL_REC);
+}
+
+/* 0x100160f0, once while the drivers' list is unmade: the player (its name, record 0's car whatever its
+   type: quirk, kept) and one opponent */
+static void players_make(void)
+{
+    if (drivers || !types) return;
+    drivers = ShList_New(0x35);
+    for (int i = 0; i < 0x35; i++) ShList_Add(drivers, (void *)driver(i), NULL);
+    nplayers = 2, player_at = 0;
+    snprintf(players[0].name, sizeof players[0].name, "%s", name);
+    memcpy(players[0].rec, car_rec(0), SHELL_REC);
+    for (int i = 1; i < nplayers; i++) opponent_new(i);
+}
+
+static void levels_draw(int from)   /* 0x10016550: the chosen level, then six from the first */
+{
+    Scr_Restore(0xb, 0x5c, 0xce, 0xb6);
+    text(0x22, 0x6d, level_name(scen));
+    for (int i = from, y = 0x95; i < nlevels && i < from + 6; i++, y += row_h()) text(0x22, y, level_name(i));
+}
+
+/* 0x10016240: the opponents' count, the player's name, the shown player's, the opponents' rows, the
+   levels */
+static void players_draw(int from)
+{
+    char c[8];
+    Scr_Restore(0xb, 0x27, 0xce, 0x1a4);
+    Scr_Restore(0x116, 0x3a, 0xaa, 0x12);
+    snprintf(c, sizeof c, dll_str(0x10061038), nplayers - 1);   /* "%2.2d" */
+    text(0xad, 0x120, c);
+    text(0xc, 0x2d, name);
+    text(0x120, 0x3a, players[player_at].name);
+    for (int i = 1, y = 0x152; i < nplayers; i++, y += row_h()) text(0x14, y, players[i].name);
+    levels_draw(from);
+}
 
 static void car_picture(int pic)   /* 0x10010ea0 */
 {
@@ -321,7 +381,8 @@ static void redraw(void)   /* 0x100167c0 */
     if (g_sh_mode == 1) {
         list_draw();
         text(0x120, 0x3a, name);   /* 0x10019520 */
-    }
+    } else if (g_sh_mode == 0)
+        players_draw(first);
 }
 
 void Map_TopPicture(void)   /* 0x10016d70 with 0x10010f40: entry 0x3d's frame of the type's picture */
@@ -396,6 +457,7 @@ static void types_done(void)   /* 0x10016d90 */
         type_at = pk.picked;
         variant = 1;
         g_sh_car = type_at;
+        if (user_sel) user_type = type_at;
         variants_load(0x10061078);
         load_rec(type_at, 0x10061084, variant);
         players[player_at].variant = 1;
@@ -488,15 +550,106 @@ static int hit(int x, int y)   /* 0x10034c60 */
     return -1;
 }
 
-static void scroll_step(void)
+/* button 8: the last opponent out, its driver back in the list (by the name; the original's search runs
+   past the table when it is not there), the shown player the one before when it was the last */
+static void players_fewer(void)
 {
-    if (hold.dir < 0) {
+    if (nplayers <= 1) return;
+    int k = 0;
+    while (k < 0x35 && strcmp(driver(k), players[nplayers - 1].name)) k++;
+    if (k < 0x35) ShList_Add(drivers, (void *)driver(k), NULL);
+    if (nplayers - 1 == player_at) {
+        player_at = nplayers - 2;
+        type_at = g_sh_car = players[player_at].type;
+        redraw();
+    }
+    nplayers--;
+    players_draw(first);
+}
+
+static void players_more(void)   /* button 9: an opponent more, to seven */
+{
+    if (nplayers >= NPLAYERS) return;
+    opponent_new(nplayers++);
+    players_draw(first);
+}
+
+/* a held button's step: the original steps, presents and sleeps 100 ms while the button is down */
+static void hold_step(void)
+{
+    switch (hold.id) {
+    case 1: case 0xc:
         if (--first < 0) first = 0;
-    } else if (first + 1 < nscen && nscen >= ROWS)   /* to the last one alone (quirk, kept) */
-        first++;
-    list_draw();
-    text(0x120, 0x3a, name);
-    hold.wait = 6;   /* the original steps, presents and sleeps 100 ms while held */
+        break;
+    case 2:
+        if (first + 1 < nscen && nscen >= ROWS) first++;   /* to the last one alone (quirk, kept) */
+        break;
+    case 0xd:
+        if (first + 1 < nlevels && nlevels >= 6) first++;
+        break;
+    case 8: players_fewer(); break;
+    case 9: players_more(); break;
+    }
+    if (hold.id == 1 || hold.id == 2) {
+        list_draw();
+        text(0x120, 0x3a, name);
+    } else if (hold.id == 0xc || hold.id == 0xd)
+        players_draw(first);
+    hold.wait = 6;
+}
+
+/* buttons 7 and 10: player i shown (7 the player, 10 an opponent's row): its type and, when not the one
+   loaded, its variant into the type's record, which is copied to the player's */
+static void player_show(int i, uint32_t fmt)
+{
+    player_at = i;
+    type_at = g_sh_car = players[i].type;
+    if (variant != players[i].variant) {
+        variant = players[i].variant;
+        memset(car_rec(type_at), 0, SHELL_REC);
+        load_rec(type_at, fmt, variant);
+    }
+    memcpy(players[i].rec, car_rec(type_at), SHELL_REC);
+    Scr_Restore(0x120, 0x3a, 0x8c, 0x12);
+    text(0x120, 0x3a, players[i].name);
+    user_sel = i == 0;
+    redraw();
+}
+
+static void multicar_write(void)   /* 0x10025b30: multicar.def, the players but the first */
+{
+    int32_t n = nplayers - 1;
+    size_t size = 4 + (size_t)(n > 0 ? n : 0) * 0xeb;
+    uint8_t *b = calloc(1, size);
+    if (!b) return;
+    memcpy(b, &n, 4);
+    for (int i = 0; i < n; i++) Car_MeleeRecord(b + 4 + i * 0xeb, players[i + 1].rec);
+    Files_Write(dll_str(0x10063774), b, size);
+    free(b);
+}
+
+/* button 6, the instant melee's: the opponents written, the player's car (its variant loaded again when
+   another is) as addon\vehscn.vcf, the game's kind 3 on the level's m0n.msn */
+static void start_melee(void)
+{
+    multicar_write();
+    g_sh_car = user_type;
+    if (variant != players[0].variant) {
+        variant = players[0].variant;
+        type_at = players[0].type;
+        memset(car_rec(type_at), 0, SHELL_REC);
+        load_rec(type_at, 0x10060f68, variant);
+        memcpy(players[0].rec, car_rec(type_at), SHELL_REC);
+    }
+    Files_Remove(dll_str(0x10060f74));          /* addon\vehscn.vsf */
+    Car_WriteVcf(dll_str(0x10060f88), NULL);    /* addon\vehscn.vcf */
+    g_sh_rec.kind = 3;
+    snprintf(g_sh_rec.vehicle, sizeof g_sh_rec.vehicle, "%s", dll_str(0x10060f9c));
+    snprintf(g_sh_rec.mission, sizeof g_sh_rec.mission, "%s", dll_str(0x10060608 + 0x2d * (uint32_t)scen));
+    snprintf(g_sh_rec.player, sizeof g_sh_rec.player, "%s", name);
+    snprintf(g_sh_rec.car, sizeof g_sh_rec.car, "%s", (const char *)car_rec(g_sh_car));
+    Setup_Reset();   /* 0x10005f30 */
+    leave(0xc010, 0);
 }
 
 static void start(void)   /* button 6, a scenario's */
@@ -523,6 +676,7 @@ static void back(void)   /* button 15: the lists freed (0x10015a90), the garage 
     }
     free(types), types = NULL;
     free(victory), victory = NULL;
+    if (drivers) ShList_Free(drivers), drivers = NULL;
     w_click = NULL;
     pic_set = top_set = NULL;   /* 0x10010e10 */
     Garage_Reset();   /* 0x10034df0 */
@@ -540,13 +694,17 @@ static void screen(uint32_t msg)
         if (Edit_Pass() == -2) return;
         editing = 0;
         text(0xc, 0x2d, name);
+        if (g_sh_mode == 0) {   /* the player's name too, shown when the player is */
+            snprintf(players[0].name, sizeof players[0].name, "%s", name);
+            if (player_at != 0) return;
+        }
         Scr_Restore(0x114, 0x39, 0xa5, 0xf);
         text(0x120, 0x3a, name);
         return;
     }
-    if (hold.dir) {
-        if (!g_sh_mouse.left) hold.dir = 0;
-        else if (--hold.wait <= 0) scroll_step();
+    if (hold.id) {
+        if (!g_sh_mouse.left) hold.id = 0;
+        else if (--hold.wait <= 0) hold_step();
         return;
     }
     int x = g_sh_mouse.x, y = g_sh_mouse.y, id = hit(x, y);
@@ -562,10 +720,10 @@ static void screen(uint32_t msg)
         victory_draw();
         return;
     }
-    case 1: case 2:
+    case 1: case 2: case 8: case 9: case 0xc: case 0xd:
         Shell_Click(w_click);
-        hold.dir = id == 1 ? -1 : 1;
-        scroll_step();
+        hold.id = id;
+        hold_step();
         return;
     case 3:
         Shell_Click(w_click);
@@ -588,7 +746,29 @@ static void screen(uint32_t msg)
     case 6:
         Shell_Click(w_click);
         if (g_sh_mode == 1) start();
+        else if (g_sh_mode == 0) start_melee();
         return;
+    case 7:
+        if (player_at == 0) return;
+        Shell_Click(w_click);
+        player_show(0, 0x10061000);
+        return;
+    case 0xa: {   /* an opponent's row */
+        int i = (y - 0x152) / row_h() + 1;
+        if (i == player_at || i >= nplayers) return;
+        Shell_Click(w_click);
+        player_show(i, 0x1006100c);
+        return;
+    }
+    case 0xb: {   /* a level */
+        int i = first + (y - 0x97) / row_h();
+        if (i == scen || i >= nlevels || i - first >= 6) return;
+        Shell_Click(w_click);
+        scen = i;
+        Scr_Restore(0x13, 0x6a, 0xbe, 0x14);
+        text(0x22, 0x6d, level_name(scen));
+        return;
+    }
     case 0xe:   /* the name */
         Shell_Click(w_click);
         Scr_Restore(0xb, 0x2c, 0xaa, 0xe);
@@ -624,7 +804,7 @@ void Catalog_Open(void)   /* the set-up's PARTS CATALOG from the map: background
 
 void Map_Open(void)
 {
-    if (g_sh_mode != 1) {   /* the instant melee and network play */
+    if (g_sh_mode > 1) {   /* network play */
         char m[80];
         snprintf(m, sizeof m, "OpenI76: the melee map's mode %d is not ported yet", g_sh_mode);
         plat_log(m);
@@ -635,16 +815,81 @@ void Map_Open(void)
     g_sh_from_map = 1;
     init();
     g_sh_rec.kind = 3;
-    victory_read();
-    g_sh_rec.kind = 4;
-    if (scen >= nscen) scen = 0;
-    Scr_Background(g_sh_db, 0x19);
-    Scr_Restore(0xb, 0x71, 0xce, 0xa2);
-    for (int i = 0, y = 0x95; i < nscen && i < ROWS; i++, y += row_h()) text(0x28, y, scen_name(i));   /* from the top */
-    text(0x28, 0x6d, scen_name(scen));
-    text(0x120, 0x3a, name);
-    victory_draw();
+    if (g_sh_mode == 0) {
+        if (scen >= nlevels) scen = 0;
+        Scr_Background(g_sh_db, 0x18);
+        players_make();
+        players_draw(0);
+    } else {
+        victory_read();
+        g_sh_rec.kind = 4;
+        if (scen >= nscen) scen = 0;
+        Scr_Background(g_sh_db, 0x19);
+        Scr_Restore(0xb, 0x71, 0xce, 0xa2);
+        for (int i = 0, y = 0x95; i < nscen && i < ROWS; i++, y += row_h()) text(0x28, y, scen_name(i));   /* from the top */
+        text(0x28, 0x6d, scen_name(scen));
+        text(0x120, 0x3a, name);
+        victory_draw();
+    }
     redraw();
-    hold.dir = 0, editing = 0;
+    hold.id = 0, editing = 0;
     Shell_SetScreen(screen);
+}
+
+/* ---- the instant melee's results (0xc025: 0x1003bb50, its screen 0x1003bcb0) ---- */
+
+static uint8_t score_recs[0x20][0x54];   /* 0x1009a668: NSCR.DAT's records */
+static int nscores;                      /* the list 0x1006793c's count */
+
+/* 0x1003be80: NSCR.DAT (the exe's, at the melee's end), its count and the teams' flag, then the records
+   of 0x54 bytes: the name, the car (+0x20), three numbers at +0x48, +0x4c, +0x50 (the deaths, kills and
+   points). With teams (the network's) each team's sum goes in before its players: not ported */
+static void scores_read(void)
+{
+    nscores = 0;
+    size_t n;
+    uint8_t *f = vfs_read_all(dll_str(0x10067944), &n);
+    if (!f) return;
+    if (n >= 8 && rd32(f + 4) == 0) {
+        uint32_t c = (uint32_t)rd32(f);
+        for (uint32_t i = 0; i < c && i < 0x20 && 8 + (i + 1) * 0x54 <= n; i++)
+            memcpy(score_recs[nscores++], f + 8 + i * 0x54, 0x54);
+    }
+    free(f);
+}
+
+static void scores_draw(void)   /* the rows from 0x46, 0x18 apart (0x1003bd50 the redraw's) */
+{
+    char t[16];
+    for (int i = 0, y = 0x46; i < nscores; i++, y += 0x18) {
+        const uint8_t *r = score_recs[i];
+        char nm[33], car[33];
+        snprintf(nm, sizeof nm, "%.32s", (const char *)r);
+        snprintf(car, sizeof car, "%.32s", (const char *)r + 0x20);
+        text(0x20, y, nm);
+        text(0xbf, y, car);
+        snprintf(t, sizeof t, "%d", rd32(r + 0x48)), text(0x1b4, y, t);
+        snprintf(t, sizeof t, "%d", rd32(r + 0x4c)), text(500, y, t);
+        snprintf(t, sizeof t, "%d", rd32(r + 0x50)), text(0x229, y, t);
+    }
+}
+
+static void results(uint32_t msg)   /* 0x1003bcb0: a click on its rect (0x10067928) back to the map */
+{
+    if (msg == 0xc004) {
+        if (g_sh_mouse.click != 1 || !Rect_Hit(g_sh_mouse.x, g_sh_mouse.y, dll_data(0x10067928, 20))) return;
+        msg = 0xc026;
+    }
+    nscores = 0;
+    Shell_Post(msg, 0xc025);
+    Shell_UnsetScreen(results);
+}
+
+void Results_Open(void)
+{
+    g_sh_redraw = scores_draw;
+    Scr_Background(g_sh_db, 0x1c);
+    scores_read();
+    scores_draw();
+    Shell_SetScreen(results);
 }

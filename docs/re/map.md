@@ -1,7 +1,7 @@
 # The melee's map (0x10013040, its screen 0x100136d0)
 
-Ported for a scenario (mode 1) in `src/shell/map.c`, with the set-up from the map (button 5,
-docs/re/setup.md "From the map"); the instant melee (mode 0) and network play are not yet.
+Ported for a scenario (mode 1) and the instant melee (mode 0) in `src/shell/map.c`, with the set-up
+from the map (button 5, docs/re/setup.md "From the map"); network play is not.
 
 The main menu's AUTO MELEE opens two items: SCENARIO (button 9, message 0xc024) and INSTANT MELEE
 (button 4, 0xc021). Both open the same screen, 0x10013040, with the mode 0x1008e9fc set first: 0 for the
@@ -56,8 +56,8 @@ marks the set-up as reached from the map (docs/re/setup.md: its paint, box 10, a
   works. background entry 0x19, the scenario names from 0x100608b8 (0x2d bytes each, from
   "Oil Well Well"; 0x100603c0 of them), the current at 0x28, 0x6d, the player's name (0x1008a500) at
   0x120, 0x3a, and under the list the car of the scenario's victory if there is one.
-- The instant melee (0): background 0x18, the players (0x1006cbf8, 0x8ec bytes each, 0x1008a524 of them)
-  and their cars.
+- The instant melee (0): background 0x18, the players (0x1006cbf0, 0x8ec bytes each, 0x1008a524 of them:
+  type, variant, name, the car's record) and the levels ("The instant melee" below).
 - Then the redraw 0x100167c0: the car's picture (0x10010ea0: frames 2 t and 2 t + 1 of entry 0x3c at 0xe5,
   0x4f and 0xe5, 0x12d, by the type's picture number, at most 0x17), its type's and variant's names, its
   guns (not named as 0x10061070), suspension, brakes, engine and four wheels' names at 0x1d6 from 0x3a.
@@ -80,25 +80,77 @@ alone shows (quirk, kept).
 
 After the mission ShellMain comes back to the map by the record's kind: 4 → 0xc024, 3 → 0xc025.
 
-## The instant melee (mode 0) — surveyed, not ported
+## The instant melee (mode 0)
 
-The shell's side: the open's mode 0 (background 0x18, 0x100160f0 makes the players' list once: the
-player plus a second drawn from the 53 drivers' names at 0x10060510, "Torque Daisy" on, each with a
-random type's first variant), the players' rows (0x10016240) and the levels' list (0x10016550, "The
-Crater" on, 0x2d bytes each at 0x100605e8, the addon levels after 15), buttons 8 and 9 (one player fewer
-or more, to 8), 7 and 10 (whose car the form shows), 11-13 (the level's list and scroll). The start
-writes `multicar.def` (0x10025b30: the players but the first, 0xeb bytes each from 0x10025820 over the
-player's record), the user's car as `addon\vehscn.vcf`, the game's kind 3, the level's `m0n.msn`
-(0x10060608 + 0x2d i), then 0xc010. After the mission (kind 3) the shell opens 0xc025, the results
-(0x1003bb50: background 0x1c, the rows 0x1003be80 reads, each name, car and three numbers).
+The shell's side (src/shell/map.c). The set-up takes out buttons 0-2 (the scenarios and their scroll)
+and moves 8 and 9 (one opponent fewer or more) to y 0x120..0x12f. The open (background 0x18) makes the
+players once, while the drivers' list (0x100603a8) is unmade (0x100160f0): the player, with its name
+and record 0's car whatever its type (a quirk, kept), and one opponent. Each opponent is a driver drawn
+from the 53 names at 0x10060510 ("Torque Daisy" on) by `rand % (count - 1)`, so the list's last is
+never drawn (kept), with a random type's first variant and that type's record as it stands. The
+shell's own CRT rand is used. The players' rows (0x10016240) show the opponents' count ("%2.2d"), the
+player's name, the shown player's name and the opponents from y 0x152. The levels (0x10016550, "The
+Crater" on, 0x2d bytes each at 0x100605e8, 15 of them; the addon levels, `addon\*.lvl`, are not
+ported) are drawn from the list's first row, which the scenario list shares (0x100603c8).
 
-The exe's side (port-plan step 12's local part): WinMain's kind 3 sets the melee (0x4072d0(1), read
-by 0x407370). The mission's start then puts the user's car in at a spawn point (0x462820: a random one
-of the mission's, the next one free of every vehicle's radius; 0x462b90: an entity tagged "netwrk" built
-from the .vcf through the class loader 0x485030 and 0x423d30) and loads the opponents
-(Opponents_Load 0x407070: `multicar.def`'s records as `nvcl<n>.vcf` through 0x487d60, each spawned the
-same way; the AI's aggression 0x408f70(3), its attackers 0x40b780(8)). Each vehicle killed counts down
-(0x4073a0, Entity_OnRemove's callback); the last one brings them all back, one aggression level lower
-(to 1) and one attacker more. The user's kills score (Melee_Kill 0x4072e0) and the HUD shows the
-scores (0x463350, "courier"). The mission's spawn points (0x4dc52c of them at 0x5749b0) are not read by
-the port's mission loader yet.
+The buttons:
+
+- 7 shows the player, and 10 an opponent's row ((y − 0x152) / row + 1). The player's type becomes the
+  current one. When its variant isn't the one loaded, the variant is read into the type's record, and
+  the record is copied into the player's. 0x1006cbe0 remembers whether the player (1) or an opponent
+  (0) is shown; the type picker gives the player's own type (0x1006c7a0) only while the player is
+  shown.
+- 8 and 9 repeat while held. 8 removes the last opponent and puts its driver back in the list; if that
+  opponent was shown, the one before it is shown. 9 adds an opponent, up to seven.
+- 11 picks a level; 12 and 13 scroll the levels.
+- 14 renames, and the name also becomes the player's.
+- 6 starts. It writes `multicar.def` (0x10025b30): the count, then each opponent's car as 0xeb bytes
+  (0x10025820):
+  - +0: the guns' count;
+  - +4: the guns, 0x11 bytes each: the gun's place in the car's list (the hard point the exe takes) and
+    its file. There is no bound, so a seventh gun runs over the name (kept);
+  - +0x6a: the variant's name;
+  - +0x7a and +0x87: the record's +0x820 and +0x82d;
+  - +0x94, +0x98, +0x9c: the engine's, suspension's and brakes' numbers less one;
+  - +0xa0: the front wheels' file, +0xad "null", +0xba the third wheel's;
+  - +0xc7: the record's nine words from +0x7fc.
+
+  The parts come from the map's lists through 0x1001c040, 0x1001c500 and 0x1001c150, which are
+  0x1001bc80, 0x1001c2d0 and 0x1001be10 given the record. The start then puts the player's type in the
+  trip record's +0x38 (reloading the player's variant when another one is loaded) and writes the car as
+  `addon\vehscn.vcf`. It sets the game's kind 3, the level's `m0n.msn` (0x10060608 + 0x2d·i), the
+  player's name (+0xe) and the car's name (+0x2e), then posts 0xc010.
+
+After the mission (kind 3), ShellMain resets the map's state (0x10012d90), sets mode 0 and opens 0xc025,
+the STANDINGS (0x1003bb50, background 0x1c). Its rows come from `NSCR.DAT` (0x1003be80): a count and a
+teams' flag, then records of 0x54 bytes. Each row shows the name, the car (+0x20), the deaths (+0x48),
+the kills (+0x4c) and the score (+0x50), from y 0x46, 0x18 apart. With teams (network play) each team's
+sums come before its players; that part is not ported. DONE (the rect at 0x10067928) posts 0xc026, the
+map again. Its opponents are drawn anew, because the reset dropped the drivers' list.
+
+The exe's side (src/melee.c):
+
+- WinMain's kind 3 sets the melee (0x4072d0(1), which 0x407370 reads).
+- Before the mission loads, SpawnLoc_Init (0x4626a0) empties the spawn points. It also keeps a list of
+  the world's vehicles through the entities' callbacks (0x4631f0, 0x463260).
+- After the terrain's textures, the user's car goes in at a spawn point. SpawnLoc_Get (0x462820) takes
+  a random point, or the next one clear of every vehicle's radius plus 0x4a63e0. Spawn_Vehicle
+  (0x462b90) builds an entity tagged "netwrk" from the .vcf; the default is 0x4a8448's.
+- Opponents_Load (0x407070) then writes `multicar.def`'s records as `NVCL\nvcl<n>.vcf` (0x487d60) and
+  spawns each one the same way. The AI's aggression is 3 (setAllAggresion 0x408f70) and its attackers
+  8 (0x40b780).
+- Each opponent removed counts down (0x4073a0, Entity_OnRemove's callback). The last one brings them
+  all back, one aggression level lower (to 1) and with one attacker more.
+- The AI's frame runs Melee_Frame (0x408e20) in the script's place. The end state is taken at its
+  time. Every vehicle that isn't dead attacks the user (AI_Order 0). A while (0x4a5174) after the
+  user's car dies, the melee ends with state 1. With no user, every vehicle stops.
+- At the mission's end (WinMain, after 0x425580), 0x463670 writes `NSCR.DAT` with one record: the
+  mission record's name and car (0x403130, 0x403160), whether the user's car was dying or dead (its
+  +0x454 & 0x8020), the kills and the points (0x407340). The car's +0xa4 is read into +0x44, then 0 is
+  written over it.
+
+Not ported yet:
+
+- the user's points per kill (Melee_Kill 0x4072e0 counts the kills only);
+- the scores' HUD (0x4632c0, 0x463350 "courier");
+- the network's records (dpGetPlayerData).

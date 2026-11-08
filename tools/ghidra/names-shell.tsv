@@ -270,3 +270,14 @@
 10007bc0	Paint_Open	setup	high	the paint picker over the catalogue's paints of the car's .vtf; ported
 10041170	Catalog_Open	setup	high	PARTS CATALOG (0xc01f): background 4; ported
 10041190	Catalog_Screen	setup	high	its DONE (0x10068bc0) back to the set-up (0xc00f); ported
+100160f0	Melee_PlayersMake	map	med	the instant melee's players once: the player and one opponent from the 53 drivers; ported (src/shell/map.c)
+10016240	Melee_PlayersDraw	map	med	the opponents' count, the names, the opponents' rows, the levels; ported
+10016550	Melee_LevelsDraw	map	med	the chosen level and six from the first; ported
+10025b30	Multicar_Write	map	med	multicar.def: the players but the first as 0xeb-byte records; ported
+10025820	Multicar_Record	carwrite	med	a player's car as multicar.def's record (names, parts, wheels, guns); ported (src/shell/carwrite.c)
+1001c040	Car_PickPartOf	carwrite	med	0x1001bc80 given the record; ported
+1001c150	Car_CollectOf	carwrite	med	0x1001be10 given the record; ported
+1001c500	Car_CollectWheelsOf	carwrite	med	0x1001c2d0 given the record; ported
+1003bb50	Results_Open	results	med	0xc025: STANDINGS, background 0x1c, NSCR.DAT's rows; ported (src/shell/map.c)
+1003be80	Results_Read	results	med	NSCR.DAT into the list; the teams' sums not ported
+1003bcb0	Results_Screen	results	med	DONE (0x10067928) posts 0xc026; ported
