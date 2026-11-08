@@ -1650,6 +1650,29 @@ int Dump_CallVehicles(int which, int upside)
             g_mission_kind = k0, g_mission_number = n0;
             break;
         }
+        case 68: {   /* the wreck hidden (0x42b830's time-up branch): the wreck started and stepped forty
+                        times, then its time run out; the flags, the moving and static lists' lengths and,
+                        for n and each child, its flags and whether it has a mesh */
+            for (int j = 0; j < 41; j++) Vehicle_Wreck(n, j == 0);
+            uint32_t f;
+            float t = 0.01f;
+            memcpy(&f, n->data + 0x454, 4);
+            f |= 0x80008000u;
+            memcpy(n->data + 0x454, &f, 4);
+            memcpy(n->data + 0x450, &t, 4);
+            Vehicle_State(n, 0.05f);
+            uint32_t b[3 + 2 * 16];
+            memset(b, 0, sizeof b);
+            memcpy(b, n->data + 0x454, 4);
+            for (Cell *c = g_coll_moving; c; c = c->next) b[1]++;
+            for (Cell *c = g_coll_static; c; c = c->next) b[2]++;
+            b[3] = n->flags, b[4] = n->geom != NULL;
+            int i = 1;
+            for (Node *ch = n->child; ch && i < 16; ch = ch->next, i++)
+                b[3 + 2 * i] = ch->flags, b[4 + 2 * i] = ch->geom != NULL;
+            call_line(b, sizeof b);
+            break;
+        }
         case 63: {   /* the flame throwers (0x46ce90-0x46df40) on the user's vehicle n as the muzzle: the ring
                         (0x46ce90 with 16), the main view 20 m behind n and 6 up, the step 0.05 s; for kinds 0 and
                         2 in turn 40 frames: in the first 25 the flame fired (0x46d090, 100 a second, the first

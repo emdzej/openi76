@@ -343,7 +343,10 @@ vehicle), with the sub-step's time. It works from the flags +0x454 as they are o
   - Bits 0x8c08 equal to 8: the engine runs (bit 1, sounds 0xf and 1, the idle 0x476580).
   - Equal to 0x8000: the wreck's time is up. Network play leaves here without writing the flags. Otherwise
     a vehicle not the user's has its fire put out and its lights off, and its entity's tree is hidden
-    (flag 1, `Node_SetFlags` 0x42e2d0).
+    (flag 1, `Node_SetFlags` 0x42e2d0). The entity leaves the collision lists (0x469cd0), so nothing hits
+    the hidden wreck, and every node of the tree gives up its loaded meshes (0x47de00 on the root, 0x42d800
+    down each child: the level-of-detail record stays, with no level shown, and the textures are fetched
+    again). Confirmed: `--call hide` identical on t01 and s04, upright and on its back.
   - The copy loses 0x8c08 and is written back. A change made to +0x454 meanwhile is lost then: a lights
     toggle during the start's countdown does not last.
 

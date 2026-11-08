@@ -111,8 +111,7 @@ void Vehicle_Lights(Node *n, int toggle)
     }
 }
 
-/* 0x4683c0 a vehicle's sound by number; not ported yet: 0x462d60 network play's, 0x469cd0 the entity's
-   collisions dropped, 0x47de00 its textures released, 0x42d800 each part's */
+/* 0x4683c0 a vehicle's sound by number; not ported yet: 0x462d60 network play's */
 static void sound(int id, Node *n) { Sound_Event(id, n, NULL); }
 
 void Vehicle_State(Node *n, float dt)
@@ -170,7 +169,8 @@ void Vehicle_State(Node *n, float dt)
                     Engine_SoundStop(e->node);   /* 0x4763b0 */
                     Horn_Stop(e->node);          /* 0x476480 */
                     Node_SetFlags(e->node, 1);   /* 0x42e2d0 */
-                    /* and 0x469cd0, 0x47de00, 0x42d800 (not ported yet) */
+                    Collide_Remove(e);           /* 0x469cd0 */
+                    Lod_UnloadTree(e->node);     /* 0x47de00, then 0x42d800 on each child */
                 }
             }
         }

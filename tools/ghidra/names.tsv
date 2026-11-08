@@ -1393,3 +1393,5 @@
 00487730	Vsf_Wlst	carfile	high	a .vsf's WLST: the six wheels' conditions; ported
 00487810	Vsf_Wpst	carfile	high	a .vsf's WPST through 0x4552a0; ported
 004552a0	Weapon_SetState	weapons	high	a gun's rounds (and +0x18) by vehicle and hard point id; ported
+0047de00	Lod_Unload	lod	high	a node's loaded meshes released, its record kept (no level shown)
+0042d800	Lod_UnloadTree	lod	high	Lod_Unload on a node and every node below it

@@ -155,6 +155,31 @@ bool Lod_Copy(const Node *src, Node *dst)
     return true;
 }
 
+void Lod_Unload(Node *n)
+{
+    LodRec *r = (LodRec *)Lod_Find(n);
+    if (!r) return;
+    if (r->prev) {
+        Geom_Release(r->prev);
+        r->prev = NULL;
+    }
+    if (r->cur) {
+        Geom_Release(r->cur);
+        r->cur = NULL;
+    }
+    r->lod = r->plod = -1;
+    memset(r->cname, 0, sizeof r->cname);
+    memset(r->pname, 0, sizeof r->pname);
+    n->geom = NULL;
+    Tex_Refresh((uintptr_t)n);
+}
+
+void Lod_UnloadTree(Node *n)
+{
+    Lod_Unload(n);
+    for (Node *c = n->child; c; c = c->next) Lod_UnloadTree(c);
+}
+
 void Lod_Remove(Node *n)
 {
     if (!n) return;

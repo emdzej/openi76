@@ -21,6 +21,11 @@ bool Lod_SetState(Node *n, int state);
 /* Lod_Copy 0x47d850: dst gets a record like src's (its names, level and state, the current mesh loaded
    again) and src's sphere and box; false if src has none */
 bool Lod_Copy(const Node *src, Node *dst);
+/* Lod_Unload 0x47de00: the record kept, its meshes released (no level shown, no names loaded) and the
+   node's textures fetched again; nothing without a record */
+void Lod_Unload(Node *n);
+/* 0x42d800: Lod_Unload on n and every node below it */
+void Lod_UnloadTree(Node *n);
 /* Lod_Remove 0x47da30 */
 void Lod_Remove(Node *n);
 /* for tests: the record's current and previous names and levels, and the state's names (NULL if no
