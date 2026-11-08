@@ -13,6 +13,7 @@
 #include "orders.h"
 #include "physics.h"
 #include "platform.h"
+#include "render/fpu.h"
 #include "res.h"
 #include "shellcar.h"
 #include "sound.h"
@@ -301,9 +302,17 @@ void Melee_End(void)   /* 0x4072b0: and 0x463aa0, the scores' display freed, and
     waves_on = 0;
 }
 
-void Melee_Kill(void)   /* 0x4072e0: the score's points are not ported yet */
+/* 0x4072e0, a kill by the user (Vehicle_Damage's in the melee): one more, and as points the user's car's
+   +0xa8 times the victim's +0xa4 times 0x4a50f0; then the scores' display (0x463350, not ported) */
+void Melee_Kill(Node *victim)
 {
     kills++;
+    Entity *u = g_user_entity;
+    if (!u || !u->node || !u->node->data || !victim->data) return;
+    float a, b;
+    memcpy(&a, u->node->data + 0xa8, 4);
+    memcpy(&b, victim->data + 0xa4, 4);
+    points += (int32_t)(int64_t)fpu_mul(fpu_mul(a, b), exe_f32(0x4a50f0));   /* ftol 0x496690 chops */
 }
 
 void Melee_Score(int32_t *p, int16_t *k)

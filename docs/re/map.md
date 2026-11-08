@@ -148,9 +148,13 @@ The exe's side (src/melee.c):
   mission record's name and car (0x403130, 0x403160), whether the user's car was dying or dead (its
   +0x454 & 0x8020), the kills and the points (0x407340). The car's +0xa4 is read into +0x44, then 0 is
   written over it.
+- A kill by the user (Vehicle_Damage's, in the melee, when the packet's source is the user's node)
+  counts one more and adds ftol(the user's car's +0xa8 × the victim's +0xa4 × 1000) points (Melee_Kill
+  0x4072e0).
 
 Not ported yet:
 
-- the user's points per kill (Melee_Kill 0x4072e0 counts the kills only);
-- the scores' HUD (0x4632c0, 0x463350 "courier");
+- the scores' box (0x4632c0, 0x463350: a scroll region of 0x44fd00-0x450350 at 0x32, 0x96, 0x21c by
+  0xb4, its lines "%s:\t%d\t%d\t%d" with tab stops 250, 330, 410, shown by SCORE_TOGGLE, 0x27). It
+  draws with the game's bitmap font, base6x76.fnt (0x4394e0, 0x439720, 0x439900), which isn't ported yet;
 - the network's records (dpGetPlayerData).

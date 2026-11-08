@@ -1,5 +1,6 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "melee.h"
 #include "sound.h"
 #include "radio.h"
 #include "salvage.h"
@@ -1158,6 +1159,8 @@ static void death_steps(Node *n, int user)
     Weapons_Unarm(n);
 }
 
+static Node *packet_by;   /* the packet's +0, the source credited (a node: the port keeps it apart) */
+
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
 {
     uint8_t *d = n->data;
@@ -1238,8 +1241,8 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
         }
     } else
         Vehicle_Wreck(n, 1);
-    /* a kill by the user scores in the melee (0x4072e0) while 0x4a8760 is set (0x407030); never in a
-       mission */
+    /* in the melee (0x407370) a kill by the user scores (0x4072e0) */
+    if (g_melee && p && packet_by && (packet_by->flags & 0x10)) Melee_Kill(n);   /* Node_IsUser 0x42e620 */
     return 1;
 }
 
@@ -1364,7 +1367,9 @@ int Impact_Damage(Node *n, Node *src, const float v[3], const float nv[3], const
         by = src->data ? *(Node **)Data_Ptr(src->data, 0xc) : NULL;   /* 0x454380: the explosion's */
     }
     Node_Ref(n);
+    packet_by = by;
     Class_Damage(n, p, at);
+    packet_by = NULL;
     Node *live = Node_Live(n);
     if (live) Node_Unref(live);
     if (by && live) ai_struck(by, (uint32_t)kind, live, src);   /* 0x40fc80 (its mask argument unread) */
@@ -1377,7 +1382,9 @@ void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at)
 {
     if (!n) return;   /* (the original would crash) */
     Node_Ref(n);
+    packet_by = by;
     Class_Damage(n, p, at);   /* 0x425df0 */
+    packet_by = NULL;
     Node *live = Node_Live(n);   /* the port frees the dead: the original reads them on */
     if (live) Node_Unref(live);
     if (by && live && is_vehicle(live)) ai_struck(by, 0x10, live, NULL);
