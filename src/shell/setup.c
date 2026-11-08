@@ -1,7 +1,9 @@
 /* trip.h: the car's set-up (0xc00f; i76shell 0x10003fe0-0x10007d70, docs/re/setup.md). The car's
    components, guns, droppers and specials in boxes beside its picture, the repairs, and DONE: the
    record written back from the boxes (0x10018840), the car as addon\vehscn.vcf and .vsf, user.rpr, then
-   the mission. The trip's path only (0x1006b050 clear); the melee's from the map is not ported. */
+   the mission. From the melee's map (0x1006b050 set) the boxes take the map's car, CANCEL (box 4) puts
+   its name and paint back, and DONE goes back to the map; saving a changed car as an addon variant is not
+   ported yet. */
 #include "shell/trip.h"
 #include "crt.h"
 #include "exe.h"
@@ -29,12 +31,15 @@ static int32_t order[16];       /* 0x1006b2a8: the guns' hard point ids in the b
 static int row_h;               /* 0x1006b0f0 */
 static int32_t weight;          /* 0x1006af3c */
 static uint8_t *w_click, *w_done, *w_hello;   /* entries 0x52, 0x50 (0x1006b240), 0x4e (0x1006b248) */
-static int changed;             /* 0x1006b204: a part changed (read by the melee's DONE, not ported) */
+static int changed;             /* 0x1006b204: a part changed (the map's DONE saves the car then) */
 enum { REPAIR_BUDGET = 0x20 };   /* 0x1006b328, set 0x20 by 0x10003c80 */
 static int rep_first;           /* 0x1006b0f8: the repair order's first row */
 static const uint8_t *gauge;    /* 0x1005fb50: entry 0x3f, the repair time's gauge */
 static uint8_t *w_refuse;       /* entry 0x4f (0x1006b244): over the repair budget */
 static int trip_fns;            /* the garage's six functions set (0x1006b0ac and the rest) */
+static int map_fns;             /* the map's six (0x10018ba0-0x10019470) */
+static int renamed;             /* 0x1006b054: the car's name edited */
+static char was_name[0x28], was_paint[16];   /* 0x1006b1b8, 0x1006b0d0: the record's +0x14 and +0x82d */
 
 static int32_t rd32(const uint8_t *p) { int32_t v; memcpy(&v, p, 4); return v; }
 static void put32(uint8_t *p, int32_t v) { memcpy(p, &v, 4); }
@@ -68,6 +73,7 @@ static int index_of(const ShList *l, const void *it)   /* 0x10034bf0 */
 }
 
 void Setup_UseTrip(void) { trip_fns = 1; }   /* the garage's ACCEPT SALVAGE */
+void Setup_UseMap(void) { map_fns = 1; }     /* the map's button 5 */
 
 /* ---- the fills (the garage's 0x10036ec0, 0x10036fc0, 0x10037910 and their refreshes) ---- */
 
@@ -209,6 +215,62 @@ static void refresh_specs(ShList *s)   /* 0x10037960 */
 {
     for (int i = 0; i < 3; i++)
         if (index_of(g_sh_specials, s->items[i]) == -1) s->items[i] = &g_sh_empty;
+}
+
+/* ---- the map's fills (0x10018ba0, 0x10018c60, 0x10018d20, 0x100190a0, 0x10019430, 0x10019470) ---- */
+
+/* the map's engine, suspension and brakes, each while its kind's list has any (the count grown only
+   then: quirk, kept), then four wheels from the map's car while there are as many wheels at all */
+static void map_comps(ShList *c)
+{
+    for (int i = 0; i < 3; i++) {
+        const ShList *l = i == 0 ? g_sh_engines : i == 1 ? g_sh_susps : g_sh_brakes;
+        if (l->count) c->items[i] = Map_Part(i), c->count++;
+        else c->items[i] = &g_sh_empty;
+    }
+    const ShList *w = Map_CarList(1);
+    for (int i = 0; i < 4; i++)
+        if (i < g_sh_wheels->count) c->items[3 + i] = i < w->cap ? w->items[i] : NULL, c->count++;
+        else c->items[3 + i] = &g_sh_empty;
+}
+
+static ShPart *map_gun(int i)   /* the map's car's first gun of the slot's name */
+{
+    const ShList *l = Map_CarList(0);
+    for (int k = 0; k < l->count; k++)
+        if (!strcmp(slot_name(i), pname(l->items[k]))) return l->items[k];
+    return NULL;
+}
+
+static void map_guns(ShList *g, ShList *d, ShList *fg, ShList *fd)
+{
+    int taken = 0;
+    for (int i = 0; i < nslots() && taken <= n_rows + n_drop; i++) {
+        int32_t k = slot_kind(i);
+        if (k == 0xb || k == 6 || k == 7) {   /* 0x1001c690 */
+            ShPart *p = !crt_stricmp(slot_name(i), dll_str(0x100611b4)) ? &g_sh_empty : map_gun(i);
+            if (!p) continue;
+            int at = order_of(rd32(rec() + 0x784 + i * 4));
+            if (at >= 0 && at < g->cap) g->items[at] = p;
+            g->count++, taken++;
+        } else if (k == 8) {   /* 0x1001c6b0 */
+            ShPart *p = !crt_stricmp(slot_name(i), dll_str(0x100611bc)) ? &g_sh_empty : map_gun(i);
+            if (!p) continue;
+            ShList_Add(d, p, NULL);
+            taken++;
+        }
+    }
+    for (int k = 0; k < g_sh_guns->count; k++) {
+        ShPart *p = g_sh_guns->items[k];
+        if (pkind(p) == 8) ShList_Add(fd, p, NULL);
+        else ShList_Add(fg, p, by_gun);
+    }
+}
+
+static void map_specs(ShList *s)
+{
+    const ShList *l = Map_CarList(2);
+    for (int i = 0; i < 3; i++) ShList_Add(s, i < l->count ? l->items[i] : &g_sh_empty, NULL);
 }
 
 /* ---- the hard points' labels (0x10006c20) ---- */
@@ -507,6 +569,7 @@ static void draw_armour(const SBox *b)
 static void redraw(void)   /* 0x10006780 */
 {
     row_h = g_sh_font45.height + 2;
+    if (g_sh_from_map) Map_TopPicture();
     int x = sb[0].x0 - 0x4b, y = sb[0].y0 + 1;
     for (int i = 0; i < sb[0].rows; i++, y += row_h) {
         Scr_Text(x, y + 3, &g_sh_font47, dll_str(dll_u32(0x1005c9c8 + 4 * (uint32_t)i)), NULL);
@@ -528,7 +591,11 @@ static void redraw(void)   /* 0x10006780 */
     draw_drops(drops, &sb[2]);
     if (g_sh_stock_repairs) draw_repairs(g_sh_stock_repairs, &sb[4]);
     draw_armour(&sb[5]);
-    Scr_Text(0x52, 10, &g_sh_font45, (const char *)rec(), NULL);
+    if (g_sh_from_map) {   /* the make and the variant */
+        Scr_Text(0x69, 2, &g_sh_font45, (const char *)rec(), NULL);
+        Scr_Text(0x52, 0x11, &g_sh_font45, (const char *)rec() + 0x14, NULL);
+    } else
+        Scr_Text(0x52, 10, &g_sh_font45, (const char *)rec(), NULL);
     draw_weight();
 }
 
@@ -538,7 +605,19 @@ static void build(void)
 {
     row_h = g_sh_font45.height + 2;
     if (sb_list) {   /* 0x10005ba0: the lists refreshed */
-        if (trip_fns) {
+        if (g_sh_from_map) {   /* the labels and the boxes' rows again */
+            hp_labels();
+            n_rows = n_rear + n_top + n_fwd;
+            sb[1].y1 = n_rows * row_h + sb[1].y0;
+            sb[2].y1 = n_drop * row_h + sb[1].y1;
+            sb[2].y0 = sb[1].y1;
+        }
+        if (map_fns) {
+            ShList_Clear(comps), map_comps(comps);
+            ShList_Clear(guns), ShList_Clear(drops), ShList_Clear(free_guns), ShList_Clear(free_drops);
+            map_guns(guns, drops, free_guns, free_drops);
+            ShList_Clear(specs), map_specs(specs);
+        } else if (trip_fns) {
             refresh_comps(comps);
             ShList_Clear(guns), ShList_Clear(drops), ShList_Clear(free_guns), ShList_Clear(free_drops);
             fill_guns(guns, drops, free_guns, free_drops, 0x100670c0, 0x100670c8);
@@ -557,25 +636,34 @@ static void build(void)
         sb[i] = (SBox){rd32(b), rd32(b + 4), rd32(b + 8), rd32(b + 0xc), rd32(b + 0x10), rd32(b + 0x14),
                        rd32(b + 0x18) ? sb_scroll : NULL, NULL};
     }
-    /* the open's (0x10003fe0) for the trip: the repair order's box */
-    sb[4].rows = 10, sb[4].x0 = 0x1c2, sb[4].x1 = 0x268, sb[4].y0 = 0x30, sb[4].y1 = 0x107, sb[4].scroll = sb_scroll;
+    if (!g_sh_from_map)   /* the open's (0x10003fe0): the trip's repair order's box, the map's CANCEL */
+        sb[4].rows = 10, sb[4].x0 = 0x1c2, sb[4].x1 = 0x268, sb[4].y0 = 0x30, sb[4].y1 = 0x107, sb[4].scroll = sb_scroll;
+    else
+        sb[4].rows = 0, sb[4].x0 = 0x1ec, sb[4].x1 = 0x276, sb[4].y0 = 0x1c2, sb[4].y1 = 0x1d5, sb[4].scroll = NULL;
     sb_list = ShList_New(16);
     for (int i = 0; i < 10; i++) ShList_Add(sb_list, &sb[i], NULL);
-    ShList_Add(sb_list, &sb[11], NULL);
-    ShList_Remove(sb_list, &sb[8]);
+    if (!g_sh_from_map) {
+        ShList_Add(sb_list, &sb[11], NULL);
+        ShList_Remove(sb_list, &sb[8]);
+    } else
+        ShList_Add(sb_list, &sb[10], NULL);
     comps = ShList_New(7), sb[0].list = comps;
     guns = ShList_New(6), sb[1].list = guns;
     drops = ShList_New(4), sb[2].list = drops;
     specs = ShList_New(3), sb[3].list = specs;
     sb[4].list = g_sh_stock_repairs;
-    for (int i = 0; i < 5; i++) ShList_Add(sb_list, &sb[i], NULL);   /* the second time (quirk, kept) */
-    if (trip_fns) fill_comps(comps);
+    for (int i = 0; i < (g_sh_from_map ? 4 : 5); i++) ShList_Add(sb_list, &sb[i], NULL);   /* the second time (quirk, kept) */
+    if (map_fns) map_comps(comps);
+    else if (trip_fns) fill_comps(comps);
     sb[1].y1 = n_rows * row_h + sb[1].y0;
     sb[2].y1 = n_drop * row_h + sb[1].y1;
     sb[2].y0 = sb[1].y1;
     free_guns = ShList_New(0x40);
     free_drops = ShList_New(16);
-    if (trip_fns) {
+    if (map_fns) {
+        map_guns(guns, drops, free_guns, free_drops);
+        map_specs(specs);
+    } else if (trip_fns) {
         fill_guns(guns, drops, free_guns, free_drops, 0x100670b0, 0x100670b8);
         fill_specs(specs);
     } else
@@ -1310,6 +1398,63 @@ static void unported(int id)
     plat_log(m);
 }
 
+static uint32_t map_msg(void)   /* back to the map: a scenario's, the instant melee's, network play's */
+{
+    return g_sh_mode == 1 ? 0xc024 : g_sh_mode == 0 ? 0xc021 : 0xc026;
+}
+
+/* ---- the map's DONE: a changed car saved as an addon variant ---- */
+
+static int save_kind, save_at;   /* 0 the current variant over, 1 a new one, 2 variant save_at over */
+
+static void over_text(int x, int y) { Scr_Text(x + 0x6d, y + 0x24, &g_sh_font45, dll_str(0x1005cdb8), NULL); }   /* 0x10005ae0 */
+static void new_text(int x, int y) { Scr_Text(x + 0x6d, y + 0x24, &g_sh_font45, dll_str(0x1005cd9c), NULL); }    /* 0x10005ab0 */
+
+/* the car into addon\<file>: its weight, and the Phaedra Rattler's secret variants: one named "knat..."
+   or "natk..." armoured 1500 all round ("natk" 6000), "retpocileh..." 3000 at the front and +0x80c */
+static void saved(int yes)
+{
+    if (!yes) return;   /* the set-up stays */
+    char file[32], path[48];
+    if (save_kind == 2) Map_VariantFileAt(file, save_at);   /* 0x10017e10 */
+    else Map_VariantFile(file, save_kind);                  /* 0x10017d70 */
+    lists_to_record();
+    snprintf(path, sizeof path, dll_str(0x1005cfc8), file);
+    float w = (float)weight;
+    memcpy(rec() + 0x8bc, &w, 4);
+    const char *v = (const char *)rec() + 0x14;
+    if (!crt_stricmp((const char *)rec(), dll_str(0x1005cfd4))) {
+        if (!crt_strnicmp(v, dll_str(0x1005cfe4), 4) || !crt_strnicmp(v, dll_str(0x1005cfec), 4)) {
+            int32_t a = crt_strnicmp(v, dll_str(0x1005d02c), 4) ? 1500 : 6000;
+            for (int i = 0; i < 8; i++) put32(rec() + 0x7fc + 4 * i, a);
+        } else if (!crt_strnicmp(v, dll_str(0x1005d034), 10))
+            put32(rec() + 0x7fc, 3000), put32(rec() + 0x80c, 3000);
+    }
+    Car_WriteVcf(path, NULL);   /* 0x1001d6a0 */
+    Map_SavedCar();             /* 0x100194b0 */
+    leave(map_msg());
+}
+
+static void map_done(void)
+{
+    if (!renamed) {
+        if (!changed) {
+            leave(map_msg());
+            return;
+        }
+        if (Map_StockVariant()) {   /* the disc's own cannot be overwritten */
+            Shell_Note(0x1e, 0x77, 0x3d, 0x2a, 0x10);
+            return;
+        }
+        save_kind = 0;
+        Shell_YesNo(over_text, saved);
+        return;
+    }
+    save_at = Map_FindVariant();
+    save_kind = save_at == -1 ? 1 : 2;
+    Shell_YesNo(save_at == -1 ? new_text : over_text, saved);
+}
+
 static int box_at(int x, int y)   /* 0x10034cc0 */
 {
     for (int i = 0; i < sb_list->count; i++) {
@@ -1319,10 +1464,20 @@ static int box_at(int x, int y)   /* 0x10034cc0 */
     return -1;
 }
 
+static int editing;
+static char edit_was[0x28];
+
 static void screen(uint32_t msg)
 {
     if (msg != 0xc004) {
         leave(msg);
+        return;
+    }
+    if (editing) {
+        if (Edit_Pass() == -2) return;
+        editing = 0;
+        Scr_Text(0x52, 0x11, &g_sh_font45, (const char *)rec() + 0x14, NULL);
+        if (strcmp(edit_was, (const char *)rec() + 0x14)) renamed = 1;
         return;
     }
     if (hold.row >= 0) {   /* an armour's button held (the original loops in 0x1001e670) */
@@ -1333,8 +1488,12 @@ static void screen(uint32_t msg)
     int x = g_sh_mouse.x, y = g_sh_mouse.y, id = box_at(x, y);
     if (g_sh_mouse.click != 1) return;
     switch (id) {
-    case 7:   /* back to the salvage */
+    case 7:   /* back to the salvage; from the map the saved cars' screen (0xc01f, 0x10041170) */
         Shell_Click(w_click);
+        if (g_sh_from_map) {
+            unported(id);
+            return;
+        }
         if (w_hello) Sound_StopData(w_hello);
         lists_to_record();
         leave(0xc017);
@@ -1342,6 +1501,10 @@ static void screen(uint32_t msg)
     case 9:   /* DONE */
         Shell_Click(w_click);
         if (!car_ok()) return;
+        if (g_sh_from_map) {
+            map_done();
+            return;
+        }
         if (w_hello) Sound_StopData(w_hello);
         if (g_sh_rec.trip == 1 && !g_sh_bookmark) {
             Shell_YesNo(ask_text, asked);
@@ -1374,6 +1537,12 @@ static void screen(uint32_t msg)
         return;
     case 4:
         Shell_Click(w_click);
+        if (g_sh_from_map) {   /* CANCEL: the car's name and paint back */
+            snprintf((char *)rec() + 0x14, 0x28, "%s", was_name);
+            snprintf((char *)rec() + 0x82d, 13, "%s", was_paint);
+            leave(map_msg());
+            return;
+        }
         if (x < 0x1e2 || 0x25c < x || y < 0xf1 || 0x102 < y) {
             if (repairs_click(x, y, &sb[4])) draw_repairs(g_sh_stock_repairs, &sb[4]);
         } else
@@ -1386,6 +1555,13 @@ static void screen(uint32_t msg)
             draw_weight();
             changed = 1;
         }
+        return;
+    case 8:   /* the map's car's variant name, edited (renamed when it differs) */
+        Shell_Click(w_click);
+        snprintf(edit_was, sizeof edit_was, "%s", (const char *)rec() + 0x14);
+        Scr_Restore(0x4d, 0x13, 0xe0, 0xe);
+        Edit_Begin(&g_sh_font45, 0x52, 0x11, (char *)rec() + 0x14, 0xf, 0xa0);
+        editing = 1;
         return;
     case 10:   /* the paint (0x10007bc0) */
         Shell_Click(w_click);
@@ -1405,6 +1581,7 @@ static uint8_t *wave(int entry)
 void Setup_Open(void)
 {
     g_sh_redraw = redraw;
+    changed = renamed = 0;
 
     for (int i = 0; i < g_sh_ncat; i++) {   /* the paint's name, by the car's .vtf */
         const uint8_t *e = g_sh_cat + i * SHELL_PART;
@@ -1432,6 +1609,10 @@ void Setup_Open(void)
             }
         }
     }
+    if (g_sh_from_map) {
+        snprintf(was_name, sizeof was_name, "%s", (const char *)rec() + 0x14);
+        snprintf(was_paint, sizeof was_paint, "%s", (const char *)rec() + 0x82d);
+    }
     build();
     Shell_SetScreen(screen);
 }
@@ -1450,5 +1631,5 @@ void Setup_Reset(void)   /* of 0x10003c80: the repair order's first row (and the
 {
     rep_first = 0;
     setup_free();
-    trip_fns = 0;
+    trip_fns = map_fns = 0;
 }

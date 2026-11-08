@@ -257,3 +257,13 @@
 10017100	VariantPicker_Done	melee	high	the variant picked read into the type's record; ported
 10010ea0	Map_CarPicture	melee	high	entry 0x3c's frames 2t and 2t+1; ported
 10010dc0	Map_LoadSets	melee	high	entries 0x3c and 0x3d; ported
+10018ba0	MapFill_Comps	melee	high	the set-up's components from the map's car (and 0x10018c60 after clearing); ported
+10018d20	MapFill_Guns	melee	high	the set-up's guns and droppers from the map's car, the free lists (and 0x100190a0); ported
+10019430	MapFill_Specs	melee	high	the set-up's specials from the map's car (and 0x10019470); ported
+10016d70	Map_TopPicture	melee	high	entry 0x3d's frame of the type's picture in the set-up (0x10010f40); ported
+10017d40	Map_StockVariant	melee	high	the variant one of the disc's (at or below the first free); ported
+10017d70	Map_VariantFile	melee	high	the variant's file name; a new one counted and i76car.def written; ported
+10017e50	Map_FindVariant	melee	high	the variant of the car's name, or -1; ported
+10017e10	Map_VariantFileAt	melee	high	variant i's file name (from 0: quirk); ported
+100194b0	Map_SavedCar	melee	high	the instant melee's player given the saved car; ported
+100257c0	CarTypes_Write	melee	high	i76car.def written; ported

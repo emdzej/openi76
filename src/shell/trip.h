@@ -80,6 +80,20 @@ void Car_CollectWheels(ShList *out, const ShList *l);
    melee's mission back), 0x10013040 opened (0xc021, 0xc024, 0xc026) */
 void Melee_Reset(void);
 void Map_Open(void);
+/* the map's car as its redraw found it: 0x1006c7b4, 0x1006c7bc, 0x1006c7b8 the engine, suspension and
+   brakes (i 0-2); 0x1006c7a8, 0x1006c7ac, 0x1006c7b0 its guns, wheels and specials (i 0-2) */
+ShPart *Map_Part(int i);
+void Map_TopPicture(void);
+/* the set-up's saving of the map's car (map.c): 0x10017d40 the variant one of the disc's; 0x10017d70 its
+   file name (fresh: a new variant, i76car.def written); 0x10017e50 the variant of the car's name;
+   0x10017e10 variant i's file; 0x100194b0 the player given the car */
+int Map_StockVariant(void);
+void Map_VariantFile(char out[32], int fresh);
+int Map_FindVariant(void);
+void Map_VariantFileAt(char out[32], int i);
+void Map_SavedCar(void);   /* the set-up's picture of the map's car (0x10016d70) */
+ShList *Map_CarList(int i);
+void Setup_UseMap(void);   /* the set-up's fills, the map's (its button 5) */
 /* 0x1001d6a0: the car (record g_sh_car) with the lists' parts as a .vcf at path, then into the file
    index (name in the player's directory, else path's name in addon) */
 void Car_WriteVcf(const char *path, const char *name);

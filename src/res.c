@@ -128,10 +128,28 @@ static void zix_path(const char *name, char *out, size_t cap)
     else snprintf(out, cap, "%s", name);
 }
 
+static void addon_file(const char *name, bool is_dir, void *user)
+{
+    (void)user;
+    if (!is_dir) Res_AddPath(name, "addon");
+}
+
+/* Zix_Load's 0x48bf10: every file of the install's addon directory goes into the index first (the
+   cars a melee's set-up saved, a trip's vehscn.vcf): the disc's and those written in earlier runs */
+static void addon_scan(void)
+{
+    vfs_list("addon", addon_file, NULL);
+    const char *p;
+    for (int i = 0; vfs_written(i, &p); i++)
+        if (!crt_strnicmp(p, "addon", 5) && (p[5] == '\\' || p[5] == '/') && !strpbrk(p + 6, "\\/"))
+            Res_AddPath(p + 6, "addon");
+}
+
 bool Res_Init(void)
 {
     Res_Shutdown();
     zix_load();
+    addon_scan();
     /* the .pix of the index, in its order (sorted by name, ignoring case) */
     int n = vfs_zfs_count();
     char **pix = calloc(n > 0 ? (size_t)n : 1, sizeof *pix);

@@ -33,6 +33,7 @@ typedef struct {        /* a melee's player (0x1006cbf0, 0x8ec bytes each) */
 static ShList *buttons;                 /* 0x100603ac: the rects (id, x0, x1, y0, y1) hit */
 static ShList *nodes;                   /* 0x100603b4: every part's node */
 static ShList *l_cguns, *l_cwheels, *l_cspecs;   /* 0x1006c7a8, 0x1006c7ac, 0x1006c7b0: the car's */
+static ShPart *c_eng, *c_susp, *c_brk;  /* 0x1006c7b4, 0x1006c7bc, 0x1006c7b8 */
 static int32_t btn[NBTN][5];            /* 0x10060a18-0x10060bd0 (the original edits them in place) */
 static int btn_loaded;
 static CarType *types;                  /* 0x100603b8 */
@@ -52,7 +53,7 @@ static char variants[32][32];           /* 0x1006c7e0: the type's variants' name
 static Player players[NPLAYERS];        /* 0x1006cbf0 */
 static int32_t *victory;                /* 0x1006cbe8: victory.rec, per scenario the car and its weight */
 static uint8_t *w_click;                /* entry 0x52 (0x1008a528) */
-static const uint8_t *pic_set;          /* entry 0x3c (0x1005fb48), and 0x3d (0x1005fb4c) */
+static const uint8_t *pic_set, *top_set; /* entries 0x3c (0x1005fb48) and 0x3d (0x1005fb4c) */
 static ShPicker pk;                     /* 0x100604d8 */
 static int editing;
 static struct { int dir, wait; } hold;  /* a scroll arrow held */
@@ -118,7 +119,7 @@ void Melee_Reset(void)   /* 0x10012d90 */
        (0x1006c794, 0x1006c798), the addon levels (addon\*.lvl through the exe's +0x58 into 0x100603a4,
        counted into 0x100603c4) */
     first = 0;   /* and 0x1006cbe0 = 1, the instant melee's */
-    pic_set = NULL;   /* 0x10010d20 (with the car picture's sets) */
+    pic_set = top_set = NULL;   /* 0x10010d20 (with the car picture's sets) */
     Markers_Init(), Setup_Reset();   /* 0x10003c80 */
 }
 
@@ -232,7 +233,8 @@ static void init(void)
     if (buttons) return;
     uint32_t n;
     w_click = Mw2_Raw(g_sh_db, 0x52, &n);
-    if (!pic_set) pic_set = Mw2_Raw(g_sh_db, 0x3c, &n);   /* 0x10010dc0 (and 0x3d, unused here) */
+    if (!pic_set) pic_set = Mw2_Raw(g_sh_db, 0x3c, &n);   /* 0x10010dc0 */
+    if (!top_set) top_set = Mw2_Raw(g_sh_db, 0x3d, &n);
     buttons = ShList_New(0x20);
     nodes = ShList_New(0xa0);
     g_sh_engines = ShList_New(8), g_sh_specials = ShList_New(0x20), g_sh_guns = ShList_New(0x40);
@@ -293,8 +295,8 @@ static void redraw(void)   /* 0x100167c0 */
     car_picture(types[type_at].pic);
     text(0x14a, 399, (const char *)car_rec(type_at));
     text(0x124, 0x1a5, (const char *)car_rec(type_at) + 0x14);
-    ShPart *eng = Car_PickPart(2, g_sh_engines), *susp = Car_PickPart(3, g_sh_susps);
-    ShPart *brk = Car_PickPart(4, g_sh_brakes);
+    c_eng = Car_PickPart(2, g_sh_engines), c_susp = Car_PickPart(3, g_sh_susps);
+    c_brk = Car_PickPart(4, g_sh_brakes);
     ShList_Clear(l_cwheels), Car_CollectWheels(l_cwheels, g_sh_wheels);
     ShList_Clear(l_cguns), Car_CollectGuns(l_cguns, g_sh_guns);
     ShList_Clear(l_cspecs), Car_CollectSpecials(l_cspecs, g_sh_specials);
@@ -311,9 +313,9 @@ static void redraw(void)   /* 0x100167c0 */
         if (p && strcmp((const char *)p->part + 0x2e, dll_str(0x10061070))) text(0x1d6, y, (const char *)p->part), y += row_h();
     }
     y = 0xb1;
-    text(0x1d6, y, (const char *)eng->part), y += row_h();
-    text(0x1d6, y, (const char *)susp->part), y += row_h();
-    text(0x1d6, y, (const char *)brk->part), y += row_h();
+    text(0x1d6, y, (const char *)c_eng->part), y += row_h();
+    text(0x1d6, y, (const char *)c_susp->part), y += row_h();
+    text(0x1d6, y, (const char *)c_brk->part), y += row_h();
     for (int i = 0; i < l_cwheels->count && i < 4; i++, y += row_h())
         text(0x1d6, y, (const char *)((const ShPart *)l_cwheels->items[i])->part);
     if (g_sh_mode == 1) {
@@ -321,6 +323,57 @@ static void redraw(void)   /* 0x100167c0 */
         text(0x120, 0x3a, name);   /* 0x10019520 */
     }
 }
+
+void Map_TopPicture(void)   /* 0x10016d70 with 0x10010f40: entry 0x3d's frame of the type's picture */
+{
+    if (!pic_set || !types) return;   /* (by 0x3c's set, as the original) */
+    int pic = types[type_at].pic;
+    if (pic > 0x16) pic = 0x17;
+    if (top_set) Scr_Frame(top_set, pic, 0x1c2, 0x46, 0xb0, 0xb0);
+}
+
+/* ---- the set-up's saving of the map's car as a variant ---- */
+
+int Map_StockVariant(void) { return types && variant <= types[type_at].free_from; }   /* 0x10017d40 */
+
+/* 0x10017d70: the current variant's file name; fresh, a new variant past the last (i76car.def written
+   again, 0x100257c0) */
+void Map_VariantFile(char out[32], int fresh)
+{
+    if (fresh) {
+        variant = ++types[type_at].count;
+        uint8_t *b = malloc(4 + (size_t)ntypes * 0x1c);
+        if (b) {
+            memcpy(b, &ntypes, 4);
+            for (int i = 0; i < ntypes; i++) memcpy(b + 4 + i * 0x1c, &types[i], 0x1c);
+            Files_Write(dll_str(0x10063754), b, 4 + (size_t)ntypes * 0x1c);
+            free(b);
+        }
+    }
+    snprintf(out, 32, dll_str(0x10061160), types[type_at].name, variant);
+    players[player_at].variant = variant;
+}
+
+/* 0x10017e50: the variant already of the car's name (from 0, by the names kept), or -1 */
+int Map_FindVariant(void)
+{
+    for (int i = 0; types && i < types[type_at].count && i < 32; i++)
+        if (!crt_stricmp(variants[i], (const char *)car_rec(type_at) + 0x14)) return i;
+    return -1;
+}
+
+/* 0x10017e10: variant i's file name: from 0 against the files' 1 (quirk, kept) */
+void Map_VariantFileAt(char out[32], int i) { snprintf(out, 32, dll_str(0x1006116c), types[type_at].name, i); }
+
+void Map_SavedCar(void)   /* 0x100194b0: the instant melee's player gets the car */
+{
+    if (g_sh_mode != 0) return;
+    players[player_at].type = type_at;
+    memcpy(players[player_at].rec, car_rec(type_at), SHELL_REC);
+}
+
+ShPart *Map_Part(int i) { return i == 0 ? c_eng : i == 1 ? c_susp : c_brk; }
+ShList *Map_CarList(int i) { return i == 0 ? l_cguns : i == 1 ? l_cwheels : l_cspecs; }
 
 /* ---- the pickers (0x1000f5e0 with 0x10016fa0 and 0x10016d90; 0x1000f370 with 0x10017200, 0x10017100) ---- */
 
@@ -471,7 +524,7 @@ static void back(void)   /* button 15: the lists freed (0x10015a90), the garage 
     free(types), types = NULL;
     free(victory), victory = NULL;
     w_click = NULL;
-    pic_set = NULL;   /* 0x10010e10 */
+    pic_set = top_set = NULL;   /* 0x10010e10 */
     Garage_Reset();   /* 0x10034df0 */
     Melee_Reset();
     leave(0xc00e, 1);
@@ -526,13 +579,12 @@ static void screen(uint32_t msg)
         picker(0xeb, 0xab, 0xf, 0x32, types[type_at].count, 0x10060438, variants_draw, variants_done);
         Picker_OpenTop(&pk, 9);
         return;
-    case 5: {   /* the car's set-up (0xc00f with the map's fills 0x10018ba0-0x10019470): not ported yet */
+    case 5:   /* the car's set-up, with the map's fills (0x10018ba0-0x10019470) */
         Shell_Click(w_click);
-        char m[80];
-        snprintf(m, sizeof m, "OpenI76: the melee map's set-up is not ported yet");
-        plat_log(m);
+        g_sh_car = type_at;
+        Setup_UseMap();
+        leave(0xc00f, 0);
         return;
-    }
     case 6:
         Shell_Click(w_click);
         if (g_sh_mode == 1) start();
