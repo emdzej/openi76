@@ -284,8 +284,8 @@ static int slab(float p, float v, float lo, float hi, float *t0, float *t1)
 
 /* 0x476df0: a point p moving v into the box [lo, hi] grown by m: the entry time within this frame (*t),
    and the normal of the face it enters by (against the motion along that axis) */
-static int box_sweep(const float p[3], const float v[3], const float lo[3], const float hi[3], float *t,
-                     float nrm[3], float m)
+int Box_Sweep(const float p[3], const float v[3], const float lo[3], const float hi[3], float *t, float nrm[3],
+              float m)
 {
     float in, out, a, b;
     if (!slab(p[0], v[0], F32(SUB(lo[0], m)), F32(ADD(m, hi[0])), &in, &out)) return 0;
@@ -318,22 +318,28 @@ static void to_local(float out[3], const float v[3], const Frame *f)
 
 /* 0x4766b0: the entity's COLP box (0x47a810: the record's three mins and the maxima its counts pick) in
    its frame, swept by the segment (in place, in local space); the normal back in the world */
-static int colp_sweep(const float p[3], const float v[3], Entity *e, float *t, float nrm[3])
+void Colp_Box(const Entity *e, float lo[3], float hi[3])
 {
-    float lo[3] = {0}, hi[3] = {0};
     const int32_t *r = e->a;
+    lo[0] = lo[1] = lo[2] = hi[0] = hi[1] = hi[2] = 0;
     if (r) {
         const float *f = (const float *)r;
         lo[0] = f[3], lo[1] = f[8], lo[2] = f[11];
         hi[0] = f[r[0] + 2], hi[1] = f[r[1] + 6], hi[2] = f[r[2] + 10];
     }
+}
+
+static int colp_sweep(const float p[3], const float v[3], Entity *e, float *t, float nrm[3])
+{
+    float lo[3], hi[3];
+    Colp_Box(e, lo, hi);
     Frame inv;
     Frame_Invert(&inv, &e->node->frame);
     float lp[3], lv[3];
     Frame_Points(&lp, (const float(*)[3])p, 1, &inv);
     to_local(lv, v, &e->node->frame);
     float n[3];
-    if (!box_sweep(lp, lv, lo, hi, t, n, 0)) return 0;
+    if (!Box_Sweep(lp, lv, lo, hi, t, n, 0)) return 0;
     const float *m = e->node->frame.m;
     nrm[0] = F32(ADD(ADD(MUL(m[6], n[2]), MUL(m[3], n[1])), MUL(n[0], m[0])));
     nrm[1] = F32(ADD(ADD(MUL(m[1], n[0]), MUL(m[7], n[2])), MUL(m[4], n[1])));
@@ -416,7 +422,7 @@ static int face_sweep(const float p[3], const float v[3], const CollFace *f, con
 }
 
 /* 0x479070: the mesh's earliest face met (not before the start) */
-static int faces_sweep(const float p[3], const float v[3], const CollMesh *m, float *t, float nrm[3])
+int Mesh_SweepFaces(const float p[3], const float v[3], const CollMesh *m, float *t, float nrm[3])
 {
     float best = 1e30f, bn[3] = {0}, tt, n[3];
     for (const CollFace *f = m->faces; f; f = f->next)
@@ -457,7 +463,7 @@ static int tree_sweep(const float p[3], const float v[3], Node *node, const Fram
                     if (!below_eq(best, tt)) best = tt, memcpy(bn, lv3, sizeof bn), bw = node;
                 }
                 if (type == 0x3000 && node->coll && faces) {
-                    if (faces_sweep(p, v, node->coll, &tt, lv3)) {
+                    if (Mesh_SweepFaces(p, v, node->coll, &tt, lv3)) {
                         hit = 1;
                         if (!below_eq(best, tt)) best = tt, memcpy(bn, lv3, sizeof bn), bw = node;
                     }
@@ -471,7 +477,7 @@ static int tree_sweep(const float p[3], const float v[3], Node *node, const Fram
                     lv[0] = F32(ADD(ADD(MUL(d[2], m[6]), MUL(d[1], m[3])), MUL(d[0], m[0])));
                     lv[1] = F32(ADD(ADD(MUL(d[2], m[7]), MUL(d[0], m[1])), MUL(d[1], m[4])));
                     lv[2] = F32(ADD(ADD(MUL(d[1], m[5]), MUL(d[0], m[2])), MUL(d[2], m[8])));
-                    if (box_sweep(lp, lv, node->bmin, node->bmax, &tt, n, r)) {
+                    if (Box_Sweep(lp, lv, node->bmin, node->bmax, &tt, n, r)) {
                         hit = 1;
                         if (!below_eq(best, tt)) {
                             best = tt;

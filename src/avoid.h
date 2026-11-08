@@ -45,3 +45,13 @@ int Entity_Sweep(const float p[3], const float v[3], Entity *e, Node **who, floa
 /* AI_ShotsAhead 0x4163d0: a live shot of the kinds dodged (12, 14-17, 19) the vehicle comes within 5 m of
    within 3 s (docs/re/ai.md "Avoiding") */
 int AI_ShotsAhead(Node *n, float *slow, float *factor, float *t);
+/* Box_Sweep 0x476df0: a point p moving v into the box [lo, hi] grown by m: the entry time within this
+   frame (*t) and the normal of the face it enters by */
+int Box_Sweep(const float p[3], const float v[3], const float lo[3], const float hi[3], float *t, float nrm[3],
+              float m);
+/* Colp_Box 0x47a810: the entity's COLP box in its frame (its record's minima, the maxima its counts pick;
+   0 without one) */
+void Colp_Box(const Entity *e, float lo[3], float hi[3]);
+/* Mesh_SweepFaces 0x479070: the segment p + v against a collision mesh's faces: the earliest met */
+struct CollMesh;
+int Mesh_SweepFaces(const float p[3], const float v[3], const struct CollMesh *m, float *t, float nrm[3]);

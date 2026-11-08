@@ -69,6 +69,11 @@ if [ -z "$1" ]; then
       echo "$out" | grep -q identical || { echo "[--call $c $m]"; echo "$out" | tail -4; }
     done
   done
+  # the collisions between entities: each vehicle against every entity (s07: the bumps; t11: a helicopter)
+  for m in t01.msn s07.msn t11.msn; do
+    out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py "$m" --call pair 2>&1) || fail=1
+    echo "$out" | grep -q identical || { echo "[--call pair $m]"; echo "$out" | tail -4; }
+  done
   # the shots' flights, the radar and the turrets where rockets and missiles fly (s01: types 2, 3, 5, 8)
   for c in fly radar aim turret; do
     out=$(nice -n 19 .deps/emu-venv/bin/python tools/emu/diff_objects.py s01.msn --call $c 2>&1) || fail=1

@@ -1485,6 +1485,20 @@
 004632c0	Scores_Init	melee	high	the scores' box made, hidden, filled; ported
 00463350	Scores_Fill	melee	high	the scores' lines (the melee's: the user's); ported
 004635d0	Scores_Toggle	melee	high	SCORE_TOGGLE: the box shown or hidden; ported
-00469db0	Collide_Frame	collide	high	each frame: the moving entities' boxes swept through the frame, then the entities' collisions; boxes ported (src/collide.c)
+00469db0	Collide_Frame	collide	high	each frame: the moving entities' boxes swept through the frame, then the entities' collisions; ported but the scenes' merge 0x48d530 (src/collide.c)
 00469f30	Box_Overlap	collide	high	a segment's box against an entity's (+0x50) in x and z
-00469f80	Collide_Pair	collide	high	two entities' collision: boxes, spheres' sweep, meshes, the class's response and sounds; not ported
+00469f80	Collide_Pair	collide	high	two entities' collision: boxes, spheres' sweep, meshes, the class's response and sounds; ported (src/contact.c), diffed (--call pair)
+00479b80	Contact_Test	collide	high	a COLP box entity against another by its collision kind: box both ways, always, or the node tree; ported
+00479be0	Contact_BoxBox	collide	high	box against box both ways round, the records swapped; ported (in Contact_Test)
+00479d10	Contact_Tree	collide	high	a box against a node tree from the identity frame 0x4db298; ported (in Contact_Test)
+00479db0	Contact_Node	collide	high	a box against a node and its children: 0x2000 box, 0x3000 mesh, 0x4000/0x5000 sphere; ported
+0047a0f0	Contact_Box	collide	high	eight mid-height points of a box swept into another box in its frame; ported
+0047aeb0	Contact_Mesh	collide	high	a box's points swept against a collision mesh's faces; ported
+0047b270	Contact_Sphere	collide	high	a box against a sphere (grows the box in place); ported
+0046b340	Contact_Sound	collide	high	an impact's sound by the other's class and the squared speed; ported
+00425d20	Class_Collide	classes	high	both nodes' class table collision handlers (+0x24); ported
+0042a7a0	Vehicle_Contact	vehicles	high	class 1's collision: the record kept at data+0x38 for the physics, the impact's damage; ported
+004306f0	Structure_Contact	classes	high	class 2's and 4's collision: the impact's damage by the other's velocity; ported
+00431dc0	Heli_Contact	vehicles	high	class 9's collision: calls 0x42a7a0; ported
+00433080	Class7_Contact	classes	high	class 7's collision, as 0x4306f0; ported
+00434840	ClassA_Contact	classes	high	class 0xa's collision, as 0x4306f0; ported

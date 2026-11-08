@@ -134,10 +134,37 @@ times the frame's step, ordered, then widened by its radius (+0x10) on each side
 boxes are set once, when they are added (0x469c10). Every sweep through the lists tests these boxes
 first (0x469f30: the shots' 0x46a9b0, the avoidance's), so before this pass was ported no shot ever hit
 a vehicle (found by a t01 run: every impact on structures, the wagon and the attackers only scratched).
-Then each moving entity against every moving one after it and every static one (0x469f80: the boxes,
-the spheres' sweep 0x46a1d0, the meshes 0x479b80, the class's collision 0x425d20 with the impact's
-sounds 0x46b340, else "vvbo1.wav"; a static one touched with 0x577170 and 0x577184 set has its scene
-merged, 0x48d530): **not ported yet**, so vehicles pass through each other and through objects.
+Then each moving entity against every moving one after it and every static one (0x577170 cleared
+before each static one); a static one touched while 0x577184 is set has its scene merged with the
+moving one's in the drawing queue (0x48d530, **not ported**).
+
+**Two entities' collision (Collide_Pair 0x469f80, src/contact.c; confirmed by `diff_objects.py --call
+pair`: each vehicle moved onto every other entity, t01, t02, t05, t08, t11, t14, t17, a01 and s01-s07
+identical).** Their +0x50 boxes must overlap in x and in z (y is not tested; 0x577170 set). Their
+spheres (centre +4 in the world, velocity by class, the sum of the radii) are swept through the frame's
+step (0x46a1d0); with a meeting, the result is 1 unless a is of class 7. The shapes are then tested by
+whichever of the two has collision kind 1 (a COLP box; a first): Contact_Test 0x479b80 by the other's
+kind: 1 the two boxes both ways round (0x479be0, the second with the records swapped), 2 always (the
+records left as the stack had them), 3 the other's node tree from the identity frame 0x4db298 (0x479db0:
+each node in its frame, 0x2000 a box both ways round with the records *not* swapped, a quirk kept; 0x3000
+the box's four mid-height corners swept against the mesh's faces 0x47aeb0; 0x4000/0x5000 a sphere,
+the box grown by the radius in place, scaled 1 or 0.75, 0x47b270; then the children). The box test
+(0x47a0f0) sweeps eight mid-height points of one box (the corners and the edges' middles), each at its
+velocity less the other's, into the other box in that one's frame (0x476df0) and keeps the earliest.
+
+The two records (0x6c bytes each: +0 hit, +4 the other node, +8 its body 0x3c bytes by 0x425c80, +0x44
+the time, +0x48 the point in its own frame, +0x54 the other's velocity less its own, +0x60 the face's
+normal in the world) then go: when either other is a ground entity (classes 0xb-0xd) with a normal over
+0.3 up, only a bump ("vvbo1.wav" at the one of class 1); else a helicopter (class 8) stands as the
+other for itself rather than its part, the impact's sound plays (0x46b340: between vehicles by the squared
+relative speed, over 2025 "vvch2", up to 500 "vvcbb3", else "vvcre2"; against class 4 "vnvco3", class 3
+"vnvcs5", anything else "vnvcs1" up to 500, else "vnvcs3"), and each node's class collision handler
+runs (0x425d20, class table +0x24): a vehicle's (0x42a7a0; a helicopter's 0x431dc0 calls it) keeps the
+record at its data +0x38 for its next physics step (Vehicle_Collide; not against class 3 with flag 0x200)
+and, unless flagged 0x20 or hit by class 3 or 4, takes the impact's damage (0x45d7c0) by the velocities'
+difference; a structure's (0x4306f0) and classes 7's and 0xa's (0x433080, 0x434840) take it by the
+other's velocity. A body of no class of its own leaves its last 12 bytes as the stack had them (the port's
+are zero; the check masks them).
 
 ## The start (Vehicle_Start 0x4294e0, ported, diffed)
 

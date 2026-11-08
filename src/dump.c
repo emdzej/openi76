@@ -347,6 +347,7 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "contrail.h"
 #include "skid.h"
 #include "flamer.h"
+#include "contact.h"
 #include "sound.h"
 #include "radio.h"
 #include "salvage.h"
@@ -442,6 +443,35 @@ static void salvage_line(void)
         memset(b + k, 0xff, 4), k += 4;
     }
     call_line(b, k);
+}
+
+/* case 76's: a contact's records as the original's 0x6c bytes, the others by identity */
+static Node *pair_a, *pair_b;
+static int pair_skip;
+static void pair_rec(Touch *r)
+{
+    uint8_t b[0x6c];
+    int32_t who = !r->other ? 0 : r->other == pair_a ? 1 : r->other == pair_b ? 2 : 3;
+    memcpy(b, &r->hit, 4);
+    memcpy(b + 4, &who, 4);
+    memcpy(b + 8, r->body, 0x3c);
+    int veh = r->other && (r->other->cls == 1 || r->other->cls == 9);
+    if (!veh) memset(b + 8 + 0x30, 0, 12);   /* the original's stack's (Body_State); a helicopter (8) is put in
+                                                after its part's body was taken */
+    memcpy(b + 0x44, &r->t, 4);
+    memcpy(b + 0x48, r->pt, 12);
+    memcpy(b + 0x54, r->vel, 12);
+    memcpy(b + 0x60, r->nrm, 12);
+    call_line(b, sizeof b);
+}
+static void pair_hook(Node *n1, Node *n2, Touch *r1, Touch *r2)
+{
+    int32_t h[3] = {n1 || n2 ? 1 : 2, !n1 ? 0 : n1 == pair_a ? 1 : n1 == pair_b ? 2 : 3,
+                    !n2 ? 0 : n2 == pair_a ? 1 : n2 == pair_b ? 2 : 3};
+    call_line(h, sizeof h);
+    if (pair_skip) return;
+    pair_rec(r1);
+    pair_rec(r2);
 }
 
 int Dump_CallVehicles(int which, int upside)
@@ -1649,6 +1679,53 @@ int Dump_CallVehicles(int which, int upside)
             salvage_line();
             Salvage_Free();
             g_mission_kind = k0, g_mission_number = n0;
+            break;
+        }
+        case 76: {   /* the collisions between entities (0x469f80): n's entity against every other one with
+                        a node, n moved to the other's place (x and z by a quarter of the radii's sum), both
+                        boxes made to overlap, its velocity (-10, -2, -10), the step 0.05; the result and, for each response (0x425d20)
+                        or bump, its records (the others as 1 n, 2 the other node, 3 else) */
+            int ia = -1;
+            for (int i = 0; i < g_entity_count; i++)
+                if (g_entities[i].node == n) ia = i;
+            if (ia < 0) break;
+            float was = g_clock_dt;
+            g_clock_dt = 0.05f;
+            g_contact_hook = pair_hook;
+            Entity *a = &g_entities[ia];
+            for (int j = 0; j < g_entity_count; j++) {
+                Entity *b = &g_entities[j];
+                if (j == ia || !b->node) continue;
+                double pos[3];
+                uint8_t ba[24], bb[24];
+                memcpy(pos, n->frame.pos, sizeof pos);
+                uint8_t vel[12];
+                static const float toward[3] = {-10, -2, -10};
+                memcpy(vel, n->data + 0xbc, 12);
+                memcpy(n->data + 0xbc, toward, 12);
+                float *xa = (float *)&a->rest[(0x50 - 0x34) / 4], *xb = (float *)&b->rest[(0x50 - 0x34) / 4];
+                memcpy(ba, xa, 24);
+                memcpy(bb, xb, 24);
+                float q = (a->r + b->r) * 0.25f;   /* in nearest, as the check's python */
+                n->frame.pos[0] = b->node->frame.pos[0] + q;
+                n->frame.pos[1] = b->node->frame.pos[1];
+                n->frame.pos[2] = b->node->frame.pos[2] + q;
+                static const float wide[6] = {-1e6f, -1e6f, -1e6f, 1e6f, 1e6f, 1e6f};
+                memcpy(xa, wide, 24);
+                memcpy(xb, wide, 24);
+                pair_a = n;
+                pair_b = b->node;
+                pair_skip = a->has_a == 2 || b->has_a == 2;
+                g_fpu_round = FPU_DOWN;
+                int32_t hdr[2] = {j, Collide_Pair(a, b)};
+                call_line(hdr, sizeof hdr);
+                memcpy(n->frame.pos, pos, sizeof pos);
+                memcpy(n->data + 0xbc, vel, 12);
+                memcpy(xa, ba, 24);
+                memcpy(xb, bb, 24);
+            }
+            g_contact_hook = NULL;
+            g_clock_dt = was;
             break;
         }
         case 75: {   /* the helicopters (0x4314a0), once: each class 9 entity (with data) flown 60 frames at the

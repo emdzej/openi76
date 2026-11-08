@@ -3,7 +3,7 @@
 #include "classes.h"
 #include "clock.h"
 #include "combat.h"
-#include "platform.h"
+#include "contact.h"
 #include "exe.h"
 #include "lod.h"
 #include "terrain.h"
@@ -223,12 +223,20 @@ void Collide_Frame(void)
         box[3] = F32(ADD(box[3], e->r));
         box[5] = F32(ADD(box[5], e->r));
     }
-    /* each moving entity against the moving after it and against every static one (0x469f80; with a
-       static one touched, 0x48d530 merges their scene nodes): not ported yet */
-    static int said;
-    if (!said && g_coll_moving) {
-        said = 1;
-        plat_log("OpenI76: the collisions between entities (0x469f80) are not ported yet");
+    /* each moving entity against the moving after it and against every static one; a static one whose
+       box was overlapped and that was not taken off the lists meanwhile (0x577184) has its scene merged
+       with the moving one's (0x48d530, the drawing queue's: not ported) */
+    for (Cell *c = g_coll_moving, *next; c; c = next) {
+        next = c->next;
+        for (Cell *o = next, *on; o; o = on) {
+            on = o->next;
+            Collide_Pair(c->value, o->value);
+        }
+        for (Cell *o = g_coll_static, *on; o; o = on) {
+            on = o->next;
+            g_coll_touch = 0;
+            Collide_Pair(c->value, o->value);
+        }
     }
 }
 

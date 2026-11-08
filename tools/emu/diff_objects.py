@@ -2165,6 +2165,76 @@ def call_heli(exe, n, fpcw):
     exe.write(0x4DB12C, was)
 
 
+PAIR = {}   # call_pair's: the stubs' state (they are set once, for the first vehicle)
+
+
+def call_pair(exe, n, fpcw):
+    from unicorn import x86_const, UC_HOOK_CODE
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    count = struct.unpack("<i", exe.read(0x4D3B5C, 4))[0]
+    ents = [0x547E60 + i * 0x78 for i in range(count)]
+    ea = next((e for e in ents if u(e) == n), 0)
+    if not ea:
+        return
+    cur = PAIR
+
+    def who(m):
+        return 0 if not m else 1 if m == cur["a"] else 2 if m == cur["b"] else 3
+
+    def rec(r):
+        b = bytearray(exe.read(r, 0x6C))
+        o = u(r + 4)
+        b[4:8] = struct.pack("<i", who(o))
+        if not o or u(o + 0x6C) not in (1, 9):   # the stack's (the port's Body_State); a helicopter (8) is
+            b[8 + 0x30:8 + 0x3C] = bytes(12)        # put in after its part's body was taken
+        return bytes(b).hex()
+
+    def response(n1, n2, r1, r2):
+        CALL_OUT.append(struct.pack("<iii", 1, who(n1), who(n2)).hex())
+        if not cur["skip"]:
+            CALL_OUT.extend((rec(r1), rec(r2)))
+
+    def bump(uc, addr, size, user):   # at Entity_Collide's calls of vvbo1.wav (0x468580 is stubbed already)
+        CALL_OUT.append(struct.pack("<iii", 2, 0, 0).hex())
+        if not cur["skip"]:   # the records on its stack, under the call's three arguments
+            sp = uc.reg_read(x86_const.UC_X86_REG_ESP) + 0xC
+            CALL_OUT.extend((rec(sp + 0x34), rec(sp + 0xA0)))
+    if not cur:
+        exe.stub(0x425D20, response, 4)
+        exe.stub(0x46B340, lambda *a: 0, 2)
+        for at in (0x46A141, 0x46A160):
+            exe.uc.hook_add(UC_HOOK_CODE, bump, None, begin=at, end=at)
+    cur["a"] = n
+    was = exe.read(0x4DB12C, 4)
+    exe.write(0x4DB12C, struct.pack("<f", 0.05))
+    rd = (fpcw & ~0xC00) | 0x400
+    ra = struct.unpack("<f", exe.read(ea + 0x10, 4))[0]
+    for j, eb in enumerate(ents):
+        m = u(eb)
+        if eb == ea or not m:
+            continue
+        cur["b"], cur["skip"] = m, u(ea + 0x14) == 2 or u(eb + 0x14) == 2
+        pos, ba, bb = exe.read(n + 0x40, 24), exe.read(ea + 0x50, 24), exe.read(eb + 0x50, 24)
+        rb = struct.unpack("<f", exe.read(eb + 0x10, 4))[0]
+        f32 = lambda v: struct.unpack("<f", struct.pack("<f", v))[0]  # noqa: E731
+        q = f32(f32(ra + rb) * 0.25)
+        x, y, z = struct.unpack("<ddd", exe.read(m + 0x40, 24))
+        exe.write(n + 0x40, struct.pack("<ddd", x + q, y, z + q))
+        d = u(n + 0x70)
+        vel = exe.read(d + 0xBC, 12)
+        exe.write(d + 0xBC, struct.pack("<fff", -10, -2, -10))
+        wide = struct.pack("<6f", -1e6, -1e6, -1e6, 1e6, 1e6, 1e6)
+        exe.write(ea + 0x50, wide)
+        exe.write(eb + 0x50, wide)
+        r = exe.call(0x469F80, ea, eb, limit=500_000_000, fpcw=rd)
+        CALL_OUT.append(struct.pack("<ii", j, r).hex())
+        exe.write(n + 0x40, pos)
+        exe.write(d + 0xBC, vel)
+        exe.write(ea + 0x50, ba)
+        exe.write(eb + 0x50, bb)
+    exe.write(0x4DB12C, was)
+
+
 def call_wheel31(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
 
@@ -2197,7 +2267,7 @@ def call_wheel31(exe, n, fpcw):
 
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge), "mortar": (72, call_mortar), "gate": (73, call_gate), "wheel31": (74, call_wheel31), "heli": (75, call_heli)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio), "salvage": (67, call_salvage), "hide": (68, call_hide), "kill": (69, call_kill), "glance": (70, call_glance), "dodge": (71, call_dodge), "mortar": (72, call_mortar), "gate": (73, call_gate), "wheel31": (74, call_wheel31), "heli": (75, call_heli), "pair": (76, call_pair)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
