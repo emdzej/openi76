@@ -347,6 +347,9 @@ size_t Objects_Dump(char *buf, size_t cap)
 #include "contrail.h"
 #include "skid.h"
 #include "flamer.h"
+#include "sound.h"
+#include "radio.h"
+#include "dsound.h"
 #include "render/poly.h"
 #include "render/sky.h"
 #include "render/obj_draw.h"
@@ -1454,6 +1457,153 @@ int Dump_CallVehicles(int which, int upside)
                 for (int i = 0; i < 6; i++) memset(b + 0x6c * i + 4 + 0x24, 0, 4);   /* the frame's pad */
                 call_line(b, sizeof b);
             }
+            break;
+        }
+        case 64:     /* the sound manager (0x466ab0-0x468970) with the user's vehicle n: its set-up (0x466ab0), the
+                        main view 20 m behind n and 6 up; then 40 frames of 0.1 s, each the sounds asked for
+                        (below), the buffers moved on 0.1 s (the checks' clock) and the frame (0x466b70 with 1);
+                        after each the DirectSound calls made and the two lists' counts; at the end 0x466de0.
+                        The others are the mission's other cars in entity order (v1, v2). 65, the engines
+                        (0x4761b0-0x476580): 30 frames of their loops, horns, siren and starter instead. 66, the CB
+                        radio (0x46fa50-0x46fdb0): 60 frames of messages, the tick count 0 (the emulator's),
+                        each frame's line with the queue's length, emptiness and the handset */
+        case 65:
+        case 66: {
+            if (!g_user_entity || g_user_entity->node != n) break;
+            Node *v[2] = {n, n};
+            for (int i = 0, k = 0; i < g_entity_count && k < 2; i++) {
+                Node *e = g_entities[i].node;
+                if (e && e->cls == 1 && e != n) v[k++] = e;
+            }
+            g_fpu_round = FPU_DOWN;
+            Ds_LogOn(1);
+            Sound_Defaults();   /* as the emulator's 0x5e14de */
+            Sound_Init();
+            static Surface sf;
+            static uint8_t px[640 * 480];
+            sf.pitch = sf.w = 640, sf.h = 480, sf.x0 = sf.y0 = 0, sf.x1 = 639, sf.y1 = 479, sf.pixels = px, sf.on = 1;
+            const uint32_t fov = 0x3fc90fda;
+            float fovf;
+            memcpy(&fovf, &fov, 4);
+            View_Create(&g_view, &sf, fovf, 1.0f, 150.0f, 1.0f);
+            Frame cam = n->frame;
+            for (int i = 0; i < 3; i++) cam.pos[i] = cam.pos[i] - 20.0 * (double)n->frame.m[6 + i] + (i == 1 ? 6.0 : 0.0);
+            View_SetCamera(&g_view, &cam);
+            {
+                const char *l0 = Ds_LogTake();
+                call_line(l0, strlen(l0));
+            }
+            const double far0 = v[1]->frame.pos[0];
+            uint8_t *eng = (*(Node **)Data_Ptr(n->data, 0x3c4))->data;
+            uint8_t rpm0[4];
+            memcpy(rpm0, eng + 0x1c, 4);
+            const double fake0 = g_clock_fake_ms;
+            if (which == 66) g_clock_fake_ms = 0, Radio_On(1);
+            char said[64] = "";
+            for (int k = 0; k < (which == 65 ? 30 : which == 66 ? 60 : 40); k++) {
+                g_fpu_round = FPU_DOWN;
+                said[0] = 0;
+                if (which == 66) {
+                    int r = -1;
+                    switch (k) {
+                    case 0:
+                        r = Radio_Say("01sgc06.wav", n, 3) * 2; r += Radio_Say("01sgc07.wav", v[0], 3);
+                        break;
+                    case 1: r = Radio_Say("01sgc08.wav", NULL, 5); break;
+                    case 2: r = Radio_Say("01sgc09.wav", NULL, 6); break;
+                    case 3: r = Radio_Say("01sgc10.wav", v[1], 3) * 2; r += Radio_Say("01sgc15.wav", v[0], 4); break;
+                    case 5: Radio_Drop(v[0]); break;
+                    case 8: r = Radio_Say("01sgc11.wav", NULL, 2); break;
+                    case 12: r = Radio_Say("01sgc12.wav", v[1], 6); break;
+                    case 20: Radio_Drop(v[1]); break;
+                    case 30: r = Radio_Say("01sir01.wav", n, 1) * 2; r += Radio_Say("01ssk01.wav", NULL, 6); break;
+                    case 34: Sound_SetVoices(0); break;
+                    case 35: Sound_SetVoices(8); r = Radio_Say("01sta09.wav", NULL, 0); break;
+                    case 40: Radio_Clear(0); r = Radio_Say("STOPCBXX", NULL, 3); break;
+                    case 41: r = Radio_Say("01sta10.wav", NULL, 3); break;
+                    case 42: Radio_On(1); r = Radio_Say("01sta12.wav", n, 3) * 2; r += Radio_Say("01sta13.wav", n, 3); break;
+                    case 50: Radio_Drop(n); break;
+                    }
+                    snprintf(said, sizeof said, "radio %d %d %d %d\n", r, Radio_Count(), Radio_Empty(), Handset_IsOn());
+                } else if (which == 65) {
+                    uint8_t *e = eng;
+                    switch (k) {
+                    case 0:
+                        Sound_Event(1, n, NULL);
+                        Sound_Event(1, v[0], NULL);
+                        Sound_Event(1, v[1], NULL);
+                        break;
+                    case 2: { float r = 3000.0f; memcpy(e + 0x1c, &r, 4); break; }
+                    case 3:
+                        Sound_Event(3, v[0], NULL);
+                        Siren(v[1], 1);
+                        break;
+                    case 8: { float r = 5123.5f; memcpy(e + 0x1c, &r, 4); break; }
+                    case 10: Horn(v[1], 1); break;
+                    case 14:
+                        Horn_Stop(v[1]);
+                        Siren(v[1], 0);
+                        break;
+                    case 16: Sound_Event(2, v[0], NULL); break;
+                    case 18: Engine_StartTime(n); break;
+                    case 20: Engine_StarterStop(n); break;
+                    case 22: Engine_SoundStop(n); break;
+                    }
+                    if (k >= 5 && k < 10) Horn_Held(n);
+                } else
+                switch (k) {
+                case 0:
+                    Sound_Event(5, v[0], NULL);
+                    Sound_Event(8, n, NULL);
+                    Sound_PlayAt(exe_str(0x4dc810), v[1], NULL);
+                    break;
+                case 1:
+                    Sound_Event(10, n, NULL);
+                    Sound_PlayAt("vtcoll.wav", v[0], NULL);
+                    Sound_PlayAt("xcar.wav", v[1], NULL);
+                    break;
+                case 3: Sound_PlayAt("xcar.wav", v[1], NULL); break;
+                case 4: Sound_PlayAt("xcar.wav", v[0], NULL); break;
+                case 5: Sound_Event(7, v[0], NULL); break;
+                case 6: Sound_PlayAt("aheli.wav", v[1], NULL); break;
+                case 22:
+                    Sound_PlayPlaced("xbuild.wav", v[0], NULL);
+                    Sound_Play("cammo.wav", NULL, NULL, NULL);
+                    Sound_PlayAt("vtcoll.wav", v[0], NULL);
+                    break;
+                case 8: v[1]->frame.pos[0] = far0 + 700.0; break;
+                case 12: v[1]->frame.pos[0] = far0; break;
+                case 15: Sound_Event(11, n, NULL); break;
+                case 20:
+                    Sound_SetVoices(2);
+                    Sound_Event(5, v[0], NULL);
+                    Sound_Event(6, v[1], NULL);
+                    Sound_Event(8, n, NULL);
+                    Sound_Event(0x10, n, NULL);
+                    break;
+                case 25: Sound_SetVoices(8); break;
+                case 30: Sound_Pause(); break;
+                case 32: Sound_Resume(); break;
+                }
+                if (which == 64 && k >= 2 && k < 12) Sound_PlayHeld("wlmgun.wav", n, NULL);   /* held while firing */
+                Ds_Advance(0.1);
+                Sound_Frame(1);
+                char m[128];
+                snprintf(m, sizeof m, "%slists %d %d", said, Sound_Count(0), Sound_Count(1));
+                const char *l = Ds_LogTake();
+                size_t ln = strlen(l), mn = strlen(m);
+                char *b = malloc(ln + mn + 1);
+                memcpy(b, l, ln), memcpy(b + ln, m, mn + 1);
+                call_line(b, ln + mn);
+                free(b);
+            }
+            Sound_StopAll();
+            const char *l = Ds_LogTake();
+            call_line(l, strlen(l));
+            Ds_LogOn(0);
+            v[1]->frame.pos[0] = far0;
+            memcpy(eng + 0x1c, rpm0, 4);
+            g_clock_fake_ms = fake0;
             break;
         }
         case 63: {   /* the flame throwers (0x46ce90-0x46df40) on the user's vehicle n as the muzzle: the ring

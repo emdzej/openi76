@@ -4,6 +4,9 @@
 #include "crt.h"
 #include "exe.h"
 #include "math3d.h"
+#include "entity.h"
+#include "ordnance.h"
+#include "sound.h"
 #include "tex.h"
 #include "render/fpu.h"
 #include "render/palette.h"
@@ -140,8 +143,10 @@ void Contrail_Start(Node *s, int kind)
     section_frame(&f, c, &s->frame);
     section_points(c, 0, &f);
     ring = c->next;
-    /* kind 2 (0x45cb60, the shot's target): clockon.wav when it is the user's vehicle and its data's
-       +0x456 has no bit 4 (0x4765d0); the sounds are not ported */
+    if (kind == 2) {   /* the shot's target (0x45cb60): clockon.wav when it is the user's, not bit 4 of +0x456 */
+        Node *t = Shot_Gather(s), *u = g_user_entity ? g_user_entity->node : NULL;
+        if (u && t == u && !(u->data[0x456] & 4)) Sound_PlayUser(exe_str(0x4d3b38), u, NULL);
+    }
 }
 
 /* 0x46f960: a section on at f */

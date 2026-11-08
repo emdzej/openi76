@@ -1443,6 +1443,343 @@ def call_flamer(exe, n, fpcw):
     exe.write(n + 0x18, start)
 
 
+class FakeDS:
+    """DirectSound's objects for the original (IDirectSound, its buffers, their 3D interfaces, the listener):
+    COM vtables of stdcall stubs that log each call as the port's dsound.c does (Ds_LogOn), the buffers
+    moving on only by advance() (the checks' clock)"""
+
+    def __init__(self, exe):
+        self.exe, self.log, self.bufs, self.serial, self.objs, self.vts = exe, [], {}, 0, {}, {}
+        self.ds = self.obj("ds", [(0, lambda t, i, o: 0x80004002, 3), (1, lambda t: 1, 1), (2, lambda t: 0, 1),
+                                  (3, self.create, 4), (4, self.caps, 2), (5, self.dup, 3), (6, lambda t, h, l: 0, 3)], 11)
+
+    def stub(self, fn, nargs):
+        e = self.exe
+        a = e.next_stub
+        e.next_stub += 16
+        e.uc.mem_write(a, b"\xc3")
+        e.stub(a, fn, nargs, stdcall=True)
+        return a
+
+    def obj(self, kind, methods, count, info=None):
+        e = self.exe
+        if kind not in self.vts:   # one table a kind: the methods go by this
+            table = {i: (fn, k) for i, fn, k in methods}
+            self.vts[kind] = e.put(b"".join(struct.pack("<I", self.stub(*table[i]) if i in table else self.stub(lambda *a: 0, 1))
+                                            for i in range(count)))
+        o = e.put(struct.pack("<II", self.vts[kind], 0))
+        self.objs[o] = (kind, info)
+        return o
+
+    def u(self, a):
+        return struct.unpack("<I", self.exe.read(a, 4))[0]
+
+    def buffer(self, b):
+        return self.obj("buf", [(0, self.qi, 3), (2, self.release, 1), (9, self.status, 2), (11, self.lock, 8),
+                                (12, self.play, 4), (14, self.fmt, 2), (15, self.vol, 2), (16, self.pan, 2),
+                                (17, self.freq, 2), (18, self.stop, 1), (19, self.unlock, 5)], 21, b)
+
+    def create(self, this, desc, out, unk):
+        flags, size, wfx = self.u(desc + 4), self.u(desc + 8), self.u(desc + 0x10)
+        if flags & 1:   # the primary: its format, its listener
+            o = self.obj("prim", [(0, self.qi, 3), (14, self.fmt, 2), (2, lambda t: 0, 1)], 21)
+        else:
+            ch, rate = struct.unpack("<HI", self.exe.read(wfx + 2, 6))
+            bits = struct.unpack("<H", self.exe.read(wfx + 14, 2))[0]
+            b = {"id": self.serial, "size": size, "freq": rate, "frames": size // (bits // 8 * ch), "playing": 0,
+                 "loop": 0, "pos": 0.0}
+            self.serial += 1
+            self.log.append(f"create {b['id']} {flags:x} {size} {rate} {bits} {ch}")
+            o = self.buffer(b)
+            self.bufs[o] = b
+        self.exe.write(out, struct.pack("<I", o))
+        return 0
+
+    def caps(self, this, caps):
+        self.exe.write(caps + 4, bytes(0x5C))
+        return 0
+
+    def dup(self, this, src, out):
+        s = self.bufs[src]
+        b = dict(s, id=self.serial, playing=0, loop=0, pos=0.0)
+        self.serial += 1
+        self.log.append(f"dup {b['id']} {s['id']}")
+        o = self.buffer(b)
+        self.bufs[o] = b
+        self.exe.write(out, struct.pack("<I", o))
+        return 0
+
+    def qi(self, this, iid, out):
+        kind, b = self.objs[this]
+        if kind == "prim":
+            o = self.obj("lis", [(2, lambda t: 0, 1), (10, self.lis, 3), (17, self.commit, 1)], 18)
+        else:
+            self.log.append(f"qi {b['id']}")
+            o = self.obj("3d", [(2, lambda t: 0, 1), (12, self.set3d, 3)], 21, b)
+        self.exe.write(out, struct.pack("<I", o))
+        return 0
+
+    def release(self, this):
+        b = self.bufs.pop(this, None)
+        if b:
+            self.log.append(f"rel {b['id']}")
+        return 0
+
+    def status(self, this, out):
+        self.exe.write(out, struct.pack("<I", self.bufs[this]["playing"]))
+        return 0
+
+    def lock(self, this, off, n, p1, n1, p2, n2, flags):
+        m = self.exe.put(bytes(n))
+        self.exe.write(p1, struct.pack("<I", m))
+        self.exe.write(n1, struct.pack("<I", n))
+        if p2:
+            self.exe.write(p2, bytes(4))
+        if n2:
+            self.exe.write(n2, bytes(4))
+        return 0
+
+    def unlock(self, this, p1, n1, p2, n2):
+        self.log.append(f"fill {self.bufs[this]['id']} {zlib.crc32(self.exe.read(p1, n1)):08x}")
+        return 0
+
+    def play(self, this, r1, r2, flags):
+        b = self.bufs[this]
+        b["playing"], b["loop"] = 1, flags & 1
+        self.log.append(f"play {b['id']} {flags & 1}")
+        return 0
+
+    def stop(self, this):
+        b = self.bufs[this]
+        b["playing"] = 0
+        self.log.append(f"stop {b['id']}")
+        return 0
+
+    def fmt(self, this, wfx):
+        ch, rate = struct.unpack("<HI", self.exe.read(wfx + 2, 6))
+        bits = struct.unpack("<H", self.exe.read(wfx + 14, 2))[0]
+        self.log.append(f"fmt {rate} {bits} {ch}")
+        return 0
+
+    def vol(self, this, v):
+        self.log.append(f"vol {self.bufs[this]['id']} {struct.unpack('<i', struct.pack('<I', v))[0]}")
+        return 0
+
+    def pan(self, this, v):
+        self.log.append(f"pan {self.bufs[this]['id']} {struct.unpack('<i', struct.pack('<I', v))[0]}")
+        return 0
+
+    def freq(self, this, f):
+        b = self.bufs[this]
+        b["freq"] = min(max(f, 100), 100000)
+        self.log.append(f"freq {b['id']} {f}")
+        return 0
+
+    def set3d(self, this, p, flags):
+        self.log.append(f"set3d {self.objs[this][1]['id']} " + "".join(f"{w:08x}," for w in struct.unpack("<15I", self.exe.read(p + 4, 60))))
+        return 0
+
+    def lis(self, this, p, flags):
+        self.log.append("lis " + "".join(f"{w:08x}," for w in struct.unpack("<15I", self.exe.read(p + 4, 60))))
+        return 0
+
+    def commit(self, this):
+        self.log.append("commit")
+        return 0
+
+    def advance(self, s):
+        for b in self.bufs.values():
+            if not b["playing"]:
+                continue
+            b["pos"] += s * b["freq"]
+            if b["pos"] >= b["frames"]:
+                if b["loop"] and b["frames"]:
+                    b["pos"] = b["pos"] % b["frames"]
+                else:
+                    b["playing"], b["pos"] = 0, 0.0
+
+    def take(self):
+        t = "".join(x + ";" for x in self.log)
+        self.log = []
+        return t
+
+
+def call_sound(exe, n, fpcw, engine=False, radio=False):
+    u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
+    rd = (fpcw & ~0xC00) | 0x400
+    if not u(0x4D3B64) or u(u(0x4D3B64)) != n:
+        return
+    v = [n, n]
+    k = 0
+    for i in range(u(0x4D3B5C)):
+        e = u(0x547E60 + i * 0x78)
+        if e and u(e + 0x6C) == 1 and e != n and k < 2:
+            v[k] = e
+            k += 1
+    ds = FakeDS(exe)
+    exe.stub_import("DirectSoundCreate", lambda g, out, unk: exe.write(out, struct.pack("<I", ds.ds)) or 0, 3)
+    for a, k in ((0x4784B0, 0), (0x468830, 0), (0x478A90, 1), (0x492420, 4), (0x492580, 2)) + (() if radio else ((0x46FD20, 1),)):
+        exe.stub(a, lambda *x: 0, k)
+    get = mission.GET[0]
+    exe.stub(0x492670, lambda cache, name: get(name), 2)
+    exe.write(0x5E14DE, bytes([3, 5, 10, 8]))   # the settings' audio bytes, 0x44d660's defaults (the port's)
+    exe.call(0x466AB0, 0, limit=50_000_000, fpcw=rd)
+    exe.call(0x466DD0, 1, limit=1_000_000, fpcw=rd)   # on, as WinMain's first frame
+    make_view(exe, rd)
+    start = exe.read(n + 0x18, 0x40)
+    m = struct.unpack("<9f", start[:36])
+    pos = struct.unpack("<3d", start[0x28:])
+    cam = start[:0x28] + struct.pack("<3d", *[pos[i] - 20.0 * m[6 + i] + (6.0 if i == 1 else 0.0) for i in range(3)])
+    exe.call(0x43CF00, 0x4A8488, exe.put(cam), limit=50_000_000, fpcw=rd)
+    CALL_OUT.append(ds.take().encode().hex())
+    far0 = struct.unpack("<d", exe.read(v[1] + 0x40, 8))[0]
+    names = {}
+    nm = lambda t: names.setdefault(t, exe.put(t.encode() + b"\0"))  # noqa: E731
+    c = lambda f, *a: exe.call(f, *a, limit=500_000_000, fpcw=rd)  # noqa: E731
+    eng = u(u(u(n + 0x70) + 0x3C4) + 0x70)
+    rpm0 = exe.read(eng + 0x1C, 4)
+    if radio:
+        c(0x46FA50, 1)
+    for k in range(30 if engine else 60 if radio else 40):
+        said = ""
+        if radio:
+            say = lambda t, nd, kind: c(0x46FA70, nm(t), nd, kind) & 0xFF  # noqa: E731
+            r = -1
+            if k == 0:
+                r = say("01sgc06.wav", n, 3) * 2
+                r += say("01sgc07.wav", v[0], 3)
+            elif k == 1:
+                r = say("01sgc08.wav", 0, 5)
+            elif k == 2:
+                r = say("01sgc09.wav", 0, 6)
+            elif k == 3:
+                r = say("01sgc10.wav", v[1], 3) * 2
+                r += say("01sgc15.wav", v[0], 4)
+            elif k == 5:
+                c(0x46FDB0, v[0])
+            elif k == 8:
+                r = say("01sgc11.wav", 0, 2)
+            elif k == 12:
+                r = say("01sgc12.wav", v[1], 6)
+            elif k == 20:
+                c(0x46FDB0, v[1])
+            elif k == 30:
+                r = say("01sir01.wav", n, 1) * 2
+                r += say("01ssk01.wav", 0, 6)
+            elif k == 34:
+                c(0x467100, 0)
+            elif k == 35:
+                c(0x467100, 8)
+                r = say("01sta09.wav", 0, 0)
+            elif k == 40:
+                c(0x46FD20, 0)
+                r = say("STOPCBXX", 0, 3)
+            elif k == 41:
+                r = say("01sta10.wav", 0, 3)
+            elif k == 42:
+                c(0x46FA50, 1)
+                r = say("01sta12.wav", n, 3) * 2
+                r += say("01sta13.wav", n, 3)
+            elif k == 50:
+                c(0x46FDB0, n)
+            q, ql = u(0x4DD904), 0
+            while q:
+                ql += 1
+                q = u(q + 0x20)
+            said = f"radio {r} {ql} {int(u(0x4DD904) == 0)} {struct.unpack('<i', exe.read(0x54FA18, 4))[0]}\n"
+        elif engine:
+            if k == 0:
+                c(0x4683C0, 1, n, 0)
+                c(0x4683C0, 1, v[0], 0)
+                c(0x4683C0, 1, v[1], 0)
+            elif k == 2:
+                exe.write(eng + 0x1C, struct.pack("<f", 3000.0))
+            elif k == 3:
+                c(0x4683C0, 3, v[0], 0)
+                c(0x4763E0, v[1], 1)
+            elif k == 8:
+                exe.write(eng + 0x1C, struct.pack("<f", 5123.5))
+            elif k == 10:
+                c(0x476440, v[1], 1)
+            elif k == 14:
+                c(0x476480, v[1])
+                c(0x4763E0, v[1], 0)
+            elif k == 16:
+                c(0x4683C0, 2, v[0], 0)
+            elif k == 18:
+                c(0x476510, n)
+            elif k == 20:
+                c(0x476580, n)
+            elif k == 22:
+                c(0x4763B0, n)
+            if 5 <= k < 10:
+                c(0x476420, n)
+        elif k == 0:
+            c(0x4683C0, 5, v[0], 0)
+            c(0x4683C0, 8, n, 0)
+            c(0x468580, 0x4DC810, v[1], 0)
+        elif k == 1:
+            c(0x4683C0, 10, n, 0)
+            c(0x468580, nm("vtcoll.wav"), v[0], 0)
+            c(0x468580, nm("xcar.wav"), v[1], 0)
+        elif k == 3:
+            c(0x468580, nm("xcar.wav"), v[1], 0)
+        elif k == 4:
+            c(0x468580, nm("xcar.wav"), v[0], 0)
+        elif k == 5:
+            c(0x4683C0, 7, v[0], 0)
+        elif k == 6:
+            c(0x468580, nm("aheli.wav"), v[1], 0)
+        elif k == 22:
+            c(0x468640, nm("xbuild.wav"), v[0], 0)
+            c(0x467260, nm("cammo.wav"), 0, 0, 0)
+            c(0x468580, nm("vtcoll.wav"), v[0], 0)
+        elif k == 8:
+            exe.write(v[1] + 0x40, struct.pack("<d", far0 + 700.0))
+        elif k == 12:
+            exe.write(v[1] + 0x40, struct.pack("<d", far0))
+        elif k == 15:
+            c(0x4683C0, 11, n, 0)
+        elif k == 20:
+            c(0x467100, 2)
+            c(0x4683C0, 5, v[0], 0)
+            c(0x4683C0, 6, v[1], 0)
+            c(0x4683C0, 8, n, 0)
+            c(0x4683C0, 0x10, n, 0)
+        elif k == 25:
+            c(0x467100, 8)
+        elif k == 30:
+            c(0x4688D0)
+        elif k == 32:
+            c(0x4688E0)
+        if 2 <= k < 12 and not engine and not radio:
+            c(0x4685D0, nm("wlmgun.wav"), n, 0)
+        ds.advance(0.1)
+        c(0x466B70, 1)
+        sys_ = 0x5E2EC0
+        cnt = [0, 0]
+        for li in range(2):
+            r = u(sys_ + 0x1C + 4 * li)
+            while r:
+                cnt[li] += 1
+                r = u(r)
+        CALL_OUT.append((ds.take() + said + f"lists {cnt[0]} {cnt[1]}").encode().hex())
+    c(0x466DE0)
+    last = ds.take()
+    if last:   # as the port's call_line, which drops an empty line
+        CALL_OUT.append(last.encode().hex())
+    exe.write(v[1] + 0x40, struct.pack("<d", far0))
+    exe.write(eng + 0x1C, rpm0)
+
+
+def call_engine(exe, n, fpcw):
+    call_sound(exe, n, fpcw, engine=True)
+
+
+def call_radio(exe, n, fpcw):
+    call_sound(exe, n, fpcw, radio=True)
+
+
 def call_orbit(exe, n, fpcw):
     call_camera(exe, n, fpcw, 0x4059A0, 0x403BE0)
 
@@ -1517,15 +1854,15 @@ def call_raze(exe, n, fpcw):
         c = u(c + 0x60)
 
 # each: the port's case in Dump_CallVehicles, the original's function (called with the node, 0) or a caller
-CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer)}
+CALLS = {"upright": (0, 0x46FE20), "steer": (1, call_steer), "wheels": (2, call_wheels), "brake": (3, call_brake), "grip": (4, call_grip), "force": (5, call_force), "air": (6, call_air), "drag": (7, call_drag), "drive": (8, call_drive), "corners": (9, call_corners), "collide": (10, call_collide), "ground": (11, call_ground), "settle": (12, call_settle), "physics": (13, call_physics), "frame": (14, call_frame), "sway": (15, call_sway), "state": (16, call_state), "side": (17, call_side), "parts": (18, call_parts), "wear": (19, call_wear), "hit": (20, call_hit), "impact": (21, call_impact), "wreck": (22, call_wreck), "search": (23, call_search), "avoid": (24, call_avoid), "way": (25, call_way), "stuck": (26, call_stuck), "roadwar": (27, call_roadwar), "tactics": (28, call_tactics), "see": (29, call_see), "fire": (30, call_fire), "trigger": (31, call_trigger), "shot": (32, call_shot), "launch": (33, call_launch), "fly": (34, call_fly), "raze": (35, call_raze), "radar": (36, call_radar), "aim": (37, call_aim), "turret": (38, call_turret), "camera": (39, call_camera), "track": (40, call_track), "overview": (41, call_overview), "chase14": (42, call_chase14), "chase15": (43, call_chase15), "mount12": (44, call_mount12), "mount13": (45, call_mount13), "target": (46, call_target), "toward": (47, call_toward), "hood": (48, call_hood), "pilot": (49, call_pilot), "missile": (50, call_missile), "orbit": (51, call_orbit), "dash": (52, call_dash), "cockpit": (53, call_cockpit), "hud": (54, call_hud), "mirror": (55, call_mirror), "wdash": (56, call_wdash), "flat": (57, call_flat), "rdisp": (58, call_rdisp), "smoke": (59, call_smoke), "contrail": (60, call_contrail), "skid": (61, call_skid), "debris": (62, call_debris), "flamer": (63, call_flamer), "sound": (64, call_sound), "engine": (65, call_engine), "radio": (66, call_radio)}
 USER_VCF = os.environ.get("USER_VCF")   # the user's vehicle, e.g. vppt10 (else WinMain's default)
 UPSIDE = "--upside" in sys.argv   # with --call: every vehicle first on its back
 CALL = sys.argv[sys.argv.index("--call") + 1] if "--call" in sys.argv else None
 START = "--start" in sys.argv or CALL is not None
 # the start handlers (the class table's word 2) not ported yet: stubbed in the emulator
 START_LATER = (
-               # the user vehicle's set-up (camera) and the engine's sound
-               0x403360, 0x476240)
+               # the user vehicle's set-up (camera)
+               0x403360,)
 TEXANIM_ARG = {0x42FEB0: 0x18, 0x434430: 0x10, 0x4208F0: 0x10, 0x433D10: 0x1C, 0x47EC60: 0x18}
 
 
@@ -1533,7 +1870,7 @@ def class_data(m, cls, d):
     """vehicle.c's and entity.c's data, as src/dump.c prints it"""
     if cls in (1, 8, 9):
         raw = bytearray(m.raw(d, 0x50C))
-        for o in VEH_PTRS + ((0,) if cls in (1, 8, 9) else ()):
+        for o in VEH_PTRS + ((0,) if cls in (1, 8, 9) else ()) + (0x10C,):   # 0x10c: the engine's sound record
             raw[o:o + 4] = bytes(4)
         s = " v" + raw.hex() + " vp"
         for o in VEH_PTRS:
@@ -1654,18 +1991,24 @@ def original():
         from unicorn import x86_const
         exe.call(0x425920, limit=500_000_000, fpcw=exe.uc.reg_read(x86_const.UC_X86_REG_FPCW))
     if CALL:
-        exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
-        exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
+        if CALL not in ("sound", "engine", "radio"):   # the sound check runs the original's sound manager
+            exe.stub(0x4683C0, lambda *a: 0, 3)   # a sound
+            exe.stub(0x468580, lambda *a: 0, 3)   # a sound by name
         # the vehicle's damage (0x429eb0) and an impact's (0x45d7c0) run; their callees not ported yet:
-        for f, k in ((0x433240, 3), (0x452CD0, 0), (0x468A70, 0), (0x46FDB0, 1),
-                     (0x488950, 1), (0x455370, 1), (0x476440, 2),
-                     # the wreck's (0x42c580): the sound's pitch, debris thrown, fires
+        for f, k in ((0x433240, 3), (0x452CD0, 0), (0x468A70, 0),
+                     (0x488950, 1), (0x455370, 1),
+                     # the wreck's (0x42c580): a kick, debris thrown, fires
                      (0x476170, 3), (0x45B760, 4), (0x45B3F0, 1)):
             exe.stub(f, lambda *a: 0, k)
+        if CALL != "radio":   # a death's CB messages dropped
+            exe.stub(0x46FDB0, lambda *a: 0, 1)
+        if CALL != "engine":   # the horn, its stop, the starter's stop, the engine's stop
+            for f, k in ((0x476440, 2), (0x476580, 1), (0x4763B0, 1), (0x476480, 1)):
+                exe.stub(f, lambda *a: 0, k)
         # the state's step (0x42b830) runs; its callees not ported yet are stubbed
-        exe.stub(0x467260, lambda *a: 1, 4)   # a sound played (the port's: as if it played)
-        for f, k in ((0x476580, 1), (0x462D60, 1), (0x4763B0, 1), (0x476480, 1), (0x469CD0, 1),
-                     (0x47DE00, 1), (0x42D800, 1)):
+        if CALL not in ("sound", "engine", "radio"):   # a sound played: without sound set up (the port's in these checks) none is
+            exe.stub(0x467260, lambda *a: 0, 4)
+        for f, k in ((0x462D60, 1), (0x469CD0, 1), (0x47DE00, 1), (0x42D800, 1)):
             exe.stub(f, lambda *a: 0, k)
         exe.stub(0x475EE0, lambda *a: 0, 3)   # the tyres' sounds and flats
         exe.stub_import("GetTickCount", lambda *a: 0, 0)
@@ -1846,6 +2189,9 @@ if __name__ == "__main__":
             bad += 1
             if bad <= 8:
                 print(f"line {i}:\n  orig {x}\n  port {y}")
+    if os.environ.get("CALL_TEXT"):   # the sound checks' lines are text
+        for x in CALL_OUT:
+            print("call", bytes.fromhex(x).decode(errors="replace").replace(";", " ; "))
     if os.environ.get("CALL_SHOW"):
         for x in CALL_OUT:
             print("call", len(x) // 2, x[:8], x[8:16], x[16:24], x[24:32], x[0x6c * 2 + 8:0x6c * 2 + 32], "t" + x[120:128])

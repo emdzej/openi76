@@ -420,11 +420,9 @@
 0042d5e0	Node_Data	entity	high	returns node+0x70
 0042d920	Special_Kind	damage	high	a special's data +0
 0042d4f0	Vehicle_Mode	vehicle	high	the vehicle's data +0x104
-004761b0	Engine_SoundStart	audio	med	0x476240 (the engine's sound) as a boolean
 00429eb0	Vehicle_Damage	damage	high	class 1's damage handler: the side by the point, the parts, the look, the smoke, the death
 0042b790	Vehicle_Kill	vehicle	high	flag 0x20 and 0x429eb0 unless dying; ported
 0046fe20	Vehicle_Upright	physics	high	on its back at rest: the user is turned over, others die; ported, diffed
-004683c0	Vehicle_Sound	sound	med	a vehicle's sound by number
 00475cb0	Vehicle_Steer	physics	high	the front wheels turned by +0xe0 times -pi/4; ported, diffed
 0042e450	Node_SetYaw	scene	high	the axes turned about y; ported
 0042ffb0	Wheel_Contact	physics	high	ground, bumps, spring target, filtered travel, wheel height; ported, diffed
@@ -544,10 +542,6 @@
 0042e320	Node_ClearFlags	scene	high	the same, cleared; ported
 0042e290	Node_ClearFlagsAll	scene	high	the same, cleared; ported
 0043a470	Light_SetOn	render	high	the node's light's flag 8; ported
-00476510	Engine_StartTime	damage	high	the user's engine start sample's length (esnp1-3.wav); ported
-004764b0	Engine_StartSample	damage	high	the start sample's entry by the engine's state and kind; ported
-00476580	Engine_IdleSound	sound	med	the idle sample after the start
-00467260	Sound_Play	sound	med	a sample by name; nonzero when it plays
 00407370	Net_Host	net	med	returns 0x4a8760
 0042bac0	Damage_Side	damage	high	a packet on a side: armour and chassis by their points times the specials' factors; ported
 0042bf90	Damage_Parts	damage	high	a packet on a random inner part of the side (or the tyres), the kill chance; ported
@@ -1019,7 +1013,6 @@
 00429080	Fsm_SetArtillery	fsm	high	the artillery block's firing word; ported
 004290a0	Fsm_SetArtilleryRate	fsm	high	the artillery block's how-seldom word; ported
 0040b740	Fsm_SetSiren	fsm	high	aps2.wav on or off (audio not ported)
-004763e0	Siren_Sound	audio	med	aps2.wav played or stopped on a vehicle
 0041f280	Objectives_FailExcept	mission	high	failAllObj's objective less one; ported
 00404380	Camera_CockpitStart	camera	high	mode 0xd (F1): the pilot's view, the HUD toggled in it; ported
 00405450	Camera_ChaseStart	camera	high	mode 0xf (F3): the chase view; ported
@@ -1149,3 +1142,81 @@
 0045db40	Packet_Damage	damage	high	a packet through the class's damage handler, the vehicle hit told the attacker (0x40fc80); ported
 0046b1e0	Coll_First	collide	high	the collision lists' walk: the moving list's first, else the static's
 0046b230	Coll_Next	collide	high	the walk's next, from the moving list on to the static
+00466ab0	Sound_Init	sound	high	DirectSound with 3D, the primary 11,025 Hz 8-bit stereo, the listener, voices, volumes; ported
+00466b70	Sound_Frame	sound	high	each frame: readmission, range, listener, each playing record started/ended/updated; ported
+00466d80	Sound_Close	sound	high	the manager released; ported
+00466dd0	Sound_Enable	sound	high	sound on or off; ported
+00466de0	Sound_StopAll	sound	high	every record stopped and freed (a mission's end); ported
+00466ea0	Sound_Apply	sound	high	a record's marked changes made: frequency, volume by kind, pan or 3D place; ported
+00466fa0	Sound_Set3D	sound	high	a 3D buffer at its node (the user's in the cockpit at the listener); ported
+00467100	Sound_SetVoices	sound	high	at most n playing, the rest parked; ported
+00467170	Sound_VolumeTable	sound	high	the 101 volumes in hundredths of a dB; ported
+004671d0	Sound_SetVolumes	sound	high	the music's, effects' and speech's volumes (-1 settings, -2 kept); ported
+00467260	Sound_Play	sound	high	a sound by name at a node (or flat); the record; ported
+00467480	Sound_Free	sound	high	a record freed; ported
+00467510	Sound_GasDefaults	sound	high	a file's GAS0 header with its defaults; ported
+00467580	Sound_GasMerge	sound	high	the caller's header over the record's, priority added; ported
+00467610	Sound_Start	sound	high	a record started: volume, pitch, its hook, played; ported
+004676d0	Sound_Stop	sound	high	a sounding buffer stopped; ported
+00467720	Sound_CountPlaying	sound	high	the playing records of a name; ported
+00467770	Sound_FindPlaying	sound	high	the playing record of a name at a node; ported
+00467830	Sound_FindLoaded	sound	high	a record of a name with its own buffer; ported
+004678c0	Sound_FindData	sound	high	a record by the caller's data (the shell's); not ported
+00467910	Sound_Find	sound	high	the playing, then the parked record of a name at a node; ported
+004679a0	Sound_PausePlaying	sound	high	the pause: playing records stopped, kept, parked or freed; ported
+00467a20	Sound_ResumePlaying	sound	high	the resume: the paused restarted; ported
+00467a60	Sound_Listener	sound	high	the listener at the view's eye along the camera's axes; ported
+00467b70	Sound_Trim	sound	high	over the cache, the parked flat once-played freed; ported
+00467c10	Sound_ListPut	sound	high	onto the playing or parked list by priority; ported
+00467d10	Sound_ListTake	sound	high	off its list; ported
+00467d80	Sound_Admit	sound	high	may a record play: 1 yes, 2 no, 3 range, 4 no room, 5 muted, 6 retry; ported
+00467ee0	Sound_RecordInit	sound	high	a record's params and header defaults; ported
+00467f10	Sound_ParamsInit	sound	high	the params' defaults (11,025 Hz, volume 100); ported
+00467f40	Sound_GasInit	sound	high	a header all -1 (defaults); ported
+00467f70	Sound_3DDefaults	sound	high	the 3D buffer's and listener's defaults; ported
+00468010	Sound_Readmit	sound	high	the parked that loop let back while there is room; ported
+004680d0	Sound_Range	sound	high	the playing beyond 600 m parked, those back in range reloaded; ported
+004681b0	Sound_InRange	sound	high	a node within a range of the listener's entity; ported
+00468280	Sound_Park	sound	high	stopped and parked for a reason (or freed); ported
+00468340	Sound_FreeParked	sound	high	the parked freed; ported
+00468380	Sound_StopPlaying	sound	high	the playing stopped and parked; ported
+004683c0	Vehicle_Sound	sound	high	a vehicle's sound by event number; ported (the engine's 1-3 not)
+00468580	Sound_PlayAt	sound	high	a sound at a node (none: the user's); ported
+004685d0	Sound_PlayHeld	sound	high	a sound looping while asked each frame; ported
+00468640	Sound_PlayPlaced	sound	high	a sound placed once at a node; ported
+004688d0	Sound_Pause	sound	high	the pause (the music's part not ported); ported
+004688e0	Sound_Resume	sound	high	the resume (the music's part not ported); ported
+00468910	Sound_AmmoVolume	sound	high	the effects' volume set and cammo.wav played; ported
+00468970	Sound_RogerVolume	sound	high	the speech's volume set and croger.wav played; ported
+004765d0	Sound_PlayUser	sound	high	a sound flat when its node is the user's; ported
+00477690	Sound_Load	sound	high	a record's buffer, copied or made from the file, then admitted; ported
+00477aa0	Sound_Release	sound	high	a record's buffers released; ported
+00477b10	Wav_Parse	sound	high	a RIFF WAVE's format and samples; ported
+00477c10	Sound_DsInit	sound	high	DirectSound created, exclusive; ported
+00477e40	Sound_Fill	sound	high	a buffer filled through Lock/Unlock; ported
+00477f00	Sound_New	sound	high	a record made; ported
+00477f90	Sound_Delete	sound	high	a record stopped, unlisted, released, freed; ported
+00477ff0	Sound_SetPrimary	sound	high	the primary buffer's format; ported
+00478080	Sound_FileGet	sound	high	a sound's file by its .gpw name, else the name; ported
+00478140	Sound_FileRelease	sound	high	a sound's file released; ported
+004761b0	Engine_SoundOn	sound	high	the engine's loop started (0x476240), nonzero when it plays; ported
+004761d0	Engine_Pitch	sound	high	the loop's hook: the frequency by the revolutions; ported
+00476240	Engine_Sound	sound	high	the engine's loop at a vehicle, its record at +0x10c; ported
+00476310	Engine_SoundName	sound	high	the loop's name by the vehicle's or the engine's kind; ported
+00476380	Horn_Name	sound	high	the horn by the vehicle's kind; ported
+004763b0	Engine_SoundStop	sound	high	the playing loop freed; ported
+004763e0	Siren	sound	high	aps2.wav at a node on or off; ported
+00476420	Horn_Held	sound	high	the user's horn key, held; ported
+00476440	Horn	sound	high	the horn once or looping; ported
+00476480	Horn_Stop	sound	high	the horn freed; ported
+004764b0	Engine_Starter	sound	high	the starter's entry by the engine's state and kind; ported
+00476510	Engine_StartTime	sound	high	the user's starter heard, its time; ported
+00476580	Engine_StarterStop	sound	high	the user's starter freed; ported
+0046fa50	Radio_On	sound	high	the CB radio on (1) or muted (0); ported
+0046fa70	Radio_Say	sound	high	a CB message queued or played by its kind; ported
+0046fc00	Radio_Play	sound	high	a CB message heard (kind 4 within 10 s), the handset up for the user's; ported
+0046fcb0	Radio_Next	sound	high	the playing message's end hook: the next played; ported
+0046fd20	Radio_Clear	sound	high	the CB queue emptied; ported
+0046fd50	Radio_Free	sound	high	a CB record freed with its sound; the next; ported
+0046fda0	Radio_Empty	sound	high	the CB queue empty; ported
+0046fdb0	Radio_Drop	sound	high	a dead speaker's messages dropped, the playing one cut by cmike.wav; ported

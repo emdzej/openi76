@@ -1,5 +1,6 @@
 /* The AI's orders and tactics (orders.h). In the current rounding mode (render/fpu.h). */
 #include "orders.h"
+#include "sound.h"
 #include "ai.h"
 #include "avoid.h"
 #include "clock.h"
@@ -45,8 +46,8 @@ void Vehicle_SetMode(Node *n, int32_t mode)
     if (n->cls == 1) put32(n->data + 0x104, mode);
 }
 
-/* 0x4683c0: a sound at the node; no audio yet */
-static void sound(int id, Node *n) { (void)id, (void)n; }
+/* 0x4683c0: a sound at the node */
+static void sound(int id, Node *n) { Sound_Event(id, n, NULL); }
 
 void Engine_Stop(Node *n)
 {
@@ -418,7 +419,7 @@ static int looked(Node *n, Node *t) { (void)t; return g_clock_game > rdf(ai_of(n
 /* the push tests to avoiding, while +0x9d14: 0x418df0 something ahead but the target (all round),
    0x418e70 something ahead (all round), 0x418ee0 something ahead (only cars while it turned less than a
    second ago, on a bridge or on rough ground (+0x45c 2, 3, 4, 7), or on 6 heading along the path within 1;
-   a car ahead sounds the horn one time in four, 0x476440) */
+   a car ahead sounds the horn one time in four, Horn 0x476440) */
 static int ahead_not_target(Node *n, Node *t)
 {
     uint8_t *ai = ai_of(n), *d = n->data;
@@ -472,13 +473,10 @@ static int ahead_driving(Node *n, Node *t)
     Node **who = (Node **)Data_Ptr(ai, 0x9d2c);
     int r = AI_Avoid(n, rdf(d + 0xe0), rdf(d + 0xe4), who, &slow, (float *)(ai + 0x9d34), cars, 0,
                      (float *)(ai + 0x9d28));
-    g_way_words[0] = 5, g_way_words[1] = 8;   /* the horn's calls (not ported) would write over them */
+    g_way_words[0] = 5, g_way_words[1] = 8;   /* what the horn's calls leave there is not modelled */
     if (r && *who && ((*who)->cls == 1 || (*who)->cls == 8 || (*who)->cls == 9)) {
         int k = crt_rand();
-        if ((k & 3) == 0) {
-            static int told;
-            if (!told++) plat_log("OpenI76: the horn (0x476440) is not ported yet");
-        }
+        if ((k & 3) == 0) Horn(n, 0);   /* 0x476440 */
     }
     return r;
 }

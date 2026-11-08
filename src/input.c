@@ -1,6 +1,7 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "sound.h"
 #include "radar.h"
 #include "ai.h"
 #include "camera.h"
@@ -1110,8 +1111,9 @@ void User_Controls(void)
     }
     if (*INPUT_AT(0x4deff7)) Radar_ChooseKind(n, 1);   /* frontal_target, 0x421760: the one ahead */
     if (*INPUT_AT(0x4deff8)) Radar_Clear(n);   /* reset_target */
-    /* not ported yet: the specials (0x4821e0), the map (0x44f7f0), the notepad (0x41e950), the horn
-       (0x476420), the poetry (0x4513c0), the binoculars (0x407010) and the combat view (0x480940) */
+    if (*INPUT_AT(0x4defee)) Horn_Held(n);   /* horn, 0x476420 */
+    /* not ported yet: the specials (0x4821e0), the map (0x44f7f0), the notepad (0x41e950), the poetry
+       (0x4513c0), the binoculars (0x407010) and the combat view (0x480940) */
 }
 
 /* ---- set-up ---- */

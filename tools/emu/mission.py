@@ -21,6 +21,9 @@ def cstr(exe, a, n=64):
     return exe.read(a, n).split(b"\0")[0].decode("latin-1")
 
 
+GET = [None]   # the resource layer's get (a file into the emulator by name), for other stubs
+
+
 def file_stubs(exe, lib, log=None):
     """the resource layer's entry points answered from the port's files"""
     lib.Res_Get.restype = ctypes.c_void_p
@@ -44,6 +47,7 @@ def file_stubs(exe, lib, log=None):
         return cache[key]
 
     exe.stub(0x492660, get, 1)
+    GET[0] = get
     exe.stub(0x492600, lambda name: lib.Res_Size(cstr(exe, name).encode("latin-1")), 1)
     exe.stub(0x4928C0, lambda name: int(lib.Res_Exists(cstr(exe, name).encode("latin-1"))), 1)
     exe.stub(0x492570, lambda name: 0, 1)

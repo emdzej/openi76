@@ -1,5 +1,6 @@
 /* The cockpit's dashboard swap (0x4286e0-0x428890); see cockpit.h */
 #include "cockpit.h"
+#include "sound.h"
 #include "mirror.h"
 #include "crt.h"
 #include "camera.h"
@@ -282,8 +283,8 @@ void Hud_Draw(const View *view, int mode)
 
 /* ---- the cockpit's frame ---- */
 
-/* the positional sound 0x4765d0 (name, node, 0): audio is not ported yet */
-static void sound(const char *name, Node *n) { (void)name, (void)n; }
+/* 0x4765d0 (name, node, 0): heard when the node is the user's */
+static void sound(const char *name, Node *n) { Sound_PlayUser(name, n, NULL); }
 
 /* the parts' scales, 100 / their full counts (0x425e50, once, 0x54fa10): the 8 armour and chassis words
    (0x54f940-0x54f94c, 0x54f9b8-0x54f9c4), then the engine, the suspension, the brakes and the four tyres

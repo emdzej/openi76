@@ -1,5 +1,7 @@
 /* A vehicle's state from step to step (damage.h). In the current rounding mode (render/fpu.h). */
 #include "damage.h"
+#include "sound.h"
+#include "radio.h"
 #include "smoke.h"
 #include "camera.h"
 #include "cockpit.h"
@@ -108,31 +110,9 @@ void Vehicle_Lights(Node *n, int toggle)
     }
 }
 
-/* 0x467260: a sound played. The sound system is not ported yet: as if it played (with the disc's
-   samples it does) */
-static int sound_play(const char *name) { (void)name; return 1; }
-
-float Engine_StartTime(Node *n)
-{
-    if (!(n->flags & 0x10) || !n->data) return 0;   /* 0x42e620: the user's */
-    const uint8_t *e = slot(n->data, 0x3c4)->data;
-    if (!e) return 0;
-    /* 0x4764b0: the sample by the engine's state, the kind's entry of 0x14 bytes (a name, its length) */
-    double r = fpu_div((double)rd32(e), (double)rd32(e + 4));
-    float rf = fpu_f32(r);
-    uint32_t rb;
-    memcpy(&rb, &rf, 4);
-    uint32_t table = r > 0.66f ? 0x4ddb40u : (int32_t)rb > 0x3ea8f5c3 ? 0x4ddbd0u : 0x4ddc60u;   /* 0x4a6824 */
-    uint32_t entry = table + (uint32_t)rd32(e + 0x28) * 0x14;
-    if (!sound_play(exe_str(entry))) return 0;
-    return exe_f32(entry + 0x10);
-}
-
-/* not ported yet: 0x4683c0 a vehicle's sound by number, 0x476580
-   the engine's idle sound, 0x462d60 network play's, 0x46e220 a node's fire put out, 0x4763b0 and 0x476480
-   its sounds stopped, 0x469cd0 the entity's collisions dropped, 0x47de00 its textures released, 0x42d800
-   each part's */
-static void sound(int id, Node *n) { (void)id, (void)n; }
+/* 0x4683c0 a vehicle's sound by number; not ported yet: 0x462d60 network play's, 0x469cd0 the entity's
+   collisions dropped, 0x47de00 its textures released, 0x42d800 each part's */
+static void sound(int id, Node *n) { Sound_Event(id, n, NULL); }
 
 void Vehicle_State(Node *n, float dt)
 {
@@ -171,7 +151,7 @@ void Vehicle_State(Node *n, float dt)
             sound(0xf, n);
             f |= 1;
             sound(1, n);
-            /* 0x476580: the idle sound */
+            Engine_StarterStop(n);   /* 0x476580 */
         } else if ((f & 0x8c08) == 0x8000) {   /* the wreck's time is up */
             f &= ~0x8000u;
             if (f & 0x100000) return;   /* network play (0x462d60); the flags stay as they were */
@@ -186,8 +166,10 @@ void Vehicle_State(Node *n, float dt)
                 /* 0x407370 (0x4a8760) and network play choose between hiding the wreck and freeing its
                    entity (0x423eb0, 0x455370, 0x41f4b0); single play hides it */
                 if (e && e->node) {
-                    Node_SetFlags(e->node, 1);
-                    /* and 0x4763b0, 0x476480, 0x469cd0, 0x47de00, 0x42d800 (not ported yet) */
+                    Engine_SoundStop(e->node);   /* 0x4763b0 */
+                    Horn_Stop(e->node);          /* 0x476480 */
+                    Node_SetFlags(e->node, 1);   /* 0x42e2d0 */
+                    /* and 0x469cd0, 0x47de00, 0x42d800 (not ported yet) */
                 }
             }
         }
@@ -1120,9 +1102,9 @@ static void sparks(const float at[3])
     const float up[3] = {0, 5.0f, 0};
     if (name) Particle_New(name, at[0], at[1], at[2], up, 2.5f);
 }
-/* not ported yet: the death's other steps (0x46fdb0, the AI's death 0x488950, the guns' 0x455370, the
-   engine's sound 0x476440) */
-static void death_steps(Node *n, int user) { (void)n, (void)user; }
+/* the death's first steps: its CB messages dropped (0x46fdb0); not ported yet: the AI's death 0x488950,
+   the guns' 0x455370 */
+static void death_steps(Node *n, int user) { Radio_Drop(n), (void)user; }
 
 int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
 {
@@ -1193,6 +1175,7 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
         death_steps(n, (n->flags & 0x10) != 0);
         AI_Rethink();   /* 0x408bf0 */
         sound(2, n);   /* 0x4683c0 */
+        Horn(n, 1);    /* 0x476440: the dead driver on the horn */
         Node_SetFlags(n, 0x200);
         if (g_user_entity && g_user_entity->node == n) {
             g_input_menu = 0;   /* 0x480680 */
@@ -1348,10 +1331,14 @@ void Packet_Damage(Node *n, uint8_t p[0x1c], Node *by, const float *at)
     if (by && live && is_vehicle(live)) ai_struck(by, 0x10, live, NULL);
 }
 
-/* the wreck's effects, not ported yet: the sound's pitch (0x476170), a wheel or a body piece thrown off (0x45b760; a piece as a
-   "v_chnk" object taking the part's class 0x3f children), the fires on the children (0x45b3f0), the
-   0x46fdb0 list (the smoke is: smoke_puff) */
-static void wreck_fx(Node *n, int what, int a) { (void)n, (void)what, (void)a; }
+/* the wreck's effects: 0 its CB messages dropped (0x46fdb0); not ported yet: 2 a kick (0x476170: 0x476020 by
+   a random quarter), a wheel or a body piece thrown off (0x45b760; a piece as a "v_chnk" object taking the
+   part's class 0x3f children), the fires on the children (0x45b3f0) (the smoke is: smoke_puff) */
+static void wreck_fx(Node *n, int what, int a)
+{
+    (void)a;
+    if (what == 0) Radio_Drop(n);
+}
 
 /* the next part from a random start among count slots from first that is there and not hidden (bit 1);
    -1 after a full turn */

@@ -1,5 +1,7 @@
 /* The mission's script (fsm.h, docs/re/fsm.md). */
 #include "fsm.h"
+#include "sound.h"
+#include "radio.h"
 #include "avoid.h"
 #include "ai.h"
 #include "classes.h"
@@ -352,6 +354,10 @@ Node *Fsm_Entity(int32_t i)
 static uint32_t A(uint32_t m, int k) { return (uint32_t)W(m + M_ARGS + 4 * (uint32_t)k); }
 static int32_t I(uint32_t m, int k) { return W(A(m, k)); }
 static Node *E(uint32_t m, int k) { return Fsm_Entity(I(m, k)); }
+
+/* the CB actions' sound: argument 0's record in the sounds' table (unchecked, as the original) */
+static uint32_t cb_sound(uint32_t m) { return g_fsm.sounds + (uint32_t)I(m, 0) * 0x54; }
+static const char *cb_name(uint32_t m) { return (const char *)at(cb_sound(m)); }
 
 /* 0x40a9a0: the vehicle's path ran out since the last ask (its AI block's +0x9c, cleared) */
 static int32_t is_arrived(Node *n)
@@ -901,11 +907,12 @@ static void action(uint32_t m, int32_t index)
         break;
     }
     case 16: Objective_Fail(I(m, 0)); break;      /* fail 0x41f1e0 */
-    /* the CB radio (0x46fa70, its queue 0x4dd904): the port has no audio, so it runs as the original with
-       speech off (0x5e14e1 or 0x5e14e0 under 2), which queues nothing; the results are unused */
-    case 19: break;                            /* cb 0x46fa70 (sound, 0, 3) */
-    case 20: break;                            /* cbPrior 0x40b6c0 */
-    case 21: E(m, 1); break;                   /* cbFromPrior 0x40b6e0 */
+    /* the CB radio (radio.h): argument 0 a sound's index (its record's name); the results are unused */
+    case 19:                                   /* cb: when the sound is there (+0x50) */
+        if (W(cb_sound(m) + 0x50)) Radio_Say(cb_name(m), NULL, 3);
+        break;
+    case 20: Radio_Say(cb_name(m), NULL, I(m, 1)); break;            /* cbPrior 0x40b6c0 */
+    case 21: b = E(m, 1); Radio_Say(cb_name(m), b, I(m, 2)); break;  /* cbFromPrior 0x40b6e0 */
     case 23: a = E(m, 0); nearest_enemy(a, A(m, 1)); break;  /* nearestEnemy */
     case 24: a = E(m, 0); nearest_blg(a, A(m, 1)); break;  /* nearestBlg */
     case 25: SET(m + M_FLAG, 1); break;        /* true */
@@ -993,13 +1000,13 @@ static void action(uint32_t m, int32_t index)
     case 73: drive_control(E(m, 0)); break;  /* driveControl */
     case 74: a = E(m, 0); SET(m + M_FLAG, ai_block(a) ? *(int32_t *)(ai_block(a) + 0xa6d0) : 0); break;   /* controlDone 0x41abf0 */
     case 75: Objective_Reveal(I(m, 0)); break;    /* reveal 0x40b540 */
-    case 76: SET(m + M_FLAG, 1); break;    /* isCBEmpty 0x40b630 (0x46fda0: 0x4dd904, the queue cb fills, not ported: empty) */
+    case 76: SET(m + M_FLAG, Radio_Empty()); break;   /* isCBEmpty 0x40b630 (0x46fda0) */
     case 77: a = E(m, 0); set_agg(a, I(m, 1)); break;  /* setAgg */
     case 78: set_user_radar(I(m, 0)); break;   /* setUserRadar */
-    case 79: E(m, 1); break;                   /* cbFrom 0x40b6a0 */
-    case 80: break;                            /* killCB 0x46fd20: the queue emptied */
+    case 79: b = E(m, 1); Radio_Say(cb_name(m), b, 3); break;   /* cbFrom 0x40b6a0 */
+    case 80: Radio_Clear(0); break;            /* killCB 0x46fd20 */
     case 81: later(0x40b720); break;           /* salvage */
-    case 82: E(m, 0); break;   /* setSiren 0x40b740: the siren's sound (0x4763e0, aps2.wav) on or off; the audio is not ported */
+    case 82: a = E(m, 0); Siren(a, I(m, 1)); break;   /* setSiren 0x40b740: aps2.wav on or off (0x4763e0) */
     case 83: a = E(m, 0); set_ai_word(a, 0x9d14, I(m, 1)); break;  /* setAvoid 0x40b760 */
     case 84: a = E(m, 0); set_ai_word(a, 0xa948, I(m, 1)); break;  /* setMaxAttackers 0x40b780 */
     case 85: b = E(m, 1); a = E(m, 0); SET(m + M_FLAG, AI_CanSee(a, b)); break;   /* canSee */

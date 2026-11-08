@@ -1,5 +1,6 @@
 /* A vehicle's simulation (physics.h). In the current rounding mode (render/fpu.h). */
 #include "physics.h"
+#include "sound.h"
 #include "camera.h"
 #include "ai.h"
 #include "classes.h"
@@ -116,7 +117,7 @@ void Vehicle_PhysInit(Node *n)
     putf(d + 0xb4, F32(DIV(exe_f32(0x4a6768), rdf(d + 0x118))));
     brakes_set(slot(d, 0x3cc), F32(MUL(rdf(d + 0xa8), 2300.0f)));   /* 0x4a676c */
     Engine_Step(engine, 0, rdf(d + 0xac), (uint32_t)rd32(d + 0x454), 0, rd32(d + 0x104));   /* 0x42d4f0 */
-    /* 0x4761b0: the engine's sound (0x476240); no audio yet */
+    Engine_Sound(n);   /* 0x4761b0 */
 }
 
 void Vehicle_Kill(Node *n)
@@ -128,8 +129,8 @@ void Vehicle_Kill(Node *n)
     Vehicle_Damage(n, NULL, NULL);   /* 0x429eb0 */
 }
 
-/* 0x4683c0: a sound at the node (4: the vehicle righted); no audio yet */
-static void sound(int id, Node *n) { (void)id, (void)n; }
+/* 0x4683c0: a sound at the node (4: the vehicle righted) */
+static void sound(int id, Node *n) { Sound_Event(id, n, NULL); }
 
 int Vehicle_Upright(Node *n)
 {
@@ -922,8 +923,8 @@ static void impact_damage(Node *n, int a, const uint8_t *v, const float nv[3], c
     memcpy(aa, at, 12);
     Impact_Damage(n, NULL, vv, nv, aa);
 }
-/* 0x468580: a sound by name at a node: no sound yet */
-static void sound_named(const char *wav, Node *n, int a) { (void)wav, (void)n, (void)a; }
+/* 0x468580: a sound by name at a node */
+static void sound_named(const char *wav, Node *n, int a) { (void)a, Sound_PlayAt(wav, n, NULL); }
 
 static float from_bits(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
 
@@ -1250,8 +1251,8 @@ void Vehicle_Settle(Node *n, const float acc[3], uint32_t mode, int keep, float 
     put32(d + 0xd0, 0);
 }
 
-/* 0x4683c0: a sound by number at a node: no sound yet */
-static void sound_id(int id, Node *n, int a) { (void)id, (void)n, (void)a; }
+/* 0x4683c0: a sound by number at a node */
+static void sound_id(int id, Node *n, int a) { (void)a, Sound_Event(id, n, NULL); }
 
 void Vehicle_Physics(Node *n, float dt)
 {

@@ -1,5 +1,6 @@
 /* The weapons' loading (weapons.h). In the current rounding mode (render/fpu.h). */
 #include "weapons.h"
+#include "sound.h"
 #include "radar.h"
 #include "chunks.h"
 #include "clock.h"
@@ -840,7 +841,7 @@ void Weapons_Faster(Node *vehicle)
 int32_t g_weapons_free;   /* 0x4db474: the user's weapons need no ammunition (set by 0x455d90) */
 int32_t g_net_game;       /* 0x4dc4e4: a network game (0x461900) */
 void (*g_weapon_fire)(WeaponInst *w, const WeaponDef *d, int n, float late);   /* 0x458710 */
-void (*g_weapon_click)(void);   /* the empty click's sound (0x4765d0, "WCLICK.WAV") */
+void (*g_weapon_click)(void);   /* the checks' log of the empty click, instead of its sound */
 
 static float getf(const void *p) { float f; memcpy(&f, p, 4); return f; }
 static void setf(void *p, float f) { memcpy(p, &f, 4); }
@@ -868,7 +869,8 @@ void Weapons_Tick(void)
             /* idle: the trigger's click when pulled with nothing to fire, the timers run down */
             if (w->v44 == 0 && w->v48 == 1) w->v48 = 0;
             if (w->v44 == 1 && w->v48 == 0) {
-                if (g_weapon_click) g_weapon_click();
+                if (g_weapon_click) g_weapon_click();   /* the checks' */
+                else Sound_PlayUser(exe_str(0x4dc3e8), g_dash, NULL);   /* WCLICK.WAV */
                 w->v48 = 1;
             }
             w->v44 = 0;
@@ -953,8 +955,7 @@ void Weapons_Tick(void)
 
 void (*g_weapon_launch)(Launch *l, float late);   /* 0x458f40 */
 
-/* not ported yet, as the effects and the audio: 0x454940 the muzzle's flash, 0x468580 / 0x4685d0 the
-   shot's sound by name */
+/* not ported yet, as the effects: 0x454940 the muzzle's flash */
 static void muzzle_flash(Node *muzzle) { (void)muzzle; }
 /* 0x433b70: the gun out of the window: the animation's frame from -1 towards 2 */
 static void gun_animation(Node *vehicle, int32_t which)
@@ -973,7 +974,12 @@ static void gun_animation(Node *vehicle, int32_t which)
     Tex_SetFrame((uintptr_t)w, t, 1, 1, 0);
     Tex_SetFrame((uintptr_t)w, t, 0, 0, 1);
 }
-static void shot_sound(const char *name, Node *at, int spatial) { (void)name, (void)at, (void)spatial; }
+/* the shot's sound by name: 0x4685d0 held while firing, else 0x468580 */
+static void shot_sound(const char *name, Node *at, int held)
+{
+    if (held) Sound_PlayHeld(name, at, NULL);
+    else Sound_PlayAt(name, at, NULL);
+}
 /* 0x433730: a type 3 mortar's muzzle raised for its target's range (0x45ddb0); not ported yet */
 static void mortar_elevation(Node *vehicle, Node *muzzle, Node *target, int32_t v) { (void)vehicle, (void)muzzle, (void)target, (void)v; }
 
@@ -1227,8 +1233,8 @@ static double weapon_health(int i)
     return fpu_div((double)(uint32_t)g_weapons[i].v0c, (double)(uint32_t)g_weapon_defs[g_weapons[i].def].v[1]);
 }
 
-/* not ported yet, as the audio: "CAMMO.WAV" and "WMISS.WAV" (0x4765d0) */
-static void dash_sound(const char *name) { (void)name; }
+/* "CAMMO.WAV" and "WMISS.WAV" at the dashboard (0x4765d0: heard when it is the user's) */
+static void dash_sound(const char *name) { Sound_PlayUser(name, g_dash, NULL); }
 
 void Weapons_DisplayFrame(HardPoints *hp)
 {

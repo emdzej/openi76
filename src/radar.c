@@ -1,5 +1,6 @@
 /* The radar (0x41fbc0-0x421fc0; docs/re/weapons.md "The radar") */
 #include "radar.h"
+#include "sound.h"
 #include "classes.h"
 #include "collide.h"
 #include "vehicle.h"
@@ -235,7 +236,7 @@ static int blips(uint8_t *r, float lo, float hi, int with_chosen)
         float af = F32(a);
         if (!(a < lo || a != a) && !(hi < af || af != af) && chosen_c != c) {
             c->b = 0;
-            /* CRADAR.WAV on the radar's node (0x4765d0): not ported */
+            Sound_PlayUser(exe_str(0x4d3af4), *slot(r, 0x7c), NULL);   /* CRADAR.WAV */
         }
         uint8_t col = blip_colour[c->b];
         int32_t y = (int32_t)zs + 0x39, x = (int32_t)xs + 0x61;
@@ -252,11 +253,14 @@ static int blips(uint8_t *r, float lo, float hi, int with_chosen)
 
 /* the range's picture (Drange_1-4) and the LED (radled_1 lit while any contact shows, CGROWL.WAV when it
    lights) */
-static void radar_led(int any)
+static void radar_led(Node *n, int any)
 {
     put_region(exe_str(0x4d3b14), exe_str(0x4d3b0c), exe_str(any ? 0x4d3a78 : 0x4d3a84), &radar_surf);
     if (!any) growled = 0;
-    else if (!growled) growled = 1;   /* CGROWL.WAV (0x4765d0): not ported */
+    else if (!growled) {
+        Sound_PlayUser(exe_str(0x4d3b00), n, NULL);   /* CGROWL.WAV */
+        growled = 1;
+    }
 }
 
 /* 0x4208f0, the display's animation on the user's radar texture: off (not working, or switched off) its
@@ -294,7 +298,7 @@ void Radar_Display(Node *n, const char *name, void *argp)
         radar_surf = Tex_Writable((uintptr_t)n, name);
         put_region(exe_str(0x4d3b14), exe_str(0x4d3b20), exe_str(0x4d3a50 + 12u * (uint32_t)rd32(r)), &radar_surf);
         sweep_arc(arg, &lo, &hi);
-        radar_led(blips(r, lo, hi, 1));
+        radar_led(n, blips(r, lo, hi, 1));
         return;
     }
     float t = g_clock_time, at;   /* 0x450f40 */
@@ -315,7 +319,7 @@ void Radar_Display(Node *n, const char *name, void *argp)
         sweep_arc(arg, &lo, &hi);
         any = blips(r, lo, hi, 0);
     }
-    radar_led(any);
+    radar_led(n, any);
 }
 
 Surface *Radar_Surface(Node *v)   /* 0x421dc0 */

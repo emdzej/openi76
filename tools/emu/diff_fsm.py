@@ -162,6 +162,8 @@ def port():
 if __name__ == "__main__":
     a = original()
     b = port()
+    if os.environ.get("FSM_SAVE"):   # the original's lines kept, to read
+        open(os.environ["FSM_SAVE"], "w").write("\n".join(a) + "\n")
     bad = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
     print(f"diff_fsm {M}: {len(a)} lines, {len(b)}; {len(bad)} differ")
     for i in bad[:6]:

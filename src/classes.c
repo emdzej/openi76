@@ -1,5 +1,6 @@
 /* The classes' handlers (classes.h). In the current rounding mode (render/fpu.h). */
 #include "classes.h"
+#include "sound.h"
 #include "cockpit.h"
 #include "mirror.h"
 #include "camera.h"
@@ -204,8 +205,8 @@ static void start_class40(Node *n)
     Filter_Init(d + 0x90, 0.5f, 4.0f);
 }
 
-/* 0x476240 (through 0x4761b0): the engine's sound, its channel at the data's +0x10c; no audio yet */
-static void engine_sound(Node *n) { (void)n; }
+/* 0x4761b0: the engine's sound (Engine_Sound 0x476240) */
+static void engine_sound(Node *n) { Engine_Sound(n); }
 
 /* ---- class 1, a vehicle (0x4294e0) ---- */
 
@@ -345,8 +346,37 @@ static void start_class9(Node *n)
 
 static void no_start(Node *n) { (void)n; }
 
-/* 0x475ee0: the tyres' sounds and a flat's damage ("tflat.wav", "fdmg1.wav"): not ported yet */
-static void tyre_step(Node *n, uint32_t flags, int32_t tclass) { (void)n, (void)flags, (void)tclass; }
+/* Tyre_Sounds 0x475ee0: the user's tyres on terrain class tclass (0x4a66e8: a skid, a turn and a surface
+   sound each), held while asked: not in the air (+0x454 bit 4), the skid while sliding (2); above 7 m/s
+   the turn's (0x2000) or else the surface's when no skid, tflat.wav with a wheel's +0x44 set (the rear
+   ones first), fdmg1.wav braking (+0xe4 below -0.5, by its bits) on brakes worn under half (+0x10 of +0xc) */
+static void tyre_step(Node *n, uint32_t flags, int32_t tclass)
+{
+    uint8_t *d = n->data;
+    if (!(n->flags & 0x10) || (flags & 4)) return;   /* 0x42e620 */
+    uint32_t row = 0x4a66e8u + 12u * (uint32_t)tclass;
+    int held = 0;
+    if ((flags & 2) && exe_u32(row)) {
+        held = 1;
+        Sound_PlayHeld(exe_str(exe_u32(row)), n, NULL);
+    }
+    if (rd32(d + 0xac) <= 0x40e00000) return;
+    uint32_t a = 0;
+    if (!held && (((flags & 0x2000) && (a = exe_u32(row + 4))) || (a = exe_u32(row + 8))))
+        Sound_PlayHeld(exe_str(a), n, NULL);
+    static const uint32_t wheels[4] = {0x3ac, 0x3a8, 0x3bc, 0x3b8};
+    for (int i = 0; i < 4; i++) {
+        Node *w = *(Node **)Data_Ptr(d, wheels[i]);
+        if (w && w->data && rd32(w->data + 0x44)) {   /* 0x4301e0 */
+            Sound_PlayHeld(exe_str(0x4dd9ec), n, NULL);   /* tflat.wav */
+            break;
+        }
+    }
+    Node *bn = *(Node **)Data_Ptr(d, 0x3cc);   /* 0x42d650 */
+    const uint8_t *b = bn ? bn->data : NULL;
+    if (b && (uint32_t)rd32(d + 0xe4) > 0xbf000000u && (double)rdf(b + 0x10) < fpu_mul(rdf(b + 0xc), exe_f32(0x4a6758)))
+        Sound_PlayHeld(exe_str(0x4dd9e0), n, NULL);   /* fdmg1.wav */
+}
 
 /* 0x429c70: a vehicle's frame. Near the camera (within 25) the physics in sub-steps of at most 0.05 (the
    timer +0x444), each with the damage, until a step leaves the node changed (+8); away from it (or dying)

@@ -15,6 +15,9 @@
 #include "contrail.h"
 #include "skid.h"
 #include "flamer.h"
+#include "sound.h"
+#include "radio.h"
+#include "dsound.h"
 #include "radar.h"
 #include "classes.h"
 #include "clock.h"
@@ -76,6 +79,9 @@ static bool viewer_init(const char *mission)
 {
     char err[200], m[300];
     Res_Init();
+    Sound_Init();       /* 0x466ab0, WinMain's first */
+    Sound_Enable(0);    /* 0x466dd0 while the mission loads */
+    Radio_On(1);        /* 0x46fa50, each mission */
     Gamma_Build();
     InvSqrt_Init();
     if (!Draw_Init(err, sizeof err) || !Queue_Init()) {
@@ -261,7 +267,9 @@ static void play_frame(void)
                          v->frame.pos[0], v->frame.pos[1], v->frame.pos[2], sp, th);
                 plat_log(m);
             }
-        /* 0x404170 (the objects' detail by distance) and the sounds are not ported yet */
+        /* 0x404170 (the objects' detail by distance) is not ported yet */
+        Sound_Frame(1);    /* 0x466b70 */
+        Sound_Enable(1);   /* 0x466dd0 */
         viewer_frame();
         Rel_Clear();   /* 0x421fc0 after the frame's drawing */
         static int32_t shown_state = 5;
@@ -284,6 +292,7 @@ bool app_init(void)
         return false;
     }
     Settings_Defaults(3);   /* a fast machine's (0x44e260) */
+    Sound_Defaults();       /* and the audio's (0x44d660) */
     snprintf(m, sizeof m, "OpenI76: I76.EXE v1.0 found; I76.ZFS: %d files", vfs_zfs_count());
     plat_log(m);
     char mission[32], v[16];
@@ -310,7 +319,26 @@ bool app_frame(void)
 
 void app_audio(float *stereo, unsigned frames)
 {
-    for (unsigned i = 0; i < frames * 2; i++) stereo[i] = 0;
+    Dsb_Mix(stereo, frames);   /* the port's DirectSound */
+    static int alog = -1;   /* the port's: --param audiolog=1 logs each second's level */
+    static double sum, peak;
+    static unsigned n;
+    if (alog < 0) {
+        char v[8];
+        alog = plat_param("audiolog", v, sizeof v) && atoi(v);
+    }
+    if (alog)
+        for (unsigned i = 0; i < frames * 2; i++) {
+            double x = stereo[i];
+            sum += x * x;
+            if (fabs(x) > peak) peak = fabs(x);
+            if (++n == 2 * APP_AUDIO_RATE) {
+                char m[80];
+                snprintf(m, sizeof m, "OpenI76: audio rms %.4f peak %.3f", sqrt(sum / n), peak);
+                plat_log(m);
+                sum = peak = 0, n = 0;
+            }
+        }
 }
 
 void app_exit(void)

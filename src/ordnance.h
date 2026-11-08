@@ -18,6 +18,8 @@ void Shot_Target(float out[3], Node *t);
    (0x459e40), moved back by the vehicle's motion over late, its record set, then flown for late; types
    9-11 are dropped one by one instead (0x46d090), 0xd does nothing */
 Node *Shot_Launch(Launch *l, float late);
+/* 0x45cb60 (the flight's state gathered: the target's point kept at the record's +0x20): its target */
+Node *Shot_Gather(Node *s);
 /* Shot_Sweep 0x46a9b0: the shot's move to p1 against the entities but owner (moving, then static: their
    ground boxes, a sphere sweep of their radius within the frame, then closely without margin, faces
    too); on a hit p1 is cut there, *who what was hit (a helicopter as itself), *cls its class (-1 none),

@@ -1,6 +1,7 @@
 /* The shots (0x458f40-0x45d710; docs/re/weapons.md "The launch"). In the current rounding mode
    (render/fpu.h). */
 #include "ordnance.h"
+#include "sound.h"
 #include "contrail.h"
 #include "flamer.h"
 #include "clock.h"
@@ -413,6 +414,13 @@ static void gather(ShotState *st, Node *s)   /* 0x45cb60 */
     }
 }
 
+Node *Shot_Gather(Node *s)
+{
+    ShotState st;
+    gather(&st, s);
+    return st.target;
+}
+
 int Shot_Sweep(Node *s, Node *owner, float p1[3], Node **who, int32_t *cls)
 {
     float dt = g_clock_dt, inv = g_clock_inv;
@@ -460,8 +468,8 @@ int Shot_Sweep(Node *s, Node *owner, float p1[3], Node **who, int32_t *cls)
 
 /* ---- the guns' flight (0x4609d0: types 1, 6, 0x12) ---- */
 
-/* not ported yet, as the sounds: 0x468640 a sound by name at a node */
-static void hit_sound(const char *name, Node *at) { (void)name, (void)at; }
+/* 0x468640: a sound by name placed once at a node */
+static void hit_sound(const char *name, Node *at) { Sound_PlayPlaced(name, at, NULL); }
 
 /* 0x45c950: the hit's explosion and sound by what was hit: the ground (-1) the kind's first, a vehicle
    (1, 4, 8, 9) its second, a structure (2, 0xc) its third, a building part (3, 0xb) its fourth; then on
@@ -923,8 +931,8 @@ static void vehicle_kick_at(Node *n, const float at[3], float spin, float up, fl
     vehicle_kick(n, q, spin, F32(MUL(up, 4.0f)), damp);   /* 0x4a679c */
 }
 
-/* not ported yet, as the audio: 0x468580 a sound by name, not placed */
-static void rest_sound(const char *name) { (void)name; }
+/* 0x468580: a sound by name, at the user's */
+static void rest_sound(const char *name) { Sound_PlayAt(name, NULL, NULL); }
 
 /* 0x45e720: types 0xe-0x10 and 0x13 (the mines and the blox, 0xf and 0x10, dropped to bounce and roll):
    - Moving less than 1 m/s in its frame (record +0x14), it lies still: on the ground (0x477290) and
