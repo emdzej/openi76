@@ -96,3 +96,18 @@ and its start (0x100298b8):
   key 2 (0x20 bytes); `dpCreateGroup` with the session's name; an add-on mission (`addon\%s`, "Mission
   file %s not found."); then the record 0x1008f964 that the game reads (0x461990): bit 0 set, bit 2 when
   +0x17c is clear, bit 3 when +0x184 is set, +0x4e the player's name (0x10018490).
+
+## The flow of a game
+
+1. The host's shell makes the session, its player and the group (above) and starts the mission at once:
+   a melee is joined while it runs.
+2. A joiner's shell opens the session, makes its player and sends `RE` to everyone; while it waits (state
+   0x1008f814 = 2), Net_Poll (0x1002b090) sends `RE` again every so often and takes the host's answer:
+   `JD` (0x444a): refused ("You've been rejected!"), the session closed; `JO` (0x4f4a): the mission's name
+   (`missions\%s`, its file checked, an add-on's too), the session's description read
+   (`dpGetSessionDesc`), the record 0x1008f964 filled, state 3: the shell starts the same mission.
+3. The host's game takes `RE` in its frame loop (0x461f20) and asks "Let %s join the game? (CTRL-Y /
+   CTRL-N)" (0x465850); Ctrl-Y answers `JO` (0x465e20), Ctrl-N `JD` (0x465f00).
+4. The joiner's game (0x461b00, called until it answers 1) asks for a spawn place (`SR`, 0x465f60) and
+   takes the host's `SP`; then it adds its player to the group (`dpAddPlayerToGroup`), and every game
+   sees `d5` ("*** %s has joined the game").
