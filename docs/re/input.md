@@ -174,8 +174,19 @@ The actions go into the user's vehicle's data:
   - 0x4deff9 kills the vehicle.
 - The radar's and the targets' keys are ported (docs/re/weapons.md, "The radar"), except
   target_nearest_enemy.
-- **Not ported yet:** the specials (0x4821e0), the map, the notepad, the horn, the poetry, the binoculars,
-  target_nearest_enemy and the combat view.
+- **The specials** (0x4821e0, after the self-destruct): each of `special1`-`special3` (0x4defe3-5) whose key
+  is down uses the special in its slot (+0x3ec + 4i) by its kind:
+  - 1, the radar jammer (0x421f30), with a charge and time left (+4, +8 above 0): the lock-on's warning
+    (`clockon.wav`) stopped, `cjamm.wav` heard, the special switched on unless it is (0x42d980), a charge
+    used on each press, on already or not (kept), and the user's car hidden from radar (+0x454 0x40000,
+    which Radar_Hidden ends when the time is up);
+  - 2, the nitro (0x475d50): the user's first working one, 15 s of +0x454 0x800 (the timer +0x450 with
+    0x80000000, 0x42d3b0; physics multiplies the acceleration by 5 meanwhile), `bnitro.wav` at the car, a
+    charge used;
+  - 4, the blower: +0xf4 = 1 for good (the throttle doubled).
+- Then the horn (0x476420) and the binoculars (0x4deff0: the last view not the cockpit, preset 0xc, camera
+  mode 0xc), before the radar's keys.
+- **Not ported yet:** the map, the notepad, the poetry, target_nearest_enemy and the combat view.
 
 The shipped `input.map` drives with the keypad's arrows (scan codes 0x48, 0x50, 0x4b, 0x4d: `UpArrow` and
 the others are the keypad's). The grey arrows and the grey Page Up and Page Down move the pilot's glance

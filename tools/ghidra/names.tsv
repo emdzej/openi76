@@ -968,7 +968,7 @@
 0041fcf0	Radar_Colours	radar	high	the blips' 255 greens and every colour's nearest by luminance, the greys 0.7, 0.5 and yellow; ported, diffed
 004208f0	Radar_Display	radar	high	the user's radar display (texture animation): the sweep, range picture, blips and LED, or the target view; ported, diffed
 004210b0	Radar_DrawView	radar	high	the target camera's view in the blips' greens, framed by zradmask; ported from the disassembly, unchecked
-00421f30	Jammer_Use	radar	med	the jammer special switched on: sounds, a charge, +0x454 bit 0x40000
+00421f30	Jammer_Use	radar	med	the jammer special switched on: sounds, a charge, +0x454 bit 0x40000; ported (src/damage.c)
 0045d4d0	Radar_Kinds	radar	high	each weapon kind's target along the vehicle's axes (0x46b050)
 0046b050	Dir_Pick	radar	high	the nearest car within 650 m in a cone (cos^2 0.933) along a direction
 00455030	Hardpoints_Kinds	weapons	high	the vehicle's hard points' kinds or-ed (+0x2c0)
@@ -1409,3 +1409,7 @@
 00463670	Melee_Results	score	med	NSCR.DAT at a melee's end: the user's name, car, death, kills, points; the network's records not ported; ported (src/melee.c)
 00403130	User_Name	app	med	the mission record's player name (0x4ed870)
 00403160	User_CarName	app	med	the mission record's car name (0x4ed810)
+004821e0	Specials_Use	input	med	the user's three special keys: jammer, nitro, blower by kind; ported (src/damage.c)
+00475d50	Nitro_Use	vehicles	med	the user's nitro: 15 s of +0x454 0x800, bnitro.wav, a charge; ported
+0042d3b0	Vehicle_TimedFlags	vehicles	med	+0x450 the time, +0x454 |= flags | 0x80000000
+0042d970	Special_UseCharge	vehicles	med	the special's data +4 less one

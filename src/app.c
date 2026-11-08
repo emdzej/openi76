@@ -361,6 +361,7 @@ bool app_init(void)
     if (plat_param("mission", mission, sizeof mission)) {
         g_no_shell = 1;   /* 0x4a80e0: the command line's mission */
         if (plat_param("melee", v, sizeof v)) Melee_Set(atoi(v) != 0);   /* the port's, for tests */
+        if (plat_param("vcf", v, sizeof v)) snprintf(g_user_vcf, sizeof g_user_vcf, "%s", v);   /* and the car */
         if (plat_param("play", v, sizeof v) && atoi(v)) return mission_start(mission);
         return (viewer = viewer_init(mission));
     }

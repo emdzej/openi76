@@ -213,6 +213,52 @@ static void special_toggle(Node *s)
     putf(s->data + 0x14, g_clock_game);
 }
 
+/* 0x421f30: the radar jammer (a special of kind 1) switched on with a charge and time left: the lock-on's
+   warning (clockon.wav) stopped, cjamm.wav heard, the special on unless it is, a charge used (each press,
+   on already or not: quirk, kept), and the vehicle hidden from radar (+0x454 0x40000) */
+static void jammer_use(Node *n, Node *s)
+{
+    uint8_t *d = n->data, *sd = s->data;
+    if (!sd || rd32(sd + 4) <= 0 || rd32(sd + 8) <= 0) return;
+    Sound_Free(Sound_FindPlaying(exe_str(0x4d3b38), NULL));   /* 0x467770, 0x467480 */
+    Sound_PlayUser(exe_str(0x4d3b2c), n, NULL);             /* 0x4765d0 */
+    if (!rd32(sd + 0x10)) special_toggle(s);
+    put32(sd + 4, rd32(sd + 4) - 1);   /* 0x42d970 */
+    put32(d + 0x454, rd32(d + 0x454) | 0x40000);
+}
+
+/* 0x475d50: the user's nitro (a working special of kind 2): 15 s of the flag 0x800 (the timer +0x450,
+   0x42d3b0), bnitro.wav at the car, a charge used */
+static void nitro_use(void)
+{
+    if (!g_user_entity || !g_user_entity->node) return;
+    Node *n = g_user_entity->node;
+    uint8_t *d = n->data;
+    Node *s = special_of(d, 2);
+    if (!s) return;
+    putf(d + 0x450, 15.0f);
+    put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x800 | 0x80000000u));
+    Sound_PlayAt(exe_str(0x4dd9d4), n, NULL);   /* 0x468580 */
+    put32(s->data + 4, rd32(s->data + 4) - 1);
+}
+
+void Specials_Use(Node *n, const int keys[3])
+{
+    uint8_t *d = n ? n->data : NULL;
+    if (!d) return;
+    for (int i = 0; i < 3; i++) {
+        Node *s = slot(d, 0x3ec + (uint32_t)i * 4);
+        if (!keys[i] || !s) continue;
+        switch (special_kind(s)) {
+        case 1:   /* the user's entity's node (0x423fc0), whoever's the special */
+            if (g_user_entity && g_user_entity->node) jammer_use(g_user_entity->node, s);
+            break;
+        case 2: nitro_use(); break;
+        case 4: put32(d + 0xf4, 1); break;   /* the blower: the throttle doubled from now on */
+        }
+    }
+}
+
 int Radar_Hidden(Node *n)
 {
     if (!n || !is_vehicle(n)) return 0;

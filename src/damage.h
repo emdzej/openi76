@@ -97,3 +97,6 @@ int Vehicle_Targetable(const Node *n);
 /* Structure_Destroy 0x430750 (the script's destroy): a crash packet worth its points, then the explosion
    at its node flagged 0x1000000 */
 void Structure_Destroy(Node *n);
+/* 0x4821e0, the user's controls': each of the three specials (+0x3ec-+0x3f4) whose key is down used by its
+   kind: 1 the radar jammer (0x421f30), 2 the nitro (0x475d50), 4 the blower (+0xf4 = 1) */
+void Specials_Use(Node *n, const int keys[3]);
