@@ -70,6 +70,16 @@ extern ShList *g_sh_allparts, *g_sh_engines, *g_sh_susps, *g_sh_brakes, *g_sh_wh
 /* 0x1001d380: every part of the catalogue but the EMPTYs, new and whole, into the lists by kind */
 void Parts_Lists(void);
 void Parts_ListsFree(void);   /* 0x1001d250 */
+/* the record g_sh_car's parts (carwrite.c): 0x1001bc80 the part of a kind (the EMPTY marker for none),
+   0x1001be10 with 0x1001c660 its guns, with 0x1001c6d0 its specials, 0x1001c2d0 its wheels */
+ShPart *Car_PickPart(int32_t kind, const ShList *l);
+void Car_CollectGuns(ShList *out, const ShList *l);
+void Car_CollectSpecials(ShList *out, const ShList *l);
+void Car_CollectWheels(ShList *out, const ShList *l);
+/* the melee's map (map.c, docs/re/map.md): 0x10012d90 its state reset (the main menu's AUTO MELEE, a
+   melee's mission back), 0x10013040 opened (0xc021, 0xc024, 0xc026) */
+void Melee_Reset(void);
+void Map_Open(void);
 /* 0x1001d6a0: the car (record g_sh_car) with the lists' parts as a .vcf at path, then into the file
    index (name in the player's directory, else path's name in addon) */
 void Car_WriteVcf(const char *path, const char *name);

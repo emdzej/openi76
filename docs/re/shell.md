@@ -140,8 +140,9 @@ The menus' and screens' meanings are to be found as each is ported.
 
 - **The way back:** when a mission ends with a state other than 7 or 10, WinMain frees it and calls
   Shell_Load again with that state (docs/re/menus.md). ShellMain opens the main menu after the
-  start-up's state 5 or after a01.msn. A trip's way back by its state (0xc01e, 0xc008, 0xc017, the
-  trip's file) and the melee's (0xc024, 0xc025) are not ported yet: they log and open the main menu.
+  start-up's state 5 or after a01.msn. A trip's way back goes by its state (0xc01e, 0xc008, 0xc017, the
+  trip's file); a scenario's (the game's kind 4) resets the melee's state (0x10012d90) and opens its map
+  again (0xc024). The instant melee's (kind 3: mode 0, 0xc025, its results) is not ported yet.
   ShellMain's end sends the exe's window 0x432, which sets the state 5 again.
 - The DLL is read at run time like the exe (src/exe.c: dll_init, dll_str; 471,552 bytes, CRC-32
   eee0a66d), for the shell's strings and tables.
@@ -359,4 +360,5 @@ shell runs, in order:
   player's file; Cancel puts the 14 bytes back. Checked: Clouds turned off and Done write +0x41 = 0.
 - Not ported yet: pop-ups 3 (modem, network play's) and 7 (controls, 0x100093a0).
 
-Other screens: the melee's, network play.
+The melee's map (AUTO MELEE's SCENARIO, 0xc024): docs/re/map.md. Other screens: the instant melee and
+its results, network play.

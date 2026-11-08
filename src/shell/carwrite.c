@@ -204,6 +204,11 @@ static void add_path(const char *path, const char *name, uint32_t addon)
 /* the number in a part's file name (+0x31: "eng01" from +0x2e gives 1) */
 static int32_t file_number(ShPart *p, int off) { return atoi(part_at(p, off)); }
 
+ShPart *Car_PickPart(int32_t kind, const ShList *l) { return pick_or_empty(kind, l); }
+void Car_CollectGuns(ShList *out, const ShList *l) { collect(is_gun, out, l); }
+void Car_CollectSpecials(ShList *out, const ShList *l) { collect(is_special, out, l); }
+void Car_CollectWheels(ShList *out, const ShList *l) { collect_wheels(is_wheel, out, l); }
+
 void Car_WriteVcf(const char *path, const char *name)   /* i76shell 0x1001d6a0 */
 {
     empty_init();

@@ -238,3 +238,22 @@
 1003eee0	Detail_Choice	options	high	Reset, Done or Cancel's choice
 1003f120	Detail_Ask	options	high	the question on exceeding the recommended detail
 1003f180	Record_Fill	menu	high	a menu record's words filled (another form)
+10012d90	Melee_Reset	melee	high	the melee's state: user.mel read (or Unnamed, the first scenario), the players, the addon levels; ported in part (map.c)
+10013040	Map_Open	melee	high	the melee's map opened by mode (0 instant, 1 scenario, 2-9 network); scenario ported (map.c)
+100136d0	Map_Screen	melee	high	the map's screen: the buttons by id (list, scrolls, type, variant, set-up, start, name, back, network's); scenario ported
+10015520	Map_Init	melee	high	the map's lists, buttons by mode, i76car.def's types and their records, the catalogue, the part lists; ported
+10015a90	Map_Free	melee	high	the map's lists, types and victory table freed; ported
+100167c0	Map_Redraw	melee	high	the car's picture, type, variant, guns and parts, the list by mode; ported (scenario)
+100184e0	Victory_Read	melee	high	victory.rec: per scenario the car and its weight, the lightest winner kept; ported
+1002c3b0	Mel_Write	melee	high	user.mel (0x50 bytes) written; ported
+1002c470	Mel_Read	melee	high	user.mel read; ported
+10017480	Map_PartLists	melee	high	the catalogue's parts by kind, guns filtered by the car; ported
+100256b0	CarTypes_Read	melee	high	i76car.def: the types, their counts lowered to the addon files there; ported
+10040090	Map_Specials	melee	high	the nine built-in specials (spc01-spc09) into a list; ported
+10017440	Map_Node	melee	high	a part's 0x20-byte node into the list of all; ported
+10016d90	TypePicker_Done	melee	high	the type picked: its variants read, the first; ported
+10016fa0	TypePicker_Draw	melee	high	the types' names; ported
+10017350	VariantPicker_Open	melee	high	the variant picker (0x1000f370, frame 9); ported
+10017100	VariantPicker_Done	melee	high	the variant picked read into the type's record; ported
+10010ea0	Map_CarPicture	melee	high	entry 0x3c's frames 2t and 2t+1; ported
+10010dc0	Map_LoadSets	melee	high	entries 0x3c and 0x3d; ported

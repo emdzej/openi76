@@ -4,6 +4,7 @@
 #include "shell/button.h"
 #include "shell/screen.h"
 #include "shell/shell.h"
+#include "shell/trip.h"
 #include "sound.h"
 #include <stdlib.h>
 
@@ -238,15 +239,15 @@ static uint32_t choose(ShButton *b)
         add(&b_e978), add(&b_e7f0), add(&b_e8d0), add(&b_e7b8), add(&b_e668);
         Btn_Draw(&b_e978), Btn_Draw(&b_e7f0), Btn_Draw(&b_e8d0), Btn_Draw(&b_e7b8), Btn_Draw(&b_e668);
         break;
-    case 4: g_sh_mode = 0; return 0xc021;   /* 0x10012d90 first (the melee's set-up: not ported yet) */
+    case 4: Melee_Reset(); return 0xc021;   /* 0x10012d90 */
     case 5:
         trip_on = 0;
         open_kinds(&b_e898);
         break;
-    case 6: g_sh_mode = trip_on ? 2 : 6; return 0xc026;
-    case 7: g_sh_mode = trip_on ? 3 : 7; return 0xc026;
-    case 8: g_sh_mode = trip_on ? 5 : 9; return 0xc026;
-    case 9: return 0xc024;
+    case 6: g_sh_mode = trip_on ? 2 : 6; Melee_Reset(); return 0xc026;
+    case 7: g_sh_mode = trip_on ? 3 : 7; Melee_Reset(); return 0xc026;
+    case 8: g_sh_mode = trip_on ? 5 : 9; Melee_Reset(); return 0xc026;
+    case 9: Melee_Reset(); return 0xc024;
     case 10:   /* the pop-up 11, TRIP's panel shut */
         open &= 0xefffffffu;
         g_sh_popup = 1, g_sh_popup_item = 0xb;

@@ -39,6 +39,7 @@ extern int g_sh_mode;          /* 0x1008e9fc: the melee's or trip's kind the scr
 typedef struct {
     int32_t trip;              /* 0x4a80dc */
     char mission[64];          /* the mission record's +0x5d */
+    char player[32];           /* its +0xe: the melee's player's name */
     int32_t kind;              /* 0x58d840: 2 a trip's or training's, 3, 4, 5 network play */
     char vehicle[32];          /* 0x58d849 */
 } ShellRecords;
