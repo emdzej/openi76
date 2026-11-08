@@ -88,8 +88,8 @@ salvage?" (0x1000fe00: entry 0x24's frame 0xb at 115, 130 with a 0x0f shadow; Ye
   the SAVE BOOKMARK button").
 - It clears 0x1006b050, sets the set-up's functions and posts 0xc00f.
 
-SAVE BOOKMARK sets 0x1005c7b8 and opens pop-up 1 (not ported). Opening on trip 4 after a win shows hint
-0x21 (not ported).
+SAVE BOOKMARK sets 0x1005c7b8 and opens pop-up 1 (docs/re/shell.md "The bookmarks"). Opening on trip 4
+after a win shows hint 0x21 (`Shell_Note` 0x1000fb10).
 
 ## The port's way in
 

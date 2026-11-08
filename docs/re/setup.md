@@ -7,8 +7,42 @@ record back from the boxes, `reconfig.spc` (and `trip4.spc`), `addon\vehscn.vcf`
 and starts the next mission. Checked: `--param trip=1`, ACCEPT SALVAGE, YES, DONE, YES gives t02.msn
 with vehscn.vcf. The parts' edits run: the pickers below, and a click on a gun's, dropper's or special's
 name puts EMPTY in its place; the repair order, SELECT REPAIRS, the armour's and chassis' buttons and
-BALANCE run. Not ported yet: the paint (box 10, 0x10007bc0), the car's picture 0x100114d0 and its sets
-0x25-0x3e, the name's edit, the melee's path from the map.
+BALANCE run, and the car's picture (0x100114d0, below) shows each part. Not ported yet: the name's edit
+and the melee's path from the map, with its paint (box 10, 0x10007bc0: only that path's box list has
+box 0x1005cb80, so a trip's set-up has no paint to choose).
+
+## The car's picture (0x100114d0)
+
+The redraws of the parts' boxes (0x10006320, the droppers' 0x100063e0) call it for each part after its
+damage bar, with a slot counter (0x1006b0fc) set to 0 at each box's start. It restores the part's place
+on the background, then draws frame `state + 4 n` of the part's set, where the state (0x100128f0) is 0
+whole, 1 at or above two thirds of the part's whole (+0x4c; 0x10059058 = 1/3 times 0x10059060 = 2), 2 at
+or above a third, else 3, and n is the part's picture number (catalogue +0x31, from 1) less one:
+
+| Kind | Place (x, y, w × h) | Set |
+|---|---|---|
+| 1, 4 engine | 0x11b, 0xae, 0x27 × 0x17 | 0x1006c328[n] (frame = state) |
+| 2 suspension | 0x145, 0x70, 0x40 × 0x5c | 0x1006c300[n] (frame = state) |
+| 3 brakes | 0x133, 0x12a, 99 × 0x4f | 0x1006c318[n] (frame = state) |
+| 5 wheel | by slot: 0x198/0x10e, 0x77/0x138, 0x24 × 0x34 | 0x1006c338[n], frame state + 4 slot |
+| 6, 7, 9-0xb gun | 0x10012970 by slot | by the file's name (+0x2e) |
+| 8 dropper | 0x1005fbb0 by slot, 0x34 × 0x16 | entry 0x39, n < 7 |
+| 0xc, 0xd special | 0x1005fb58 by slot, 0x28 × 0x18 | entry 0x3b, n < 10 (n from +0x3e without +0x31) |
+
+A gun's file is looked up in nineteen names of 8 bytes at 0x1005fbc0 (the slugs', the spikes', the
+flame throwers' and the mortars'): the first seven pick frame `4 i + state` of entry 0x35, the next three
+fours entries 0x36-0x38 the same way; a gun named otherwise is not drawn. The slot's place (0x10012970)
+is the forward guns' (0x1005fb70), then the top's (0x1005fb88), then the rear's (0x1005fb98); the rear's
+test takes one slot more than there are (quirk kept). A rear gun is drawn turned half round (0x1006c310,
+0x100113c0): through aw 0x1002e5a6 with the scales -1, -1 about (x + w - 4, y + h - 1), its colour 0xff
+left out. The port maps each frame pixel at (hx, hy) from the frame's origin to (X - hx, Y - hy), read
+from 0x10031512's transform (inferred, not compared pixel by pixel).
+
+The sets are loaded once (0x10010fe0): entries 0x25-0x34 by the tables 0x1005fb08 (suspensions),
+0x1005fb18 (engines), 0x1005fb28 (brakes) and 0x1005fb38 (wheels), then 0x35-0x3b and 0x3f.
+
+Checked: `--param trip=1`, the garage's ACCEPT SALVAGE and YES show the Piranha's parts on the picture,
+its rear gun turned.
 
 ## The pickers
 
@@ -237,7 +271,8 @@ the record's kind-0xc slots. Not yet read in full.
 (the ring's parts not EMPTY, plus 0x100614b8's). Then each such ring node (0x20) with its part (0x54),
 then 0x100614b8's, then c904's count and records.
 
-**0x1001c7a0** writes `user.rpr` (179 lines of decompile, not yet read).
+**0x1001c7a0** writes `user.rpr`, the stock the garage reads back (`Garage_ReadStock` 0x1001cc10);
+ported as `write_stock` in src/shell/setup.c.
 
 ## The repairs and the armour
 

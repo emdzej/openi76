@@ -249,16 +249,153 @@ static void hp_labels(void)
 
 static void tick(int x, int y) { Scr_Frame(Shell_Set24(), 0xe, x, y, 0xb, 0xe); }   /* 0x10010f10 */
 
-/* 0x10006320: a box's slots (to its capacity), each with its damage bar and name (the car's picture's
-   part, 0x100114d0, is not ported yet) */
+/* ---- the car's picture (0x100114d0) ---- */
+
+/* 0x10010fe0's sets: the engines' (0x1006c328), suspensions' (0x1006c300), brakes' (0x1006c318) and
+   wheels' (0x1006c338) by the part's picture number, four each, their entries at 0x1005fb18, 0x1005fb08,
+   0x1005fb28 and 0x1005fb38; then entries 0x35-0x3b (0x1005fae4-0x1005fafc: the guns' four, the
+   droppers', 0x3a, the specials') */
+static const uint8_t *pic_sets[4][4];   /* engines, suspensions, brakes, wheels */
+static const uint8_t *pic_more[7];      /* 0x1005fae4.. */
+static int pic_slot;                    /* 0x1006b0fc: the box's slot drawn next */
+static int pic_turned;                  /* 0x1006c310: a rear gun's, drawn turned half round */
+
+static uint8_t *wave(int entry);
+
+static void pic_load(void)   /* 0x10010fe0 */
+{
+    static const uint32_t at[4] = {0x1005fb18, 0x1005fb08, 0x1005fb28, 0x1005fb38};
+    for (int s = 0; s < 4; s++)
+        for (int i = 0; i < 4; i++)
+            if (!pic_sets[s][i]) pic_sets[s][i] = wave((int)dll_u32(at[s] + 4 * (uint32_t)i));
+    for (int i = 0; i < 7; i++)
+        if (!pic_more[i]) pic_more[i] = wave(0x35 + i);
+}
+
+/* 0x100128f0: the part's state, 0 whole, 1 above two thirds (0x10059058 x 0x10059060), 2 above a third
+   (0x10059058), else 3 */
+static int pic_state(const ShPart *p)
+{
+    int32_t whole = rd32(p->part + 0x4c);
+    if (whole == p->count) return 0;
+    double k1, k2, cur = p->count;
+    memcpy(&k1, dll_data(0x10059058, 8), 8);
+    memcpy(&k2, dll_data(0x10059060, 8), 8);
+    double third = whole * k1;
+    if (cur < third) return 3;
+    if (cur < third * k2) return 2;
+    return 1;
+}
+
+/* 0x10012970: slot i's place among the guns: forward (0x1005fb70), top (0x1005fb88), then rear
+   (0x1005fb98, turned); the rear's test takes one more than there are (quirk kept) */
+static void pic_gun_at(int i, int *x, int *y)
+{
+    pic_turned = 0;
+    uint32_t t;
+    if (i < n_fwd) t = 0x1005fb70 + 8 * (uint32_t)i;
+    else if (i < n_fwd + n_top) t = 0x1005fb88 + 8 * (uint32_t)(i - n_fwd);
+    else if (i <= n_fwd + n_top + n_rear) t = 0x1005fb98 + 8 * (uint32_t)(i - n_fwd - n_top), pic_turned = 1;
+    else return;
+    *x = (int32_t)dll_u32(t), *y = (int32_t)dll_u32(t + 4);
+}
+
+/* 0x100113c0: frame k at x, y (w x h); a rear gun's through aw 0x1002e5a6 with the scales -1, -1 about
+   (x + w - 4, y + h - 1): the frame's pixel at (hx, hy) from its origin lands at (X - hx, Y - hy) and its
+   colour 0xff is left out (inferred from 0x10031512's transform, not compared pixel by pixel) */
+static void pic_frame(const uint8_t *set, int k, int x, int y, int w, int h)
+{
+    if (!set) return;
+    if (!pic_turned) {
+        Scr_Frame(set, k, x, y, w, h);
+        return;
+    }
+    const uint8_t *f = set + rd32(set + 8 + 8 * k);
+    int fx0 = rd32(f + 8), fy0 = rd32(f + 12), fw = rd32(f + 16) - fx0 + 1, fh = rd32(f + 20) - fy0 + 1;
+    if (fw > 0 && fh > 0 && fw * fh <= 0x800) {
+        uint8_t buf[0x800];
+        memset(buf, 0xff, sizeof buf);
+        GfxBitmap bm = {buf, fw - 1, fh - 1};
+        GfxView v = {&bm, 0, 0, fw - 1, fh - 1};
+        Gfx_Frame(&v, set, k, -fx0, -fy0);
+        int X = x + w - 4, Y = y + h - 1;
+        for (int r = 0; r < fh; r++)
+            for (int c = 0; c < fw; c++) {
+                uint8_t px = buf[r * fw + c];
+                int dx = X - (fx0 + c), dy = Y - (fy0 + r);
+                if (px != 0xff && dx >= 0 && dx < 640 && dy >= 0 && dy < 480) g_shs.px[dy * 640 + dx] = px;
+            }
+    }
+    Scr_Dirty(x, y, x + w - 1, y + h - 1);   /* 0x1003c910 */
+}
+
+static void car_picture(const ShPart *p)   /* 0x100114d0 */
+{
+    const uint8_t *e = p->part;
+    int n = atoi((const char *)e + 0x31) - 1, x = 0, y = 0;
+    switch (rd32(e + 0x1e)) {
+    case 1: case 4:   /* the engine */
+        Scr_Restore(0x11b, 0xae, 0x28, 0x18);
+        if (n >= 0 && n < 4) Scr_Frame(pic_sets[0][n], pic_state(p), 0x11b, 0xae, 0x27, 0x17);
+        return;
+    case 2:   /* the suspension */
+        Scr_Restore(0x145, 0x70, 0x40, 0x5c);
+        if (n >= 0 && n < 4) Scr_Frame(pic_sets[1][n], pic_state(p), 0x145, 0x70, 0x40, 0x5c);
+        return;
+    case 3:   /* the brakes */
+        Scr_Restore(0x133, 0x12a, 100, 0x50);
+        if (n >= 0 && n < 4) Scr_Frame(pic_sets[2][n], pic_state(p), 0x133, 0x12a, 99, 0x4f);
+        return;
+    case 5: {   /* a wheel, by the slot: front right, front left, rear right, rear left */
+        static const int at[4][2] = {{0x198, 0x77}, {0x10e, 0x77}, {0x198, 0x138}, {0x10e, 0x138}};
+        if (pic_slot < 4) {
+            Scr_Restore(at[pic_slot][0], at[pic_slot][1], 0x24, 0x34);
+            if (n >= 0 && n < 4)
+                Scr_Frame(pic_sets[3][n], pic_state(p) + 4 * pic_slot, at[pic_slot][0], at[pic_slot][1], 0x24, 0x34);
+        }
+        pic_slot++;
+        return;
+    }
+    case 6: case 7: case 9: case 10: case 0xb: {   /* a gun: its picture by its file's name */
+        pic_gun_at(pic_slot, &x, &y);
+        Scr_Restore(x, y, 0x16, 0x36);
+        for (int i = 0; i < 19; i++)   /* 0x1005fbc0: seven to set 0x35, then four each to 0x36-0x38 */
+            if (!strcmp((const char *)e + 0x2e, dll_str(0x1005fbc0 + 8 * (uint32_t)i))) {
+                int set = i < 7 ? 0 : 1 + (i - 7) / 4, base = i < 7 ? 4 * i : 4 * ((i - 7) % 4);
+                pic_frame(pic_more[set], base + pic_state(p), x, y, 0x14, 0x34);
+                break;
+            }
+        pic_slot++;
+        return;
+    }
+    case 8:   /* a dropper (0x1005fbb0) */
+        x = (int32_t)dll_u32(0x1005fbb0 + 8 * (uint32_t)pic_slot), y = (int32_t)dll_u32(0x1005fbb4 + 8 * (uint32_t)pic_slot);
+        Scr_Restore(x, y, 0x34, 0x16);
+        if (n >= 0 && n < 7) Scr_Frame(pic_more[4], pic_state(p) + 4 * n, x, y, 0x34, 0x16);
+        pic_slot++;
+        return;
+    case 0xc: case 0xd:   /* a special (0x1005fb58); without a picture number its +0x3e's */
+        if (n == -1) n = atoi((const char *)e + 0x3e) - 1;
+        x = (int32_t)dll_u32(0x1005fb58 + 8 * (uint32_t)pic_slot), y = (int32_t)dll_u32(0x1005fb5c + 8 * (uint32_t)pic_slot);
+        Scr_Restore(x, y, 0x28, 0x18);
+        if (n >= 0 && n < 10) Scr_Frame(pic_more[6], pic_state(p) + 4 * n, x, y, 0x28, 0x18);
+        pic_slot++;
+        return;
+    }
+}
+
+/* 0x10006320: a box's slots (to its capacity), each with its damage bar, its part on the car's picture
+   and its name */
 static void draw_list(const ShList *l, const SBox *b)
 {
     Scr_Restore(b->x0, b->y0, b->x1 - b->x0 - 0xe, b->y1 - b->y0 + 1);
     int x = b->x0 + 1, y = b->y0 + 2;
+    pic_slot = 0;
     for (int i = 0; i < l->cap; i++, y += row_h) {
         const ShPart *p = l->items[i];
         if (!p) continue;
         Part_Bar(p, x, y);
+        car_picture(p);
         Scr_Text(x, y, &g_sh_font45, pname(p), NULL);
     }
 }
@@ -268,10 +405,12 @@ static void draw_drops(const ShList *l, const SBox *b)
 {
     Scr_Restore(b->x0, b->y0, b->x1 - b->x0 - 0xe, b->y1 - b->y0 + 1);
     int y = b->y0 + 2;
+    pic_slot = 0;
     for (int i = 0; i < l->count; i++) {
         const ShPart *p = l->items[i];
         if (!p) continue;
         Part_Bar(p, b->x0 + 1, b->y0 + 2);   /* at the box's top whatever the row (quirk, kept) */
+        car_picture(p);
         Scr_Text(b->x0 + 1, y, &g_sh_font45, pname(p), NULL);
         y += row_h;
     }
@@ -1346,7 +1485,8 @@ void Setup_Open(void)
         if (any_gun(slot_kind(i))) guns_n++;
     put32(rec() + 0x864, guns_n);
     Bars_Load();   /* 0x10035c50 */
-    if (!gauge) gauge = wave(0x3f);   /* of 0x10010fe0's sets (0x25-0x3e, the picture's, not yet) */
+    pic_load();                       /* 0x10010fe0, the car's picture's sets */
+    if (!gauge) gauge = wave(0x3f);   /* and 0x3f */
     Scr_Background(g_sh_db, g_sh_from_map ? 2 : 1);
     if (!sb_list) {
         w_click = wave(0x52);

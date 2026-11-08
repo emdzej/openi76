@@ -131,9 +131,8 @@ The menus' and screens' meanings are to be found as each is ported.
   pointer input lights TRIP, opens its panel and shows a label under the mouse.
 - gasm's headless pointer (`PTR(x,y)`) is in drawable pixels: 1280 × 720 with the frame scaled by 1.5
   and centred (x + 160).
-- **Not ported yet:** every other screen and pop-up (each logs and goes back to the main menu), the
-  fonts and text, the keyboard, the cursors (the runner's is shown), the player's files, the music, and
-  network play.
+- **Not ported yet** (as of the main menu's first port; see "What comes next" below for the rest): the
+  cursors (the runner's is shown), the player's file, and network play.
 
 - **The way back:** when a mission ends with a state other than 7 or 10, WinMain frees it and calls
   Shell_Load again with that state (docs/re/menus.md). ShellMain opens the main menu after the
