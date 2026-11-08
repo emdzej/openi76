@@ -24,8 +24,8 @@ extern int g_user_pressed_prev;
 /* AI_UserInScene 0x409b80: n is the user's vehicle while the script did not hold the controls last frame
    (outside network play) */
 bool AI_UserInScene(Node *n);
-/* AI_Begin 0x408cf0 (WinMain, after the load): the user's node noted (0x409b20), the flags cleared; the
-   bridges' 0x4109b0 is not ported yet */
+/* AI_Begin 0x408cf0 (WinMain, after the load): the bridges' links made (Nav_Bridges 0x4109b0), the user's
+   node noted (0x409b20), the flags cleared */
 void AI_Begin(void);
 /* the end of 0x409020: the search's turns for the next frame; a search not called this frame is dropped
    (0x40fdf0 on its vehicle's AI block) */

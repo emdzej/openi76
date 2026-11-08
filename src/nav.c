@@ -1,6 +1,9 @@
 /* The AI's navigation (nav.h). In the current rounding mode (render/fpu.h). */
 #include "nav.h"
+#include "drive.h"
 #include "entity.h"
+#include "collide.h"
+#include "exe.h"
 #include "fsm.h"
 #include "math3d.h"
 #include "platform.h"
@@ -310,13 +313,16 @@ static int tree_remove(uint32_t n, uint32_t *out, Slot s, int t)
 /* ---- the bridges (0x50552c): a binary tree by x * 100000 + z of the cells a bridge links ---- */
 
 typedef struct Bridge {
-    double key;              /* +0 */
+    double key;              /* +0: x * 100000 + z */
+    int32_t x0, z0;          /* +8: the cell at this end */
     int32_t x, z;            /* +0x10: the cell at its other end */
-    Node *obj;               /* +0x18: the bridge (flag 0x200: down) */
+    Node *obj;               /* +0x18: the bridge's object (flag 0x200: down) */
     struct Bridge *right;    /* +0x1c */
     struct Bridge *left;     /* +0x20 */
 } Bridge;
 static Bridge *g_bridges;    /* 0x50552c */
+static Bridge g_links[500];  /* 0x505570, 0x28 each (the clear in 0x4109b0 runs to 0x50a3ac) */
+static int g_nlinks;         /* 0x505568 */
 
 static Bridge *bridge_at(double key)
 {
@@ -327,9 +333,130 @@ static Bridge *bridge_at(double key)
     return NULL;
 }
 
+/* Nav_LinkNew 0x40fe70: the next record, from the cell (x, z) to (x2, z2), each rounded to the nearest metre */
+static Bridge *link_new(double x, double z, Node *obj, float x2, float z2)
+{
+    if (g_nlinks >= 500) {   /* the original runs on past its table */
+        plat_log("OpenI76: the bridges' links table (0x505570) is full");
+        return NULL;
+    }
+    Bridge *b = &g_links[g_nlinks++];
+    b->x0 = ftol(floor(ADD(x, 0.5)));   /* 0x4a52f8 */
+    b->z0 = ftol(floor(ADD(z, 0.5)));
+    b->obj = obj;
+    b->key = ADD(MUL((double)b->x0, 100000.0), (double)b->z0);   /* 0x4a5300 */
+    b->x = ftol(floor((double)F32(ADD(x2, 0.5))));   /* 0x4a5308 */
+    b->z = ftol(floor((double)F32(ADD(z2, 0.5))));
+    b->right = b->left = NULL;
+    return b;
+}
+
+/* Nav_LinkInsert 0x40ff80: into the tree, right of a smaller key, else left */
+static void link_insert(Bridge *b, Bridge **at)
+{
+    while (*at) at = (*at)->key < b->key ? &(*at)->right : &(*at)->left;
+    *at = b;
+}
+
+static void link_add(Bridge *b)
+{
+    if (!b) return;
+    /* the original works out x0 % 5 (and z0 % 5) here and drops them */
+    link_insert(b, &g_bridges);
+}
+
+/* Nav_FindDeck 0x40ffe0: the first class 0xd node among n, its siblings and their descendants, with
+   its frame in the world (each node's frame inside f's) */
+static int find_deck(Node *n, const Frame *f, Node **out, Frame *of)
+{
+    for (; n; n = n->next) {
+        Frame w;
+        Frame_Mul(&w, &n->frame, f);   /* 0x4527c0 */
+        if (n->cls == 0xd) {
+            *of = w;
+            *out = n;
+            return 1;
+        }
+        if (n->child && find_deck(n->child, &w, out, of)) return 1;
+    }
+    return 0;
+}
+
+/* Nav_BridgeLinks 0x4100a0: an object (class 0xc) with a deck (class 0xd, the first among its nodes)
+   links the cells on its two banks. The deck's box, 5 m longer at each end, goes into the world; its
+   length must lie along x or z (its z axis within 0.9 of one of them). The two ends are pushed out to
+   the 10 m grid, and every 5 m across the deck (from one side of the box to within 2.5 m of the other)
+   a link runs each way between the banks' cells. */
+static void bridge_links(Entity *e)
+{
+    Frame id, w;
+    memcpy(&id, exe_data(0x4db298, sizeof id), sizeof id);
+    Node *deck = NULL;
+    for (Node *n = e->node; n; n = n->next) {
+        Frame f;
+        Frame_Mul(&f, &n->frame, &id);   /* 0x4527c0 */
+        if (n->cls == 0xd) {
+            w = f;
+            deck = n;
+            break;
+        }
+        if (n->child && find_deck(n->child, &f, &deck, &w)) break;
+    }
+    if (!deck) return;
+    float a[3] = {deck->bmin[0], deck->bmin[1], F32(SUB(deck->bmin[2], 5.0f))};   /* 0x4a5328 */
+    float b[3] = {deck->bmax[0], deck->bmax[1], F32(ADD(deck->bmax[2], 5.0f))};
+    Frame_Points(&a, (const float (*)[3])&a, 1, &w);   /* 0x452740 */
+    Frame_Points(&b, (const float (*)[3])&b, 1, &w);
+    /* the tests are on the words: signed above 0.9, or (unsigned) a negative beyond -0.9 */
+    uint32_t m8, m6;
+    memcpy(&m8, &w.m[8], 4);
+    memcpy(&m6, &w.m[6], 4);
+    int along;   /* 0: the links along z, the steps along x; 1: the other way */
+    int32_t i;
+    if ((int32_t)m8 > 0x3f666666) {
+        i = ftol(b[2]), b[2] = F32(ADD((double)i, (double)(10 - i % 10)));
+        i = ftol(a[2]), a[2] = F32(SUB((double)i, (double)(i % 10)));
+        along = 0;
+    } else if (m8 > 0xbf666666u) {
+        i = ftol(b[2]), b[2] = F32(SUB((double)i, (double)(i % 10)));
+        i = ftol(a[2]), a[2] = F32(ADD((double)i, (double)(10 - i % 10)));
+        along = 0;
+    } else if ((int32_t)m6 > 0x3f666666) {
+        i = ftol(b[0]), b[0] = F32(ADD((double)i, (double)(10 - i % 10)));
+        i = ftol(a[0]), a[0] = F32(SUB((double)i, (double)(i % 10)));
+        along = 1;
+    } else if (m6 > 0xbf666666u) {
+        i = ftol(b[0]), b[0] = F32(SUB((double)i, (double)(i % 10)));
+        i = ftol(a[0]), a[0] = F32(ADD((double)i, (double)(10 - i % 10)));
+        along = 1;
+    } else {
+        plat_log("OpenI76: bridge not orthoginal");   /* the original's message, through the empty Msg_Nop 0x407470 */
+        return;
+    }
+    int k = along ? 2 : 0;   /* the stepped axis */
+    float step = b[k] > a[k] ? 5.0f : -5.0f;
+    for (float c = a[k]; fabs(SUB(ADD(step, b[k]), c)) > 2.5; c = F32(ADD(c, step))) {   /* 0x4a5338 */
+        if (!along) {
+            link_add(link_new((double)c, (double)a[2], e->node, c, b[2]));
+            link_add(link_new((double)c, (double)b[2], e->node, c, a[2]));
+        } else {
+            link_add(link_new((double)a[0], (double)c, e->node, b[0], c));
+            link_add(link_new((double)b[0], (double)c, e->node, a[0], c));
+        }
+    }
+}
+
+/* Nav_Bridges 0x4109b0 */
 void Nav_Bridges(void)
 {
-    g_bridges = NULL;   /* and 0x505568, the table 0x50558c; the links (0x4100a0) are not ported yet */
+    g_nlinks = 0;
+    g_bridges = NULL;
+    memset(g_links, 0, sizeof g_links);   /* the original clears only each record's two links */
+    for (int list = 0; list < 2; list++)   /* 0x46b1e0, 0x46b230: the moving entities, then the static */
+        for (Cell *cl = list ? g_coll_static : g_coll_moving; cl; cl = cl->next) {
+            Entity *e = (Entity *)cl->value;
+            if (e->node->cls == 0xc) bridge_links(e);
+        }
 }
 
 /* 0x4126b0: the eight cells round n (and the bridge's far end) as its children; 0 when the pool ran out */
@@ -795,18 +922,82 @@ static void join_roads(const Pt *in, int n, Pt *out, int *nout)
     *nout = k;
 }
 
-/* 0x411a20: a bridge's two points moved to its deck; not ported yet (the bridges' links are not, so no
-   point is a bridge's) */
-static void onto_bridges(const Pt *in, Pt *out, int *n)
+/* Nav_OntoBridges 0x411a20: a point on a bridge's cell and the next (its far end) moved onto the deck's
+   lane: across the deck (its x axis) by 7.55, 2.45 or 1.55 m, the way and the amount by where the point
+   lies from the deck's centre (Dir_Cos with its z axis, then with its x axis, 0.01 either side of square
+   counting as on it); the two then joined by points every 5 m, flagged bridge, until within 5 m of the
+   far end. Both points are moved in the input. */
+static void onto_bridges(Pt *in, Pt *out, int *n)
 {
+    static Frame deck;   /* the stack's in the original: kept from the bridge before when one has no deck */
     int k = 0;
-    for (int i = 0; *n != 1 && i < *n - 1; i++) {
-        if (pbits(in[i].flag) == F_BRIDGE) plat_log("OpenI76: a path over a bridge (0x411a20) is not ported yet");
-        out[k++] = in[i];
-        if (k > 1999) too_long();
+#define PUT(px, pz, pf) do { if (k < PATH_MAX + 7) out[k] = (Pt){px, pz, pf}; k++; } while (0)
+    for (int i = 0; *n - 1 > 0 && i < *n - 1; i++) {
+        Pt *p = &in[i], *q = &in[i + 1];
+        if (pbits(p->flag) != F_BRIDGE) {
+            PUT(p->x, p->z, p->flag);
+            if (k > 1999) too_long();
+            continue;
+        }
+        Bridge *r = bridge_at(ADD(MUL((double)p->x, 100000.0), (double)p->z));   /* 0x4a5300, within 0x4a5310 */
+        if (!r)   /* the original reads through the null record here */
+            plat_log("OpenI76: a bridge's point (0x411a20) with no standing bridge");
+        Frame id;
+        memcpy(&id, exe_data(0x4db298, sizeof id), sizeof id);
+        for (Node *o = r ? r->obj : NULL; o; o = o->next) {
+            Frame f;
+            Frame_Mul(&f, &o->frame, &id);   /* 0x4527c0 */
+            if (o->cls == 0xd) {
+                deck = f;
+                break;
+            }
+            if (o->child && find_deck(o->child, &f, &o, &deck)) break;
+        }
+        float cx = F32(deck.pos[0]), cz = F32(deck.pos[2]);
+        float ux = deck.m[0], uz = deck.m[2];
+        double along = Dir_Cos(cx, cz, F32(ADD(deck.m[6], cx)), F32(ADD(deck.m[8], cz)), p->x, p->z);
+        double across = Dir_Cos(cx, cz, F32(ADD(ux, cx)), F32(ADD(uz, cz)), p->x, p->z);
+        float s = F32(across);
+        float by;   /* the shift along the x axis */
+        if (along < 0.0) {   /* 0x4a5320 */
+            if (across < -0.009999999776482582) by = 7.55f;   /* 0x4a5360, 0x4a5364 */
+            else if ((int32_t)fbits(s) > 0x3c23d70a) by = -2.45f;   /* 0x4a5354 */
+            else by = 1.55f;   /* 0x4a536c */
+        } else {
+            if (across > 0.009999999776482582) by = -7.55f;   /* 0x4a5368 */
+            else if (fbits(s) > 0xbc23d70au) by = 2.45f;
+            else by = -1.55f;
+        }
+        double tx = MUL(ux, fabsf(by)), tz = MUL(uz, fabsf(by));   /* unrounded */
+        if (by > 0) {
+            p->x = F32(ADD(p->x, tx)), p->z = F32(ADD(p->z, tz));
+            q->x = F32(ADD(tx, q->x)), q->z = F32(ADD(tz, q->z));
+        } else {
+            p->x = F32(SUB(p->x, tx)), p->z = F32(SUB(p->z, tz));
+            q->x = F32(SUB(q->x, tx)), q->z = F32(SUB(q->z, tz));
+        }
+        float dx = F32(SUB(q->x, p->x)), dz = F32(SUB(q->z, p->z));
+        double l2x = ADD(MUL(SUB(q->z, p->z), dz), MUL(dx, dx));   /* z's unrounded difference by its stored one */
+        float l2 = F32(l2x), step;
+        if (!(l2x <= -9.999999747378752e-05) && (int32_t)fbits(l2) < 0x38d1b717)   /* 0x4a5344 */
+            step = 1e6f;
+        else
+            step = F32(MUL(Fast_InvSqrt(l2), 5.0));   /* 0x4a5378 */
+        dx = F32(MUL(step, dx)), dz = F32(MUL(step, dz));
+        PUT(p->x, p->z, p->flag);
+        float x = p->x, z = p->z;
+        while (ADD(MUL(SUB(q->x, x), SUB(q->x, x)), MUL(SUB(q->z, z), SUB(q->z, z))) > 25.0) {   /* 0x4a5380 */
+            x = F32(ADD(dx, x)), z = F32(ADD(dz, z));
+            PUT(x, z, 2.0f);
+        }
+        PUT(q->x, q->z, q->flag);
+        if (k >= 2000) too_long();
+        i++;
     }
-    out[k] = in[*n - 1];
-    *n = k + 1;
+    PUT(in[*n - 1].x, in[*n - 1].z, in[*n - 1].flag);
+#undef PUT
+    if (k > PATH_MAX + 7) k = PATH_MAX + 7;   /* the port's: the original runs on past its buffer */
+    *n = k;
 }
 
 /* 0x411fb0: the points into the AI block (+0xb0, 0x14 each: x, z, on a road, on a bridge); +0xa8 the next */

@@ -106,6 +106,7 @@ int g_ai_getdown;   /* 0x505450 */
 
 void AI_Begin(void)
 {
+    Nav_Bridges();   /* 0x4109b0 */
     g_ai_getdown = 0;   /* 0x4088a0's, at the mission's set-up */
     g_ai_user = g_user_entity ? g_user_entity->node : NULL;
     g_user_pressed = g_user_pressed_prev = 0;

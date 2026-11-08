@@ -1502,3 +1502,6 @@
 00431dc0	Heli_Contact	vehicles	high	class 9's collision: calls 0x42a7a0; ported
 00433080	Class7_Contact	classes	high	class 7's collision, as 0x4306f0; ported
 00434840	ClassA_Contact	classes	high	class 0xa's collision, as 0x4306f0; ported
+0x40fe70	Nav_LinkNew
+0x40ff80	Nav_LinkInsert
+0x40ffe0	Nav_FindDeck

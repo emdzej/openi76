@@ -944,6 +944,7 @@ int Dump_CallVehicles(int which, int upside)
                         called until done (at most 300 times): each call's answer, the nodes and the trees,
                         then the AI block's path (+0x7c-+0xb0 but the path's address, and the points) */
             uint8_t *ai = *Data_Ptr(n->data, 0x108);
+            Nav_Bridges();   /* as AI_Begin 0x408cf0 */
             for (int pi = 0; pi < g_fsm.n_paths && pi < 3; pi++)
                 for (int end = 0; end < 2; end++) {
                     uint32_t path = g_fsm.paths + (uint32_t)pi * 0x58;

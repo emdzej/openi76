@@ -495,6 +495,7 @@ def call_search(exe, n, fpcw):
     u = lambda a: struct.unpack("<I", exe.read(a, 4))[0]  # noqa: E731
     d = u(n + 0x70)
     ai = u(d + 0x108)
+    exe.call(0x4109B0, fpcw=fpcw)   # the bridges' links (as AI_Begin 0x408cf0 makes them)
     for pi in range(min(u(0x4A88E0), 3)):
         for end in range(2):
             path = u(0x4A88DC) + pi * 0x58

@@ -308,7 +308,7 @@ static void play_frame(void)
         if (trace > 0) {   /* the port's: the objectives' changes with the trace */
             static uint32_t seen[8];
             for (int i = 0; i < g_objectives.count && i < 6; i++)
-                if (g_objectives.flags[i] != seen[i]) {
+                if (g_objectives.flags[i] != seen[i] || frames == 1) {   /* all of them at the first frame */
                     char m[200];
                     snprintf(m, sizeof m, "OpenI76: frame %d objective %d flags %x: %.120s", frames, i, (unsigned)g_objectives.flags[i],
                              g_objectives.text[i] ? g_objectives.text[i] : "");

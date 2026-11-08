@@ -168,8 +168,29 @@ on a bridge), +0xa8 the point being driven to set to 0 (0x411fb0):
 5. 0x4116a0: two road points of one RSEG become the lane between them (0x411310): along the strip in its
    direction, or round a loop's join when the strip's ends meet within 9 m and that way is shorter, each
    point 2.45 m in from the right edge going forward, the left going back (0x410b20).
-6. 0x411a20 moves a bridge's two points onto its deck (not ported yet; without the bridges' links no point
-   is a bridge's).
+6. 0x411a20 (Nav_OntoBridges): a bridge's point and the next (the far bank's) move onto the deck's lane.
+   The deck's frame is found again from the link's object (the first class 0xd node, as below; an object
+   with none keeps the frame of the bridge before, the original's stack). With c the deck's centre and
+   its axes x (across) and z (along), Dir_Cos of the point from c against z picks the end, against x the
+   side, within 0.01 of square counting as the middle: before the centre (cos z < 0) the shift along x
+   is +7.55 m from the -x side, -2.45 m from the +x side, +1.55 m from the middle; past it -7.55, +2.45
+   and -1.55. Both points shift by it (in the input too), then points flagged bridge every 5 m from the
+   first while more than 5 m from the second; the second keeps its own flag, and the next point is
+   skipped. A point with no standing bridge has a null record in the original, read through; the port
+   logs it.
+
+**The bridges' links** (Nav_Bridges 0x4109b0, first in AI_Begin 0x408cf0): the records 0x505570 (0x28
+each, 500, no bound check: +0 the key x * 100000 + z as a double, +8 / +0xc this end's cell, +0x10 /
++0x14 the far end's, +0x18 the object, +0x1c right, +0x20 left) in the tree 0x50552c (0x40ff80: right of
+a smaller key, else left), each cell rounded to the nearest metre (0x40fe70). For every entity, moving
+then static, whose node is class 0xc, Nav_BridgeLinks 0x4100a0 takes the first class 0xd node among its
+nodes and their descendants (0x40ffe0, the frames composed from the identity 0x4db298). Its box, 5 m
+longer each way along z, goes into the world; the deck's z axis must lie within 0.9 of world z (m8) or
+world x (m6), else "bridge not orthoginal" (a message that goes nowhere) and no links. The two ends on
+that axis are pushed out to the 10 m grid (the far one up, the near one down, by the sign; through
+chopped integers), and from one side of the box across, every 5 m until within 2.5 m of the other side
+plus a step, a link each way between the two banks' cells. The search's expansion (0x4126b0) gives a
+cell with a link (within 1 of its key, the object standing) a ninth child, the far end.
 
 ## Driving a path (goto 0x16, following 0x17)
 

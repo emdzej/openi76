@@ -15,7 +15,7 @@
      meanwhile with "navsN" the script's paths nav1 .. navN driven in turn at 60 (goto), each passed within
      25 m (t04's laps);
    - "to:path@k" written: the script's path driven (goto, at 60) once objective k shows, until within 30 m
-     of its last point, or "wp:x:z@k" the point (x, z), within 60 m; several in turn, each once the one before is
+     of its last point, "wp:x:z@k" the point (x, z), or "go:name@k" the script entity's place, within 60 m; several in turn, each once the one before is
      reached;
    - else the leader (a script entity: taurus; name@k:lead, from objective k) followed in formation (order 0x1e), 15 m behind (20 m ahead
      with "ahead[@k]" written, to win a race), avoiding
@@ -213,10 +213,15 @@ void Autopilot_Frame(void)
         }
 follow:;
     for (int k = 1; k < nnames; k++) {   /* "to:path@k": along the script's path by its goto, once objective k shows */
-        int to = !strncmp(names[k], "to:", 3), wp = !strncmp(names[k], "wp:", 3);
-        if ((!to && !wp) || reached[k] || !gate_ok(k)) continue;
+        int to = !strncmp(names[k], "to:", 3), wp = !strncmp(names[k], "wp:", 3), go = !strncmp(names[k], "go:", 3);
+        if ((!to && !wp && !go) || reached[k] || !gate_ok(k)) continue;
         float x = 0, z = 0;
         if (wp) sscanf(names[k] + 3, "%f:%f", &x, &z);
+        if (go) {   /* "go:name@k": to the script entity's place */
+            Node *o = Fsm_Named(names[k] + 3);
+            if (!o) continue;
+            x = (float)o->frame.pos[0], z = (float)o->frame.pos[2], wp = 1;
+        }
         int r = to ? Fsm_GotoNamed(u, names[k] + 3, 60.0f, 30, 1) : Fsm_GotoPoint(u, x, z, 60.0f, 60);
         if (r == 1) reached[k] = 1;   /* reached: not driven again */
         else if (r == 0) return;
