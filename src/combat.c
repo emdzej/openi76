@@ -140,15 +140,11 @@ int Angle_Sector(float a, float b)
 void Class_Velocity(Node *n, float v[3], float *speed)
 {
     switch (n->cls) {
-    case 1: case 9:   /* 0x42a740, 0x431d70 */
+    case 1: case 8: case 9:   /* 0x42a740; 0x428c70 calls it; 0x431d70 */
         memcpy(v, n->data + 0xbc, 12);
         *speed = rdf(n->data + 0xac);
         return;
-    case 7: case 8: case 0xa: {   /* 0x433000, 0x428c70, 0x4347a0 */
-        static int told;
-        if (!told++) plat_log("OpenI76: the velocity of classes 7, 8 and 0xa (0x425be0) is not ported yet");
-        break;
-    }
+    /* 7 and 0xa (0x433000, 0x4347a0) stand still, as the classes without one */
     }
     v[0] = v[1] = v[2] = 0;
     *speed = 0;

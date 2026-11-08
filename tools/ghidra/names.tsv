@@ -1437,3 +1437,5 @@
 00431c60	Damage_Heli	damage	high	class 9's damage: the 0x508 block's points; falling (0x10), the controls set, x1_bldx1; ported, diffed
 00432ed0	Damage_Gate	damage	high	class 7's damage (+0x98): state 1, 0x200, exploded; re-entered by its own splash (stack overflow); ported, diffed
 004346b0	Damage_Class10	damage	high	class 0xa's damage (+0xc): as class 7's; ported, diffed
+00425be0	Class_Velocity	combat	high	a node's velocity and speed by its class's table slot (+0x1c); 0 without one; ported
+00428c70	Velocity_Artillery	combat	high	class 8's velocity: class 1's (0x42a740)

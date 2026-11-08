@@ -342,6 +342,10 @@ smaller one is taken off. All four spawn `x1_bldx1` (0x4d539c) at the node's pla
   gate `bcaikgat`. The port's deviation: while the node's explosion is being spawned, a call on that node
   does nothing.
 
+**Their velocity (`Class_Velocity` 0x425be0, the class table's +0x1c).** An artillery gun's is a
+vehicle's (0x428c70 calls 0x42a740: the data's +0xbc and the speed +0xac). A class 7 or 0xa node, like a
+class without the slot, stands still (0x433000, 0x4347a0).
+
 Checked: `diff_objects --call kill` on t12 (an artillery gun, the helicopters, a gate) and t05 (a class
 0xa), with the same guard in the emulator. For each vehicle, the nearest intact one takes 100000 of the
 first kind. It compares the result, the seed, the flags, the points' words, the children's flags, the
