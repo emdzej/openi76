@@ -1368,3 +1368,4 @@
 00488090	ShellCar_Btbl	carfile	high	BTBL: the brakes' name by number; ported
 004880d0	ShellCar_Stbl	carfile	high	STBL: the suspension's name by number; ported
 0048b420	ShellCar_State	carfile	high	the table's +0x18: a .vsf as the shell's 0x4e-dword state; ported
+00489cf0	ShellCar_Record	carfile	high	the table's +0x14: a .vcf as the shell's 0x8c4 record (slots, names, armour, weight); ported

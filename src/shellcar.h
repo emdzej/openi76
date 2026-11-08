@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum { SHELL_VCF = 0xaa8, SHELL_VSF = 0xc0 };
+enum { SHELL_VCF = 0xaa8, SHELL_VSF = 0xc0, SHELL_REC = 0x8c4 };
 
 /* 0x485210: name's .vcf into the scratch (SHELL_VCF bytes, cleared by the caller): +0x50 the car's name,
    +0xa0 the body's, +0xf0 the .vdf, +0xfd the .vtf, +0x10a the shell's VSHL, +0x137/+0x147/+0x157 the
@@ -26,6 +26,14 @@ bool ShellCar_ReadVsf(const char *name, uint8_t *scratch, SalvFn salv);
    the brakes', [2] the suspension's condition, [3..8] the wheels', [9+i] gun i's hard point and [0x27+i]
    its count, the bytes at +0x114 the specials, [0x46..0x4d] the VCST's words from +0xd */
 void ShellCar_State(int32_t out[0x4e], const char *name, SalvFn salv);
+
+/* 0x489cf0 (the table's +0x14): name's .vcf as record index of the array recs (SHELL_REC bytes each, not
+   cleared): +0 the body's name, +0x14 the car's, +0x3c the slots' count, +0x40 the slots (0x20 each: the
+   kind, the label, the place) of the engine, suspension, brakes, the wheels, the guns and the specials,
+   +0x400 their parts' names (0x1e each), +0x784 the guns' hard points, +0x7fc the armour, +0x820 the
+   .vdf, +0x82d the .vtf, +0x83a the wheels' .wdf, +0x868 the hard points' words, +0x8bc the weight. The
+   hard points' count goes to the array's +0x864. 0 when the file cannot be read */
+int ShellCar_Record(uint8_t *recs, const char *name, int index);
 
 /* the port's tables are the exe's (tests) */
 bool ShellCar_CheckTables(void);

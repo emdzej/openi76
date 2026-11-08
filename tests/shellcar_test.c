@@ -48,6 +48,18 @@ int main(void)
                rd32(s + 0x428 + i * 0xfc), (char *)s + 0x3c8 + i * 0xfc);
     CHECK(s[0x50] && s[0x137] && s[0x147] && s[0x157] && rd32(s + 0xa60) > 0 && w > 0);
 
+    static uint8_t recs[2 * SHELL_REC];
+    CHECK(ShellCar_Record(recs, "vppa01.vcf", 0) == 4);
+    int slots = rd32(recs + 0x3c);
+    printf("record: \"%s\" / \"%s\", %d slots, .vdf %s, wheels %s %s %s\n", (char *)recs, (char *)recs + 0x14,
+           slots, (char *)recs + 0x820, (char *)recs + 0x83a, (char *)recs + 0x847, (char *)recs + 0x854);
+    for (int i = 0; i < slots && i < 24; i++) {
+        const uint8_t *sl = recs + 0x40 + 0x20 * i;
+        printf("  slot %2d kind %2d %-10s at %3d,%3d: %s\n", i, rd32(sl), (char *)sl + 4, rd32(sl + 0x14),
+               rd32(sl + 0x18), (char *)recs + 0x400 + 0x1e * i);
+    }
+    CHECK(slots >= 3 + 4 && rd32(recs + 0x40) == 2 && rd32(recs + 0x864) == 4);
+
     Bwd2Out f;
     uint8_t vcst[0x4c] = {0}, wlst[0x18] = {0}, wp[0xc] = {0}, sv[0x18] = {0};
     vcst[0x3d] = 9;

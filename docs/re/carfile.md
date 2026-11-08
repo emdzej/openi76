@@ -92,3 +92,38 @@ at +0x64 (their count at +0xbc), and hands each SALV to the function at +0xb8. 0
 six wheels', each gun's hard point and count, the three specials' bytes and the VCST's words from +0xd.
 
 `tests/shellcar_test.c` reads the training car (vppa01.vcf) and a .vsf written through the file layer.
+
+## The shell's car record (0x489cf0) — confirmed, tested
+
+The shell's +0x14 turns a .vcf into a record of 0x8c4 bytes in the shell's array (0x1009bf60). The
+record is not cleared first:
+
+| Offset | Contents |
+|---|---|
+| +0, +0x14 | the body's and the car's names |
+| +0x28, +0x38 | "doarmel", 1 |
+| +0x3c | the slots' count |
+| +0x40 + 0x20 i | slot i: its kind, its label (+4), its place on the garage's picture (+0x14, +0x18), 0 (+0x1c) |
+| +0x400 + 0x1e i | slot i's part's name |
+| +0x784 + 4 i | a gun slot's hard point id |
+| +0x7fc | the armour's nine words, in the order +0xa7c, +0xa84, +0xa80, +0xa88, +0xa8c, +0xa94, +0xa90, +0xa98, +0xa9c of the scratch |
+| +0x820, +0x82d | the .vdf and .vtf |
+| +0x83a, +0x847, +0x854 | the wheel pairs' .wdf files |
+| +0x868 + 0xc i | hard point i's id and two words |
+| +0x8bc, +0x8c0 | the weight, the body's |
+
+The slots come in order:
+1. The engine (kind 2), suspension (3) and brakes (4), placed by VSHL's words.
+2. The wheels that have a .wdf (5), labelled `WHL FR`, `WHL FL`, … and placed by their WLOC's +0x34.
+3. One gun slot per hard point of the body, by the HLOC's type: 8 (type 4, a dropper), 10 or 9 (type 6,
+   the handguns, by the side 3 or 4; any other side is a fatal error), 0xb (type 3), else 7. A gun slot
+   without a gun reads `EMPTY`.
+4. The specials (0xc), named from the table at 0x4eac44.
+
+Two quirks are kept:
+- The hard points' count goes to +0x864 of the array's first record, whatever the record's index.
+- The specials' loop keeps two cursors. A special that is there goes to the next slot after the last
+  one filled. A special that is not there clears the slot of its own place.
+
+The training car (vppa01.vcf) gives 12 slots: the three components, four wheels, four guns (Oil Slick,
+two 30cal MG, FireRite Rkt) and the special Structo Bmpr.
