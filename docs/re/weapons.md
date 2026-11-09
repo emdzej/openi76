@@ -704,6 +704,11 @@ It runs once a frame after the AI, before the textures' animations:
        slots after the current one, round to it, whose definition's kind and instance's kind match the
        current one's. While it is clear, 0x457df0 empties the group but its current slot.
      - Quirk: from a current slot past 4, 0x458030 reads past the slots; the port stops at 6.
+     - The dashboard: for the user's car each of the three redraws the name plates (3dymo_N, by
+       0x4569b0) of the slots that leave the group unlit and of those that join it lit, and sets their
+       lights (+0x28). The cycle and unlink clear the light at the slot's position in the group, not at
+       the slot (quirk, kept). Each ends, every frame it runs, by drawing the separator bar (3separator_N
+       with 3sepbar) after slot +0x24 (w9).
 3. Network play's triggers and messages (0x4624a0, 0x462580) are skipped; not ported.
 4. The instances' tick (0x458340, "Firing: the triggers' timing").
 5. The dashboard's slots are redrawn: each weapon's diode (0x456c10), then each one's counter (0x456cf0),

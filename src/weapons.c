@@ -1466,6 +1466,28 @@ static int all_broken(const HardPoints *hp)
     return 1;
 }
 
+/* slot k's name plate (3dymo_N) drawn lit or not, by its instance's definition (0x4569b0); false when the
+   weapon has none */
+static bool dash_plate_put(HardPoints *hp, int k, int lit)
+{
+    int i = hp->slot[k].inst;
+    const WeaponDef *d = &g_weapon_defs[g_weapons[i].def];
+    const char *plate = dash_plate(d->kind, d->index, g_weapons[i].kind == 4, lit);
+    if (!plate || !*plate) return false;
+    Tex_PutRegion((uintptr_t)g_dash, dash_tex(), dash_name(0x4dc0c8, k, 0), plate, &g_dash_surf);
+    return true;
+}
+
+/* the end of the cycle, link and unlink (0x457a30, 0x458030, 0x457df0): the user's separator bar
+   (3separator_N, 3sepbar) after slot w9, every time they run */
+static void dash_separator(void)
+{
+    HardPoints *u = user_hardpoints();
+    if (u && g_dash && u->w9 != -1)
+        Tex_PutRegion((uintptr_t)g_dash, dash_tex(), dash_name(0x4dbf88, u->w9, 0), exe_str(0x4db4f8 + (uint32_t)g_dash_low),
+                      &g_dash_surf);
+}
+
 /* 0x457a30: weapon_cycle: the group's current slot to the next working one not in the group (round the
    five), the group emptied */
 static void weapons_cycle(HardPoints *hp)
@@ -1488,21 +1510,36 @@ static void weapons_cycle(HardPoints *hp)
         }
     } while (found == -1 && (cur != k || in));
     if (cur == k) return;
-    for (int j = 0; j < 7; j++) hp->w1[j] = -1;
+    int user = hp == user_hardpoints();
+    for (int j = 0; j < 7; j++) {
+        /* the user's group's plates unlit; the light cleared is the group's position j, not the slot's
+           (quirk, kept) */
+        if (user && hp->w1[j] != -1) {
+            *light_of(hp, j) = 0;
+            dash_plate_put(hp, hp->w1[j], 0);
+        }
+        hp->w1[j] = -1;
+    }
     hp->w1[0] = k;
-    if (hp == user_hardpoints()) {
+    if (user) {
         dash_sound(exe_str(0x4dc378));
+        if (dash_plate_put(hp, k, 1)) *light_of(hp, k) = 1;
         Radar_Unlock(hp->vehicle);
     }
+    dash_separator();
 }
 
 /* 0x458030: linked: the group (+8 on) made, once, of the working slots after the current one (round
-   to it, slot 5 included) with its definition's kind and its instance's kind */
+   to it, slot 5 included) with its definition's kind and its instance's kind, their plates lit; the
+   separator drawn */
 static void weapons_link(HardPoints *hp)
 {
     int cur = hp->w1[0];
     if (cur == -1 || hp->slot[cur].inst == -1) return;
-    if (hp->w1[1] != -1) return;
+    if (hp->w1[1] != -1) {
+        dash_separator();
+        return;
+    }
     const WeaponInst *c = &g_weapons[hp->slot[cur].inst];
     int at = 1, k = cur;
     do {
@@ -1513,26 +1550,36 @@ static void weapons_link(HardPoints *hp)
             const WeaponInst *w = &g_weapons[i];
             if (g_weapon_defs[c->def].kind == g_weapon_defs[w->def].kind && c->kind == w->kind && weapon_health(i) > 0.0) {
                 hp->w1[at++] = n;   /* the original writes on past the group's six words with more */
-                if (hp == user_hardpoints()) dash_sound(exe_str(0x4dc378));
+                if (hp == user_hardpoints()) {
+                    dash_sound(exe_str(0x4dc378));
+                    if (dash_plate_put(hp, n, 1)) *light_of(hp, n) = 1;
+                }
             }
         }
         if (n == 5) n = -1;
         k = n;
     } while (cur != k);
     hp->w1[0] = cur;
+    dash_separator();
 }
 
-/* 0x457df0: unlinked: the group but its current slot emptied */
+/* 0x457df0: unlinked: the group but its current slot emptied, the plates unlit; the separator drawn */
 static void weapons_unlink(HardPoints *hp)
 {
     int cur = hp->w1[0];
     if (cur == -1 || hp->slot[cur].inst == -1) return;
-    if (hp->w1[1] == -1) return;
-    for (int j = 1; j < 7; j++)
-        if (hp->w1[j] != -1) {
-            if (hp == user_hardpoints()) dash_sound(exe_str(0x4dc378));
-            hp->w1[j] = -1;
-        }
+    if (hp->w1[1] != -1)
+        for (int j = 1; j < 7; j++)
+            if (hp->w1[j] != -1) {
+                /* the user's: the plate unlit, and the light at the group's position cleared (quirk, as the
+                   cycle's) */
+                if (hp == user_hardpoints()) {
+                    dash_sound(exe_str(0x4dc378));
+                    if (dash_plate_put(hp, hp->w1[j], 0)) *light_of(hp, j) = 0;
+                }
+                hp->w1[j] = -1;
+            }
+    dash_separator();
 }
 
 static const Frame k_identity = {.m = {1, 0, 0, 0, 1, 0, 0, 0, 1}};   /* 0x4db298 */
