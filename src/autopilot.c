@@ -23,6 +23,8 @@
      (+0x9d14) as the script has the leader avoid.
    "name:spareN" leaves a vehicle alone once its health is under N (t09: Calisto disabled, not killed), and
    follows it as the leader while it is 250 m off or more (the attack's path search loses a fast car).
+   "route" reaches a leader 300 m off or more by the path search (the formation drives straight at its
+   place and can stick on the terrain); off, the formation as before (t01-t04's wins).
    "stay[R]" leaves the fights while the leader is R m (200) off or more, to catch it up (s05's bus).
    "name/a/b" hunts name before anything nearer once the script's a and b are dead (s05: Plato, who
    blows the bridge, once the bus's ambushers are dealt with).
@@ -371,7 +373,7 @@ follow:;
     for (int k = 1; k < nnames; k++)
         if (lead[k] && gate_ok(k)) ln = names[k];   /* name@k:lead: the leader from objective k */
     Node *lead = ln ? Fsm_Named(ln) : NULL;
-    if (lead && !dead(lead) && dist2(lead, u) > 300.0 * 300.0 &&   /* far: to its place by the path search (the
+    if (lead && !dead(lead) && has("route") && dist2(lead, u) > 300.0 * 300.0 &&   /* far: to its place by the path search (the
                                                                      formation drives straight at it) */
         Fsm_GotoPoint(u, (float)lead->frame.pos[0], (float)lead->frame.pos[2], 60.0f, 60) >= 0)
         return;
