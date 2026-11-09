@@ -28,7 +28,7 @@
    blows the bridge, once the bus's ambushers are dealt with).
    --param aphurt=name:N@s wears the script's car down to under N health from s seconds (small chassis
    packets each frame, credited to the user), to test a "disable, don't kill" script (t09).
-   --param apwarp=path@s puts the user's car at the script path's first point at s seconds, by the
+   --param apwarp=path@s (or path#k, once objective k is done) puts the user's car at the script path's first point, by the
    script's teleport (s02: past the race the autopilot cannot win, to test what follows).
    --param apkill=name@s,... destroys the script's named entity at s seconds of the script's clock, a test
    aid to run a script's later branches apart from the fights (as apinvincible and apstrong are).
@@ -100,7 +100,9 @@ static int has(const char *name)
 
 void Autopilot_Keys(void)
 {
-    if (on > 0 && g_camera_mode == 5 && has("skip")) g_input_main = 1;   /* with "skip" written */
+    /* with "skip" written: a script camera up, or the script asking for a key lately (an intro's wait) */
+    if (on > 0 && (g_camera_mode == 5 || g_fsm_keypoll > 0) && has("skip")) g_input_main = 1;
+    if (g_fsm_keypoll > 0) g_fsm_keypoll--;
 }
 
 void Autopilot_Reset(void) { started = skilled = 0, focus = prey = NULL; memset(reached, 0, sizeof reached); }
@@ -240,17 +242,20 @@ void Autopilot_Frame(void)
     static char wname[32];   /* --param apwarp=path@s: the user's car put at the path's start at s seconds (a test aid) */
     static int warp = -1;
     static float wat;
+    static int wobj = -1;   /* path#k: once objective k is done */
     if (warp < 0) {
         char v[64];
         warp = 0;
         if (plat_param("apwarp", v, sizeof v)) {
-            char *at = strchr(v, '@');
+            char *at = strchr(v, '@'), *hash = strchr(v, '#');
             if (at) *at = 0, wat = (float)atof(at + 1);
+            if (hash) *hash = 0, wobj = atoi(hash + 1);
             snprintf(wname, sizeof wname, "%s", v);
             warp = 1;
         }
     }
-    if (warp == 1 && g_clock_total >= wat && g_user_entity && g_user_entity->node) {
+    if (warp == 1 && g_clock_total >= wat && g_user_entity && g_user_entity->node &&
+        (wobj < 0 || (wobj < g_objectives.count && (g_objectives.flags[wobj] & 2)))) {
         char m[80];
         snprintf(m, sizeof m, "OpenI76: apwarp to %s at %.1f s: %s", wname, g_clock_total,
                  Fsm_Warp(g_user_entity->node, wname) ? "done" : "no such path");

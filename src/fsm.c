@@ -366,6 +366,8 @@ Node *Fsm_Named(const char *name)
 }
 
 /* the port's (the traces'): the script's name of a node, or NULL */
+int g_fsm_keypoll;   /* the port's (the autopilot's skip): isKeypress asked lately */
+
 const char *Fsm_NameOf(const Node *n)
 {
     if (!g_fsm_loaded || !n) return NULL;
@@ -1198,7 +1200,7 @@ static void action(uint32_t m, int32_t index)
         break;
     }
     case 61: SET(m + M_FLAG, Cam_IsArrived()); break;   /* camIsArrived */
-    case 62: SET(m + M_FLAG, Input_MenuPoll()); break;    /* isKeypress (0x480720) */
+    case 62: g_fsm_keypoll = 2; SET(m + M_FLAG, Input_MenuPoll()); break;    /* isKeypress (0x480720) */
     case 63: trigger_gate(E(m, 0)); break;  /* triggerGate */
     case 65: toggle_avoid(E(m, 0)); break;  /* toggleAvoid */
     case 66: SET(m + M_FLAG, all_blg_dead()); break;    /* allBlgDead */

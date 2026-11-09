@@ -46,6 +46,7 @@ Node *Fsm_Entity(int32_t i);
 Node *Fsm_Named(const char *name);
 const char *Fsm_NameOf(const Node *n);
 void Fsm_Destroy(Node *n);
+extern int g_fsm_keypoll;
 int Fsm_Warp(Node *n, const char *name);
 /* the port's (the autopilot's): n sent along the path named name at speed (the goto order); 1 once within r
    of its first point (its last with last), -1 without such a path */
