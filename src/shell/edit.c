@@ -15,14 +15,14 @@ static const ShFont *font;
 static int ex, ey, len, max_n, max_w, shown_w;
 static char *out;
 
-/* 0x1003c1b0 and 0x10033390: the line drawn as a piece over the screen, and taken off it (the background
-   back over its width and 1, its height) */
+/* 0x1003c1b0: the line drawn as a piece over the screen */
 static void show(void)
 {
     shown_w = Text_Width(font, work);
     Scr_Text(ex, ey, font, work, NULL);
 }
 
+/* 0x10033390: the piece taken off (the background back over its width and 1, its height) */
 static void hide(void) { Scr_Restore(ex, ey, shown_w + 1, font->height); }
 
 void Edit_Begin(const ShFont *f, int x, int y, char *buf, int max, int max_w_)

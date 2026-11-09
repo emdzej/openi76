@@ -245,7 +245,7 @@ static float db_gain(int32_t att) { return att <= -10000 ? 0.0f : powf(10.0f, (f
 static float dot(const float a[3], const float b[3]) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 
 /* a 3D buffer's gain, its left and right shares and its pitch's factor (the port's) */
-static void place(const Dsb *b, float *g, float *gl, float *gr, double *pitch)
+static void spatial(const Dsb *b, float *g, float *gl, float *gr, double *pitch)
 {
     *g = 1, *gl = *gr = 1, *pitch = 1;
     const Ds3dBuffer *p = &b->p3;
@@ -289,7 +289,7 @@ static void mix_one(float *lr)
         if (!b->used || !b->playing || !b->d->frames) continue;
         float g3, l3, r3;
         double pitch;
-        place(b, &g3, &l3, &r3, &pitch);
+        spatial(b, &g3, &l3, &r3, &pitch);
         float g = db_gain(b->vol) * g3;
         float gl = g * l3 * (b->pan > 0 ? db_gain(-b->pan) : 1.0f), gr = g * r3 * (b->pan < 0 ? db_gain(b->pan) : 1.0f);
         const int16_t *s = b->d->pcm;

@@ -64,13 +64,6 @@ static int32_t repair_cost(const ShPart *p, uint32_t k)   /* by the kind's cost,
     return (int32_t)dll_u32(0x1005cbc0 + 4 * (uint32_t)pkind(p)) * level(p, k);
 }
 
-static int index_of(const ShList *l, const void *it)   /* 0x10034bf0 */
-{
-    for (int i = 0; i < l->count; i++)
-        if (l->items[i] == it) return i;
-    return -1;
-}
-
 void Setup_UseTrip(void) { trip_fns = 1; }   /* the garage's ACCEPT SALVAGE */
 void Setup_UseMap(void) { map_fns = 1; }     /* the map's button 5 */
 
@@ -102,7 +95,7 @@ static void wheels_on_car(ShList *out, const ShList *l)
         }
         for (int k = 0; k < l->count; k++) {
             ShPart *p = l->items[k];
-            if (strcmp(slot_name(i), pname(p)) || p->where != 1 || index_of(out, p) != -1) continue;
+            if (strcmp(slot_name(i), pname(p)) || p->where != 1 || ShList_Index(out, p) != -1) continue;
             strncpy((char *)p->part + 0x3b, (const char *)rec() + 0x83a, 7);
             ShList_Add(out, p, NULL);
             break;
@@ -132,11 +125,11 @@ static void fill_comps(ShList *c)   /* 0x10036ec0 */
 
 static void refresh_comps(ShList *c)   /* 0x10037400 */
 {
-    if (index_of(g_sh_engines, c->items[0]) == -1) c->items[0] = &g_sh_no_engine;
-    if (index_of(g_sh_susps, c->items[1]) == -1) c->items[1] = &g_sh_no_susp;
-    if (index_of(g_sh_brakes, c->items[2]) == -1) c->items[2] = &g_sh_no_brakes;
+    if (ShList_Index(g_sh_engines, c->items[0]) == -1) c->items[0] = &g_sh_no_engine;
+    if (ShList_Index(g_sh_susps, c->items[1]) == -1) c->items[1] = &g_sh_no_susp;
+    if (ShList_Index(g_sh_brakes, c->items[2]) == -1) c->items[2] = &g_sh_no_brakes;
     for (int i = 3; i < 7; i++)
-        if (index_of(g_sh_wheels, c->items[i]) == -1) c->items[i] = &g_sh_no_wheel;
+        if (ShList_Index(g_sh_wheels, c->items[i]) == -1) c->items[i] = &g_sh_no_wheel;
 }
 
 static int order_of(int32_t id)   /* 0x10006bd0: the id's place, or the last */
@@ -155,7 +148,7 @@ static ShPart *gun_for(int i, const ShList *l, uint32_t empty)
     if (!crt_stricmp(slot_name(i), dll_str(empty))) return &g_sh_empty;
     for (int k = 0; k < g_sh_guns->count; k++) {
         ShPart *p = g_sh_guns->items[k];
-        if (!strcmp(slot_name(i), pname(p)) && index_of(l, p) == -1 && p->where == 1) return p;
+        if (!strcmp(slot_name(i), pname(p)) && ShList_Index(l, p) == -1 && p->where == 1) return p;
     }
     return &g_sh_empty;
 }
@@ -213,7 +206,7 @@ static void fill_specs(ShList *s)   /* 0x10037910 */
 static void refresh_specs(ShList *s)   /* 0x10037960 */
 {
     for (int i = 0; i < 3; i++)
-        if (index_of(g_sh_specials, s->items[i]) == -1) s->items[i] = &g_sh_empty;
+        if (ShList_Index(g_sh_specials, s->items[i]) == -1) s->items[i] = &g_sh_empty;
 }
 
 /* ---- the map's fills (0x10018ba0, 0x10018c60, 0x10018d20, 0x100190a0, 0x10019430, 0x10019470) ---- */
@@ -758,7 +751,7 @@ static void spec_pass(void)
         ShPart *p = pop.list->items[row];
         if (p && !strcmp(pname(p), dll_str(0x1005fac8))) return;
         ((ShPart *)specs->items[pop.slot])->where = 2;
-        int at = index_of(specs, p);
+        int at = ShList_Index(specs, p);
         ((uint8_t *)g_sh_empty.part)[0x1e] = 0xc;
         if (at == -1) {
             for (int i = 0; i < 3; i++) {
@@ -826,7 +819,7 @@ static void gun_done(ShList *from, ShList *to, int keep)
     if (pk.picked != -1) {
         ShPart *p = from->items[pk.picked];
         p->where = 1;
-        int at = index_of(to, p);
+        int at = ShList_Index(to, p);
         if (at != -1) {
             ((uint8_t *)g_sh_empty.part)[0x1e] = 7;
             to->items[at] = &g_sh_empty;
@@ -978,7 +971,7 @@ static void put_word(uint8_t **b, size_t *n, size_t *cap, int32_t v)
 static void drop_from(ShList *l, const ShList *from)   /* 0x1001e4d0 */
 {
     for (int i = l->count - 1; i >= 0; i--)
-        if (index_of(from, l->items[i]) != -1) ShList_Remove(l, l->items[i]);
+        if (ShList_Index(from, l->items[i]) != -1) ShList_Remove(l, l->items[i]);
 }
 
 /* 0x1001c7a0: user.rpr: the repairs (their count, the split where their cost passes the shop's 0x20 a
@@ -1165,7 +1158,7 @@ static void rp_toggle(int i)   /* 0x1000ed10 */
             p->where = p->w18 - 1;
             p->w18 = 0;
         }
-        if (index_of(rp.chosen, p) == -1) rp.base -= repair_cost(p, 0x10059048);
+        if (ShList_Index(rp.chosen, p) == -1) rp.base -= repair_cost(p, 0x10059048);
         else ShList_Remove(rp.chosen, p);
     } else {
         if (REPAIR_BUDGET < repair_cost(p, 0x10059048) + cost) {
@@ -1198,7 +1191,7 @@ static void rp_pass(void)   /* 0x1000da90 */
         for (int k = 0; k < rp.chosen->count; k++) {
             ShPart *p = rp.chosen->items[k];
             p->where = 3;
-            if (index_of(rep, p) == -1) ShList_Add(rep, p, NULL);
+            if (ShList_Index(rep, p) == -1) ShList_Add(rep, p, NULL);
             take_off(p);
         }
         for (int k = rep->count - 1; k >= 0; k--)

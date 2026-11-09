@@ -19,7 +19,8 @@ address reach. Callees are classed by where the port stands with them:
   mentioned   cited somewhere in the port but owned by no function
   unported    not cited anywhere in the port
 tools/audit-allow.tsv (caller address, callee address or "s:" string, reason) lists the gaps checked and
-found to be the port's on purpose; they are left out of the report.
+found to be the port's on purpose; they are left out of the report. A caller "*" allows the callee from
+every caller (a few-byte accessor the port reads in line: a global, a field).
 """
 import argparse
 import collections
@@ -303,8 +304,12 @@ def parse_sources(funcs):
             for a in own:
                 if a not in defs[name]["own"]:
                     defs[name]["own"].append(a)
+    # not an address some function owns already (`if (n->flags & 0x10) user_start(n);   /* 0x42e620 */`
+    # labels the test, Node_IsUser's, not the call)
+    owned = {x for f in defs.values() for x in f["own"]}
     for name, addrs in votes.items():
-        if name in defs and not defs[name]["own"] and len(addrs) == 1 and next(iter(addrs)) in funcs:
+        if name in defs and not defs[name]["own"] and len(addrs) == 1 and next(iter(addrs)) in funcs \
+                and next(iter(addrs)) not in owned:
             defs[name]["own"] = list(addrs)
         # a cited one-statement wrapper of an uncited helper (`Clip_Screen(...) { return clip_screen(...); }`):
     # the helper is that function's body, so a call of the helper reaches the wrapper's address too
@@ -383,7 +388,7 @@ def main():
                 continue
             p = line.rstrip("\n").split("\t")
             if len(p) >= 2:
-                allow.add((int(p[0], 16), p[1] if p[1].startswith("s:") else int(p[1], 16)))
+                allow.add((-1 if p[0] == "*" else int(p[0], 16), p[1] if p[1].startswith("s:") else int(p[1], 16)))
 
     os.makedirs(args.out, exist_ok=True)
     gaps, sgaps = [], []
@@ -442,7 +447,7 @@ def main():
             layer = nxt
         for c in fo["callees"]:
             # a callee the same port function ports too ("0x45d420 / 0x46ae70: ..."): merged
-            if c in r_addrs or c == a or (a, c) in allow or any(c in defs[n]["own"] for n in names):
+            if c in r_addrs or c == a or (a, c) in allow or (-1, c) in allow or any(c in defs[n]["own"] for n in names):
                 continue
             cf = funcs.get(c)
             if not cf or cf["size"] < args.min_size:

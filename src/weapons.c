@@ -1392,7 +1392,8 @@ uint32_t Hardpoints_Kinds(const Node *v)
     return h ? h->flags : 0;   /* the original reads the word before the table's first */
 }
 
-static HardPoints *user_hardpoints(void) { return g_user_entity ? hardpoints_of(g_user_entity->node) : NULL; }   /* 0x423fc0 */
+/* the user's hard points (User_Entity's entity, then 0x456ff0) */
+static HardPoints *user_hardpoints(void) { return g_user_entity ? hardpoints_of(g_user_entity->node) : NULL; }
 
 /* 0x456830: instance i's health, its points over its definition's whole */
 static double weapon_health(int i)

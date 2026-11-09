@@ -129,13 +129,6 @@ static ShPart *pick_or_empty(int32_t kind, const ShList *l)
     return p ? p : &g_sh_empty;
 }
 
-static int index_of(const ShList *l, const void *item)   /* i76shell 0x10034bf0 */
-{
-    for (int i = 0; i < l->count; i++)
-        if (l->items[i] == item) return i;
-    return -1;
-}
-
 /* i76shell 0x1001c6c0, 0x1001c660, 0x1001c6d0: the slots' kinds collected (the guns' leave out 9 and 10,
    the handguns) */
 static int is_wheel(int32_t k) { return k == 5; }
@@ -155,7 +148,7 @@ static void collect(int (*pred)(int32_t), ShList *out, const ShList *l)
         }
         int k = 0;
         for (; k < l->count; k++)
-            if (!strcmp(slot_name(i), part_name(l->items[k])) && index_of(out, l->items[k]) == -1) {
+            if (!strcmp(slot_name(i), part_name(l->items[k])) && ShList_Index(out, l->items[k]) == -1) {
                 ShList_Add(out, l->items[k], NULL);
                 break;
             }

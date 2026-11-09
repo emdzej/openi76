@@ -222,7 +222,7 @@ static void edit_begin(void)
     editing = 1;
 }
 
-/* the name taken: one not on the list gets the next file number; for a new name, a bookmark of the same
+/* 0x1001aea0 (its end): the name taken: one not on the list gets the next file number; for a new name, a bookmark of the same
    mission and name is the one overwritten (and one picked is), after asking */
 static int named_again(void)
 {
@@ -244,6 +244,7 @@ static void ask_text(int x, int y)   /* 0x1001b360 */
     Scr_Text(x + 0x6e, y + 0x32, &g_sh_font45, dll_str(0x10061450), NULL);
 }
 
+/* 0x1001aea0 (its answer to Shell_YesNo 0x1000fe00) */
 static void edit_asked(int yes)
 {
     if (yes) {
@@ -256,6 +257,7 @@ static void edit_asked(int yes)
     edit_begin();
 }
 
+/* 0x1001aea0 (its end, the name taken) */
 static void edit_end(int r)
 {
     editing = 0;
@@ -285,6 +287,7 @@ static void edit_end(int r)
     Shell_YesNo(ask_text, edit_asked);
 }
 
+/* 0x1001aea0 (its loop, a pass a frame: Edit_Pass, the list's arrows and rows) */
 static void edit_pass(void)
 {
     int r = Edit_Pass();

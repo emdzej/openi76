@@ -121,7 +121,7 @@ typedef struct {        /* the trip's screens' boxes (0x20 bytes: the garage's 0
    moved), -1 none */
 int Box_RowAt(int x, int y, const ShBox *b);
 void Bars_Load(void);                            /* i76shell 0x10035c50: the damage bars' frames */
-void Part_Bar(const ShPart *p, int x, int y);    /* a part's damage bar, as 0x100366d0 draws it */
+void Part_Bar(const ShPart *p, int x, int y);    /* i76shell 0x10036600: a part's damage bar */
 void Setup_UseTrip(void);                        /* the set-up's fills, the trip's (the garage's done) */
 void Setup_Open(void);
 void Setup_Reset(void);

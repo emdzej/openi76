@@ -178,22 +178,13 @@ static void heli_fly(Node *n, float acc[3], float dt)
     n->frame = f;
 }
 
-/* 0x4286c0: the entity's cached sphere dropped */
-static void sphere_drop(Entity *e)
-{
-    if (e) {
-        e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
-        e->rest[(0x70 - 0x34) / 4] = 0;
-    }
-}
-
 /* 0x432920: part i (the data's +0x408 slots, by the table 0x4d5ce8) in a state by level (0-4: 0, 0, 1,
    2, 3), dropping the entity's sphere when it changes */
 static void part_state(uint8_t *d, int i, int level)
 {
     Node *part = *Data_Ptr(d, 0x408 + 4 * exe_u32(0x4d5ce8 + 4u * (uint32_t)i));
     static const int state[5] = {0, 0, 1, 2, 3};
-    if (part && Lod_SetState(part, state[level])) sphere_drop(*Data_Ptr(d, 0));
+    if (part && Lod_SetState(part, state[level])) Entity_DropSphere(*Data_Ptr(d, 0));
 }
 /* 0x4329b0: the part's damage textures (0x4d5d00's count of the 13-byte names at 0x4d5d18, ten a part) at
    a frame by level (0, 1, 1, 2, 3) */
@@ -240,7 +231,7 @@ void Heli_Step(Node *n, float dt)
     if (!(rdu(d + 0x454) & 0x20)) return;
     /* the crash */
     Entity *e = *Data_Ptr(d, 0);
-    sphere_drop(e);
+    Entity_DropSphere(e);
     if (g_user_entity && g_user_entity->node == n) {
         g_input_menu = 0;                         /* 0x480680 */
         Camera_SetMode(g_user_entity, 0xfefe);    /* the death camera */
@@ -276,4 +267,5 @@ void Heli_Step(Node *n, float dt)
     Engine_SoundStop(n);  /* 0x4763b0 */
 }
 
-void Heli_Frame(Node *n) { Heli_Step(n, g_clock_dt); }   /* 0x450e50 */
+/* Heli_Frame 0x4314a0: the step by the frame's (g_clock_dt, 0x450e50) */
+void Heli_Frame(Node *n) { Heli_Step(n, g_clock_dt); }

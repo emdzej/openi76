@@ -92,10 +92,7 @@ bool Spc_Read(const char *path)
         for (int i = 0; i < count && TAKE(rec, sizeof rec); i++) {
             ShPart *q = g_sh_parts;
             if (q) do {
-                    int taken = 0;
-                    for (int k = 0; k < g_sh_stock_repairs->count; k++)
-                        if (g_sh_stock_repairs->items[k] == q) taken = 1;
-                    if (q->count == rd32(rec + 0xc) && !taken && q->where == 3 &&
+                    if (q->count == rd32(rec + 0xc) && ShList_Index(g_sh_stock_repairs, q) == -1 && q->where == 3 &&
                         !crt_stricmp((const char *)rec + 0x20 + 0x3b, (const char *)q->part + 0x3b)) {
                         ShList_Add(g_sh_stock_repairs, q, NULL);
                         break;

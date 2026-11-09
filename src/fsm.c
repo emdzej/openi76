@@ -989,10 +989,7 @@ static void drive_control(Node *n)
             memset(d + 0xf0, 0, 4);
             float one = 1.0f;
             memcpy(d + 0xe8, &one, 4);
-            if (n->cls == 1) {
-                int32_t three = 3;
-                memcpy(d + 0x104, &three, 4);
-            }
+            Vehicle_SetMode(n, 3);
             return;
         }
         uint8_t *e = ai + 0x9d68 + (uint32_t)head * 0x18;

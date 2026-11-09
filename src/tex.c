@@ -140,10 +140,7 @@ static void anim_end(Node *n)
 {
     if (Tex_IsUse(n)) return;
     Entity *e = Entity_OfNode(n);
-    if (e) {
-        e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
-        e->rest[(0x70 - 0x34) / 4] = 0;
-    }
+    Entity_DropSphere(e);
     Node_Free(n);
 }
 

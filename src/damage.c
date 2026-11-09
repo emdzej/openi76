@@ -45,13 +45,14 @@ static Node *slot(uint8_t *d, uint32_t off) { return *Data_Ptr(d, off); }
 static uint16_t rd16(const uint8_t *p) { uint16_t v; memcpy(&v, p, 2); return v; }
 static void smoke_stop(uint8_t *d);
 
-/* 0x42e250 and 0x42e290: the node, everything after it and everything under it */
+/* 0x42e250: the node, everything after it and everything under it */
 static void flags_set_all(Node *n, uint32_t bits)
 {
     if (n->next) flags_set_all(n->next, bits);
     if (n->child) flags_set_all(n->child, bits);
     n->flags |= bits;
 }
+/* 0x42e290: as 0x42e250, the bits cleared */
 static void flags_clear_all(Node *n, uint32_t bits)
 {
     if (n->next) flags_clear_all(n->next, bits);
@@ -553,7 +554,6 @@ static int damage_gun(Node *n, uint8_t *p)
 
 /* ---- a structure's destruction (0x430900's lethal branch, 0x430e40) ---- */
 
-static void sphere_drop(Entity *e);
 
 /* 0x4540d0: an explosion by name at a place, n its owner, on no node */
 static void explosion(const char name[8], Node *n, const float at[3])
@@ -829,7 +829,7 @@ void Structure_Destroy(Node *n)
 static void structure_destroy(Node *n)
 {
     Entity *e = Entity_OfNode(n);
-    sphere_drop(e);
+    Entity_DropSphere(e);
     put32(n->data, 0);
     uint8_t *d = n->data;
     Node_SetFlags(n, 0x200);
@@ -943,7 +943,7 @@ static int damage_8(Node *n, uint8_t *p)
         sound(7, root);   /* 0x4683c0 */
         for (int k = 0; k < 5; k++) {
             Node *part = slot(d, 0x408 + 4 * exe_u32(0x4d5378 + 4u * k));
-            if (part && Lod_SetState(part, 3) == 1) sphere_drop((Entity *)slot(d, 0));   /* 0x4286c0 */
+            if (part && Lod_SetState(part, 3) == 1) Entity_DropSphere((Entity *)slot(d, 0));   /* 0x4286c0 */
         }
         Node_SetFlags(root, 0x200);
         gun_hide(root);
@@ -1087,14 +1087,6 @@ double Vehicle_Whole(uint8_t *d)
 
 /* 0x482f20: the state on the node and every node under it (Lod_SetState); true if any changed */
 /* 0x4286c0: the entity's cached sphere (+0x68 -1, +0x70 0) */
-static void sphere_drop(Entity *e)
-{
-    if (e) {
-        e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
-        e->rest[(0x70 - 0x34) / 4] = 0;
-    }
-}
-
 static bool state_tree(Node *n, int state)
 {
     if (!n) return false;
@@ -1137,7 +1129,7 @@ void Damage_Look(uint8_t *d, uint32_t part, uint32_t level)
             tyre_blow(slot(d, 0x3a8 + t * 4));
         }
     }
-    if (tree && state_tree(tree, state)) sphere_drop((Entity *)slot(d, 0));
+    if (tree && state_tree(tree, state)) Entity_DropSphere((Entity *)slot(d, 0));
 }
 
 int32_t Damage_Parts(uint8_t *d, int side, uint8_t *p, int kill, float health)
@@ -1694,7 +1686,7 @@ void Vehicle_Wreck(Node *n, int start)
 {
     uint8_t *d = n->data;
     float at[3] = {fpu_f32(n->frame.pos[0]), fpu_f32(n->frame.pos[1]), fpu_f32(n->frame.pos[2])};
-    sphere_drop((Entity *)slot(d, 0));
+    Entity_DropSphere((Entity *)slot(d, 0));
     if (start) {
         putf(d + 0x450, 10.0f);
         put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x80008000u));

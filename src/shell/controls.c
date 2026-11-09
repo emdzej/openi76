@@ -637,6 +637,7 @@ static void capture_pass(void)
     draw();
 }
 
+/* 0x1000c160 (its start: the box, the keys flushed, then capture_poll a pass at a time) */
 static void capture(void)
 {
     message(dll_str(0x1005ed50));   /* "Press any key or button..." */

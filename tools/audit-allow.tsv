@@ -32,3 +32,66 @@
 0x4883f0	0x4304a0	Salvage_Parts: as above
 0x4883f0	0x42fd90	Salvage_Parts: as above
 0x48f7b0	0x4409c0	draw_patches: the untextured run clips through Draw_Clip's table (mode 0 is Clip_Camera)
+*	0x423fc0	User_Entity (6 bytes): the port reads g_user_entity
+*	0x461900	Net_On (6 bytes): the port reads the network flag
+*	0x42d5e0	the AI block of a node (8 bytes): the port reads the field
+*	0x42d380	ai_of (11 bytes): the port reads the field
+*	0x42e570	is_vehicle (38 bytes): the port tests the class in line
+*	0x42e620	Node_IsUser (25 bytes): the port compares with the user's entity in line
+*	0x407470	report (a bare ret in the release build): the port's messages go to its log or nowhere
+*	0x44e380	alloc (23 bytes): the port's malloc/calloc
+*	0x450e50	the frame's step (7 bytes): the port reads g_clock_dt
+*	0x496690	__ftol: the port's ftol or a C cast
+*	0x495fe0	__splitpath: the port's crt_splitname or its own string code
+*	0x497960	qsort: the C library's, or the port's own sort with the same order
+*	0x498480	bsearch: the C library's, or the port's own search
+*	0x402c80	the fatal message box and exit: the port returns its error to the caller, which stops the run
+0x403360	0x404380	View_Init: through the modes' table 0x4a86e8 (0xd's entry), as Camera_SetMode's k_modes
+0x407010	0x404380	Camera_SetMode: as above
+0x10008520	0x10033390	menu_remake: menu_free takes the pieces off with Scr_Restore in line (0x10033390's body)
+0x10040090	0x10034a30	specials: node (0x10017440's) adds to the caller's list too
+0x1003be80	0x10034a30	scores_read: the records in the port's own array, not the shell's list
+0x1003be80	0x10034920	scores_read: as above
+0x1003bcb0	0x10034c20	results: as above (the count cleared)
+0x1001c7a0	0x10034b70	write_stock: the original has 0x1001e4d0's loop in line; the port calls drop_from (0x1001e4d0)
+0x1001c7a0	0x10034bf0	write_stock: as above
+0x1000e640	0x1002fa48	rp_draw: the background copied back in line (Gfx_Copy's rows)
+0x1000e540	0x10034d80	rp_close: the pop-up's record is the port's static rp, nothing to free
+0x10005f30	0x10034c20	setup_free: the lists freed whole (ShList_Free), the clear before it memory only
+0x1003d7c0	0x1002fa48	Scr_Shadow: the 0x0f block filled in line, not copied from a made block
+0x1002a83e	0x10018410	host: the config (net_config 0x10018410's) comes in as c
+0x10034460	0x10034c20	interlude: the screen's rects (0x10092a34's list) are the port's static array, nothing to free
+0x10033880	0x10034c20	final_car: as above
+0x10016650	0x10010f10	games_draw: the tick's frame (0x10010f10's one Scr_Frame) drawn in line
+0x4227b0	0x424130	the node's entry made in line (0x422c20's copy); the port calls rel_node_of, which calls Node_CentreNow
+0x423220	0x424130	the node's entry made in line (0x422c20's copy); the port calls rel_node_of, which calls Node_CentreNow
+0x4236a0	0x424130	the node's entry made in line (0x422c20's copy); the port calls rel_node_of, which calls Node_CentreNow
+0x422dc0	0x424130	the node's entry made in line (0x422c20's copy); the port calls rel_node_of, which calls Node_CentreNow
+0x41e0d0	0x425be0	Combat: the target's velocity read into locals never used (a read only)
+0x45e620	0x45c920	delayed_hits: the kind's index looked up, never used (a pure lookup)
+0x4761d0	0x467480	engine_pitch: the record marked for the frame to free (the original frees one its caller still uses)
+0x4a3c20	0x47dc70	shadow_draw: the original's top loop over the children is shadow_tree's (0x4a3da0) body; the port calls shadow_tree for it
+0x4a3c20	0x4a36f0	shadow_draw: the original's top loop over the children is shadow_tree's (0x4a3da0) body; the port calls shadow_tree for it
+0x4a3c20	0x4527c0	shadow_draw: the original's top loop over the children is shadow_tree's (0x4a3da0) body; the port calls shadow_tree for it
+0x459e40	0x4527c0	place: the turn written in line in case 1; the port calls turn (0x45acc0, the same steps)
+0x459e40	0x451820	place: the turn written in line in case 1; the port calls turn (0x45acc0, the same steps)
+0x459e40	0x451880	place: the turn written in line in case 1; the port calls turn (0x45acc0, the same steps)
+0x425920	0x4306c0	Class_StartAll: a computed call through the handlers' table (0x4d3c20); the port's handlers[] (entry 0, all null, is its -1)
+0x425700	0x4306a0	Class_Set: a computed call through the classes' table; the port's classes[].make
+0x47ed20	0x47b660	device_open: through the drivers' table (0x4e6330), the port's drv->count/close
+0x47ed20	0x480db0	device_open: through the drivers' table (0x4e6330), the port's drv->count/close
+0x47ed20	0x480e30	device_open: through the drivers' table (0x4e6330), the port's drv->count/close
+0x4831a0	0x4837e0	js_describe: the close frees the description's allocations on failure; the port's are static
+0x407070	0x492c50	opponents_load: the name for 0x492880's cache drop, which the port's Res_AddPath does
+0x44b9c0	0x42dc00	GameMenu_Close: as above (the specials' panel set up again for the new mode)
+0x484d10	0x478560	Cd_Disc2: the original re-opens the CD audio to read the drive; the port's disc 2 is the asset, its music device the music's own
+0x478900	0x478560	cd_toc: the close on an MCI error; the port's MCI (the BIN's tracks) does not fail
+0x478770	0x4789e0	cd_changed: 0x4789e0 is empty
+*	0x464b60	NetPl_Me (6 bytes): the port reads g_net_me
+0x41ff50	0x4391c0	Radar_New: an empty surface (Surface_Make with 0 x 0: all zero), the port's memset
+0x454b50	0x4391c0	Weapons_Init: as Radar_New (the dashboard's surface 0x570a70 made empty)
+0x47d010	0x492600	Geom_Get: the size comes with the data from Res_Get
+0x488e60	0x492600	Salvage_ReadFile: as above
+0x4503a0	0x450df0	Regions_Free: the port's own singly linked list, its cells freed in line
+0x450cf0	0x450df0	EditLine_Free: as above
+0x407550	0x439390	viewer_frame: the shadow mask (0x58d890) cleared in line, Surface_Fill with 0

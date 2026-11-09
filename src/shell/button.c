@@ -56,6 +56,13 @@ void ShList_Free(ShList *l)
     free(l);
 }
 
+int ShList_Index(const ShList *l, const void *item)
+{
+    for (int i = 0; i < l->count; i++)
+        if (l->items[i] == item) return i;
+    return -1;
+}
+
 void ShList_Add(ShList *l, void *item, int (*before)(void *have, void *item))
 {
     if (!item || l->count >= l->cap) return;

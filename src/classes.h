@@ -27,6 +27,8 @@ void Classes_Free(void);
 void Tyre_Step(Node *n, uint32_t flags, int32_t tclass);
 /* the entity of n's root (0x424060), NULL if none */
 struct Entity *Entity_OfNode(Node *n);
+/* 0x4286c0: the entity's cached sphere dropped (+0x68 -1, +0x70 0), made again when next asked; NULL none */
+void Entity_DropSphere(struct Entity *e);
 /* 0x5ad1a0: the artillery's contact, its node the user's (0x428910) */
 extern Node *g_artillery_target;
 /* Node_Root 0x42e6b0 */

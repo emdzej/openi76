@@ -279,6 +279,7 @@ void Shell_Note(int k, int x, int y, int w, int h)
     box_open = true;
 }
 
+/* 0x1000fb10 (its wait, a pass a frame) */
 static void note_pass(void)
 {
     mouse_update(&g_sh_mouse);
@@ -411,6 +412,7 @@ static void insert_disc(void)
     box_open = true;
 }
 
+/* 0x1000fc80 (its wait, a pass a frame) */
 static void disc_pass(void)
 {
     mouse_update(&g_sh_mouse);

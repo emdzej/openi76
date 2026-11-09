@@ -49,6 +49,13 @@ Entity *Entity_OfNode(Node *n)
     return NULL;
 }
 
+void Entity_DropSphere(Entity *e)
+{
+    if (!e) return;   /* the original writes through it unchecked */
+    e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
+    e->rest[(0x70 - 0x34) / 4] = 0;
+}
+
 /* ---- the start handlers ---- */
 
 /* 0x4306c0 (structures; 0x434930 for class 4 when it is its own root): in network games only, the

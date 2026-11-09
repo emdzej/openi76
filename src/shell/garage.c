@@ -245,11 +245,9 @@ static void boxes_make(void)
 
 /* ---- the drawing ---- */
 
-/* i76shell 0x100366d0: the box's background back, then its rows: a part not whole on a damage bar (frame
-   set 0x21 under 0x10059bf8 of whole, 0x23 under 0x10059c00 of that, else 0x22), its name; the car's
-   side marks it by where it is ({ 1 on the car, | 2 kept, } 3), the yard's shows the rows from its
-   scroll */
-void Part_Bar(const ShPart *p, int x, int y)   /* i76shell 0x10036600 */
+/* i76shell 0x10036600: a part not whole on a damage bar (frame set 0x21 under 0x10059bf8 of whole, 0x23
+   under 0x10059c00 of that, else 0x22) */
+void Part_Bar(const ShPart *p, int x, int y)
 {
     int32_t full = rd32(p->part + 0x4c);
     if (full == p->count) return;
@@ -262,6 +260,9 @@ void Part_Bar(const ShPart *p, int x, int y)   /* i76shell 0x10036600 */
     Scr_Frame(frames[s], frame_k[s], x, y, 0x8c, 0xe);
 }
 
+/* i76shell 0x100366d0: the box's background back, then its rows: the part's damage bar, its name; the
+   car's side marks it by where it is ({ 1 on the car, | 2 kept, } 3), the yard's shows the rows from its
+   scroll */
 static void box_draw(const Box *b)
 {
     int x = b->x0 + 2, y = b->y0 + 1;

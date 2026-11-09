@@ -33,3 +33,4 @@ void ShList_Free(ShList *l);
 void ShList_Add(ShList *l, void *item, int (*before)(void *have, void *item));
 void ShList_Remove(ShList *l, const void *item);   /* i76shell 0x10034b70 */
 void ShList_Clear(ShList *l);                      /* i76shell 0x10034c20 */
+int ShList_Index(const ShList *l, const void *item);   /* i76shell 0x10034bf0: its index, else -1 */
