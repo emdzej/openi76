@@ -550,7 +550,8 @@ static void message(uint32_t msg, uint32_t wparam)
 
 /* The set-up the screens ported need: the CRT's seed from the time, the database (0x1001a510), the
    display (0x1003c670), the mouse (0x1001f1c0, on). Then the first message: after the intro (the exe's
-   state 5) the main menu. Not ported yet: the player's defaults and I76PLYR.DEF (0x10039e20), the CD's
+   state 5) the main menu. The player's defaults and I76PLYR.DEF (0x10039e20) are the game's settings the
+   port's shell shares (Settings_Init). Not ported yet: the CD's
    drive (0x10012a10), the tables (0x10032e20, 0x1003c4b0), the fonts (entries 0x42, 0x44-0x47), the
    keyboard (0x10038530), the cursors (pencil.cur, nopencil.cur: the runner's own is shown), network
    play's ways in */
@@ -576,7 +577,7 @@ bool Shell_Start(int prev_state)
     prev = prev_state;
     /* from the start (5) or after the training mission (a01.msn, 0x100637e8): the main menu */
     if (prev_state == 5 || !crt_stricmp(g_sh_rec.mission, dll_str(0x100637e8))) Shell_Post(0xc00e, 0);
-    else if (g_sh_rec.kind == 2) {   /* a trip's (its file read, 0x10039e20: not ported) */
+    else if (g_sh_rec.kind == 2) {   /* a trip's (its file read, 0x10039e20: the record kept in memory) */
         if (prev_state == 2) {   /* aborted: the main menu (the trip's file saved one back: not ported) */
             Shell_Post(0xc00e, 0);
         } else if (prev_state == 8) {   /* Reconfigure: the trip's screen again */

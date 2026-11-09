@@ -471,7 +471,7 @@ void Bookmark_Load(void)
 }
 
 /* 0x10002d80 (0xc01d): the trip from the bookmark picked: the stock gone, its .cmp read back, the trip's
-   mission and state from it (the player's file saved, 0x10039f30: not ported); then the end after the
+   mission and state from it (the player's file saved, 0x10039f30: Settings_Save); then the end after the
    last mission won, the salvage screen on mission 12, else the salvage's choice; with "No Salv. Manag."
    the car written from the file's record and the salvage screen */
 void Bookmark_Restore(void)

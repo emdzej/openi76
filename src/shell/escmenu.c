@@ -241,7 +241,8 @@ void EscMenu_Open(void)   /* 0x1000cc40 */
     map_make(&esc);
     Shell_KbFlush();
     menu_make(&esc, esc_records(0));
-    /* 0x10039e20 (the player's file read): not ported */
+    /* 0x10039e20, the player's file read (I76PLYR.DEF: the record and the shell's copy of the settings):
+       the port's shell shares the game's settings, read by Settings_Init, and keeps the record in memory */
     Shell_SetMenu(esc_menu);
 }
 
