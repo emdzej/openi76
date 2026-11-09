@@ -150,8 +150,39 @@ static void start_class41(Node *n)
     *Data_Ptr(d, 0x48) = Node_Root(n);
 }
 
-/* 0x42feb0: a wheel's tread, turned with the wheel each frame (not ported yet) */
-static void wheel_tread(Node *n, const char *name, void *arg) { (void)n, (void)name, (void)arg; }
+/* 0x42feb0: a wheel's tread on its mesh (the node's child), each frame. The wheel's spin (+0x20), as a
+   speed (its sign the direction, +0x14 of the record: 1 forward), picks the tread's set (dimension 1):
+   past 11.176 (25 mph) 2, past 4.4704 (10 mph) 1, past 0.044704 0, the speeds compared by their floats'
+   bits; slower it is set 0 at once and nothing turns. Turning, each step past the time (+0, +4) moves the
+   frame (+0xc, of +8) one on or back, round, into dimension +0x10. (Ghidra has no function here: it is
+   reached only through the animation's pointer.) */
+static void wheel_tread(Node *n, const char *name, void *arg)
+{
+    uint8_t *rec = arg;
+    float s = rdf(n->data + 0x20);
+    uint32_t b;
+    memcpy(&b, &s, 4);
+    if (b <= 0x80000000u) put32(rec + 0x14, 1);
+    else s = F32(-s), put32(rec + 0x14, 0);
+    memcpy(&b, &s, 4);
+    int32_t bi = (int32_t)b;
+    Node *mesh = n->child;
+    if (bi > 0x4132d0e5) Tex_SetFrame((uintptr_t)mesh, name, 1, 2, false);
+    else if (bi > 0x408f0d84) Tex_SetFrame((uintptr_t)mesh, name, 1, 1, false);
+    else if (bi > 0x3d371b8b) Tex_SetFrame((uintptr_t)mesh, name, 1, 0, false);
+    else {
+        Tex_SetFrame((uintptr_t)mesh, name, 1, 0, true);
+        return;
+    }
+    float at = rdf(rec);
+    if (!(g_clock_time > at)) return;   /* fcomp: on only when the time is past (not equal, not unordered) */
+    putf(rec, F32(ADD(rdf(rec + 4), at)));
+    int32_t f = (int32_t)rd32(rec + 0xc), count = (int32_t)rd32(rec + 8);
+    if (rd32(rec + 0x14)) f = count - 1 <= f ? 0 : f + 1;
+    else f = (f == 0 ? count : f) - 1;
+    put32(rec + 0xc, (uint32_t)f);
+    Tex_SetFrame((uintptr_t)mesh, name, (int)rd32(rec + 0x10), f, true);
+}
 
 /* 0x42fbc0 (class 30, a wheel): its rest height (+0x1c, +0x28) and the travel (+-0.25 of it); a tread
    animation (0x18 bytes: the next time, the step 0.05, 12 frames) on the first texture of its intact

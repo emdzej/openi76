@@ -89,7 +89,10 @@ function, its argument, and the links.
 - TexAnim_Add 0x47e8b0 replaces the node's animations of that name and pushes the new one at the head.
 - TexAnim_Run 0x47e9a0, each frame, calls each animation of a live node and drops the rest (0x47ebe0).
 
-The functions themselves (the treads 0x42feb0, 0x434430, 0x4208f0, 0x433d10) are not ported yet.
+The functions: the wheels' treads 0x42feb0 (classes.c: by the wheel's speed, past 0.1, 10 and 25 mph in
+m/s, one of three sets, stepped round every 0.05 s forward or back; slower, set 0 and still; it is a
+function Ghidra has not made, reached only through its pointer), the steering wheel 0x434430, the
+radar's display 0x4208f0 and the windows 0x433d10.
 
 - TexAnim_Remove 0x47e9f0 drops the first animation with that node and name, and its reference.
 
