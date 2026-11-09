@@ -48,10 +48,31 @@ void Entity_Init(void)
     Names_Add(NULL, NULL);   /* 0x492ac0: a new table */
 }
 
+static void names_free(void);
+
+/* Entities_Free 0x423c30: the name table emptied (0x492c10: its heap destroyed); each entity's removal
+   callbacks run and its node, when still live (Node_Live), released: once, and once more out of its parent
+   when it holds more than the entity's reference, so an attached node goes too. The user's entity
+   (0x4d3b64) is left as it was (Entities_Init clears it); the port clears it here as well, so nothing reads
+   a freed node before the next mission */
 void Entities_Free(void)
 {
-    for (int i = 0; i < MAX_ENTITIES; i++)
-        if (g_entities[i].node) Entity_Remove(&g_entities[i]);
+    names_free();
+    for (int i = 0; i < MAX_ENTITIES; i++) {
+        Entity *e = &g_entities[i];
+        if (e->node) {
+            for (int k = 0; k < on_remove_count; k++) on_remove[k](e);
+            Node *n = Node_Live(e->node);   /* tagged 0x4d3b9c, as the two below */
+            if (n) {
+                int more = n->refs >= 2;
+                Node_Unref(n);
+                if (more) Node_Free(n);
+            }
+        }
+        /* a COLP record (has_a 1) is the original's to free (0x44e3e0); the port's belongs to its vehicle */
+        memset(e, 0, sizeof *e);
+    }
+    g_user_entity = NULL;
     g_entity_count = 0;
 }
 
@@ -604,6 +625,13 @@ typedef struct {
 } NameEntry;
 static NameEntry *names;
 static int names_count, names_cap;
+
+static void names_free(void)   /* 0x492c10 */
+{
+    free(names);
+    names = NULL;
+    names_cap = names_count = 0;
+}
 
 bool Names_Add(const char *name, Node *n)
 {
