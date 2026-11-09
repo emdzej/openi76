@@ -98,5 +98,16 @@ It does nothing until ready, or without pieces.
 - **The record.** It is type 1 (an occluder), with vertices a, b, c, e and the texture coordinates
   (0, 0), (1, 0), (1, 1), (0, 1) (0x4eb370).
   - It is queued at its nearest vertex's z, unclipped; DrawPoly clips it at the flush.
-- **Then 0x491650.** This draws the faces of objects (list 0x5e3018) that belong to roads. It waits for
-  the objects.
+- **Then 0x491650 (World_DrawFaces).** The world list's nodes (0x5e3018: the class 0x51 parts and the
+  first children of classes 0x50, 0x52, 0x53, folded into the world; docs/re/objects.md) that are roots
+  (+0x68 0) and not pick-ups (class 5), each:
+  - its centre through its frame into camera space; skipped when View_TestSphere with its radius (+0x90)
+    is 1, when Lod_Select level 0 fails, or without a mesh of more than two points with faces;
+  - its points into camera space (Frame_Mul of its frame and the view's, Frame_Points into 0x58dcb0);
+  - each face whose plane in camera space (Plane_Transform) has d's bits below 1 (d ≤ 0, facing): a type
+    1 record of its points (at most 16 in the port), the mode 0xf4 with the detail byte (else 0), its
+    texture by name on the node (Tex_Get) or, without one, its colour with the mode less 0x14; each
+    vertex's u, v and the roads' shade by its depth; queued at its nearest z.
+  - Quirk: with the detail off the record's colour is never set (the queue record's last), kept.
+  - These nodes are also entities (the parking lots, the junctions' pieces), so the objects' pass draws
+    them again over these faces: in the scenes checked (t01) the frame is the same with or without.

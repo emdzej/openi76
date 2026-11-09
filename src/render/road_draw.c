@@ -8,6 +8,11 @@
 #include "render/light.h"
 #include "render/queue.h"
 #include "render/terrain_draw.h"
+#include "render/view.h"
+#include "geom.h"
+#include "lod.h"
+#include "scene.h"
+#include "tex.h"
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
@@ -84,5 +89,72 @@ void Roads_Draw(const View *view)
             Queue_Add(z);
         }
     }
-    /* 0x491650: the objects' road faces, not ported yet */
+    World_DrawFaces(view);   /* 0x491650 */
+}
+
+/* 0x491650: the world list's faces (the objects folded into the world: the class 0x51 parts and the
+   0x50/0x52/0x53 objects' first children, docs/re/objects.md), as the roads' (type 1, the occluders).
+   Each node that is a root (+0x68 0) and not a pick-up (class 5): its centre (through its frame) in
+   camera space; with its sphere not wholly outside the view, its level 0 mesh selected, and a mesh of more
+   than two points with faces, its points into camera space in the terrain's buffer (0x58dcb0), then each
+   face whose plane in camera space has its d's bits below 1 (d <= 0: facing the camera) queued: its n,
+   the mode 0xf4 with the detail byte 0x5e14d3 (else 0), its texture by name on the node (Tex_Get), or
+   without a name or a texture its colour flat (the mode less 0x14); the vertices' u, v, and a shade by
+   the roads' falloff, at its nearest z. With the detail off the record's colour is left as the queue's
+   last record had it (the original never sets it; kept). */
+void World_DrawFaces(const View *view)
+{
+    int mode = g_detail.b[3] ? 0xf4 : 0;
+    float (*v)[3] = g_terr_vert;
+    for (Node *n = g_world_nodes; n; n = n->next) {
+        if (n->prev || n->cls == 5) continue;
+        double w[3];
+        Point_ToWorld(w, n->centre, &n->frame);
+        double l = MUL(Light_Strength(), g_sun[1]);
+        float sun = below(l, 0.0) ? 0 : F32(l);   /* 0x4a7590 */
+        float amb = Light_Strength2();
+        float c[3];
+        View_ToCamera(view, c, w[0], w[1], w[2]);
+        if (View_TestSphere(view, c, n->radius) >= 1) continue;
+        if (!Lod_Select(n, 0)) continue;
+        Geom *g = n->geom;
+        if (!g || g->nverts <= 2 || !g->faces) continue;
+        Frame m;
+        Frame_Mul(&m, &n->frame, &view->cam);
+        Frame_Points(v, (const float (*)[3])g->verts, g->nverts, &m);
+        for (GeomFace *f = g->faces; f; f = f->next) {
+            float pl[4];
+            Plane_Transform(pl, f->plane, &m);
+            if (bits(pl[3]) >= 1) continue;
+            QRec *q = Queue_New();
+            q->type = 1;
+            q->n = f->nrefs < 16 ? f->nrefs : 16;   /* the record's room (the port's bound) */
+            q->mode = mode;
+            if (mode & 4) {
+                const Texture *t = f->texture[0] ? Tex_Get((uintptr_t)n, f->texture) : NULL;
+                if (t) q->arg.tex = t;
+                else {
+                    q->arg.colour = f->colour;
+                    q->mode &= ~0x14;
+                }
+            }
+            for (int j = 0; j < f->nrefs && j < 16; j++) {
+                const float *p = v[f->refs[j].vertex];
+                float k = F32(ADD(MUL(p[2], g_light_k[1]), g_light_k[0]));
+                if (below(k, 0.75)) k = 0.75f;   /* 0x4a75a4 */
+                if (bits(k) > 0x3f800000) k = 1.0f;
+                k = F32(ADD(MUL(k, sun), amb));
+                if (1.0f < k) k = 1.0f;   /* 0x4a75a8 */
+                CamVert *cv = &q->u.v[j];
+                cv->x = p[0], cv->y = p[1], cv->z = p[2];
+                cv->u = f->refs[j].u, cv->v = f->refs[j].v;
+                cv->q = k;
+            }
+            float z = q->u.v[0].z;
+            for (int j = 1; j < f->nrefs && j < 16; j++)
+                if (below(SUB(q->u.v[j].z, z), 0.0)) z = q->u.v[j].z;
+            q->z = z;
+            Queue_Add(z);
+        }
+    }
 }
