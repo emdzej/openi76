@@ -1407,8 +1407,8 @@ static void keeper_changed(void)
     Net_AskSpawn(NULL, g_asked_regen ? 0x80000000u : 0);
 }
 
-/* 0x4624a0 / 0x462580, the weapons' frame: this frame's triggers (bits 0-4 the weapons, 0x20 and 0x40 the
-   specials) and the locks and contact, an object's by its index + 1 with its flag (0x4dc730, 0x40000000) */
+/* 0x4624a0, the weapons' frame: this frame's triggers (bits 0-4 the weapons, 0x20 and 0x40 the specials),
+   each read from the instance's record as 0x4551d0 copies it (Weapon_Triggered) */
 void Net_Fire(void)
 {
     g_net_fire = 0;
@@ -1430,6 +1430,7 @@ static int16_t lock_id(Node *t, uint32_t flag)
     return (int16_t)(get32(t->data, 8) + 1);
 }
 
+/* 0x462580: the target and the locks, an object's by its index + 1 with its flag (0x4dc730, 0x40000000) */
 void Net_Aims(void)
 {
     Entity *u = g_user_entity;

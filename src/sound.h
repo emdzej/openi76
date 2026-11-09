@@ -96,7 +96,7 @@ void Sound_StopAll(void);
 void Sound_FreeParked(void);
 /* 0x468380: the playing stopped and parked */
 void Sound_StopPlaying(void);
-/* 0x4688d0 / 0x4688e0: the pause's (the music's part not ported) */
+/* 0x4688d0 / 0x4688e0: the pause's, the effects' and the music's */
 void Sound_Pause(void);
 void Sound_Resume(void);
 /* 0x4679a0 / 0x467a20: the effects' alone (the menus') */

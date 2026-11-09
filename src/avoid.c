@@ -316,8 +316,7 @@ static void to_local(float out[3], const float v[3], const Frame *f)
     out[2] = F32(ADD(ADD(MUL(m[7], v[1]), MUL(m[6], v[0])), MUL(m[8], v[2])));
 }
 
-/* 0x4766b0: the entity's COLP box (0x47a810: the record's three mins and the maxima its counts pick) in
-   its frame, swept by the segment (in place, in local space); the normal back in the world */
+/* Colp_Box 0x47a810: the record's three minima and the maxima its counts pick */
 void Colp_Box(const Entity *e, float lo[3], float hi[3])
 {
     const int32_t *r = e->a;
@@ -329,6 +328,8 @@ void Colp_Box(const Entity *e, float lo[3], float hi[3])
     }
 }
 
+/* Colp_Sweep 0x4766b0: the entity's COLP box in its frame, swept by the segment (in local space); the
+   normal back in the world */
 static int colp_sweep(const float p[3], const float v[3], Entity *e, float *t, float nrm[3])
 {
     float lo[3], hi[3];

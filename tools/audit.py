@@ -145,10 +145,12 @@ def own_addresses(name, comment, funcs):
     lead of the nearest comment block (up to its first '(' or ':' after an address, or its first
     sentence)."""
     own = []
-    for m in re.finditer(r"\b" + re.escape(name) + r"\b\s+0x([0-9a-fA-F]{6,8})\b", comment):
-        a = int(m.group(1), 16)
-        if a in funcs and a not in own:
-            own.append(a)
+    # "Fsm_Chunk 0x408400 + 0x40bc60": a list after the name, the original's functions the port merged
+    for m in re.finditer(r"\b" + re.escape(name) + r"\b\s+(0x[0-9a-fA-F]{6,8}(?:\s*(?:,|/|\+)\s*0x[0-9a-fA-F]{6,8})*)\b", comment):
+        for x in ADDR.finditer(m.group(1)):
+            a = int(x.group(1), 16)
+            if a in funcs and a not in own:
+                own.append(a)
     if own:
         return own
     starts = [m.start() for m in re.finditer(r"/\*", comment)]
@@ -216,7 +218,9 @@ def parse_sources(funcs):
             c = header_comment(text, comments, start)
             f = defs.setdefault(name + "@" + rel if name in ("main",) else name, {
                 "name": name, "own": [], "addrs": set(), "calls": set(), "lits": set(), "strs": set(),
-                "file": rel, "line": text.count("\n", 0, m.start(2)) + 1})
+                "file": rel, "line": text.count("\n", 0, m.start(2)) + 1, "stmts": 0})
+            f["stmts"] += strip_strings_chars(body_code).count(";")
+            f["called"] = {n for n in re.findall(r"\b([A-Za-z_]\w*)\s*\(", strip_strings_chars(body_code)) if n not in KEYWORDS}
             f["own"] += own_addresses(name, c, funcs)
             if not f["own"]:   # a comment on the signature, before the brace: `f(...)   /* 0x45cb60 */`
                 sig_comments = [t for cs, ce, t in comments if m.start(2) <= cs < open_brace]
@@ -242,12 +246,20 @@ def parse_sources(funcs):
     for var, fn in aliases.items():
         if fn in defs and var not in defs:
             defs[var] = {"name": var, "own": [], "addrs": set(), "calls": {fn}, "lits": set(), "strs": set(),
-                         "file": defs[fn]["file"], "line": defs[fn]["line"]}
+                         "file": defs[fn]["file"], "line": defs[fn]["line"], "stmts": 0}
     for name, own in proto_own.items():
         if name in defs:
             for a in own:
                 if a not in defs[name]["own"]:
                     defs[name]["own"].append(a)
+    # a cited one-statement wrapper of an uncited helper (`Clip_Screen(...) { return clip_screen(...); }`):
+    # the helper is that function's body, so a call of the helper reaches the wrapper's address too
+    for f in list(defs.values()):
+        if not f["own"] or f.get("stmts", 0) != 1:
+            continue
+        inner = [c for c in f.get("called", ()) if c in defs]
+        if len(inner) == 1 and not defs[inner[0]]["own"]:
+            defs[inner[0]]["addrs"] |= set(f["own"])
     return defs
 
 
@@ -359,15 +371,31 @@ def main():
             s = exe.cstr(sa)
             if s:
                 r_text.add(s.lower())
+        # the depth at which the port still reaches each address, through any of its functions: a gap whose
+        # callee is reached deeper is most often the port's own split (a refactor), one never reached a gap
+        deep, layer, dseen = {}, list(names), set(names)
+        for depth in range(1, 6):
+            nxt = []
+            for n in layer:
+                for c in defs[n]["calls"]:
+                    g = defs.get(c)
+                    if not g or c in dseen:
+                        continue
+                    dseen.add(c)
+                    nxt.append(c)
+                    for x in g["own"]:
+                        deep.setdefault(x, depth)
+            layer = nxt
         for c in fo["callees"]:
-            if c in r_addrs or c == a or (a, c) in allow:
+            # a callee the same port function ports too ("0x45d420 / 0x46ae70: ..."): merged
+            if c in r_addrs or c == a or (a, c) in allow or any(c in defs[n]["own"] for n in names):
                 continue
             cf = funcs.get(c)
             if not cf or cf["size"] < args.min_size:
                 continue
             cls = "ported" if c in owners else "mentioned" if c in mentioned else "unported"
             gaps.append((cls, a, fo["name"], ",".join(names), defs[names[0]]["file"], defs[names[0]]["line"],
-                         c, cf["name"], cf["size"], ",".join(owners.get(c, []))))
+                         c, cf["name"], cf["size"], ",".join(owners.get(c, [])), deep.get(c, 0)))
         for s in fo["strings"]:
             if s.lower() in r_text or (a, "s:" + s) in allow:
                 continue
@@ -377,9 +405,9 @@ def main():
     order = {"ported": 0, "mentioned": 1, "unported": 2}
     gaps.sort(key=lambda g: (order[g[0]], g[4], g[5], -g[8]))
     with open(os.path.join(args.out, "callees.tsv"), "w") as f:
-        f.write("class\tcaller\tcaller_name\tport_functions\tfile\tline\tcallee\tcallee_name\tcallee_size\tcallee_port\n")
+        f.write("class\tcaller\tcaller_name\tport_functions\tfile\tline\tcallee\tcallee_name\tcallee_size\tcallee_port\tdeeper\n")
         for g in gaps:
-            f.write("%s\t0x%x\t%s\t%s\t%s\t%d\t0x%x\t%s\t%d\t%s\n" % g)
+            f.write("%s\t0x%x\t%s\t%s\t%s\t%d\t0x%x\t%s\t%d\t%s\t%d\n" % g)
     with open(os.path.join(args.out, "strings.tsv"), "w") as f:
         f.write("caller\tcaller_name\tport_functions\tfile\tline\tstring\n")
         for g in sgaps:

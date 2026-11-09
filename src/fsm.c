@@ -131,7 +131,7 @@ static void name_into(uint32_t a)
     for (int i = 0; i < 10; i++) SET(a + 4 * (uint32_t)i, next());
 }
 
-/* 0x40bc60's table of 0x54 records with only a name */
+/* a table of 0x54-byte records with only a name (the loader's, 0x40bc60) */
 static void named(uint32_t *table, int32_t *count)
 {
     *count = next();

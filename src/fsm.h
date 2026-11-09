@@ -23,8 +23,8 @@ typedef struct Fsm {
 extern Fsm g_fsm;
 extern bool g_fsm_loaded;
 
-/* Fsm_Chunk 0x408400: ADEF's FSM chunk (payload words, size in bytes) read into the tables; then
-   0x40cb40 names each action's code, finds each entity's node (Names_Find), checks the sounds' files and
+/* Fsm_Chunk 0x408400 + 0x40bc60 + 0x40cb40: ADEF's FSM chunk (payload words, size in bytes) read into
+   the tables (the loader 0x40bc60); then 0x40cb40 names each action's code, finds each entity's node (Names_Find), checks the sounds' files and
    sets each machine going */
 int Fsm_Chunk(const uint8_t *c, void *arg, const uint8_t *end);
 /* Fsm_Reset: the tables dropped (the original's heap 0x505444 goes with the mission) */

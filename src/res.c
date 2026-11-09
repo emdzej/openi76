@@ -292,7 +292,6 @@ void Res_Release(const char *name)
     if (c && c->users) c->users--;
 }
 
-/* 0x495bb0 */
 static int wild(const char *s, const char *p);
 
 static int wild_star(const char *s, const char *p)   /* 0x495d00 */
@@ -304,6 +303,7 @@ static int wild_star(const char *s, const char *p)   /* 0x495d00 */
     return -1;
 }
 
+/* 0x495bb0 */
 static int wild(const char *s, const char *p)
 {
     while (*p) {

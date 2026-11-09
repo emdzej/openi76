@@ -1163,8 +1163,8 @@ void Sound_StopPlaying(void)
         }
 }
 
-/* Sound_Pause 0x4688d0 (0x4679a0, then the music's 0x468780): outside network play each playing record not marked to play on (or all in state 0x20)
-   stopped: kept paused (flag 1), else parked or freed */
+/* Sound_PausePlaying 0x4679a0: outside network play each playing record not marked to play on (or all in
+   state 0x20) stopped: kept paused (flag 1), else parked or freed */
 void Sound_PausePlaying(void)
 {
     if (!sys || g_net_game) return;
@@ -1179,13 +1179,14 @@ void Sound_PausePlaying(void)
     }
 }
 
+/* Sound_Pause 0x4688d0 */
 void Sound_Pause(void)
 {
     Sound_PausePlaying();   /* 0x4679a0 */
     Music_Pause();          /* 0x468780 */
 }
 
-/* Sound_Resume 0x4688e0 (0x467a20, then the music's 0x4687c0) */
+/* Sound_ResumePlaying 0x467a20: each record not stopped for good (state 4) started again, paused or not */
 void Sound_ResumePlaying(void)
 {
     if (!sys) return;
@@ -1195,6 +1196,7 @@ void Sound_ResumePlaying(void)
     }
 }
 
+/* Sound_Resume 0x4688e0 */
 void Sound_Resume(void)
 {
     Sound_ResumePlaying();   /* 0x467a20 */

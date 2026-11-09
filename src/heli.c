@@ -187,15 +187,16 @@ static void sphere_drop(Entity *e)
     }
 }
 
-/* 0x432920 and 0x4329b0: part i (the data's +0x408 slots, by the table 0x4d5ce8) in a state by level
-   (0-4: 0, 0, 1, 2, 3), dropping the entity's sphere when it changes; and its damage textures (0x4d5d00's
-   count of the 13-byte names at 0x4d5d18, ten a part) at a frame by level (0, 1, 1, 2, 3) */
+/* 0x432920: part i (the data's +0x408 slots, by the table 0x4d5ce8) in a state by level (0-4: 0, 0, 1,
+   2, 3), dropping the entity's sphere when it changes */
 static void part_state(uint8_t *d, int i, int level)
 {
     Node *part = *Data_Ptr(d, 0x408 + 4 * exe_u32(0x4d5ce8 + 4u * (uint32_t)i));
     static const int state[5] = {0, 0, 1, 2, 3};
     if (part && Lod_SetState(part, state[level])) sphere_drop(*Data_Ptr(d, 0));
 }
+/* 0x4329b0: the part's damage textures (0x4d5d00's count of the 13-byte names at 0x4d5d18, ten a part) at
+   a frame by level (0, 1, 1, 2, 3) */
 static void part_textures(uint8_t *d, int i, int level)
 {
     Node *part = *Data_Ptr(d, 0x408 + 4 * exe_u32(0x4d5ce8 + 4u * (uint32_t)i));

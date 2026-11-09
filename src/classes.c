@@ -70,10 +70,8 @@ static void start_artillery(Node *n)
     *Data_Ptr(n->data, 0) = e;
 }
 
-/* 0x432b90 (class 7, a turret's base): a root takes its first class 7 descendant's data (0xa0 bytes),
-   and that one leaves the class list; a non-root under a class 7 root has nothing to do. Then its place
-   (+0x84 and +0x6c), its aim through the frame (+0x78) and the rate's inverse (+0x94). */
-Node *Node_FindClass(Node *n, int cls)   /* 0x42e970 */
+/* Node_FindClass 0x42e970 */
+Node *Node_FindClass(Node *n, int cls)
 {
     if (!n) return NULL;
     if (n->cls == cls) return n;
@@ -84,6 +82,9 @@ Node *Node_FindClass(Node *n, int cls)   /* 0x42e970 */
     return NULL;
 }
 
+/* 0x432b90 (class 7, a turret's base): a root takes its first class 7 descendant's data (0xa0 bytes),
+   and that one leaves the class list; a non-root under a class 7 root has nothing to do. Then its place
+   (+0x84 and +0x6c), its aim through the frame (+0x78) and the rate's inverse (+0x94). */
 static void start_class7(Node *n)
 {
     if (!n->prev) {
