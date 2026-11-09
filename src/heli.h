@@ -5,3 +5,5 @@
 /* Heli_Frame 0x4314a0 (class 9's frame): the flight (0x431de0) and, when it ends on the ground, the crash:
    the explosions, the parts' damage, the chunks and smoke, the weapons, the AI told */
 void Heli_Frame(Node *n);
+/* Heli_Step 0x431840: the same over dt (network play steps another player's helicopter with it) */
+void Heli_Step(Node *n, float dt);

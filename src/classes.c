@@ -542,7 +542,7 @@ void Spin_Frame(Node *n)
 static void nothing(Node *n) { (void)n; }
 
 /* 0x429d70, a vehicle's second frame: for the user's, the cockpit (0x426b60) and the engine's sound
-   (0x468ac0, not ported) */
+   (0x468ac0: in fact the joystick's force feedback, with I-Force's DLL only: none in the port) */
 static void vehicle_frame2(Node *n)
 {
     if (n->flags & 0x10) Cockpit_Frame(n);   /* 0x42e620 */

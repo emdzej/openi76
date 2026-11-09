@@ -213,9 +213,11 @@ static void explode(Node *n, const float at[3], Node *on)
     Explosion_Spawn((const uint8_t *)name, n, at[0], at[1], at[2], on);   /* 0x4540d0 */
 }
 
-void Heli_Frame(Node *n)
+/* Heli_Step 0x431840 (network play's, another player's helicopter stepped over dt) and Heli_Frame's body:
+   the same code but for the step (the parts' states written out, 0x432920's, and the crash's places read
+   from the frame alone) */
+void Heli_Step(Node *n, float dt)
 {
-    float dt = g_clock_dt;   /* 0x450e50 */
     uint8_t *d = n->data;
     float at[3];
     /* a hit in the motion block (+0x38) brings it down as the lethal damage does (0x431c60) */
@@ -273,3 +275,5 @@ void Heli_Frame(Node *n)
     Collide_Remove(e);    /* 0x469cd0 */
     Engine_SoundStop(n);  /* 0x4763b0 */
 }
+
+void Heli_Frame(Node *n) { Heli_Step(n, g_clock_dt); }   /* 0x450e50 */

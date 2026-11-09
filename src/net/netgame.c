@@ -1,5 +1,6 @@
 /* The game's side of network play (netgame.h; docs/re/network.md "The game's side"). */
 #include "net/netgame.h"
+#include "heli.h"
 #include "clock.h"
 #include "melee.h"
 #include "physics.h"
@@ -1310,7 +1311,7 @@ void Net_ChatToggle(void) { Net_ChatShow(!g_msgs_shown); }   /* 0x463e80 */
 /* ---- the others' cars between their states (0x464fc0) ---- */
 
 /* each frame: the time every half second (0x4a641c); each other player's car stepped on from its last
-   state's time to now (as the vehicles' frame steps, 0x429c70; a helicopter's 0x431840 is not ported), and
+   state's time to now (as the vehicles' frame steps, 0x429c70; a helicopter by Heli_Step, 0x431840), and
    a player's team read from its data (key 1, the byte at +1) once */
 void Net_Reckon(void)
 {
@@ -1328,7 +1329,7 @@ void Net_Reckon(void)
                 float dt = fpu_f32((double)game - p->taken);
                 if (dt > 1e-4f) {   /* 0x4a6420 */
                     if (n->cls == 9) {
-                        /* 0x431840 */
+                        Heli_Step(n, dt);   /* 0x431840 */
                     } else {
                         uint8_t *d = n->data;
                         float *t = (float *)(d + 0x444);
