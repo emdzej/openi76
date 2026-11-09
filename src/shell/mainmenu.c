@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 static uint8_t *set;            /* 0x1005fb00: entry 0x3e, the menus' frame set */
+static int set_freed;           /* the port's: freed by the original, kept until the next load */
 static uint8_t *click;          /* 0x1006347c (in its holder 0x1008e974): entry 0x51, the click */
 static ShList *list;            /* 0x1008e894: the buttons shown */
 static ShButton *hot;           /* 0x10063478: the button lit under the mouse */
@@ -27,13 +28,16 @@ static ShButton b_e978, b_e7f0, b_e8d0, b_e668, b_e7b8;
 static void load_set(void)   /* 0x10010fb0 */
 {
     uint32_t n;
+    if (set_freed) free(set), set = NULL, set_freed = 0;
     if (!set) set = Mw2_Raw(g_sh_db, 0x3e, &n);
 }
 
-static void free_set(void)   /* 0x100111f0 */
+/* 0x100111f0. The screen stays the redraw after it leaves, and the disc's box (after TRAINING's 0xc010)
+   calls it: the original draws from the freed block, whose bytes are still there. The port keeps the
+   block until the set is loaded again */
+static void free_set(void)
 {
-    free(set);
-    set = NULL;
+    set_freed = 1;
 }
 
 static void add(ShButton *b) { ShList_Add(list, b, NULL); }

@@ -294,8 +294,15 @@ static void note_pass(void)
 
 /* a pass of the box's loop: the mouse, the exe's frame (done by the pass), a press on Yes (0x1005f8e0) or
    No (0x1005f8f4), relative to the box */
+static int disc_wait;
+static void disc_pass(void);
+
 static void box_pass(void)
 {
+    if (disc_wait) {
+        disc_pass();
+        return;
+    }
     if (note_rect[0] >= 0) {
         note_pass();
         return;
@@ -387,12 +394,38 @@ static bool popup(void)
     }
 }
 
-/* 0x1000fc80: the box asking for the disc (entry 0x24's frame, Retry and Cancel), waited on; not ported:
-   the message logged and Cancel taken */
-static int insert_disc(void)
+/* InsertDisc 0x1000fc80: the box asking for disc 2 (frame 0x14 of set 0x24 at 0xb3, 0xc2, the note's
+   shadows), waited on (here a pass a frame, disc_pass) until a press on Retry (x 0x4c-0x82, y 0x38-0x49
+   from the box) or Cancel (x 0x97-0xd0); then the box away and the screen's redraw. Retry looks for the
+   disc again (the box again without it), Cancel goes back to the main menu. The port's discs are given
+   as it starts: the log says how */
+
+static void insert_disc(void)
 {
-    Cd_Disc2(1);
-    return 0;
+    Cd_Disc2(1);   /* the port's log */
+    Scr_Frame(Shell_Set24(), 0x14, 0xb3, 0xc2, 0x11a, 0x5d);
+    Scr_Shadow(0xb9, 0x11e, 0x11a, 6);
+    Scr_Shadow(0x1cd, 200, 6, 0x5c);
+    Scr_Present();
+    disc_wait = 1;
+    box_open = true;
+}
+
+static void disc_pass(void)
+{
+    mouse_update(&g_sh_mouse);
+    if (g_sh_mouse.click != 1) return;
+    int x = g_sh_mouse.x - 0xb3, y = g_sh_mouse.y - 0xc2, retry;
+    if (x > 0x4b && x < 0x83 && y > 0x37 && y < 0x4a) retry = 1;
+    else if (x > 0x96 && x < 0xd1 && y > 0x37 && y < 0x4a) retry = 0;
+    else return;
+    Scr_Restore(0xb3, 0xc2, 0x122, 0x6e);
+    if (g_sh_redraw) g_sh_redraw();
+    disc_wait = 0;
+    box_open = false;
+    if (!retry) Shell_Post(0xc00e, 0xc010);
+    else if (Cd_Disc2(0)) Shell_Quit(0xc001);
+    else insert_disc();
 }
 
 /* the user's car new from file: its record (the exe's +0x14), the catalogue (+0), the lists, and the car
@@ -486,12 +519,10 @@ static void message(uint32_t msg, uint32_t wparam)
         MainMenu_Open();
         return;
     case 0xc010:   /* the mission: a trip's or training's needs disc 2 in the drive (the exe's +0x44) */
-        if (g_sh_mode < 2)
-            while (!Cd_Disc2(0))
-                if (!insert_disc()) {
-                    Shell_Post(0xc00e, 0xc010);
-                    return;
-                }
+        if (g_sh_mode < 2 && !Cd_Disc2(0)) {
+            insert_disc();   /* its Retry and Cancel go on in disc_pass */
+            return;
+        }
         Shell_Quit(0xc001);
         return;
     case 0xc022:
@@ -567,7 +598,7 @@ bool Shell_Start(int prev_state)
     fonts_load();
     Garage_Reset();        /* 0x10034df0 */
     Shnet_Leave();         /* 0x1002a660: a network game's session left */
-    nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL, note_rect[0] = -1;
+    nwaits = 0, box_open = false, g_sh_redraw = NULL, g_sh_modal = NULL, note_rect[0] = -1, disc_wait = 0;
     menu_fn = NULL, g_sh_popup_up = 0, g_sh_editing = 0, g_sh_next_msg = 0xc004, kq_r = kq_w = 0;
     memset(&g_sh_mouse, 0, sizeof g_sh_mouse);
     g_sh_mouse.on = 1;

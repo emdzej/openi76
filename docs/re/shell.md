@@ -122,8 +122,13 @@ The menus' and screens' meanings are to be found as each is ported.
 - **The mission's start** (0xc010). TRAINING's set-up (0x10001680) records the trip's first mission,
   a01.msn, and the car vppa01.vcf. In a trip or training (mode below 2), 0xc010 first asks the exe for disc
   2 (its function +0x44, 0x484d10: the drive's label `I76_CD2`, then `int12f01.smk` on it). While the disc
-  is missing it opens the insert-disc dialog (0x1000fc80; stubbed: the port logs and cancels, back to the
-  main menu). Then it quits with 0xc001. ShellMain's end makes the game's kind 0 or 1 into 2 and returns 3.
+  is missing it opens the insert-disc box (0x1000fc80: frame 0x14 of set 0x24 at 0xb3, 0xc2, "Sugar, put
+  disc 2 in now", the note's shadows) and waits for a press on OK (x 0x4c-0x82, y 0x38-0x49 from the box)
+  or CANCEL (x 0x97-0xd0); then the box is restored away and the screen's redraw called. OK looks for the
+  disc again (the box again without it), CANCEL goes back to the main menu. The redraw is the main menu's,
+  which has left and freed its frame set: the original draws the buttons from the freed block (quirk; the
+  port keeps the block until the set is loaded again). The port's discs are given as it starts, so OK
+  finds none; the log says how to pass disc 2. Then it quits with 0xc001. ShellMain's end makes the game's kind 0 or 1 into 2 and returns 3.
   Shell_Load copies the car's file into the exe's (0x58d849 to 0x58dcd0), and the app loads the mission
   and plays it. Before that, TRAINING and NEW TRIP write the car out as `addon\vehscn.vcf` and `.vsf`
   (step 8 below) and name `vehscn.vcf`, which the exe reads back.
