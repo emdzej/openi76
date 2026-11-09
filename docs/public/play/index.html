@@ -37,7 +37,7 @@
       computer.</p>
     <p class="lead small">A work in progress: the shell, the trip's and the training's missions run,
       with the AI, the weapons, the cockpit and the sound; most missions have not been played through
-      yet and network play is not ported. See <a href="/guide/status">Status</a>.</p>
+      yet. See <a href="/guide/status">Status</a>.</p>
 
     <div class="cols">
       <div class="card">
@@ -93,6 +93,30 @@
           <progress id="progress-bar" max="1" value="0"></progress>
           <p class="small" id="progress-text"></p>
         </div>
+      </div>
+    </div>
+
+    <div class="card" id="renderer">
+      <h2>Renderer</h2>
+      <p class="small">The default is the original's: its 8-bit software renderer at 640 x 480. The GL
+        renderer is OpenI76's addition, opt-in and still being built: the same game, its 3D drawn again by
+        your graphics card at a higher resolution, with smooth textures and a depth buffer if you want them.
+        The 2D art (the menus, the dashboard's bitmaps, the text) stays at the original's resolution.
+        See <a href="/guide/enhancements">Enhancements</a> for pictures.</p>
+      <div class="row">
+        <label><input id="gl" type="checkbox"> GL renderer</label>
+      </div>
+      <div class="row" id="gl-opts">
+        <label>Resolution
+          <select id="glscale" class="opt">
+            <option value="fit">the window's</option>
+            <option value="1">640 x 480 (the original's)</option>
+            <option value="2">2x (1280 x 960)</option>
+            <option value="3">3x (1920 x 1440)</option>
+            <option value="4">4x (2560 x 1920)</option>
+          </select></label>
+        <label title="Filtered, mip-mapped textures and smooth shading in 24-bit colour"><input id="glfilter" type="checkbox"> smooth textures</label>
+        <label title="Polygons the game's sorting got wrong no longer show through"><input id="gldepth" type="checkbox"> depth buffer</label>
       </div>
     </div>
   </section>

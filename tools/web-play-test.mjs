@@ -3,7 +3,7 @@
 // images are handed to its file input (CDP DOM.setFileInputFiles, as if picked), checked, and run without
 // importing in gasm's Worker mode (?hashframes=N: virtual time, the page prints gasm-run --headless's hash
 // line). The line must match gasm-run's for the same module, images and frames. Also saves the page as
-// Chrome renders it and the last frame.
+// Chrome renders it and the last frame, and runs the GL renderer (?gl=1) on t01, saving the page (gl.png).
 //
 //   docs/scripts/copy-wasm.sh && (cd docs && scripts/vendor-web.sh && pnpm build)
 //   node tools/web-play-test.mjs <disc 1 image> [disc 2 image] [out dir]
@@ -138,6 +138,22 @@ try {
   report(hash === nat, 'the page runs the frames gasm-run runs');
   const png = await page.evaluate('globalThis.__openi76Png ? new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(globalThis.__openi76Png); }) : null');
   if (png) writeFileSync(join(OUT, 'frame.png'), Buffer.from(png.split(',')[1], 'base64'));
+
+  // the GL renderer (the Renderer card's, ?gl=1): openi76-gl.wasm on a canvas transferred to the worker, t01
+  // from its static camera with the options on; the page as Chrome draws it (gl.png)
+  const gq = new URLSearchParams({ gl: '1', hashframes: '40', mission: 't01.msn', intro: '0', shell: '0',
+    glscale: '2', glfilter: '1', gldepth: '1', ...(process.env.GLDEBUG ? { gldebug: '1' } : {}) });
+  await page.open(`${base}?${gq}`);
+  await page.setFiles('#image-input', images);
+  await page.until('globalThis.__openi76Checked', 20000);
+  await page.evaluate('document.getElementById("play-direct").click(), 0');
+  const g = await page.until('globalThis.__openi76Result', 300000);
+  const glog = page.logs.filter((l) => /GL|gl:|OpenI76/i.test(l)).slice(-12);
+  report(/frames=40/.test(g) && !page.logs.some((l) => /GL poly|GL: (shader|link)|EXCEPTION/.test(l)), 'the GL renderer runs', `${g}${glog.length ? `\n      ${glog.join('\n      ')}` : ''}`);
+  await page.evaluate('document.getElementById("game").scrollIntoView(), 0');
+  await sleep(800);
+  const gshot = await page.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(join(OUT, 'gl.png'), Buffer.from(gshot.result.data, 'base64'));
 } catch (e) {
   report(false, 'the test ran', e.message);
 } finally {
@@ -146,5 +162,5 @@ try {
   await sleep(500);
   rmSync(PROFILE, { recursive: true, force: true });
 }
-console.log(failed ? 'FAILED' : `ok (page.png and frame.png in ${OUT})`);
+console.log(failed ? 'FAILED' : `ok (page.png, frame.png and gl.png in ${OUT})`);
 process.exit(failed ? 1 : 0);

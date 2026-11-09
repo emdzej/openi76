@@ -11,6 +11,8 @@
 //   batch=N        with hashframes: frames per worker batch (default 250)
 //   input=SCRIPT   with hashframes: scripted input, gasm-run's --input syntax ("60:KEY(Enter),...")
 //   filter=NAME    the presenter's upscaling filter (sharp, nearest, xbr, fsr, crt); integer: whole multiples
+//   gl=1|0         the GL renderer (openi76-gl.wasm on gasm:gl, the canvas transferred to the worker) or the
+//                  original's; with it the Renderer card's glscale, glfilter, gldepth unless given here
 //   autoplay       start the imported data right away
 //   any parameter the game reads (--param, e.g. mission=t01.msn, intro=0) is passed through
 import { BrowserInput, ProcExit, Resampler } from './vendor/gasm/gasm-host.js';
@@ -21,7 +23,7 @@ import { FILTERS, GlPresenter } from './vendor/gasm/gasm-present.js';
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
-const PAGE_PARAMS = new Set(['hashframes', 'batch', 'input', 'filter', 'integer', 'autoplay']);
+const PAGE_PARAMS = new Set(['hashframes', 'batch', 'input', 'filter', 'integer', 'autoplay', 'gl']);
 const HASH_FRAMES = Number(query.get('hashframes') || 0);
 const BATCH = Number(query.get('batch') || 250);   // hash runs: frames per worker batch
 const STORAGE = 'openi76';               // gasm:storage namespace (IndexedDB): the options and input.map
@@ -41,7 +43,7 @@ const show = (id, on) => { $(id).hidden = !on; };
 // gasm's presenter (WebGL 2): letterboxed at the canvas's device-pixel size with an upscaling filter
 // (?filter= / the toolbar, kept in localStorage; default sharp = even pixels at any size), optionally whole
 // multiples only (?integer). Without WebGL 2, a canvas 2D scaled up by CSS.
-const canvas = $('screen');
+let canvas = $('screen');
 const view = {
   filter: FILTERS.includes(query.get('filter')) ? query.get('filter') : localStorage.getItem('openi76.filter') ?? 'sharp',
   integerScale: query.has('integer') || localStorage.getItem('openi76.integer') === '1',
@@ -62,8 +64,51 @@ function present(rgba, w, h) {
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   ctx2d.putImageData(new ImageData(rgba, w, h), 0, 0);
 }
-const redraw = () => { if (shown) present(...shown); };
-new ResizeObserver(redraw).observe(canvas);
+const redraw = () => { if (shown && !glMode) present(...shown); };
+const resized = new ResizeObserver(redraw);
+resized.observe(canvas);
+
+// ---- the renderer: the original's, or the port's GL renderer (docs/re/port-plan.md, step 11) -------------
+// GL: openi76-gl.wasm draws through gasm:gl on a canvas transferred to the worker (a canvas once transferred
+// is the worker's: each run gets a new one, and the 2D presenter a new one after).
+const GL_OPTS = ['glscale', 'glfilter', 'gldepth'];
+const glPref = {
+  on: query.has('gl') ? query.get('gl') !== '0' : localStorage.getItem('openi76.gl') === '1',
+  glscale: localStorage.getItem('openi76.glscale') ?? 'fit',
+  glfilter: localStorage.getItem('openi76.glfilter') ?? '1',
+  gldepth: localStorage.getItem('openi76.gldepth') ?? '1',
+};
+let glMode = false, transferred = false;
+function rendererUi() {
+  $('gl').checked = glPref.on;
+  $('glscale').value = glPref.glscale;
+  $('glfilter').checked = glPref.glfilter === '1';
+  $('gldepth').checked = glPref.gldepth === '1';
+  $('gl-opts').setAttribute('aria-disabled', glPref.on ? 'false' : 'true');
+  for (const id of GL_OPTS) $(id).disabled = !glPref.on;
+}
+$('gl').onchange = () => { glPref.on = $('gl').checked; localStorage.setItem('openi76.gl', glPref.on ? '1' : '0'); rendererUi(); };
+$('glscale').onchange = () => { glPref.glscale = $('glscale').value; localStorage.setItem('openi76.glscale', glPref.glscale); };
+for (const id of ['glfilter', 'gldepth'])
+  $(id).onchange = () => { glPref[id] = $(id).checked ? '1' : '0'; localStorage.setItem(`openi76.${id}`, glPref[id]); };
+rendererUi();
+/** the game's parameters for the GL renderer (the page's query wins) */
+function glParams() {
+  return { glpoly: '1', glscale: glPref.glscale, glfilter: glPref.glfilter, gldepth: glPref.gldepth };
+}
+/** a new canvas in the old one's place (the old one transferred, or its context taken) */
+function newCanvas() {
+  const c = canvas.cloneNode(false);
+  canvas.replaceWith(c);
+  resized.unobserve(canvas);
+  canvas = c;
+  resized.observe(c);
+  presenter = null, ctx2d = null;
+  canvas.classList.remove('gl');
+  keyboard.setElement(c);
+  return c;
+}
+const drawableSize = () => [Math.max(1, Math.round(canvas.clientWidth * devicePixelRatio)), Math.max(1, Math.round(canvas.clientHeight * devicePixelRatio))];
 for (const f of FILTERS) $('filter').add(new Option(f, f));
 $('filter').value = view.filter;
 $('integer').checked = view.integerScale;
@@ -197,16 +242,17 @@ function gameFullscreen(on) {
 document.addEventListener('fullscreenchange', () => { if (worker) worker.fullscreen = !!document.fullscreenElement; });
 
 // ---- running the game ---------------------------------------------------------------------
-let worker = null, running = false, inflight = false, rafId = 0, wasmBytes = null, lastLog = '';
+let worker = null, running = false, inflight = false, rafId = 0, lastLog = '';
+const wasmCache = {};
 let acc = 0, last = 0, fpsN = 0, fpsT = 0;
 
-async function loadWasm() {
-  if (!wasmBytes) {
-    const r = await fetch(new URL('openi76.wasm', import.meta.url));
-    if (!r.ok) throw new Error(`openi76.wasm: HTTP ${r.status}`);
-    wasmBytes = await r.arrayBuffer();
+async function loadWasm(name) {
+  if (!wasmCache[name]) {
+    const r = await fetch(new URL(name, import.meta.url));
+    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+    wasmCache[name] = await r.arrayBuffer();
   }
-  return wasmBytes.slice(0); // start() transfers its copy to the worker
+  return wasmCache[name].slice(0); // start() transfers its copy to the worker
 }
 
 function onLog(msg) {
@@ -249,11 +295,24 @@ async function play(source) {
   show('game', true);
   show('setup', HASH_FRAMES > 0);      // keep the page visible in test runs
   $('status').textContent = 'Starting...';
-  const params = Object.fromEntries([...query].filter(([k]) => !PAGE_PARAMS.has(k)));
+  const asked = Object.fromEntries([...query].filter(([k]) => !PAGE_PARAMS.has(k)));
+  glMode = glPref.on && typeof canvas.transferControlToOffscreen === 'function';
+  if (glPref.on && !glMode) message('This browser can\'t hand a canvas to a worker (OffscreenCanvas): the original renderer is used.');
+  const params = glMode ? { ...glParams(), ...asked } : asked;
+  let glCanvas = null, size = null;
+  if (glMode) {
+    size = drawableSize();
+    glCanvas = newCanvas().transferControlToOffscreen();
+    transferred = true;
+  } else if (transferred) {
+    newCanvas();   // the last run's is the worker's
+    transferred = false;
+  }
   try {
     await audioReady;
     worker = await GasmWorker.start({
-      wasm: await loadWasm(), assets: data.assetSpecs(source), params,
+      wasm: await loadWasm(glMode ? 'openi76-gl.wasm' : 'openi76.wasm'), assets: data.assetSpecs(source), params,
+      ...(glMode ? { glCanvas, size } : {}),
       storage: HASH_FRAMES > 0 ? null : STORAGE,     // hash runs: in memory, like gasm-run --headless
       hashing: HASH_FRAMES > 0, virtualTime: HASH_FRAMES > 0, onLog, onAudio, keyboard: true,
       onTitle: (t) => { document.title = `${t ?? TITLE} | OpenI76`; },
@@ -293,10 +352,10 @@ function tick(now) {
     inflight = true;
     acc -= due * period;
     const steps = Array.from({ length: due }, (_, k) => ({ pads, input: keyboard.frame(k === 0) }));
-    worker.frames(steps, true).then((r) => {
+    worker.frames(steps, true, glMode ? { size: drawableSize() } : {}).then((r) => {
       inflight = false;
       fpsN += due;
-      if (r.frame) present(r.frame.rgba, r.frame.width, r.frame.height);
+      if (r.frame && !glMode) present(r.frame.rgba, r.frame.width, r.frame.height);
       keyboard.setMode(worker?.inputMode ?? 0);
     }, stopped);
   }

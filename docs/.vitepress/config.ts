@@ -97,6 +97,7 @@ export default defineConfig({
             { text: "Game data", link: "/guide/game-data" },
             { text: "Running on gasm", link: "/guide/gasm" },
             { text: "Playing", link: "/guide/playing" },
+            { text: "Enhancements", link: "/guide/enhancements" },
             { text: "How the game works", link: "/guide/theory" },
           ],
         },

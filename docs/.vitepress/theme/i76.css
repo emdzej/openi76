@@ -302,6 +302,8 @@ a.VPLink:hover > .VPFeature {
   box-shadow: 4px 4px 0 var(--i76-orange); }
 .dark .shots img { border-color: #000; box-shadow: 4px 4px 0 var(--i76-red); }
 .shots figcaption { font-size: 0.85em; color: var(--vp-c-text-2); margin-top: 8px; }
+.shots.pair { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.shots.wide { grid-template-columns: 1fr; }
 
 /* The hero picture (docs/public/hero.svg, drawn for the site after the cover's composition). */
 .VPHero .image-bg { display: none; }

@@ -51,6 +51,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 1.2rem 24px 2rem; }
 .card { background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 16px 20px; box-shadow: 4px 4px 0 var(--orange); }
 .card ul { padding-left: 1.2rem; margin: .4rem 0; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: .7rem 0; }
+#renderer { margin: 0 0 1.4rem; }
+#renderer label { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; }
+#renderer select { font: 14px var(--font); padding: 4px; border: 2px solid var(--ink); border-radius: 4px; background: #fff; }
+#gl-opts[aria-disabled="true"] { opacity: .5; }
 
 button { font: 700 14px var(--font); padding: 8px 14px; border-radius: 4px; border: 2px solid var(--ink); background: #fff;
   color: var(--ink); cursor: pointer; }

@@ -69,6 +69,7 @@ jobs:
           scripts/vendor-web.sh
           pnpm build
           test -f .vitepress/dist/play/openi76.wasm
+          test -f .vitepress/dist/play/openi76-gl.wasm
           test -f .vitepress/dist/play/vendor/gasm/gasm-worker.js
           test -f .vitepress/dist/CNAME
 

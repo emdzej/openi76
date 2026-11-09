@@ -6,7 +6,7 @@ hero:
   text: Interstate '76, reimplemented
   image:
     src: /hero.svg
-    alt: "OpenI76 in heavy italic letters in a yellow and blue oval, over a sunset burst and a desert road"
+    alt: "A desert road at sunset running to the horizon between mesas, its centre line rushing towards the viewer"
   tagline: "A faithful reimplementation of Interstate '76 (Activision, 1997) in C11, ported function by function from the Windows game. It runs the game from your own discs, as one WebAssembly module for the gasm runtime, natively and in the browser. A work in progress: the missions run, most are still to be played through."
   actions:
     - theme: brand
@@ -35,6 +35,14 @@ features:
     details: The cockpit with its gauges, radar and damage display, the weapons and specials, the CB radio, the music from disc 2's audio tracks.
     link: /guide/status
     linkText: Status
+  - title: Melee and network play
+    details: The melee's arenas, instant melee and network play, hosting and joining through the shell's own screens over a relay.
+    link: /guide/status
+    linkText: Status
+  - title: Enhancements, opt-in
+    details: The original by default. Switch on the GL renderer for the 3D at your screen's resolution, with smooth textures and a depth buffer, the same game underneath.
+    link: /guide/enhancements
+    linkText: Enhancements
 ---
 
 <div class="vp-doc" style="max-width: 1152px; margin: 48px auto 0; padding: 0 24px;">
@@ -53,6 +61,17 @@ Renders of OpenI76 itself: headless runs of `openi76.wasm` on the game's discs a
   <figure><img src="/screenshots/06-t03-canyon.jpg" alt="The car at dusk in a canyon by a winding road" loading="lazy"><figcaption>A canyon at dusk</figcaption></figure>
   <figure><img src="/screenshots/07-a01-training.jpg" alt="The car on a dirt road through the desert with cacti" loading="lazy"><figcaption>Training</figcaption></figure>
   <figure><img src="/screenshots/08-s07-desert.jpg" alt="The car on open desert under a teal sky" loading="lazy"><figcaption>Open desert</figcaption></figure>
+</div>
+
+## The GL renderer
+
+The same moment of the first mission drawn by the original's software renderer (left, at its 640 x 480)
+and by OpenI76's opt-in GL renderer (right, smooth textures and a depth buffer). More in
+[Enhancements](/guide/enhancements).
+
+<div class="shots pair">
+  <figure><img src="/screenshots/gl/f3000-original.jpg" alt="The cockpit view in the original renderer, blocky textures" loading="lazy"><figcaption>The original</figcaption></figure>
+  <figure><img src="/screenshots/gl/f3000-gl.jpg" alt="The same cockpit view in the GL renderer, smooth and sharp" loading="lazy"><figcaption>The GL renderer</figcaption></figure>
 </div>
 
 ## Built for gasm

@@ -266,7 +266,10 @@ Write one page per format under `docs/formats/` (internal; not published).
      drawn by GL, blue not GL's, yellow changed since. t01's static view is now GL's but for the last
      column and row (GL's edge rule); 0.76% of its pixels differ from the software frame at the frame's
      size, frame 3000 0.64%, the game's state the same (the audio hash); glpoly=1 costs about 28%
-     headless (78 frames/s against 108), the probe a part of it.
+     headless (78 frames/s against 108), the probe a part of it. A frame that is not shown (a hash run's, `drawfrom`'s) also makes
+     the backend's frame its own, so the first shown frame has its polygons. On the play page the
+     Renderer card (`?gl=1`) loads openi76-gl.wasm with the canvas transferred to the worker, a new canvas
+     a run (tools/web-play-test.mjs runs it on t01).
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.
 

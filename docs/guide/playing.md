@@ -11,6 +11,9 @@ Safari works.
 The toolbar under the game has the fullscreen switch, the sound, and the scaling filter (`sharp` keeps
 the pixels even at any size). Holding <kbd>Esc</kbd> for a second stops the game.
 
+The Renderer card above Play switches on the GL renderer, OpenI76's opt-in addition: the 3D at your
+screen's resolution with smooth textures and a depth buffer. See [Enhancements](./enhancements).
+
 ## Controls
 
 The mouse drives the shell's menus. In a mission the game reads the keyboard with the original's default
