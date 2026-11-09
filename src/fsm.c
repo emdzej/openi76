@@ -967,7 +967,7 @@ static void control(Node *n, int32_t throttle, int32_t steer)
     enqueue(n, throttle, steer, brake, sign, 0, 0);
 }
 
-/* driveControl 0x41ab50: a live vehicle takes the next control (0x41a820) into its throttle (+0xe4),
+/* driveControl 0x41ab50 + 0x41a820 (the dequeue): a live vehicle takes the next control into its throttle (+0xe4),
    steering (+0xe0), handbrake (+0xf0) and sign (+0xe8); the queue empty, those are cleared (the sign 1) and
    the drive mode set to 3 (0x42d500). Otherwise (and when dead) the user is touched (0x409bc0) */
 static void drive_control(Node *n)

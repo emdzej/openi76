@@ -122,7 +122,7 @@ int Shell_KbRead(void)   /* 0x10038640 */
     return g_sh_kb_key == 0x1b ? 3 : 1;
 }
 
-void Shell_KbFlush(void) { kq_r = kq_w = 0; }   /* 0x10038590 through 0x10021e10 */
+void Shell_KbFlush(void) { kq_r = kq_w = 0; }   /* Shell_KbFlush 0x10021e10 (0x10038590 calls it) */
 
 /* the pass's key messages: each press queued, and unless a pop-up is up or a modal pass runs, read
    back at once by the window's procedure: Esc opens the menu (pop-up 0) */
@@ -161,10 +161,11 @@ int Shell_Rand(void)
 
 /* ---- the mouse (0x1001f380) ---- */
 
-/* The pointer when inside the window (GetCursorPos, the buttons by GetAsyncKeyState), else as it was;
-   the left's press 1, held after it 2; the right's and middle's presses; a left press within 200 ms of
-   the last a double click. (While the right is held and 0x10068c34 is 0 the coordinates would be printed
-   at 560, 20: it is 1 in the DLL's data and never set, so they never are.) */
+/* Mouse_Update 0x1001f380: the pointer when inside the window (GetCursorPos, the buttons by
+   GetAsyncKeyState), else as it was; the left's press 1, held after it 2; the right's and middle's
+   presses; a left press within 200 ms of the last a double click. (While the right is held and
+   0x10068c34 is 0 the coordinates would be printed at 560, 20: it is 1 in the DLL's data and never set,
+   so they never are.) */
 static void mouse_update(ShMouse *m)
 {
     if (!active) return;

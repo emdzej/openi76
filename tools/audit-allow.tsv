@@ -179,3 +179,11 @@
 *	0x40fae0	the AI's frame count read: the port's g_ai_frames
 0x425d20	0x42e5e0	collide: the class table's structure mapping done in collide_one
 0x45d7c0	0x452cd0	Impact_Damage: the screen's knock through knock (0x433240's, with it)
+0x1000c160	0x1001f380	the capture's wait: the shell's frame updates the mouse before each modal pass
+0x1000ff90	0x1001f380	the teams' box: as above
+0x1001f380	0x1003e200	Mouse_Update: the coordinates' print, under a flag never set (0x10068c34)
+0x1001f380	0x1003dc50	Mouse_Update: as above
+0x100298b8	0x10010480	Shnet_Start: the waiting box closed by the map around the network calls (the port's, inverted)
+0x1002b090	0x10010480	Shnet_Poll: as above
+0x1002a4f0	0x10029e00	Shnet_InfoOpen: the info box drawn by the map (info_draw), the network module its data
+0x1002a4f0	0x10010970	Shnet_InfoOpen: the info box opened by the map (info_open)

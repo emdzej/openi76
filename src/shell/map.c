@@ -813,6 +813,7 @@ static void team_open(void (*then)(void))
    drawing (0x10029e00) */
 static uint8_t info_saved[640 * 480];
 
+/* 0x10029e00: the info box's drawing */
 static void info_draw(void)
 {
     const int x = 9, y = 0x6c;
@@ -845,6 +846,7 @@ static void info_pass(void)
     Shnet_InfoClose();
 }
 
+/* 0x10010970: the info box opened */
 static void info_open(const ShSession *g)
 {
     Shnet_InfoOpen(g);
@@ -889,6 +891,7 @@ static void wait_open(void)
     Scr_Present();
 }
 
+/* 0x10010480: the waiting box taken away */
 static void wait_close(void)
 {
     Scr_Restore(0xe2, 0xc2, 0xdc, 0x78);

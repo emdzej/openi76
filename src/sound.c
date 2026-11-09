@@ -220,7 +220,7 @@ static Snd *find_data(const uint8_t *key)
 
 /* ---- the range (0x4681b0) ---- */
 
-/* n within r (0: 600) of ref (NULL: the camera's entity's node); true without either */
+/* 0x4681b0: n within r (0: 600) of ref (NULL: the camera's entity's node); true without either */
 static bool in_range(Node *n, const Node *ref, int r)
 {
     if (!n) return true;

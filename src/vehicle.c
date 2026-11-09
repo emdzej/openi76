@@ -53,6 +53,7 @@ typedef struct EffectTable {
 } EffectTable;
 static EffectTable *etables[2];
 
+/* 0x481320 */
 static void etbl_add(const uint8_t *t)
 {
     uint32_t size = (uint32_t)rd32(t + 0x11) * 0x20 + 0x19;
