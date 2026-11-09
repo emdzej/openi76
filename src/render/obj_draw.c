@@ -478,7 +478,7 @@ static void headlight(Node *hl, const View *view, float depth)
 
 void Objects_DrawInit(void)
 {
-    /* types 3 and 0xb (the shadows, 0x48cd60 / 0x4a3c20) are not ported yet */
+    /* types 3 and 0xb (the shadows, 0x48cd60 / 0x4a3c20) are set by Shadow_Init (shadow.c) */
     Queue_SetDraw(5, type5);
     Queue_SetDraw(10, draw_beam);
     Queue_SetDraw(6, type6);

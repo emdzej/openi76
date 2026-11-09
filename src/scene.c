@@ -1,5 +1,6 @@
 /* The scene graph (scene.h). In the current rounding mode (render/fpu.h). */
 #include "scene.h"
+#include "tex.h"
 #include "weapons.h"
 #include "entity.h"
 #include "exe.h"
@@ -96,7 +97,7 @@ static void destroy(Node *n)
     n->cls = 0;
     n->data = NULL;
     Lod_Remove(n);
-    /* 0x47c030 (the textures' owner records) is not ported yet */
+    Tex_Close((uintptr_t)n);   /* 0x47c030: the node's texture uses (and, in the port, their animations) */
     if (n->flags & 0x800) Light_Remove(n, &n->flags);
     /* the original leaves the root 0x50a394 pointing at a freed node; the port clears it */
     if (g_root == n) g_root = NULL;

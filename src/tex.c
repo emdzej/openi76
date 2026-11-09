@@ -323,8 +323,11 @@ bool Tex_Close(uintptr_t owner)
             continue;
         }
         any = true;
-        /* the port's: its animations go with it (the original's run on over the freed record) */
-        while (TexAnim_Remove((Node *)u->owner, u->name)) {}
+        /* the port's: a Tex_Open use's animations go with it (the original's run on over the freed record).
+           A node's are the node's: they hold a reference, and TexAnim_Run drops them once it is freed (its
+           freeing is what brings it here) */
+        if (u->owner == (uintptr_t)u)
+            while (TexAnim_Remove((Node *)u->owner, u->name)) {}
         if (u->flags & 1) free((void *)u->pixels);
         else if (!(u->flags & 2)) Tex_PixelsRelease(u->frame);
         Material *m = u->mat;
