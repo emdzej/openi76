@@ -178,6 +178,9 @@ def parse_sources(funcs):
         rel = os.path.relpath(path, os.path.dirname(SRC))
         for m in re.finditer(r"\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\([^;{}]*\)\s*=\s*([A-Za-z_]\w*)\s*;", code):
             aliases[m.group(1)] = m.group(2)
+        # `static QPolyFn poly = DrawPoly;`: a typedef'd pointer at file scope
+        for m in re.finditer(r"(?m)^(?:static\s+)?[A-Za-z_]\w*\s+\*?\s*([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*;", code):
+            aliases.setdefault(m.group(1), m.group(2))
         if path.endswith(".h"):
             for m in PROTO.finditer(code):
                 name = m.group(1)
@@ -336,10 +339,21 @@ def main():
             r_lits |= l
             r_strs |= s
             if depth < 3:
-                for c in defs[n]["calls"]:
-                    g = defs.get(c)
-                    if g and g["own"] and not (set(g["own"]) & orig_callees):
-                        todo.append((c, depth + 1))
+                # the calls of n and of the uncited helpers it reaches
+                frontier, hseen = [n], set()
+                while frontier:
+                    h = frontier.pop()
+                    if h in hseen:
+                        continue
+                    hseen.add(h)
+                    for c in defs[h]["calls"]:
+                        g = defs.get(c)
+                        if not g:
+                            continue
+                        if not g["own"]:
+                            frontier.append(c)
+                        elif not (set(g["own"]) & orig_callees):
+                            todo.append((c, depth + 1))
         r_text = {s.lower() for s in r_lits}
         for sa in r_strs | r_addrs:   # exe_str's, and any address a helper takes (dash_name(0x4dc0c8, ...))
             s = exe.cstr(sa)
