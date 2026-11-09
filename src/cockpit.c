@@ -7,6 +7,7 @@
 #include "clock.h"
 #include "entity.h"
 #include "settings.h"
+#include "res.h"
 #include "render/obj_draw.h"
 #include "render/fpu.h"
 #include "render/sprite.h"
@@ -721,8 +722,25 @@ void Dash_Setup(Node *n)
     g_dash_main = Node_FindTexture(n, exe_str(0x4d52d8));   /* zretc_1.map */
     Node_ClearFlags(g_dash_main, 1);
     Node_SetFlags(g_dash_alt, 1);
-    /* 0x5ad1c8 = Res_Get of the screen mode's mask (0x4d52f8, 13 bytes a name, by 0x5e0780), 0x5ad1c4 = 1:
-       not ported yet (the mask's drawing, 0x428770, is not) */
+    /* 0x5ad1c8 = Res_Get of the screen mode's mask, 0x5ad1c4 = 1: Dash_Mask gets it itself */
+}
+
+void Dash_Mask(const Surface *s)
+{
+    if (g_play_state != 1 || !g_dash_on || !s || !s->pixels) return;
+    size_t n = 0;
+    const uint8_t *m = Res_Get(exe_str(0x4d52f8 + (uint32_t)g_detail.b[DET_SCREEN] * 0xd), &n);   /* bmask640.msk */
+    if (!m) return;
+    uint8_t *p = s->pixels, *end = s->pixels + (size_t)s->pitch * (size_t)s->h;
+    for (size_t i = 0; i + 1 < n; i += 2) {
+        uint16_t w = (uint16_t)(m[i] | m[i + 1] << 8);
+        if (!w) break;
+        size_t len = w & 0x7fff;
+        if (p + len > end) len = (size_t)(end - p);   /* the port's bound */
+        if (w & 0x8000) memset(p, 0xfe, len);
+        p += len;
+        if (p >= end) break;
+    }
 }
 
 int32_t Dash_Toggle(void)

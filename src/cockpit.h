@@ -1,6 +1,6 @@
 /* The cockpit (0x426410-0x428900; docs/re/cockpit.md): its set-up, the instruments, the special weapons'
-   panel, the 3D cockpit's drawing, the HUD and the dashboard's swap. Not ported yet: the flat cockpit and
-   the mask's drawing (0x428770). The rear-view mirror is mirror.c. */
+   panel, the 3D cockpit's drawing, the HUD and the dashboard's swap with its mask (Dash_Mask). The
+   rear-view mirror is mirror.c. */
 #pragma once
 #include <stdint.h>
 #include "scene.h"
@@ -75,6 +75,10 @@ int32_t Dash_IsOn(void);
 /* Dash_Off 0x428890 (Camera_SetMode's after any start but the view 0xc's): the flag 0, the main part shown,
    the other hidden */
 void Dash_Off(void);
+/* Dash_Mask 0x428770 (after the world's drawing): in play with the swapped dashboard shown (the view 0xc),
+   the screen mode's mask (bmask640.msk, 0x4d52f8 by the mode, 13 bytes a name) over the frame from its
+   first pixel: 16-bit runs to a 0, those with bit 15 filled with 0xfe, the others skipped */
+void Dash_Mask(const Surface *s);
 /* Net_NameTags 0x428310 (Render_World's in network play): the players' names over their cars, the radar
    target's alone or (key 0x28, 0x428580) every targetable one's */
 void Net_NameTags(const View *view);

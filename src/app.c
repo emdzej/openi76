@@ -482,7 +482,7 @@ static void play_frame(void)
         Sound_Enable(1);   /* 0x466dd0 */
         if (!(g_play_state & 0xc)) {
             viewer_frame();
-            /* 0x428770 (the cockpit's mask) is not ported */
+            Dash_Mask(view.surface);   /* 0x428770 */
             if (g_play_state == 1) {
                 Regions_Draw(&surf);     /* 0x450040 */
                 EditLines_Draw(&surf);   /* 0x450ae0: network play's chat line */

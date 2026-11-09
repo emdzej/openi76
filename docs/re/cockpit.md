@@ -300,3 +300,16 @@ start swaps the dashboard back and returns to the pilot's view before the script
 **The mask** (0x428770, from the game loop at 0x4023e2). In play with the flag set, it reads the mask as
 16-bit run lengths. A run with bit 15 set fills that many bytes of the frame buffer with 0xfe; one
 without it skips that many. A zero length ends it. Not ported yet.
+
+## The binoculars' mask (0x428770)
+
+`toggle_binoculars` (B) sets the camera's mode 0xc, which swaps the dashboard (`Dash_Toggle`,
+docs/re/camera.md). While the swap is on and the game is in play (0x4db008 = 1), Dash_Mask 0x428770 runs
+after the world's drawing. It takes the screen mode's mask (`bmask640.msk` at 640 x 480; the names at
+0x4d52f8, 13 bytes each, by the mode) and walks the frame from its first pixel:
+
+- the file is 16-bit words up to a 0;
+- a word with bit 15 fills the next `word & 0x7fff` pixels with colour 0xfe (the twin circles' black);
+- any other word skips that many pixels.
+
+The port bounds the walk at the frame's end.
