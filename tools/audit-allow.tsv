@@ -176,3 +176,6 @@
 0x1000ff90	0x10034c60	the teams' box: its rows' rects hit in line
 0x1000d6d0	0x10034a30	pop_open: the pop-up's two rects in the port's array, not a list
 0x1000d6d0	0x10034920	pop_open: as above
+*	0x40fae0	the AI's frame count read: the port's g_ai_frames
+0x425d20	0x42e5e0	collide: the class table's structure mapping done in collide_one
+0x45d7c0	0x452cd0	Impact_Damage: the screen's knock through knock (0x433240's, with it)

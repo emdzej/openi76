@@ -266,7 +266,7 @@ static void sounds(Touch *r1, Touch *r2)
     Sound_PlayAt(exe_str(name), y->other, NULL);   /* 0x468580 */
 }
 
-/* the class table's collision (+0x24): a structure's (0x4306f0) and classes 7's and 10's (0x433080,
+/* collide_one 0x4306f0 + 0x433080 + 0x434840 + 0x42a7a0: the class table's collision (+0x24): a structure's (0x4306f0) and classes 7's and 10's (0x433080,
    0x434840) its damage by the other's velocity; a vehicle's (0x42a7a0, a helicopter's through 0x431dc0)
    the record kept for its physics (+0x38; not against class 3 with flag 0x200) and its damage by the
    velocities' difference, nothing while flag 0x20 is set or against class 3 or 4 */

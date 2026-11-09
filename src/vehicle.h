@@ -10,6 +10,8 @@
 #include <stdbool.h>
 
 extern char g_user_vcf[16];   /* 0x58dcd0: the user's vehicle's .vcf (WinMain: 0x4a8448 by default) */
+/* User_CarName 0x4030b0: g_user_vcf's file name, 8 characters (zero-padded, as _splitpath and strncpy) */
+void User_CarName(uint8_t name[8]);
 extern int g_vcf_forced;
 /* 0x4d3a90: the radar's list, the vehicles' entities (0x41fea0) */
 extern struct Cell *g_radar;      /* 0x4e9c20: the user's object loads its own .vcf */

@@ -1495,9 +1495,10 @@ int Vehicle_Damage(Node *n, uint8_t *p, const float *at)
     return 1;
 }
 
-/* the user's knock (0x45dbb0's, for a blow over 20): 0x433240 pushes the eye (the data's +0x398) along the
-   blow turned into its frame, times k within [0, 1], into its data's +0x2c-+0x34 (which nothing reads:
-   class 40's frame, 0x433330, is a bare return), and 0x452cd0 shakes the screen in the cockpit */
+/* knock 0x433240: the user's knock (0x45dbb0's, for a blow over 20): it pushes the eye (the data's
+   +0x398) along the blow turned into its frame, times k within [0, 1], into its data's +0x2c-+0x34
+   (which nothing reads: class 40's frame, 0x433330, is a bare return), and 0x452cd0 shakes the screen in
+   the cockpit */
 static void knock(Node *n, const float nv[3], float k)
 {
     if (!(n->flags & 0x10)) return;   /* Node_IsUser 0x42e620 */

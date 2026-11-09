@@ -248,12 +248,8 @@ int Regen_Frame(void)
             }
             Sound_Event(3, NULL, NULL);   /* 0x4683c0 */
             if (!Net_On()) {
-                uint8_t name[8] = {0};
-                const char *base = g_user_vcf;
-                for (const char *q = g_user_vcf; *q; q++)
-                    if (*q == '\\' || *q == '/' || *q == ':') base = q + 1;
-                size_t len = strcspn(base, ".");
-                memcpy(name, base, len < 8 ? len : 8);
+                uint8_t name[8];
+                User_CarName(name);
                 Spawn_Vehicle(SpawnLoc_Get(), 0, name, 1);
             } else
                 Net_AskRegen();

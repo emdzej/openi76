@@ -391,8 +391,7 @@ void Net_Init(dpid_t me)
     Net_PromptInit();      /* 0x4656e0 */
 }
 
-/* the user's car's name (0x4030b0: the .vcf's, 8 characters) */
-static void my_car(uint8_t name[8])
+void User_CarName(uint8_t name[8])
 {
     memset(name, 0, 8);
     const char *base = g_user_vcf;
@@ -409,7 +408,7 @@ int Net_Start(void)
     NetPl_Flags(g_net_me, &f);
     NetPl_SetFlags(g_net_me, f | 1);
     uint8_t name[8];
-    my_car(name);
+    User_CarName(name);
     const char *path = Obj_Name(name, exe_str(0x4a8100));   /* ".vcf" */
     size_t n = 0;
     const uint8_t *car = path ? Res_Get(path, &n) : NULL;
@@ -459,7 +458,7 @@ int Net_Join(void)
             g_synced = g_net_me;
             NetPl_SetKeeper(g_net_me);
             uint8_t name[8];
-            my_car(name);
+            User_CarName(name);
             Net_AskSpawn(name, 0);   /* the keeper's own place */
             return joined();
         }
@@ -502,7 +501,7 @@ int Net_Join(void)
                 g_synced = from;
                 NetPl_SetKeeper(from);
                 uint8_t name[8];
-                my_car(name);
+                User_CarName(name);
                 Net_AskSpawn(name, 0);
                 Clock_Sync(getf(b, 8), 1);   /* 0x450f50 */
             }

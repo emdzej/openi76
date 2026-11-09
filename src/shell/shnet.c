@@ -155,7 +155,7 @@ int Shnet_Browse(void)
     return 0;
 }
 
-/* the player's data under key 1 (0x10027ee0): +0 0x80 (0x40 for the host), +1 the team + 1, +2 1, +3-+5 a
+/* player_data i76shell 0x10027ee0: the player's data under key 1: +0 0x80 (0x40 for the host), +1 the team + 1, +2 1, +3-+5 a
    number's base-255 digits + 1 (0 here), +6 the car's name */
 static void player_data(uint8_t d[0x50], const char *car, int team, int host)
 {
