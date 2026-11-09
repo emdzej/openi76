@@ -16,6 +16,7 @@
 #include "vfs_zfs.h"
 #include <gasm.h>
 #ifdef OPENI76_GL
+#include "render/gl_poly.h"
 #include "render/gl_present.h"
 #endif
 #include <stdio.h>
@@ -92,7 +93,8 @@ void gl_present_log(const char *what, const char *detail)
 /* openi76-gl.wasm: through gasm:gl (src/render/gl_present.c); when only catching up, nothing is drawn */
 void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768])
 {
-    if (w <= 0 || h <= 0 || !gasm_gl_frame_shown()) return;
+    if (w <= 0 || h <= 0) return;
+    if (!gasm_gl_frame_shown()) { gl_poly_discard(); return; }
     if (gl_present(pixels, w, h, pitch, pal, (int)gasm_gl_width(), (int)gasm_gl_height())) gl_presented = true;
 }
 #else

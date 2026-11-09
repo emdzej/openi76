@@ -195,9 +195,21 @@ Write one page per format under `docs/formats/` (internal; not published).
   1. The presentation (done, `src/render/gl_present.c`): the 8-bit frame as an integer texture expanded
      through the palette by a shader, at 4:3 in the drawable with nearest sampling. Checked: sampled at
      each source pixel's centre it equals the software module's frame, pixel for pixel.
-  2. The polygon backend: the fillers' screen-space polygons (x, y, 1/z, u·w, v·w, the shade) drawn by GL
-     behind an interface of triangles and a material (texture, mode, shade, translucency), not tied to
-     `ScreenVert`, so a later camera-space producer (a GPU-side scene) can feed it too.
+  2. The polygon backend (done, `src/render/gl_poly.c`, `--param glpoly=1`): the fillers' screen-space
+     polygons drawn by GL too, behind an interface of vertices (x, y, 1/z, u, v in texels, the lum row) and
+     a material (solid, lum-shaded colour, texture, lum-shaded texture; perspective, tiled), not tied to
+     `ScreenVert`, so a later camera-space producer (a GPU-side scene) can feed it too. DrawPoly's tap
+     (draw.c, by the fill table's routine) records the flat, Gouraud, affine and the perspective plain,
+     tiled, Gouraud- and flat-shaded fillers; the software fill still runs, so the 8-bit frame stays whole
+     and in the original's order. The pixels each recorded fill changed form an ownership plane (the
+     value, owned); at presentation GL's index (an RG8UI framebuffer: index, covered) replaces the frame's
+     pixel where it is owned and the frame still holds that value, so sprites, 2D and the other modes drawn
+     over it stay software's. The shade stays linear in screen space under perspective (s·w and w
+     interpolated, then divided). Textures are cached by address with a sampled hash. Checked: t01's
+     static view and a 400-frame drive differ from the software frame in 0.45% and 0.97% of pixels,
+     scattered texels of the perspective fillers (their 16-pixel affine runs) and shade rounding; the
+     shell's frames are identical; about 12% slower. Left for later: the keyed (0x55-0x57), remap, tbl,
+     glow and shadow fillers (step 3), and the tiled affine filler (its stale-row bug).
   3. `lum`, glow and `tbl` in shaders (`tbl` approximated by blending, or exact by reading back).
   4. Resolution, filtering and an opt-in depth buffer, each a `--param`.
 - Each addition gets a launch parameter (`--param`, and a setting on the play

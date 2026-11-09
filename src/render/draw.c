@@ -157,6 +157,60 @@ static const struct { uint32_t addr; FillFn *fn; } fill_fns[] = {
 static ClipFn *clip_table[512];
 static FillFn *fill_table[512];
 
+#ifdef OPENI76_GL
+/* The port's GL backend (gl_poly.h, openi76-gl.wasm): the fillers it draws too, by the fill table's routine,
+   and their vertices as its own. Not the original's. */
+#include "render/gl_poly.h"
+enum { SH_NONE, SH_FLAT, SH_VERTEX };   /* the shade: none, vertex 0's for the polygon, each vertex's */
+static const struct {
+    FillFn *fn;
+    uint8_t kind, persp, tiled, full, shade;   /* full: u, v times the size, else the size - 1 */
+} gl_fills[] = {
+    {f_flat, GL_MAT_SOLID, 0, 0, 0, SH_FLAT},
+    {f_gouraud, GL_MAT_SHADED, 0, 0, 0, SH_VERTEX},
+    {f_affine, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE},
+    {f_persp, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE},
+    {f_persp_tiled, GL_MAT_TEXTURE, 1, 1, 1, SH_NONE},
+    {f_persp_shade, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_VERTEX},
+    {f_persp_shadetiled, GL_MAT_TEXTURE_SHADED, 1, 1, 0, SH_VERTEX},
+    {f_persp_flat, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_FLAT},
+    {f_persp_flattiled, GL_MAT_TEXTURE_SHADED, 1, 1, 1, SH_FLAT},
+};
+static int8_t gl_fill[512];   /* the mode's entry in gl_fills, or -1 */
+
+/* before the fill (which rewrites the vertices), under its rounding: the polygon as the fillers would take
+   it, recorded; then the rectangle its pixels can fall in */
+static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg a)
+{
+    GlVert g[72];
+    GlMaterial m = {gl_fills[k].kind, (uint8_t)a.colour, NULL, gl_fills[k].persp, gl_fills[k].tiled};
+    float su = 0, sv = 0, row = 0;
+    int shade = gl_fills[k].shade;
+    if (shade == SH_FLAT)   /* the flat fillers' row, round((1 - q0) * 7936) & 0xff00, held mid-row */
+        row = (float)((fpu_int(fpu_mul(fpu_sub(1.0, v[0].q), 7936.0)) & 0xff00) >> 8) + 0.5f;
+    if (m.kind == GL_MAT_SOLID) m.colour = g_lum[((int)row << 8) + (uint8_t)a.colour];
+    if (m.kind >= GL_MAT_TEXTURE) {
+        if (a.tex->w < 1 || a.tex->h < 1) return false;
+        m.tex = a.tex;
+        su = (float)(a.tex->w - !gl_fills[k].full), sv = (float)(a.tex->h - !gl_fills[k].full);
+    }
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+    for (int i = 0; i < n; i++) {
+        float x = v[i].x + (float)s->x0, y = v[i].y + (float)s->y0;
+        /* the Gouraud fillers' shade: (1 - q) * 7936 in 8.8, the row its upper byte */
+        g[i] = (GlVert){x, y, v[i].w, v[i].u * su, v[i].v * sv, shade == SH_VERTEX ? (1.0f - v[i].q) * 31.0f : row};
+        if (m.persp) g[i].u /= v[i].w, g[i].v /= v[i].w;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+    }
+    if (!(x0 > -1e6f && x1 < 1e6f && y0 > -1e6f && y1 < 1e6f) || !gl_poly_draw(g, n, &m)) return false;
+    gl_poly_cover_begin((int)x0 - 2, (int)y0 - 2, (int)x1 + 2, (int)y1 + 2);
+    return true;
+}
+#endif
+
 bool Draw_Init(char *err, size_t cap)
 {
     if (!exe_loaded()) return snprintf(err, cap, "the exe is not loaded"), false;
@@ -169,6 +223,11 @@ bool Draw_Init(char *err, size_t cap)
             if (fill_fns[k].addr == f) fill_table[m] = fill_fns[k].fn;
         if (!clip_table[m] || !fill_table[m])
             return snprintf(err, cap, "mode %#x: no port of clip %#x / fill %#x", m, c, f), false;
+#ifdef OPENI76_GL
+        gl_fill[m] = -1;
+        for (size_t k = 0; k < sizeof gl_fills / sizeof *gl_fills; k++)
+            if (gl_fills[k].fn == fill_table[m]) gl_fill[m] = (int8_t)k;
+#endif
     }
     return true;
 }
@@ -199,6 +258,12 @@ void DrawPoly(const View *view, void *verts, int n, PolyArg arg, int mode)
     /* the fill runs with the FPU rounding up (the control word's RC = 2); a fault in a filler is caught */
     int saved = g_fpu_round;
     g_fpu_round = FPU_UP;
+#ifdef OPENI76_GL
+    bool gl = gl_fill[mode] >= 0 && gl_poly_on(view->surface->pixels) && gl_tap(view->surface, out, n, gl_fill[mode], arg);
+#endif
     fill_table[mode](view->surface, out, n, arg);
+#ifdef OPENI76_GL
+    if (gl) gl_poly_cover_end();
+#endif
     g_fpu_round = saved;
 }

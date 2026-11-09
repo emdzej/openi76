@@ -46,5 +46,11 @@ Nothing of the original is left unported; the remaining work is checking each mi
 
 ## Beyond the original
 
-Nothing yet. Additions (widescreen, higher resolutions) will come after the faithful game, and will
-always be opt-in: the default is the original.
+Additions come after the faithful game and are always opt-in: the default is the original.
+
+- **A GL renderer** (being built; a second module, `openi76-gl.wasm`, run with `./play --gl`, not on the
+  play page yet). It presents the 8-bit frame through its palette with a shader, the same picture as the
+  software path. With `--param glpoly=1` GL also draws the 3D polygons of the flat, Gouraud and textured
+  fillers (plain, shaded, tiled, perspective) into an index framebuffer, used wherever nothing was drawn
+  over them. At the original's resolution the picture is the software one but for about 1% of pixels, the
+  rasterizers' texel rounding. Higher resolutions and filtering are the next steps.
