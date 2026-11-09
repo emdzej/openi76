@@ -9,6 +9,9 @@ set(I76_WARN -Wall -Wextra -Wno-unused-parameter -ffp-contract=off)   # no fused
 
 # The portable core: everything except host backends (no platform headers).
 file(GLOB CORE_SRC CONFIGURE_DEPENDS src/*.c src/fmt/*.c src/net/*.c src/render/*.c src/shell/*.c)
+# The added GL renderer (src/render/gl_*.c, gasm:gl) is only in openi76-gl.wasm.
+file(GLOB GL_SRC CONFIGURE_DEPENDS src/render/gl_*.c)
+list(REMOVE_ITEM CORE_SRC ${GL_SRC})
 set(HOST_SRC src/vfs_host.c src/platform_host.c)
 foreach(f ${HOST_SRC} src/platform_gasm.c src/app.c)
   list(REMOVE_ITEM CORE_SRC "${CMAKE_SOURCE_DIR}/${f}")
@@ -25,6 +28,13 @@ if(OPENI76_PLATFORM STREQUAL "gasm")
   target_include_directories(openi76 PRIVATE src)
   target_compile_options(openi76 PRIVATE ${I76_WARN} -O2)
   target_link_options(openi76 PRIVATE -Wl,-z,stack-size=1048576 -Wl,--strip-debug)
+  # The same game presented through gasm:gl (a module imports gasm:gl or video_present's path, not both
+  # gasm:gl and gasm:gfx): the base of the added GL renderer, opt-in (docs/re/port-plan.md).
+  gasm_add_game(openi76-gl ${CORE_SRC} ${GL_SRC} ${GASM_GL_SOURCE} src/app.c src/platform_gasm.c)
+  target_include_directories(openi76-gl PRIVATE src)
+  target_compile_definitions(openi76-gl PRIVATE OPENI76_GL=1)
+  target_compile_options(openi76-gl PRIVATE ${I76_WARN} -O2)
+  target_link_options(openi76-gl PRIVATE -Wl,-z,stack-size=1048576 -Wl,--strip-debug)
   return()
 endif()
 

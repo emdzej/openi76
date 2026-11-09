@@ -190,7 +190,16 @@ Write one page per format under `docs/formats/` (internal; not published).
   HUD anchored to the edges.
 - A GL renderer on `gasm:gl` behind the polygon seam. It brings high
   resolution, 32-bit colour and texture filtering, with the `lum`/`tbl`
-  effects reproduced in shaders.
+  effects reproduced in shaders. It is a second module, `openi76-gl.wasm` (a module imports `gasm:gl` or
+  the 2D presentation's path, not both; `./play --gl`), in steps:
+  1. The presentation (done, `src/render/gl_present.c`): the 8-bit frame as an integer texture expanded
+     through the palette by a shader, at 4:3 in the drawable with nearest sampling. Checked: sampled at
+     each source pixel's centre it equals the software module's frame, pixel for pixel.
+  2. The polygon backend: the fillers' screen-space polygons (x, y, 1/z, u·w, v·w, the shade) drawn by GL
+     behind an interface of triangles and a material (texture, mode, shade, translucency), not tied to
+     `ScreenVert`, so a later camera-space producer (a GPU-side scene) can feed it too.
+  3. `lum`, glow and `tbl` in shaders (`tbl` approximated by blending, or exact by reading back).
+  4. Resolution, filtering and an opt-in depth buffer, each a `--param`.
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.
 

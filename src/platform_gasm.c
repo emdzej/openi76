@@ -15,6 +15,9 @@
 #include "cdaudio.h"
 #include "vfs_zfs.h"
 #include <gasm.h>
+#ifdef OPENI76_GL
+#include "render/gl_present.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +79,23 @@ void plat_set_frame_rate(double hz)
     gasm_set_frame_rate(hz);
 }
 /* The 8-bit frame through its palette to RGBA (byte order R, G, B, A), as the display hardware did. */
+#ifdef OPENI76_GL
+static bool gl_presented;   /* this frame drew into the drawable */
+
+void gl_present_log(const char *what, const char *detail)
+{
+    char line[600];
+    snprintf(line, sizeof line, "OpenI76: %s: %s", what, detail);
+    plat_log(line);
+}
+
+/* openi76-gl.wasm: through gasm:gl (src/render/gl_present.c); when only catching up, nothing is drawn */
+void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768])
+{
+    if (w <= 0 || h <= 0 || !gasm_gl_frame_shown()) return;
+    if (gl_present(pixels, w, h, pitch, pal, (int)gasm_gl_width(), (int)gasm_gl_height())) gl_presented = true;
+}
+#else
 void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768])
 {
     static uint32_t *rgba;
@@ -97,6 +117,7 @@ void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t 
     }
     gasm_video_present(rgba, (uint32_t)w, (uint32_t)h, (uint32_t)w * 4);
 }
+#endif
 
 /* ---- raw keyboard (gasm 0.5) ---- */
 
@@ -476,11 +497,17 @@ GASM_EXPORT("gasm_frame") void i76_gasm_frame(void)
     for (uint32_t p = 0; p < 4; p++) pads[p] = gasm_input_pad(p);
     poll_key_events();
     have_ptr = gasm_pointer(ptr, sizeof ptr) == GASM_POINTER_BYTES;
+#ifdef OPENI76_GL
+    gl_presented = false;
+#endif
     if (!app_frame()) {
         running = false;
         app_exit();
         __wasi_proc_exit(0);
     }
+#ifdef OPENI76_GL
+    if (!gl_presented && gasm_gl_frame_shown()) gl_present_repeat((int)gasm_gl_width(), (int)gasm_gl_height());
+#endif
     /* The sound for the time since the previous frame (the runner's clock), as OpenCMR2's: a frame
        rate that drifts from the one asked for (a window's vsync, a slow frame) keeps the queue at its
        level instead of draining or flooding it; headless the clock is the frames' own, the same share.

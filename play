@@ -6,10 +6,18 @@
 # Disc 2 (the missions' movies, the music): $OPENI76_CD2, else I76_CD2.BIN with its .CUE (the CD-audio
 # tracks: the music) next to disc 1's image, else I76_CD2.ISO there, else ./cd2; none is fine (no music).
 # Extra options go to gasm-run (--fullscreen, --window 1280x960, --param mission=t01.msn --param play=1 ...).
+# --gl (anywhere) runs openi76-gl.wasm instead: the port's GL renderer, being built (docs/re/port-plan.md).
 # Fetches the gasm SDK and runner into .deps/ the first time; GASM_RUN=<path to gasm-run> uses another
 # runner (a local gasm build, say).
 set -euo pipefail
 cd "$(dirname "$0")"
+
+MODULE=openi76
+ARGS=()
+for a in "$@"; do
+  if [ "$a" = --gl ]; then MODULE=openi76-gl; else ARGS+=("$a"); fi
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
 
 DISC=
 if [ $# -gt 0 ] && [ -e "$1" ]; then DISC=$1; shift; fi
@@ -49,6 +57,6 @@ if [ ! -f build-gasm/CMakeCache.txt ]; then
   cmake -S . -B build-gasm -DOPENI76_PLATFORM=gasm -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_TOOLCHAIN_FILE=.deps/gasm-c-sdk/cmake/gasm-toolchain.cmake -DWASI_SDK_PREFIX="$PWD/.deps/wasi-sdk" >/dev/null
 fi
-cmake --build build-gasm --parallel >/dev/null
+cmake --build build-gasm --parallel --target "$MODULE" >/dev/null
 
-exec "$RUN" build-gasm/openi76.wasm "${ASSET[@]}" --allow-net "$@"
+exec "$RUN" "build-gasm/$MODULE.wasm" "${ASSET[@]}" --allow-net "$@"
