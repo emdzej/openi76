@@ -44,7 +44,8 @@ void Entity_Init(void)
     on_add_count = 0;
     memset(on_remove, 0, sizeof on_remove);
     on_remove_count = 0;
-    /* the ids (0x547a58) are not ported yet */
+    /* the ids (0x547a58: each slot's next, i + 1, the 257th 0) are the iterator 0x423ff0 / 0x423f60's ring from
+       slot 0: the port walks the array */
     Names_Add(NULL, NULL);   /* 0x492ac0: a new table */
 }
 
