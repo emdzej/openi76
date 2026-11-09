@@ -1015,6 +1015,24 @@ static void destroy(Node *n)
         Structure_Destroy(n);
 }
 
+/* the port's (the autopilot's apwarp test aid): n teleported to the named path's first point, at rest,
+   heading 0; 0 without such a path */
+int Fsm_Warp(Node *n, const char *name)
+{
+    if (!g_fsm_loaded || !n) return 0;
+    static uint32_t words;
+    if (!words) words = alloc(8);   /* the speed and the angle, as the action's argument words */
+    SET(words, 0);
+    SET(words + 4, 0);
+    for (int32_t i = 0; i < g_fsm.n_paths; i++) {
+        uint32_t p = g_fsm.paths + (uint32_t)i * 0x58;
+        if (crt_strnicmp((const char *)at(p), name, 0x50)) continue;
+        teleport(n, p, words, words + 4, 0, 0);
+        return 1;
+    }
+    return 0;
+}
+
 /* the port's (the autopilot's apkill test aid): the script's destroy */
 void Fsm_Destroy(Node *n) { if (n) destroy(n); }
 

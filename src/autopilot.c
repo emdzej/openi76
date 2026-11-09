@@ -28,6 +28,8 @@
    blows the bridge, once the bus's ambushers are dealt with).
    --param aphurt=name:N@s wears the script's car down to under N health from s seconds (small chassis
    packets each frame, credited to the user), to test a "disable, don't kill" script (t09).
+   --param apwarp=path@s puts the user's car at the script path's first point at s seconds, by the
+   script's teleport (s02: past the race the autopilot cannot win, to test what follows).
    --param apkill=name@s,... destroys the script's named entity at s seconds of the script's clock, a test
    aid to run a script's later branches apart from the fights (as apinvincible and apstrong are).
    "best" fights at the AI's best skill (5) from the first attack, "skip" skips the script's cameras as Esc
@@ -234,6 +236,26 @@ void Autopilot_Frame(void)
             pk[8] = 2, pk[0xc] = 2;
             Packet_Damage(o, pk, g_user_entity ? g_user_entity->node : NULL, front);
         }
+    }
+    static char wname[32];   /* --param apwarp=path@s: the user's car put at the path's start at s seconds (a test aid) */
+    static int warp = -1;
+    static float wat;
+    if (warp < 0) {
+        char v[64];
+        warp = 0;
+        if (plat_param("apwarp", v, sizeof v)) {
+            char *at = strchr(v, '@');
+            if (at) *at = 0, wat = (float)atof(at + 1);
+            snprintf(wname, sizeof wname, "%s", v);
+            warp = 1;
+        }
+    }
+    if (warp == 1 && g_clock_total >= wat && g_user_entity && g_user_entity->node) {
+        char m[80];
+        snprintf(m, sizeof m, "OpenI76: apwarp to %s at %.1f s: %s", wname, g_clock_total,
+                 Fsm_Warp(g_user_entity->node, wname) ? "done" : "no such path");
+        plat_log(m);
+        warp = 2;
     }
     if (!on || !g_user_entity || !g_user_entity->node) return;
     Node *u = g_user_entity->node;
