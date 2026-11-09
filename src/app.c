@@ -69,6 +69,7 @@
 #include "render/view.h"
 #include "net/netgame.h"
 #include "render/fpu.h"
+#include "lod.h"
 #include "shell/shnet.h"
 #include <math.h>
 #include <stdio.h>
@@ -203,6 +204,29 @@ static void show_frame(void)
 {
     if (g_play_state & 0x10) Menu_Show();
     else if (!(g_play_state & 0xc)) plat_present(pixels, 640, 480, 640, g_shown_pal);
+}
+
+/* 0x404170, each frame before the drawing: each entity but a group's (node flag 0x100) by its distance
+   from the view's eye (squared in floats, z as a float first): within the view's far_radius (+0x14) its
+   word +0x34 cleared; farther, the first frame there its node tree's meshes and pixels released
+   (Lod_Unload 0x47de00 down the children, 0x404290) and the word set, so that it is done once each time
+   it goes away (the meshes come back when next drawn) */
+static void Entities_FarUnload(void)
+{
+    for (int i = 0; i < g_entity_count; i++) {
+        Entity *e = &g_entities[i];
+        Node *n = e->node;
+        if (!n || (n->flags & 0x100)) continue;
+        float dx = fpu_f32(fpu_sub(n->frame.pos[0], view.eye[0])), dy = fpu_f32(fpu_sub(n->frame.pos[1], view.eye[1]));
+        float dz = fpu_f32(fpu_sub(fpu_f32(n->frame.pos[2]), fpu_f32(view.eye[2])));
+        float d = fpu_f32(fpu_add(fpu_add(fpu_mul(dx, dx), fpu_mul(dy, dy)), fpu_mul(dz, dz)));
+        int band = d <= fpu_mul(view.radius600, view.radius600) ? (d <= fpu_mul(view.far_radius, view.far_radius) ? 0 : 1) : 2;
+        if (band == 0) e->rest[0] = 0;
+        else if (e->rest[0] == 0) {
+            Lod_UnloadTree(n);
+            e->rest[0] = 1;
+        }
+    }
 }
 
 /* The game in a mission (WinMain's loop while the state 0x4a80f4 is 5), its ported parts: after the load the
@@ -452,7 +476,7 @@ static void play_frame(void)
                          Vehicle_Health(v), (unsigned)((v->flags >> 16) & 7), (vf & 0x20) ? " dead" : "", Fsm_NameOf(v) ? Fsm_NameOf(v) : "");
                 plat_log(m);
             }
-        /* 0x404170 (the objects' detail by distance) is not ported yet */
+        Entities_FarUnload();   /* 0x404170 */
         if (draw) {
         Sound_Frame(1);    /* 0x466b70 */
         Sound_Enable(1);   /* 0x466dd0 */
