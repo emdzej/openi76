@@ -26,6 +26,8 @@
    "stay[R]" leaves the fights while the leader is R m (200) off or more, to catch it up (s05's bus).
    "name/a/b" hunts name before anything nearer once the script's a and b are dead (s05: Plato, who
    blows the bridge, once the bus's ambushers are dealt with).
+   --param aphurt=name:N@s wears the script's car down to under N health from s seconds (small chassis
+   packets each frame, credited to the user), to test a "disable, don't kill" script (t09).
    --param apkill=name@s,... destroys the script's named entity at s seconds of the script's clock, a test
    aid to run a script's later branches apart from the fights (as apinvincible and apstrong are).
    "best" fights at the AI's best skill (5) from the first attack, "skip" skips the script's cameras as Esc
@@ -204,6 +206,35 @@ void Autopilot_Frame(void)
             Fsm_Destroy(o);
             kname[k][0] = 0;
         }
+    static char hname[32];   /* --param aphurt=name:N@s: name worn down to under N health from s seconds (a test aid) */
+    static int hurt = -1, hto;
+    static float hat;
+    if (hurt < 0) {
+        char v[64];
+        hurt = 0;
+        if (plat_param("aphurt", v, sizeof v)) {
+            char *c = strchr(v, ':'), *at = strchr(v, '@');
+            if (at) *at = 0, hat = (float)atof(at + 1);
+            if (c) *c = 0, hto = atoi(c + 1);
+            snprintf(hname, sizeof hname, "%s", v);
+            hurt = 1;
+        }
+    }
+    if (hurt == 1 && g_clock_total >= hat) {
+        Node *o = Fsm_Named(hname);
+        if (!o || dead(o) || Vehicle_Health(o) < (double)hto) {
+            char m[80];
+            snprintf(m, sizeof m, "OpenI76: aphurt %s done at %.1f s, health %.0f", hname, g_clock_total, o ? Vehicle_Health(o) : -1.0);
+            plat_log(m);
+            hurt = 2;
+        } else {
+            uint8_t pk[0x1c] = {0};
+            static const float front[3] = {0, 0, 1};
+            pk[4] = 3;                            /* the chassis's amounts */
+            pk[8] = 2, pk[0xc] = 2;
+            Packet_Damage(o, pk, g_user_entity ? g_user_entity->node : NULL, front);
+        }
+    }
     if (!on || !g_user_entity || !g_user_entity->node) return;
     Node *u = g_user_entity->node;
     if (dead(u)) return;
