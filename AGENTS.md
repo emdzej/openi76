@@ -33,7 +33,7 @@ the AI's set-up (docs/re/ai.md) and the classes' start pass, the vehicles' with 
 the mouse and TRAINING starts a01 with disc 2 passed as `--asset cd2=I76_CD2.ISO`, docs/re/shell.md, and the mission's end comes back to it; `--param shell=0` shows disc 1's loading screen instead), or with `--param
 mission=t01.msn [--param cam=x,y,z,yaw,pitch]` a mission's terrain, roads, objects and sky from a static
 camera. With `--param play=1` too it runs the game loop's ported parts: the vehicles' simulation
-(docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows) and the
+(docs/re/vehicles.md), the input (docs/re/input.md: input.map drives with the keypad's arrows, the mouse's buttons and a game controller as joystick1) and the
 cameras: every mode of the presets F1-F11, the death's and the script's cameras of the intros (docs/re/camera.md) and the AI's driving and fighting (docs/re/ai.md), the damage, the death and the wreck (docs/re/vehicles.md; their
 effects stubbed); `--param tick=<ms>` gives headless runs a fixed step and `--param
 trace=<frames>` logs the user's vehicle. `--param autopilot=<leader>[,<target>[@objective][:guard]...]` (the
