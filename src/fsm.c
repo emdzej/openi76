@@ -349,6 +349,15 @@ int Fsm_Chunk(const uint8_t *c, void *arg, const uint8_t *end)
     return 1;
 }
 
+void Fsm_Forget(Node *n)
+{
+    for (int32_t i = 0; i < g_fsm.n_entities && ent_node; i++)
+        if (ent_node[i] == n) {
+            Node_Unref(n);   /* tagged "ai" */
+            ent_node[i] = NULL;
+        }
+}
+
 Node *Fsm_Entity(int32_t i)
 {
     if (i < 0 || i >= ent_cap) return NULL;

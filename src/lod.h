@@ -26,6 +26,8 @@ bool Lod_Copy(const Node *src, Node *dst);
 void Lod_Unload(Node *n);
 /* 0x42d800: Lod_Unload on n and every node below it */
 void Lod_UnloadTree(Node *n);
+/* 0x494a10: the removal callback 0x4949e0 set (an entity's node's mesh released as it goes) */
+void Lod_EntityHook(void);
 /* Lod_Remove 0x47da30 */
 void Lod_Remove(Node *n);
 /* for tests: the record's current and previous names and levels, and the state's names (NULL if no

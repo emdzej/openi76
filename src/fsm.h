@@ -42,6 +42,8 @@ void Fsm_SetWord(uint32_t a, int32_t v);
 uint32_t Fsm_Window(uint8_t *p, uint32_t size);
 /* entity record i's node, refreshed (Node_Live: a freed one becomes NULL) */
 Node *Fsm_Entity(int32_t i);
+/* the entity records holding n (+0x58) let go of it (their reference dropped): the AI's removal's part */
+void Fsm_Forget(Node *n);
 /* the port's: the node of the script's entity of that name (the autopilot's targets) */
 Node *Fsm_Named(const char *name);
 const char *Fsm_NameOf(const Node *n);

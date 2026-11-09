@@ -27,6 +27,12 @@ View g_view;
 Surface *g_screen;
 void (*g_camera_fn)(void);
 Entity *g_camera_entity;
+
+/* 0x406d20 (Entity_OnRemove's): the camera's entity gone, the user's in its place (0x423fc0) */
+void Camera_EntityGone(Entity *e)
+{
+    if (g_camera_entity == e) g_camera_entity = g_user_entity;
+}
 int32_t g_cockpit = 1, g_camera_mode;
 
 /* the pilot's glance: the targets (0x4a86bc pitch, 0x4a86c4 yaw, 0x4a86cc roll) and the eased angles

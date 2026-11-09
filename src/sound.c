@@ -42,7 +42,6 @@ static int32_t cache_used;           /* 0x5e2a68 */
 static int32_t cache_max = 500000;   /* 0x5e2a70: the free 3D memory's caps word, or 500,000 */
 static Ds3dListener lis;             /* 0x5e2e80 */
 static Ds3dBuffer b3d;               /* 0x5e2ef0 */
-static Entity *lis_entity;           /* 0x4a8660 (the camera's; set to the user's when unset) */
 
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 static float rdf(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
@@ -51,12 +50,9 @@ static int32_t ftol(double x) { return (int32_t)(int64_t)x; }   /* 0x496690: cho
 
 static Node *user_node(void) { return g_user_entity ? g_user_entity->node : NULL; }   /* 0x423fc0 */
 
-/* the listener's entity, as 0x4a8660 is set: the camera's, else the user's */
-static Entity *camera_entity(void)
-{
-    if (g_camera_entity) return g_camera_entity;
-    return g_user_entity;
-}
+/* the listener's entity is the camera's (0x4a8660), set to the user's when unset */
+#define lis_entity g_camera_entity
+static Entity *camera_entity(void) { return g_camera_entity = g_user_entity; }
 
 /* ---- the header, the params (0x467ee0-0x467f40, 0x467510, 0x467580) ---- */
 

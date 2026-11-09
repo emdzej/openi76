@@ -249,6 +249,7 @@ static bool play_init(void)
     g_screen = &surf;
     Cockpit_Init();     /* 0x426070 */
     Class_StartAll();
+    Entity_OnRemove(Camera_EntityGone);   /* 0x406d20 */
     if (Net_On()) {   /* WinMain's clock runs from before the load (0x450e90); the join's needs it */
         Clock_Init();
         Net_Start();   /* 0x461a10; then the join (0x461b00) a frame at a time */

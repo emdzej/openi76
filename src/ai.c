@@ -74,6 +74,53 @@ static void ai_add(Entity *e)
     put32(ai + 8, 1);
 }
 
+/* 0x408660 (Entity_OnRemove's): every AI aiming at the node lets it go (its target +0xa9b4 dropped, the
+   reference with it). Then, but for class 8: a vehicle leaves its team's list, the script's records and
+   its own target let go, and every AI's weapons are looked at again (+0xa714); anything else only leaves
+   the script's records. The team's place is searched first; one not found is taken as -1 (quirk, kept):
+   the list is shifted down from the slot before the team's first, which drops the first member and
+   writes the last slot of the team before (for team 0, before the lists: not written here), and the
+   count goes down even from 0 */
+static void ai_remove(Entity *e)
+{
+    Node *n = e->node;
+    if (!n) return;   /* the original reads its class through NULL */
+    for (int t = 0; t < AI_TEAMS; t++)
+        for (int i = 0; i < g_team_count[t] && i < 0x40; i++) {
+            Node **tg = (Node **)Data_Ptr(ai_of(g_teams[t][i]->node), 0xa9b4);
+            if (*tg == n) {
+                Node_Unref(n);   /* tagged "ai" */
+                *tg = NULL;
+            }
+        }
+    if (n->cls == 8) return;
+    if (!(n->cls == 1 || n->cls == 8 || n->cls == 9)) {   /* 0x42e570 */
+        Fsm_Forget(n);
+        return;
+    }
+    int team = (int)((n->flags & 0x70000) >> 16), k = -1;
+    for (int i = 0; i < g_team_count[team] && i < 0x40; i++)
+        if (g_teams[team][i] == e) {
+            k = i;
+            break;
+        }
+    Fsm_Forget(n);
+    Node **own = (Node **)Data_Ptr(ai_of(n), 0xa9b4);
+    if (*own) {
+        Node_Unref(*own);
+        *own = NULL;
+    }
+    int last = g_team_count[team] - 1;
+    Entity **flat = &g_teams[0][0];
+    int at = team * 0x40;
+    for (int i = k; i < last && i < 0x3f; i++)
+        if (at + i >= 0) flat[at + i] = flat[at + i + 1];
+    int z = k < last ? last : k;
+    if (at + z >= 0 && z < 0x40) flat[at + z] = NULL;
+    g_team_count[team] = last;
+    AI_Rethink();
+}
+
 void AI_Rethink(void)
 {
     for (int t = 0; t < AI_TEAMS; t++)
@@ -89,9 +136,10 @@ void AI_Init(void)
     memset(g_team_count, 0, sizeof g_team_count);
     memset(g_teams, 0, sizeof g_teams);
     Entity_OnAdd(ai_add);
+    Entity_OnRemove(ai_remove);   /* 0x408660 */
     g_ai_505458 = g_ai_50545c = g_ai_50544c = g_ai_505448 = 0;
     Nav_Init();   /* 0x40fda0 */
-    /* the removal callback 0x408660 and the rest of the set-up (0x40fac0, 0x40f0b0, 0x40d0b0,
+    /* the rest of the set-up (0x40fac0, 0x40f0b0, 0x40d0b0,
        0x40b7f0, the skill tables 0x40b380) come with the driving */
 }
 

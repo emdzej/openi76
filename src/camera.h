@@ -10,6 +10,8 @@ extern View g_view;                 /* 0x4a8488 */
 extern Surface *g_screen;           /* 0x58d860: the main surface the view is made on */
 extern void (*g_camera_fn)(void);   /* 0x4a8478: the mode's per-frame function, NULL for none */
 extern Entity *g_camera_entity;     /* 0x4a8660: the entity the camera is on */
+/* 0x406d20, the removal callback WinMain sets after the classes' start: the camera back on the user */
+void Camera_EntityGone(Entity *e);
 extern int32_t g_cockpit;           /* 0x4a847c: 1 in the cockpit (Render_World draws the mirror) */
 extern int32_t g_camera_mode;       /* 0x4a8480: the sub-mode, 0 the pilot, 1 the chase, 2 ..., 4 ..., 5 ... */
 

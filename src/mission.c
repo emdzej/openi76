@@ -1,5 +1,6 @@
 /* The mission file (mission.h). */
 #include "mission.h"
+#include "lod.h"
 #include "crt.h"
 #include "entity.h"
 #include "objects.h"
@@ -53,7 +54,7 @@ static ChunkDesc table[] = {   /* 0x4e9770 */
 
 bool Mission_Load(const char *name)
 {
-    /* 0x494a10 (the scrounge objects' reset) is not ported yet */
+    Lod_EntityHook();   /* 0x494a10 */
     char base[16], *dot;
     strncpy(base, name, 15);
     base[15] = 0;

@@ -1,8 +1,10 @@
 /* The levels of detail (lod.h). */
 #include "lod.h"
 #include "geom.h"
+#include "entity.h"
 #include "platform.h"
 #include "tex.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -179,6 +181,18 @@ void Lod_UnloadTree(Node *n)
     Lod_Unload(n);
     for (Node *c = n->child; c; c = c->next) Lod_UnloadTree(c);
 }
+
+/* 0x4949e0 (Entity_OnRemove's, set by the mission's load, 0x494a10): the entity's node's mesh released.
+   A node whose mesh its level-of-detail record holds would have it released twice (here, then by
+   Lod_Remove); the vehicles removed in play hold theirs alone */
+static void lod_entity_gone(Entity *e)
+{
+    if (!e || !e->node || !e->node->geom) return;
+    Geom_Release(e->node->geom);
+    e->node->geom = NULL;
+}
+
+void Lod_EntityHook(void) { Entity_OnRemove(lod_entity_gone); }   /* 0x494a10 */
 
 void Lod_Remove(Node *n)
 {

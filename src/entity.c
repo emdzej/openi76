@@ -79,9 +79,10 @@ void Entities_Free(void)
 void Entity_OnAdd(EntityFn fn) { on_add[on_add_count++] = fn; }
 void Entity_OnRemove(EntityFn fn) { on_remove[on_remove_count++] = fn; }   /* 0x423d10 */
 
-/* 0x423eb0. Of the removal callbacks only the collision's (0x469cd0) is ported; not yet the user's
-   (0x406d20), the AI's (0x408660), the radar's (0x41fef0), the artillery's (0x428d00), network play's
-   (0x463260) and the level of detail's (0x4949e0) */
+/* 0x423eb0: the removal callbacks in the order they were set: the collision's (0x469cd0), the AI's
+   (0x408660), the radar's (0x41fef0), the artillery's (0x428d00), the spawn places' (0x463260), the
+   level of detail's (0x4949e0: the node's mesh), the camera's (0x406d20) and the melee's opponents'
+   (0x4073a0) */
 void Entity_Remove(Entity *e)
 {
     int i = (int)(e - g_entities);
