@@ -56,6 +56,8 @@ typedef struct {
     const Texture *tex;   /* the textured kinds' */
     bool persp;           /* u, v interpolated in perspective (by w); else in screen space */
     bool tiled;           /* texel indices masked by the size - 1 (power-of-two textures) */
+    int rows_last;        /* the fillers' row table: rows rows_last..+3 below the height read row rows_last - 1
+                             (row 0 for a negative one; poly.h's Poly_TexRows); the height for none */
 } GlMaterial;
 
 /* the view the next polygons are drawn in (a key, its rectangle on the frame, inclusive, and its near
@@ -76,9 +78,16 @@ bool gl_poly_on(const uint8_t *pixels);
 bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m);
 /* around a recorded polygon's software fill: the frame's rectangle x0..x1, y0..y1 (inclusive) before, then
    the pixels the fill changed become the polygon's; for an op that reads the destination only where that
-   was GL's too (else GL's value would be from another destination: the pixel goes back to software) */
+   was GL's too (else GL's value would be from another destination: the pixel goes back to software).
+   cover_end returns how many pixels it left in doubt: unchanged, and not GL's with that value already (a
+   fill can write the value a pixel had; the frame is not cleared between frames). For those the caller
+   runs the fill again into the probe, a scratch frame whose rectangle is a probe value (pass 0: 0, 1:
+   0xff): a pixel the fill overwrites there was written. probe_end returns how many are still in doubt
+   (written with the probe's value). */
 void gl_poly_cover_begin(int x0, int y0, int x1, int y1, bool reads_dest);
-void gl_poly_cover_end(void);
+int gl_poly_cover_end(void);
+uint8_t *gl_poly_probe(int pass);
+int gl_poly_probe_end(int pass);
 
 /* what a frame's composite reads: index (RG8UI: the index, covered) and colour (RGBA8) at w x h, own (RG8UI:
    the value, owned) at the frame's size */
@@ -92,6 +101,9 @@ typedef struct {
    dw, dh: the drawable, for glscale=fit. Then starts the next frame. */
 bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768], unsigned pal_tex, int dw,
                      int dh, GlPolyFrame *out);
+/* --param gldebug=1: the composite colours the pixels where GL's is not shown (gl_present.c) */
+bool gl_poly_debug(void);
+
 /* a frame that is not shown: what was recorded is dropped */
 void gl_poly_discard(void);
 

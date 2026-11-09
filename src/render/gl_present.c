@@ -15,7 +15,7 @@
 #include <string.h>
 
 static GLuint prog, vao, frame_tex, pal_tex;
-static GLint u_frame, u_pal, u_size, u_index, u_own, u_colour, u_poly, u_psize;
+static GLint u_frame, u_pal, u_size, u_index, u_own, u_colour, u_poly, u_psize, u_dbg;
 static int tex_w, tex_h;
 static bool ready, failed;
 static GlPolyFrame poly;   /* the last frame's, index 0 when it had no GL polygons */
@@ -38,7 +38,7 @@ static const char FS[] =
     "uniform mediump usampler2D u_index;\n"
     "uniform mediump usampler2D u_own;\n"
     "uniform sampler2D u_colour;\n"
-    "uniform bool u_poly;\n"
+    "uniform bool u_poly, u_dbg;\n"
     "uniform ivec2 u_size, u_psize;\n"
     "in vec2 v_uv;\n"
     "out vec4 o;\n"
@@ -49,6 +49,8 @@ static const char FS[] =
     "        ivec2 p = min(ivec2(v_uv * vec2(u_psize)), u_psize - 1);\n"
     "        uvec2 w = texelFetch(u_own, t, 0).rg, g = texelFetch(u_index, p, 0).rg;\n"
     "        if (w.y != 0u && w.x == i && g.y != 0u) { o = vec4(texelFetch(u_colour, p, 0).rgb, 1.0); return; }\n"
+    /* gldebug=1: where GL's pixel is not shown, why: red not drawn by GL, blue not GL's, yellow changed since */
+    "        if (u_dbg) { o = g.y == 0u ? vec4(1, 0, 0, 1) : w.y == 0u ? vec4(0, 0, 1, 1) : vec4(1, 1, 0, 1); return; }\n"
     "    }\n"
     "    o = vec4(texelFetch(u_pal, ivec2(int(i), 0), 0).rgb, 1.0);\n"
     "}\n";
@@ -96,6 +98,7 @@ static bool init(void)
     u_poly = glGetUniformLocation(prog, "u_poly");
     u_colour = glGetUniformLocation(prog, "u_colour");
     u_psize = glGetUniformLocation(prog, "u_psize");
+    u_dbg = glGetUniformLocation(prog, "u_dbg");
     glGenVertexArrays(1, &vao);
     GLuint t[2];
     glGenTextures(2, t);
@@ -165,6 +168,7 @@ static void draw(int dw, int dh)
     glUniform1i(u_own, 3);
     glUniform1i(u_colour, 4);
     glUniform1i(u_poly, poly.index != 0);
+    glUniform1i(u_dbg, gl_poly_debug());
     glUniform2i(u_size, tex_w, tex_h);
     glUniform2i(u_psize, poly.w, poly.h);
     glBindVertexArray(vao);

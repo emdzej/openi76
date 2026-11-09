@@ -250,9 +250,23 @@ Write one page per format under `docs/formats/` (internal; not published).
      use, the frame's earlier polygons keeping the old one. Checked: `glpoly=1` alone still differs from the software frame
      in 0.48% of t01's static view (step 3's); with all three, t01's frame 3000 (the 3D cockpit, the
      panels, the Fireworks' car and its shadow) reads as the software frame, smoothed. The counters' digits now match the software's (they showed a
-     stale digit since step 2). Speed unchanged within noise (78-85 frames/s headless, the software fill
-     is the cost). Not done: the tiled affine filler's polygons stay software's, at the frame's
-     resolution.
+     stale digit since step 2). The tiled affine filler is drawn too: the textured fillers share a row
+     table that its build leaves with four rows repeating the one above a stale row, until the texture
+     changes, so the backend asks poly.c which table the next fill reads (`Poly_TexRows`) and uploads
+     that variant of the texture (cached by texture and row). Ownership: the frame is not cleared between
+     frames, so a fill often writes the value a pixel already had, which the changed-pixel test cannot
+     see (in t01's static view most of the terrain and half the sky stayed software's, as the checks of
+     steps 2-3 compared with the software frame and could not tell). The plane is now kept across frames
+     (reset after a frame without GL polygons), and a pixel left in doubt (unchanged, within a pixel and
+     a half of the polygon, not GL's with that value) is settled by the fill run again into a scratch
+     frame filled with 0, then 0xff (from the vertices as they were, the row table already this
+     texture's, the stale row put back): one it overwrites there was written. A pixel the probe finds
+     unwritten is not probed again from the next frame on until it changes (the frame's last column,
+     which no fill reaches). `--param gldebug=1` colours the pixels where GL's is not shown: red not
+     drawn by GL, blue not GL's, yellow changed since. t01's static view is now GL's but for the last
+     column and row (GL's edge rule); 0.76% of its pixels differ from the software frame at the frame's
+     size, frame 3000 0.64%, the game's state the same (the audio hash); glpoly=1 costs about 28%
+     headless (78 frames/s against 108), the probe a part of it.
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.
 

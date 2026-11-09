@@ -170,6 +170,7 @@ static const struct {
     {f_gouraud, GL_MAT_SHADED, 0, 0, 0, SH_VERTEX, GL_OP_COPY},
     {f_shadow, GL_MAT_SOLID, 0, 0, 0, SH_NONE, GL_OP_SHADOW},
     {f_affine, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_COPY},
+    {f_tiled, GL_MAT_TEXTURE, 0, 1, 1, SH_NONE, GL_OP_COPY},
     {f_remap, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_REMAP},
     {f_tbl, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_TBL},
     {f_tblrev, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_TBL_REV},
@@ -194,7 +195,7 @@ static int8_t gl_fill[512];   /* the mode's entry in gl_fills, or -1 */
 static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg a)
 {
     GlVert g[72];
-    GlMaterial m = {gl_fills[k].kind, gl_fills[k].op, (uint8_t)a.colour, NULL, gl_fills[k].persp, gl_fills[k].tiled};
+    GlMaterial m = {gl_fills[k].kind, gl_fills[k].op, (uint8_t)a.colour, NULL, gl_fills[k].persp, gl_fills[k].tiled, 0};
     float su = 0, sv = 0, row = 0;
     int shade = gl_fills[k].shade;
     if (shade == SH_FLAT)   /* the flat fillers' row, round((1 - q0) * 7936) & 0xff00, held mid-row */
@@ -203,6 +204,9 @@ static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg 
     if (m.kind >= GL_MAT_TEXTURE) {
         if (a.tex->w < 1 || a.tex->h < 1) return false;
         m.tex = a.tex;
+        /* the row table the fill reads (the tiled affine filler's stale row); where its build faults the
+           fill draws nothing */
+        if (!Poly_TexRows(a.tex, gl_fills[k].fn == f_tiled, &m.rows_last)) return false;
         su = (float)(a.tex->w - !gl_fills[k].full), sv = (float)(a.tex->h - !gl_fills[k].full);
     }
     float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
@@ -219,6 +223,23 @@ static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg 
     if (!(x0 > -1e6f && x1 < 1e6f && y0 > -1e6f && y1 < 1e6f) || !gl_poly_draw(g, n, &m)) return false;
     gl_poly_cover_begin((int)x0 - 2, (int)y0 - 2, (int)x1 + 2, (int)y1 + 2, m.op >= GL_OP_REMAP);
     return true;
+}
+
+/* the pixels the fill left as they were and the backend cannot tell were written (gl_poly.h): the fill
+   again into its probe, from the vertices as they were (the Gouraud fillers rewrite q), the fill's state
+   kept as the first left it (the row table is this texture's already) */
+static void gl_probe(const Surface *s, const ScreenVert *v, int n, int mode, PolyArg a)
+{
+    int stale = g_poly_stale_row;
+    for (int pass = 0; pass < 2; pass++) {
+        Surface p = *s;
+        if (!(p.pixels = gl_poly_probe(pass))) return;
+        ScreenVert w[72];
+        memcpy(w, v, (size_t)n * sizeof *v);
+        fill_table[mode](&p, w, n, a);
+        g_poly_stale_row = stale;
+        if (!gl_poly_probe_end(pass)) return;
+    }
 }
 #endif
 
@@ -270,16 +291,18 @@ void DrawPoly(const View *view, void *verts, int n, PolyArg arg, int mode)
     int saved = g_fpu_round;
     g_fpu_round = FPU_UP;
 #ifdef OPENI76_GL
+    ScreenVert before[72];
     bool gl = gl_fill[mode] >= 0 && gl_poly_on(view->surface->pixels);
     if (gl) {
         const Surface *sf = view->surface;
         gl_poly_view(view, sf->x0, sf->y0, sf->x1, sf->y1, VIEW_ZNEAR(view));
         gl = gl_tap(sf, out, n, gl_fill[mode], arg);
+        if (gl) memcpy(before, out, (size_t)n * sizeof *out);
     }
 #endif
     fill_table[mode](view->surface, out, n, arg);
 #ifdef OPENI76_GL
-    if (gl) gl_poly_cover_end();
+    if (gl && gl_poly_cover_end()) gl_probe(view->surface, before, n, mode, arg);
 #endif
     g_fpu_round = saved;
 }

@@ -171,6 +171,7 @@ void Poly_FillGouraud(const Surface *s, ScreenVert *v, int n, uint8_t colour)
 static const uint8_t *tex_row_buf[4 + TEX_ROWS_MAX + 8];
 static const uint8_t *const *const tex_rows = tex_row_buf + 4;
 static const Texture *tex_rows_of;
+static int tex_rows_last;   /* the row the table's copies went after (h: rows 0..h - 1 are the texture's) */
 int g_poly_stale_row;
 
 static bool tex_rows_build(const Texture *t, int last)
@@ -187,8 +188,21 @@ static bool tex_rows_build(const Texture *t, int last)
     /* the copies go after row `last`, which is h but in the tiled affine filler (g_poly_stale_row). Far
        outside the table the original faults on the first one, and DrawPoly's handler catches it: nothing
        is drawn (the texture stays the cached one, its table whole but for the copies). */
+    tex_rows_last = t->h;
     if (last < -3 || last + 3 >= TEX_ROWS_MAX + 8) return false;
     for (int k = 0; k < 4; k++) rows[last + k] = rows[last - 1];
+    tex_rows_last = last;
+    return true;
+}
+
+/* The port's, for its GL backend (gl_poly.h): the table the next fill of t (tiled: the tiled affine
+   filler) reads, as the row its copies go after (rows last..last + 3 below h are row last - 1, row 0 for
+   a negative one); false when that fill builds it and faults (nothing drawn). */
+bool Poly_TexRows(const Texture *t, int tiled, int *last)
+{
+    if (t == tex_rows_of) return *last = tex_rows_last, true;
+    *last = tiled ? g_poly_stale_row : t->h;
+    if (*last < -3 || *last + 3 >= TEX_ROWS_MAX + 8) return false;
     return true;
 }
 

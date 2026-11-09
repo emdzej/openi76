@@ -1,6 +1,7 @@
 /* Polygon fillers (docs/re/render.md). */
 #pragma once
 #include "render/surface.h"
+#include <stdbool.h>
 
 /* Poly_FillFlat 0x43ea00: a convex polygon of n screen vertices in one colour, shaded once for the whole
    polygon from vertex 0's q through the lum table. */
@@ -46,6 +47,8 @@ void Poly_FillTexTiled(const Surface *s, ScreenVert *v, int n, const Texture *te
    holds the last row of the previous polygon this filler drew: the port keeps that here. (In the original,
    any other code that ran at that stack depth in between could have left another value.) */
 extern int g_poly_stale_row;
+/* the port's (GL): the row table the next fill of t reads, as the row its copies of the last row go after */
+bool Poly_TexRows(const Texture *t, int tiled, int *last);
 void Poly_FillTexPerspTiled(const Surface *s, ScreenVert *v, int n, const Texture *tex);
 void Poly_FillTexPerspTiledKey(const Surface *s, ScreenVert *v, int n, const Texture *tex);
 

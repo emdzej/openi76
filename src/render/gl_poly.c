@@ -30,6 +30,7 @@
 #include <GLES3/gl3.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -54,7 +55,12 @@ static int enabled = -1;
 static const uint8_t *frame;
 static int fw, fh, fpitch;
 static uint8_t *own, *saved;   /* own: value, owned per pixel; saved: a cover rectangle's pixels before */
-static int cx0, cy0, cx1, cy1;
+static uint8_t *doubt, *probe;   /* a cover rectangle's pixels in doubt; the probe frame (gl_poly.h) */
+static int cx0, cy0, cx1, cy1, ndoubt;
+static uint16_t *tried, fno = 1;   /* per pixel: the frame a probe found it not written (0 none), so it is not
+                                      probed again from the next frame on until it changes */
+static float shape[72][3];   /* the last recorded polygon's edges (a, b, c: a x + b y + c >= 0 inside, in pixels) */
+static int nshape;
 static bool covering, cover_dest;
 
 static Vtx *vtx;
@@ -85,6 +91,7 @@ static int nviews;
 enum { CACHE = 4096, VTX_MAX = 1 << 21 };
 typedef struct {
     const Texture *key;
+    int last;           /* the row table's (GlMaterial.rows_last): a variant of the texture each */
     GLuint tex;
     int w, h;
     uint32_t hash;
@@ -347,8 +354,12 @@ static void drawn(const Surface *sf, int x0, int y0, int x1, int y1)
     for (int y = y0; y <= y1; y++) {
         uint8_t *o = own + 2 * ((size_t)y * (size_t)fw + (size_t)x0) + 1;
         for (int x = x0; x <= x1; x++, o += 2) *o = 0;
+        memset(tried + (size_t)y * (size_t)fw + (size_t)x0, 0, (size_t)(x1 - x0 + 1) * sizeof *tried);
     }
 }
+
+static bool debug;
+bool gl_poly_debug(void) { return debug; }
 
 bool gl_poly_on(const uint8_t *pixels)
 {
@@ -359,6 +370,7 @@ bool gl_poly_on(const uint8_t *pixels)
         if (plat_param("glscale", v, sizeof v)) scale = strcmp(v, "fit") == 0 ? 0 : atoi(v) < 1 ? 1 : atoi(v) > 8 ? 8 : atoi(v);
         filter = plat_param("glfilter", v, sizeof v) && atoi(v) != 0;
         depth = plat_param("gldepth", v, sizeof v) && atoi(v) != 0;
+        debug = plat_param("gldebug", v, sizeof v) && atoi(v) != 0;
     }
     return enabled && !failed && !overflow && frame && pixels == frame;
 }
@@ -388,14 +400,12 @@ static void texture_written(const Texture *t)
 {
     uint32_t k = (uint32_t)((uintptr_t)t >> 3) * 2654435761u & (CACHE - 1);
     for (int n = 0; cache[k].key && n < CACHE; n++, k = (k + 1) & (CACHE - 1))
-        if (cache[k].key == t) {
+        if (cache[k].key == t)   /* each variant */
             cache[k].stamp = 0, cache[k].hash ^= 0x80000001u;   /* no longer this frame's, nor its hash */
-            return;
-        }
 }
 
 /* the texture's GL name, uploaded if new or changed, and its cache slot; 0 if it cannot be */
-static GLuint texture(const Texture *t, int *slot)
+static GLuint texture(const Texture *t, int last, int *slot)
 {
     if (t->w < 1 || t->h < 1 || t->w > 4096 || t->h > 4096) return 0;
     if (ncache >= CACHE / 2) {   /* full: start again */
@@ -408,7 +418,8 @@ static GLuint texture(const Texture *t, int *slot)
         ncache = 0;
     }
     uint32_t k = (uint32_t)((uintptr_t)t >> 3) * 2654435761u & (CACHE - 1);
-    while (cache[k].key && cache[k].key != t) k = (k + 1) & (CACHE - 1);
+    if (last > t->h) last = t->h;
+    while (cache[k].key && !(cache[k].key == t && cache[k].last == last)) k = (k + 1) & (CACHE - 1);
     TexEntry *e = &cache[k];
     *slot = (int)k;
     if (e->key && e->stamp == stamp) return e->tex;
@@ -428,8 +439,18 @@ static GLuint texture(const Texture *t, int *slot)
     glBindTexture(GL_TEXTURE_2D, e->tex);
     tex_params();
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, t->w, t->h, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, t->pixels);
-    e->key = t, e->w = t->w, e->h = t->h, e->hash = h, e->stamp = stamp;
+    if (last < t->h) {   /* the rows the table repeats */
+        uint8_t *c = malloc((size_t)t->w * (size_t)t->h);
+        if (!c) { glDeleteTextures(1, &e->tex); e->key = NULL; ncache--; return 0; }
+        memcpy(c, t->pixels, (size_t)t->w * (size_t)t->h);
+        const uint8_t *from = t->pixels + (size_t)(last >= 1 ? last - 1 : 0) * (size_t)t->w;
+        for (int r = last < 0 ? 0 : last; r < last + 4 && r < t->h; r++) memcpy(c + (size_t)r * (size_t)t->w, from, (size_t)t->w);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, t->w, t->h, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, c);
+        free(c);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8UI, t->w, t->h, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, t->pixels);
+    }
+    e->key = t, e->last = last, e->w = t->w, e->h = t->h, e->hash = h, e->stamp = stamp;
     return e->tex;
 }
 
@@ -458,7 +479,7 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m)
             if (!(v[i].w > 0)) return false;
     GLuint t = 0;
     int slot = -1;
-    if (m->kind >= GL_MAT_TEXTURE && !(t = texture(m->tex, &slot))) return false;
+    if (m->kind >= GL_MAT_TEXTURE && !(t = texture(m->tex, m->rows_last, &slot))) return false;
     int add = 3 * (n - 2);
     if (nvtx + add > VTX_MAX) { overflow = true; return false; }
     if (nvtx + add > capvtx) {
@@ -498,13 +519,22 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m)
         b->rect[0] = ix0, b->rect[1] = iy0, b->rect[2] = ix1 - ix0, b->rect[3] = iy1 - iy0;
     }
     if (t) b->tex = t, b->slot = slot, b->tiled = m->tiled;
+    float area = 0;   /* its edges, for the doubt (cover_end): inside by the winding */
+    for (int i = 0; i < n; i++) area += v[i].x * v[(i + 1) % n].y - v[(i + 1) % n].x * v[i].y;
+    nshape = n <= 72 ? n : 0;
+    for (int i = 0; i < nshape; i++) {
+        const GlVert *a = &v[i], *c = &v[(i + 1) % n];
+        float ex = c->x - a->x, ey = c->y - a->y, l = sqrtf(ex * ex + ey * ey), s = area < 0 ? -1.0f : 1.0f;
+        if (l <= 0) { shape[i][0] = shape[i][1] = 0, shape[i][2] = 1; continue; }
+        shape[i][0] = -ey * s / l, shape[i][1] = ex * s / l, shape[i][2] = -(shape[i][0] * a->x + shape[i][1] * a->y);
+    }
     for (int i = 1; i + 1 < n; i++) {
         const GlVert *f[3] = {&v[0], &v[i], &v[i + 1]};
         for (int k = 0; k < 3; k++) {
             Vtx *o = &vtx[nvtx++];
             float wc = m->persp ? 1.0f / f[k]->w : 1.0f;
             float z = f[k]->w * view_near;
-            o->x = f[k]->x, o->y = f[k]->y, o->z = 1.0f - 2.0f * (z < 0 ? 0 : z > 1 ? 1 : z), o->wc = wc;
+            o->x = f[k]->x, o->y = f[k]->y, o->z = depth ? 1.0f - 2.0f * (z < 0 ? 0 : z > 1 ? 1 : z) : 0.0f, o->wc = wc;
             o->u = f[k]->u, o->v = f[k]->v, o->sw = f[k]->shade * wc, o->wc2 = wc;
             o->kind = (uint8_t)m->kind, o->colour = m->colour, o->tiled = m->tiled, o->op = (uint8_t)m->op;
         }
@@ -526,23 +556,63 @@ void gl_poly_cover_begin(int x0, int y0, int x1, int y1, bool reads_dest)
     covering = true;
 }
 
-void gl_poly_cover_end(void)
+/* within a pixel and a half of the recorded polygon (the fillers' edges round differently) */
+static bool near_shape(float x, float y)
 {
-    if (!covering) return;
-    covering = false;
-    int w = cx1 - cx0 + 1;
-    for (int y = cy0; y <= cy1; y++) {
-        const uint8_t *now = frame + (size_t)y * (size_t)fpitch + cx0, *was = saved + (size_t)(y - cy0) * (size_t)w;
-        uint8_t *o = own + 2 * ((size_t)y * (size_t)fw + (size_t)cx0);
-        for (int x = 0; x < w; x++, o += 2)
-            if (now[x] != was[x]) {
-                if (!cover_dest || (o[1] && o[0] == was[x])) o[0] = now[x], o[1] = 1;
-                else o[1] = 0;
-            }
-    }
+    for (int i = 0; i < nshape; i++)
+        if (shape[i][0] * x + shape[i][1] * y + shape[i][2] < -1.5f) return false;
+    return true;
 }
 
-static void next_frame(const uint8_t *pixels, int w, int h, int pitch)
+int gl_poly_cover_end(void)
+{
+    if (!covering) return 0;
+    covering = false;
+    int w = cx1 - cx0 + 1;
+    ndoubt = 0;
+    for (int y = cy0; y <= cy1; y++) {
+        const uint8_t *now = frame + (size_t)y * (size_t)fpitch + cx0, *was = saved + (size_t)(y - cy0) * (size_t)w;
+        uint8_t *o = own + 2 * ((size_t)y * (size_t)fw + (size_t)cx0), *d = doubt + (size_t)(y - cy0) * (size_t)w;
+        for (int x = 0; x < w; x++, o += 2) {
+            d[x] = 0;
+            if (now[x] != was[x]) {
+                tried[(size_t)y * (size_t)fw + (size_t)(cx0 + x)] = 0;
+                if (!cover_dest || (o[1] && o[0] == was[x])) o[0] = now[x], o[1] = 1;
+                else o[1] = 0;
+            } else if (!cover_dest && !(o[1] && o[0] == now[x]) && near_shape((float)(cx0 + x), (float)y) &&
+                       !(tried[(size_t)y * (size_t)fw + (size_t)(cx0 + x)] && tried[(size_t)y * (size_t)fw + (size_t)(cx0 + x)] != fno)) {
+                d[x] = 1, ndoubt++;
+            }
+        }
+    }
+    return ndoubt;
+}
+
+uint8_t *gl_poly_probe(int pass)
+{
+    if (!ndoubt || !probe) return NULL;
+    for (int y = cy0; y <= cy1; y++) memset(probe + (size_t)y * (size_t)fpitch + cx0, pass ? 0xff : 0, (size_t)(cx1 - cx0 + 1));
+    return probe;
+}
+
+int gl_poly_probe_end(int pass)
+{
+    int w = cx1 - cx0 + 1;
+    uint8_t v = pass ? 0xff : 0;
+    for (int y = cy0; y <= cy1 && ndoubt; y++) {
+        const uint8_t *p = probe + (size_t)y * (size_t)fpitch + cx0, *now = frame + (size_t)y * (size_t)fpitch + cx0;
+        uint8_t *o = own + 2 * ((size_t)y * (size_t)fw + (size_t)cx0), *d = doubt + (size_t)(y - cy0) * (size_t)w;
+        for (int x = 0; x < w; x++, o += 2)
+            if (d[x] && p[x] != v) o[0] = now[x], o[1] = 1, d[x] = 0, ndoubt--;
+            else if (d[x] && pass) tried[(size_t)y * (size_t)fw + (size_t)(cx0 + x)] = fno;   /* not written */
+    }
+    return ndoubt;
+}
+
+/* the next frame: the ownership plane is kept (the frame is not cleared between frames, so a pixel a fill
+   draws again with the value it had stays the fill's), but when nothing was drawn by GL (a movie, a menu:
+   the frame is someone else's) */
+static void next_frame(const uint8_t *pixels, int w, int h, int pitch, bool keep)
 {
     nvtx = nbatch = 0;
     overflow = false;
@@ -550,17 +620,20 @@ static void next_frame(const uint8_t *pixels, int w, int h, int pitch)
     stamp++;
     if (ndead) glDeleteTextures(ndead, dead), ndead = 0;
     if (pixels != frame || w != fw || h != fh || pitch != fpitch) {
-        free(own), free(saved);
-        own = calloc((size_t)w * (size_t)h, 2), saved = malloc((size_t)w * (size_t)h);
-        frame = own && saved ? pixels : NULL, fw = w, fh = h, fpitch = pitch;
-    } else if (own) {
+        free(own), free(saved), free(doubt), free(probe), free(tried);
+        own = calloc((size_t)w * (size_t)h, 2), saved = malloc((size_t)w * (size_t)h), doubt = malloc((size_t)w * (size_t)h);
+        probe = malloc((size_t)pitch * (size_t)h), tried = calloc((size_t)w * (size_t)h, sizeof *tried);
+        frame = own && saved && doubt && probe && tried ? pixels : NULL, fw = w, fh = h, fpitch = pitch;
+    } else if (own && !keep) {
         memset(own, 0, (size_t)w * (size_t)h * 2);
+        memset(tried, 0, (size_t)w * (size_t)h * sizeof *tried);
     }
+    if (!++fno) fno = 1;
 }
 
 void gl_poly_discard(void)
 {
-    if (frame) next_frame(frame, fw, fh, fpitch);
+    if (frame) next_frame(frame, fw, fh, fpitch, nbatch > 0);
 }
 
 /* a rectangle of the frame in the framebuffer's pixels, outward */
@@ -784,6 +857,6 @@ bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, const uint8
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         *out = (GlPolyFrame){index_tex, colour_tex, own_tex, hw, hh};
     }
-    next_frame(pixels, w, h, pitch);
+    next_frame(pixels, w, h, pitch, have);
     return have;
 }
