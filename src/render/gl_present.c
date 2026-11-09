@@ -96,11 +96,29 @@ static bool init(void)
 }
 
 /* The largest 4:3 rectangle in the drawable, centred (the rest black). */
-static void viewport_43(int dw, int dh)
+static void rect_43(int dw, int dh, int r[4])
 {
     int w = dw, h = dw * 3 / 4;
     if (h > dh) h = dh, w = dh * 4 / 3;
-    glViewport((dw - w) / 2, (dh - h) / 2, w, h);
+    r[0] = (dw - w) / 2, r[1] = (dh - h) / 2, r[2] = w, r[3] = h;
+}
+
+static void viewport_43(int dw, int dh)
+{
+    int r[4];
+    rect_43(dw, dh, r);
+    glViewport(r[0], r[1], r[2], r[3]);
+}
+
+bool gl_present_to_frame(float x, float y, int dw, int dh, float *fx, float *fy)
+{
+    if (tex_w <= 0 || dw <= 0 || dh <= 0) return false;
+    int r[4];
+    rect_43(dw, dh, r);
+    if (r[2] <= 0 || r[3] <= 0) return false;
+    *fx = (x - (float)r[0]) * (float)tex_w / (float)r[2];
+    *fy = (y - (float)r[1]) * (float)tex_h / (float)r[3];   /* the rectangle is centred: GL's flip is the same */
+    return true;
 }
 
 static void draw(int dw, int dh)

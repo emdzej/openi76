@@ -463,6 +463,13 @@ bool plat_pointer(int *x, int *y, uint32_t *buttons)
     float fx, fy;
     memcpy(&fx, ptr + GASM_POINTER_OFF_FX, 4);
     memcpy(&fy, ptr + GASM_POINTER_OFF_FY, 4);
+#ifdef OPENI76_GL
+    /* the runner's frame position is video_present's; under GL the frame's place is ours (gl_present.c) */
+    float dx, dy;
+    memcpy(&dx, ptr + GASM_POINTER_OFF_X, 4);
+    memcpy(&dy, ptr + GASM_POINTER_OFF_Y, 4);
+    if (!gl_present_to_frame(dx, dy, (int)gasm_gl_width(), (int)gasm_gl_height(), &fx, &fy)) return false;
+#endif
     memcpy(buttons, ptr + GASM_POINTER_OFF_BUTTONS, 4);
     *x = (int)fx, *y = (int)fy;
     return true;

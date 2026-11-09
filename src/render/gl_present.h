@@ -12,6 +12,9 @@ bool gl_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pa
    from one frame to the next, as WebGL's). */
 void gl_present_repeat(int dw, int dh);
 
+/* A drawable position (pixels, top first) in the last frame's pixels; false before the first frame. */
+bool gl_present_to_frame(float x, float y, int dw, int dh, float *fx, float *fy);
+
 /* The platform's log, for GL's errors (platform_gasm.c). */
 void gl_present_log(const char *what, const char *detail);
 
