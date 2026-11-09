@@ -118,7 +118,7 @@ static void normalise(float out[3], const float v[3])
 }
 
 
-/* the frame turned by yaw and pitch degrees first, each only when positive (as integer bits) */
+/* 0x45acc0: the frame turned by yaw and pitch degrees first, each only when positive (as integer bits) */
 static void turn(Frame *f, float yaw, float pitch)
 {
     Frame y, p, t;
@@ -493,6 +493,7 @@ static void hit_effect(Node *s, const float at[3], Node *who, int32_t cls)
     if (x) hit_sound(g_ordnance[k].fx[f].sound, x);
 }
 
+/* 0x4609d0 */
 static int fly_gun(Node *s, float t)
 {
     uint8_t *r = s->data;

@@ -73,7 +73,7 @@ int Joy_GetPos(int id, uint32_t pos[3], uint32_t *buttons)
     return 0;
 }
 
-/* the kind (the game's 0x483d50, the shell's i76shell 0x10002860): by the OEM name, else by the caps and
+/* 0x483d50 (the shell's i76shell 0x10002860), the kind: by the OEM name, else by the caps and
    the button count; a four-way hat has JOYCAPS_POV4DIR with HASPOV */
 static const char *kind(const char *oem, const JoyCaps *c, const JoyStrings *s)
 {
@@ -85,7 +85,7 @@ static const char *kind(const char *oem, const JoyCaps *c, const JoyStrings *s)
     return s->kind[4];
 }
 
-/* the game's 0x4831a0 and the shell's i76shell 0x10001b50: joystick i+1, its title the OEM name (else
+/* 0x4831a0 (the shell's i76shell 0x10001b50): joystick i+1, its title the OEM name (else
    "Joystick %d"), its axes Down/Up and Left/Right, then Throttle (Head Roll on a tracker), Rudder, 5th and
    6th by the caps; its buttons "Button%d", then a hat's four */
 int Joy_Describe(int i, JoyDesc *d, const JoyStrings *s)

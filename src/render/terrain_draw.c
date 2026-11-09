@@ -291,6 +291,7 @@ static void take(TNode *to, int slot, int flag, TNode *from1, int v1, TNode *fro
     to->count++;
 }
 
+/* stitch 0x48f360, by the side's row of the table above */
 static void stitch(TNode *a, TNode *b, int side)
 {
     const Stitch *t = &stitch_side[side >> 2];
@@ -507,7 +508,7 @@ static void patch_poly(int n, const int16_t *vi, const int *slots, const TerrLev
     }
 }
 
-/* the untextured renderer's polygon (0x48f7b0): colour 0xb4 by the shade q, type 0, queued at its farthest
+/* 0x48f7b0, the untextured renderer's polygon: colour 0xb4 by the shade q, type 0, queued at its farthest
    vertex once clipped and projected in place with the clip of mode 0 (the record's mode then 0xe8; a
    record not clipped in keeps the queue's last mode, unused) */
 static void flat_poly(int n, const int16_t *vi, const int *slots, const TerrLevel *l, float du, float dv,
