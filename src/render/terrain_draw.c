@@ -507,6 +507,34 @@ static void patch_poly(int n, const int16_t *vi, const int *slots, const TerrLev
     }
 }
 
+/* the untextured renderer's polygon (0x48f7b0): colour 0xb4 by the shade q, type 0, queued at its farthest
+   vertex once clipped and projected in place with the clip of mode 0 (the record's mode then 0xe8; a
+   record not clipped in keeps the queue's last mode, unused) */
+static void flat_poly(int n, const int16_t *vi, const int *slots, const TerrLevel *l, float du, float dv,
+                      float q)
+{
+    (void)slots, (void)l, (void)du, (void)dv;
+    QRec *r = Queue_New();
+    r->type = 0;
+    r->arg.colour = 0xb4;
+    for (int k = 0; k < n; k++) {
+        const float *p = verts[vi[k]];
+        CamVert *v = &r->u.v[k];
+        v->x = p[0], v->y = p[1], v->z = p[2];
+        v->q = q;
+    }
+    r->n = n;
+    float z = r->u.v[0].z;
+    for (int k = 1; k < n; k++)
+        if (!below_eq(SUB(r->u.v[k].z, z), 0.0)) z = r->u.v[k].z;
+    r->z = z;
+    r->n = Draw_Clip(cur_view, r->u.v, r->u.v, n, 0);
+    if (r->n) {
+        Queue_Add(r->z);
+        r->mode = 0xe8;
+    }
+}
+
 /* a plane's d below zero by its bits (as unsigned, above 0x80000000): the camera on its front side */
 static bool facing(const float p[4])
 {
@@ -520,10 +548,12 @@ static bool facing(const float p[4])
    quad when its two triangles (v0 v2 v4, v0 v4 v6) are near coplanar (their normals' dot above 0.995) and
    both face the camera, else each triangle that faces it; one with midpoints is a fan about its last
    midpoint over its other vertices, each triangle that faces the camera. A polygon's shade is from its
-   first plane and its first vertex's depth. */
+   first plane and its first vertex's depth. Without DET_TERRTEX the original runs 0x48f7b0 instead: the
+   same leaves, planes, tests and shades, each polygon flat in colour 0xb4 (flat_poly). */
 static void draw_patches(void)
 {
-    if (!g_detail.b[DET_TERRTEX]) return;   /* 0x48f7b0 is not ported yet */
+    void (*emit)(int, const int16_t *, const int *, const TerrLevel *, float, float, float) =
+        g_detail.b[DET_TERRTEX] ? patch_poly : flat_poly;
     const float *m = cur_view->cam.m, *s = g_sun;
     g_terr_sun[0] = F32(ADD(ADD(MUL(m[3], s[1]), MUL(m[6], s[2])), MUL(m[0], s[0])));
     g_terr_sun[1] = F32(ADD(ADD(MUL(m[7], s[2]), MUL(m[1], s[0])), MUL(m[4], s[1])));
@@ -542,20 +572,20 @@ static void draw_patches(void)
                 float q = F32(Terrain_Shade(p1[0], p1[1], p1[2], verts[t->v[0]][2]));
                 float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));   /* 0x4a7564 */
                 int16_t vi[4] = {t->v[0], t->v[2], t->v[4], t->v[6]};
-                patch_poly(4, vi, (const int[]){0, 2, 4, 6}, l, du, dv, q);
+                emit(4, vi, (const int[]){0, 2, 4, 6}, l, du, dv, q);
                 continue;
             }
             if (f1) {
                 float q = F32(Terrain_Shade(p1[0], p1[1], p1[2], verts[t->v[0]][2]));
                 float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));
                 int16_t vi[3] = {t->v[0], t->v[2], t->v[4]};
-                patch_poly(3, vi, (const int[]){0, 2, 4}, l, du, dv, q);
+                emit(3, vi, (const int[]){0, 2, 4}, l, du, dv, q);
             }
             if (f2) {
                 float q = F32(Terrain_Shade(p2[0], p2[1], p2[2], verts[t->v[0]][2]));
                 float du = F32(MUL(t->x & 7, 0.125f)), dv = F32(MUL(t->z & 7, 0.125f));
                 int16_t vi[3] = {t->v[0], t->v[4], t->v[6]};
-                patch_poly(3, vi, (const int[]){0, 4, 6}, l, du, dv, q);
+                emit(3, vi, (const int[]){0, 4, 6}, l, du, dv, q);
             }
             continue;
         }
@@ -570,7 +600,7 @@ static void draw_patches(void)
             if (facing(p)) {
                 float q = F32(Terrain_Shade(p[0], p[1], p[2], verts[t->v[pivot]][2]));
                 int16_t vi[3] = {t->v[pivot], t->v[b], t->v[c]};
-                patch_poly(3, vi, (const int[]){pivot, b, c}, l, du, dv, q);
+                emit(3, vi, (const int[]){pivot, b, c}, l, du, dv, q);
             }
             b = c;
             c = NEXT_V(c);

@@ -3,9 +3,10 @@ original's 0x48ffa0, run by Terrain_Draw 0x48e8d0 in both over random views of r
 with random suns, ambients and depth falloffs. The textures' set-up (Terrain_LoadTextures 0x48e550, the
 original's Res_Get stubbed) must leave the same levels; then both queues are flushed (0x48d820) and every
 polygon drawn (DrawPoly 0x43d730 stubbed: its texture, mode and screen-space vertices, in order) must be
-identical, as must the sun in camera space (0x5824b0) and the ambient (0x5824a0).
+identical, as must the sun in camera space (0x5824b0) and the ambient (0x5824a0). With --flat the detail
+byte 0x5e14db is cleared after the textures' set-up, so both run the untextured renderer (0x48f7b0).
 
-  .deps/emu-venv/bin/python tools/emu/diff_terrpatch.py [count] [seed] [--down]
+  .deps/emu-venv/bin/python tools/emu/diff_terrpatch.py [count] [seed] [--down] [--flat]
 """
 import ctypes
 import math
@@ -35,6 +36,9 @@ def f32(x):
 
 
 def main():
+    flat = "--flat" in sys.argv
+    if flat:
+        sys.argv.remove("--flat")
     exe, lib, argv, down = setup()
     count = int(argv[1]) if len(argv) > 1 else 200
     rng = random.Random(int(argv[2]) if len(argv) > 2 else 76)
@@ -75,6 +79,9 @@ def main():
         bad_l += w[:0x60] != bytes(l.uv) or struct.unpack_from("<i", w, 0x64)[0] != l.mode
     print(f"diff_terrpatch ({'down' if down else 'nearest'}): levels {7 - bad_l}/7 identical "
           f"(modes {[l.mode for l in levels]}, {len(calls)} textures)")
+    if flat:   # the untextured renderer (0x48f7b0) in both
+        exe.write(0x5E14DB, b"\x00")
+        (ctypes.c_uint8 * 14).in_dll(lib, "g_detail")[0xB] = 0
 
     # the queues
     exe.stub(0x44F600, lambda size, flags: exe.put(bytes(size)), 2)
@@ -115,6 +122,17 @@ def main():
         mode.value = 1 if down else 0
         lib.Terrain_Draw(ctypes.byref(v))
         lib.Queue_Flush(ctypes.byref(v), 0)
+        if flat:   # the untextured records' u, v are never set (the queue record's leftovers, interpolated by the
+            # clip) and the flat filler does not read them: only x, y, w and the shade are compared
+            def strip(polys):
+                out = []
+                for a, n, m, vb in polys:
+                    f = list(struct.unpack(f"<{6 * n}f", vb))
+                    for k in range(n):
+                        f[6 * k + 3] = f[6 * k + 4] = 0.0
+                    out.append((a, n, m, struct.pack(f"<{6 * n}f", *f)))
+                return out
+            want[:], got[:] = strip(want), strip(got)
         same = want == got
         same &= exe.read(0x5824B0, 12) == bytes(tsun) and exe.read(0x5824A0, 4) == bytes(amb)
         polys += len(want)
@@ -128,7 +146,7 @@ def main():
                 if j is not None:
                     print("   ", struct.unpack(f"<{6 * want[j][1]}f", want[j][3]))
                     print("   ", struct.unpack(f"<{6 * got[j][1]}f", got[j][3]))
-    print(f"diff_terrpatch ({'down' if down else 'nearest'}): {count - bad}/{count} identical "
+    print(f"diff_terrpatch ({'down' if down else 'nearest'}{', flat' if flat else ''}): {count - bad}/{count} identical "
           f"({drawn} drawn, {polys} polygons)")
     del keep, poly
     sys.exit(1 if bad or bad_l else 0)

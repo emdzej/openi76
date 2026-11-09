@@ -192,7 +192,14 @@ Called from WinMain, and from 0x44ca74 through 0x48e690 (free, then load). It do
 - It returns `l·f + ambient`.
 - The plane is the polygon's first, and z is the depth of its first vertex (for a fan, the pivot).
 
-## Not ported yet
+## The untextured patch drawer (0x48f7b0)
 
-- The other patch drawer 0x48f7b0 (0x5e14db clear); with it, Terrain_Draw draws nothing.
-- The scrounge objects 0x48e120.
+With the detail byte 0x5e14db clear (the terrain's textures off), Terrain_Draw's last step is 0x48f7b0
+instead of 0x48ffa0. It walks the same leaves with the same planes, tests and shades, and the same quad,
+triangle and fan cases. Each polygon is type 0 in colour 0xb4 (shaded through the lum table by its q),
+clipped and projected with the clip of mode 0, then queued at its farthest vertex with the mode 0xe8.
+Its vertices' u and v are never written: they keep the queue record's last contents, which the clip
+interpolates and the flat filler never reads. `tools/emu/diff_terrpatch.py --flat` finds the port's
+polygons identical (x, y, w and the shade; 300 views at each rounding).
+
+The world list (0x48e120, World_Add) is in docs/re/objects.md.
