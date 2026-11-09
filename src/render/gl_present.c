@@ -202,7 +202,7 @@ bool gl_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pa
     glBindTexture(GL_TEXTURE_2D, pal_tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 
-    if (!gl_poly_compose(pixels, w, h, pitch, pal_tex, dw, dh, &poly)) poly.index = 0;
+    if (!gl_poly_compose(pixels, w, h, pitch, pal, pal_tex, dw, dh, &poly)) poly.index = 0;
     draw(dw, dh);
     return true;
 }

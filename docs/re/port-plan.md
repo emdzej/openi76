@@ -230,15 +230,29 @@ Write one page per format under `docs/formats/` (internal; not published).
      pixel's colour through the frame's palette; filtered, it blends four texels (centres at k + 0.5) and
      two shade rows (the flat fillers' row is held mid-row, so stays one), each tap through the same
      tables, a keyed texel left out of the blend, while the index and the discard stay the nearest texel's
-     (the destination ops read the index). `gldepth=1`: a depth of 1/z, window depth 1 - w·near (linear in
-     screen space as w is, so the affine fillers' polygons get it right too), LEQUAL; the destination ops
-     test without writing, pulled to the camera by a polygon offset (the shadows lie in the ground's
-     plane and failed the test without it); a view's rectangle is cleared at its first polygon of the
-     frame (the mirror's, the cockpit's). Checked: `glpoly=1` alone still differs from the software frame
+     (the destination ops read the index). Filtered textures are mip-mapped: each has an RGBA copy made at
+     presentation through the frame's palette (a pass of its own; 0xff with alpha 0, premultiplied, so a
+     keyed texture's holes drop out of the average; made again when the palette changes) and mip-mapped
+     by GL, trilinear and up to 8x anisotropic. Where a pixel spans more than a texel the shader moves to
+     it from the exact taps, the shade row then an affine fit of the lum row to the palette (out = a·in +
+     b per channel, least squares over the 256 colours, each frame). The ops that read the destination
+     keep the exact taps. `gldepth=1`: a depth of 1/z, window depth 1 - w·near (linear in
+     screen space as w is, so the affine fillers' polygons get it right too), LEQUAL. Only what the
+     queue's flush draws as objects (and its records past type 1) writes it, the flush telling the
+     backend (queue.c, GL-only): the ground (records 0 and 1, the terrain and the roads) and what is
+     drawn outside the queue (the sky) test only, keeping the queue's order among themselves, since the
+     roads lie in the terrain's plane and close up below it (offsets do not help: an absolute offset is
+     nothing close up in 1/z, and a relative one of 2% was not enough). The destination ops test
+     without writing, pulled to the camera by a polygon offset (the shadows lie in the ground's plane).
+     A view's rectangle is cleared at its first polygon of the frame (the mirror's, the cockpit's). The
+     2D seam also reports blits into a texture's pixels (the cockpit's rolling counters are written into
+     the panel's texture), which the sampled hash missed: such a texture is uploaded again at its next
+     use, the frame's earlier polygons keeping the old one. Checked: `glpoly=1` alone still differs from the software frame
      in 0.48% of t01's static view (step 3's); with all three, t01's frame 3000 (the 3D cockpit, the
-     panels, the Fireworks' car and its shadow) reads as the software frame, smoothed. Not done: mip-maps
-     (far textures shimmer when filtered); the sky and the tiled affine filler's polygons stay software's,
-     at the frame's resolution.
+     panels, the Fireworks' car and its shadow) reads as the software frame, smoothed. The counters' digits now match the software's (they showed a
+     stale digit since step 2). Speed unchanged within noise (78-85 frames/s headless, the software fill
+     is the cost). Not done: the tiled affine filler's polygons stay software's, at the frame's
+     resolution.
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.
 

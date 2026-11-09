@@ -6,7 +6,7 @@
 
    The textures go up as R8UI textures, cached by the record's address and checked once a frame by a
    sampled hash of their size and pixels (a texture freed and another loaded at the same address shows as a
-   new one; a change of a few texels might not). The colour block goes up each frame.
+   new one; a change of a few texels might not, so the 2D seam's blits into a texture mark it changed). The colour block goes up each frame.
 
    A polygon whose op reads the destination is drawn on its own, after its rectangle of the framebuffer is
    blitted into a second texture the shader reads (GL has no read of the pixel it writes); the shadows
@@ -17,7 +17,14 @@
    palette, from four texels and two shade rows when filtered (each tap through the same tables, a keyed
    texel left out of the blend; whether the pixel is drawn stays the nearest texel's); and a depth test of
    1/z (window depth 1 - w * near, linear in screen space as w is, so the fillers' affine polygons get it
-   right too), the ops that read the destination testing without writing. */
+   right too), the ops that read the destination testing without writing.
+
+   Filtered textures are mip-mapped: an index cannot be averaged, so each texture has an RGBA copy, made at
+   presentation through the frame's palette by a pass of its own (0xff with alpha 0, premultiplied, so the
+   keyed texels drop out of the average) and mip-mapped by GL. Where a pixel spans more than a texel the
+   shader moves from the exact taps to it, with the shade row as an affine fit of the lum row to the
+   palette (out = a * in + b per channel, a least-squares fit over the 256 colours: the lum rows blend
+   towards black and the haze). The ops that read the destination keep the exact taps. */
 #include "render/gl_poly.h"
 #include "platform.h"
 #include <GLES3/gl3.h>
@@ -38,6 +45,9 @@ typedef struct {
     int op;       /* a destination op's polygon is a batch of its own, its rectangle copied first */
     int rect[4];  /* x, y, w, h */
     int clear[4]; /* with the depth: a view's rectangle cleared first (w > 0) */
+    int slot;     /* the texture's cache entry (its mip-mapped copy), -1 none */
+    bool tiled;
+    int layer;    /* GL_LAYER_* */
 } Batch;
 
 static int enabled = -1;
@@ -55,7 +65,10 @@ static bool overflow;   /* too much recorded (frames drawn and never presented):
 
 static bool ready, failed;
 static GLuint prog, vao, vbo, fbo, dest_fbo, stencil_rb, index_tex, own_tex, rtab_tex, dest_tex, colour_tex;
-static GLint u_scale, u_tex, u_rtab, u_dest, u_pal, u_filter;
+static GLint u_scale, u_tex, u_rtab, u_dest, u_pal, u_filter, u_mip, u_tint, u_mipped;
+static GLuint mip_prog, mip_fbo, mip_vao, tint_tex, samplers[2];   /* samplers: clamped, repeated */
+static GLint um_src, um_pal;
+static uint32_t pal_hash;
 static int tex_w, tex_h, hw, hh;   /* tex: the frame's size the textures have; hw, hh: the framebuffer's */
 
 static int scale = 1;          /* glscale: 0 fit */
@@ -64,6 +77,7 @@ static const void *view_key;   /* the current view's, and the views met this fra
 static int view_rect[4];
 static float view_near = 0.1f;
 static bool view_new;
+static int layer;
 enum { VIEWS = 16 };
 static const void *views[VIEWS];
 static int nviews;
@@ -75,6 +89,8 @@ typedef struct {
     int w, h;
     uint32_t hash;
     unsigned stamp;
+    GLuint rgba;        /* the mip-mapped copy, 0 none yet */
+    uint32_t rgba_pal;  /* the palette's hash it was made with */
 } TexEntry;
 static TexEntry cache[CACHE];
 static int ncache;
@@ -109,7 +125,9 @@ static const char FS[] =
     "uniform highp usampler2D u_rtab;\n"
     "uniform highp usampler2D u_dest;\n"
     "uniform sampler2D u_pal;\n"
-    "uniform bool u_filter;\n"
+    "uniform sampler2D u_mip;\n"
+    "uniform highp sampler2D u_tint;\n"
+    "uniform bool u_filter, u_mipped;\n"
     "in vec4 v_tex;\n"
     "flat in uvec4 v_mat;\n"
     "layout(location = 0) out uvec4 o;\n"
@@ -132,6 +150,7 @@ static const char FS[] =
     "    return texelFetch(u_tex, t, 0).r;\n"
     "}\n"
     "void main() {\n"
+    "    vec2 dx = dFdx(v_tex.xy), dy = dFdy(v_tex.xy);\n"   /* in uniform control flow, before any discard */
     "    uint i = v_mat.y, op = v_mat.w, cov = 1u;\n"
     "    bool tex = v_mat.x >= 2u, shaded = v_mat.x == 1u || v_mat.x == 3u, keyed = op == 1u || op == 4u;\n"
     "    ivec2 sz = tex ? textureSize(u_tex, 0) : ivec2(1);\n"
@@ -153,6 +172,23 @@ static const char FS[] =
        stays one row) */
     "    vec2 f = tex ? v_tex.xy - 0.5 : vec2(0.0), t0 = floor(f), fr = f - t0;\n"
     "    float sc = s - 0.5, r0 = floor(sc), fs = shaded ? sc - r0 : 0.0;\n"
+    /* how far past a texel a pixel spans: 0 up close (the exact taps), 1 from two texels (the mip-map) */
+    "    float lod = 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8));\n"
+    "    float m = tex && u_mipped && op <= 1u ? clamp(lod, 0.0, 1.0) : 0.0;\n"
+    "    vec3 mc = vec3(0.0);\n"
+    "    if (m > 0.0) {\n"
+    "        vec2 isz = 1.0 / vec2(sz);\n"
+    "        vec4 p = textureGrad(u_mip, v_tex.xy * isz, dx * isz, dy * isz);\n"
+    "        vec3 base = keyed ? (p.a > 0.0 ? p.rgb / p.a : pal(r)) : p.rgb + (1.0 - p.a) * pal(255u);\n"
+    "        if (shaded) {\n"
+    "            int ra = int(r0) & 255, rb = (int(r0) + 1) & 255;\n"
+    "            vec3 a = mix(texelFetch(u_tint, ivec2(ra, 0), 0).rgb, texelFetch(u_tint, ivec2(rb, 0), 0).rgb, fs);\n"
+    "            vec3 b = mix(texelFetch(u_tint, ivec2(ra, 1), 0).rgb, texelFetch(u_tint, ivec2(rb, 1), 0).rgb, fs);\n"
+    "            base = clamp(a * base + b, 0.0, 1.0);\n"
+    "        }\n"
+    "        mc = base;\n"
+    "        if (m >= 1.0) { c = vec4(mc, 1.0); return; }\n"
+    "    }\n"
     "    vec3 sum = vec3(0.0);\n"
     "    float wsum = 0.0;\n"
     "    for (int k = 0; k < 4; k++) {\n"
@@ -165,7 +201,25 @@ static const char FS[] =
     "        if (fs > 0.0) a = mix(a, pal(line(ti, int(r0) + 1, d)), fs);\n"
     "        sum += w * a, wsum += w;\n"
     "    }\n"
-    "    c = vec4(wsum > 0.0 ? sum / wsum : pal(r), 1.0);\n"
+    "    c = vec4(mix(wsum > 0.0 ? sum / wsum : pal(r), mc, m), 1.0);\n"
+    "}\n";
+
+/* the mip-mapped copy's level 0: the texture through the palette, premultiplied, 0xff transparent */
+static const char MIP_VS[] =
+    "#version 300 es\n"
+    "void main() {\n"
+    "    vec2 p = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));\n"
+    "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
+    "}\n";
+static const char MIP_FS[] =
+    "#version 300 es\n"
+    "precision mediump float;\n"
+    "uniform highp usampler2D u_src;\n"
+    "uniform sampler2D u_pal;\n"
+    "out vec4 o;\n"
+    "void main() {\n"
+    "    uint i = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).r;\n"
+    "    o = i == 255u ? vec4(0.0) : vec4(texelFetch(u_pal, ivec2(int(i), 0), 0).rgb, 1.0);\n"
     "}\n";
 
 static void log_gl(const char *what, const char *detail)
@@ -200,23 +254,44 @@ static void tex_params(void)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
-static bool init(void)
+static GLuint program(const char *vsrc, const char *fsrc)
 {
-    GLuint vs = shader(GL_VERTEX_SHADER, VS), fs = shader(GL_FRAGMENT_SHADER, FS);
-    if (!vs || !fs) return false;
-    prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
-    glLinkProgram(prog);
+    GLuint vs = shader(GL_VERTEX_SHADER, vsrc), fs = shader(GL_FRAGMENT_SHADER, fsrc);
+    if (!vs || !fs) return 0;
+    GLuint p = glCreateProgram();
+    glAttachShader(p, vs);
+    glAttachShader(p, fs);
+    glLinkProgram(p);
     glDeleteShader(vs);
     glDeleteShader(fs);
     GLint ok = 0;
-    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+    glGetProgramiv(p, GL_LINK_STATUS, &ok);
     if (!ok) {
         char log[512] = {0};
-        glGetProgramInfoLog(prog, sizeof log - 1, NULL, log);
+        glGetProgramInfoLog(p, sizeof log - 1, NULL, log);
         log_gl("link", log);
-        return false;
+        return 0;
+    }
+    return p;
+}
+
+static bool init(void)
+{
+    if (!(prog = program(VS, FS)) || !(mip_prog = program(MIP_VS, MIP_FS))) return false;
+    um_src = glGetUniformLocation(mip_prog, "u_src");
+    um_pal = glGetUniformLocation(mip_prog, "u_pal");
+    glGenFramebuffers(1, &mip_fbo);
+    glGenVertexArrays(1, &mip_vao);
+    glGenSamplers(2, samplers);
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    GLfloat aniso = 0;
+    if (ext && strstr(ext, "texture_filter_anisotropic")) glGetFloatv(0x84ff /* MAX_TEXTURE_MAX_ANISOTROPY */, &aniso);
+    for (int i = 0; i < 2; i++) {
+        glSamplerParameteri(samplers[i], GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glSamplerParameteri(samplers[i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_S, i ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        glSamplerParameteri(samplers[i], GL_TEXTURE_WRAP_T, i ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        if (aniso > 1) glSamplerParameterf(samplers[i], 0x84fe /* TEXTURE_MAX_ANISOTROPY */, aniso < 8 ? aniso : 8);
     }
     u_scale = glGetUniformLocation(prog, "u_scale");
     u_tex = glGetUniformLocation(prog, "u_tex");
@@ -224,6 +299,13 @@ static bool init(void)
     u_dest = glGetUniformLocation(prog, "u_dest");
     u_pal = glGetUniformLocation(prog, "u_pal");
     u_filter = glGetUniformLocation(prog, "u_filter");
+    u_mip = glGetUniformLocation(prog, "u_mip");
+    u_tint = glGetUniformLocation(prog, "u_tint");
+    u_mipped = glGetUniformLocation(prog, "u_mipped");
+    glGenTextures(1, &tint_tex);
+    glBindTexture(GL_TEXTURE_2D, tint_tex);
+    tex_params();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 256, 2, 0, GL_RGBA, GL_FLOAT, NULL);
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glBindVertexArray(vao);
@@ -249,9 +331,15 @@ static bool init(void)
 
 /* the 2D drawing's rectangle on the frame (surface.h's seam): its pixels are software's again, as the
    value check cannot see a pixel drawn over with the value it had */
+static void texture_written(const Texture *t);
+
 static void drawn(const Surface *sf, int x0, int y0, int x1, int y1)
 {
-    if (!own || sf->pixels != frame) return;
+    if (sf->pixels != frame) {   /* a blit into a texture (the cockpit's counters roll in the panel's) */
+        if (sf->pixels) texture_written((const Texture *)(const void *)(sf->pixels - offsetof(Texture, pixels)));
+        return;
+    }
+    if (!own) return;
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
     if (x1 >= fw) x1 = fw - 1;
@@ -294,27 +382,48 @@ static void kill_tex(GLuint t)
     dead[ndead++] = t;
 }
 
-/* the texture's GL name, uploaded if new or changed; 0 if it cannot be */
-static GLuint texture(const Texture *t)
+/* the 2D seam's write into a texture's pixels: its next use uploads it again (the sampled hash would miss
+   a few texels) */
+static void texture_written(const Texture *t)
+{
+    uint32_t k = (uint32_t)((uintptr_t)t >> 3) * 2654435761u & (CACHE - 1);
+    for (int n = 0; cache[k].key && n < CACHE; n++, k = (k + 1) & (CACHE - 1))
+        if (cache[k].key == t) {
+            cache[k].stamp = 0, cache[k].hash ^= 0x80000001u;   /* no longer this frame's, nor its hash */
+            return;
+        }
+}
+
+/* the texture's GL name, uploaded if new or changed, and its cache slot; 0 if it cannot be */
+static GLuint texture(const Texture *t, int *slot)
 {
     if (t->w < 1 || t->h < 1 || t->w > 4096 || t->h > 4096) return 0;
     if (ncache >= CACHE / 2) {   /* full: start again */
         for (int i = 0; i < CACHE; i++)
-            if (cache[i].key) kill_tex(cache[i].tex);
+            if (cache[i].key) {
+                kill_tex(cache[i].tex);
+                if (cache[i].rgba) kill_tex(cache[i].rgba);
+            }
         memset(cache, 0, sizeof cache);
         ncache = 0;
     }
     uint32_t k = (uint32_t)((uintptr_t)t >> 3) * 2654435761u & (CACHE - 1);
     while (cache[k].key && cache[k].key != t) k = (k + 1) & (CACHE - 1);
     TexEntry *e = &cache[k];
+    *slot = (int)k;
     if (e->key && e->stamp == stamp) return e->tex;
     uint32_t h = tex_hash(t);
     if (e->key && e->w == t->w && e->h == t->h && e->hash == h) {
         e->stamp = stamp;
         return e->tex;
     }
-    if (e->key) kill_tex(e->tex);   /* pending batches of this frame may still draw with the old one */
-    else ncache++;
+    if (e->key) {   /* pending batches of this frame may still draw with the old one */
+        kill_tex(e->tex);
+        if (e->rgba) kill_tex(e->rgba);
+    } else {
+        ncache++;
+    }
+    e->rgba = 0;
     glGenTextures(1, &e->tex);
     glBindTexture(GL_TEXTURE_2D, e->tex);
     tex_params();
@@ -323,6 +432,8 @@ static GLuint texture(const Texture *t)
     e->key = t, e->w = t->w, e->h = t->h, e->hash = h, e->stamp = stamp;
     return e->tex;
 }
+
+void gl_poly_layer(int l) { layer = l; }
 
 void gl_poly_view(const void *key, int x0, int y0, int x1, int y1, float znear)
 {
@@ -346,7 +457,8 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m)
         for (int i = 0; i < n; i++)
             if (!(v[i].w > 0)) return false;
     GLuint t = 0;
-    if (m->kind >= GL_MAT_TEXTURE && !(t = texture(m->tex))) return false;
+    int slot = -1;
+    if (m->kind >= GL_MAT_TEXTURE && !(t = texture(m->tex, &slot))) return false;
     int add = 3 * (n - 2);
     if (nvtx + add > VTX_MAX) { overflow = true; return false; }
     if (nvtx + add > capvtx) {
@@ -357,14 +469,15 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m)
         vtx = p, capvtx = c;
     }
     bool dest = m->op >= GL_OP_REMAP, clear = depth && view_new && nbatch;
-    if (!nbatch || dest || clear || batch[nbatch - 1].op >= GL_OP_REMAP || (t && batch[nbatch - 1].tex && batch[nbatch - 1].tex != t)) {
+    Batch *l = nbatch ? &batch[nbatch - 1] : NULL;
+    if (!l || dest || clear || l->op >= GL_OP_REMAP || l->layer != layer || (t && l->tex && (l->tex != t || l->tiled != m->tiled))) {
         if (nbatch == capbatch) {
             int c = capbatch ? capbatch * 2 : 256;
             Batch *b = realloc(batch, (size_t)c * sizeof *b);
             if (!b) return false;
             batch = b, capbatch = c;
         }
-        batch[nbatch++] = (Batch){0, nvtx, 0, dest ? m->op : GL_OP_COPY, {0, 0, 0, 0}, {0, 0, 0, 0}};
+        batch[nbatch++] = (Batch){0, nvtx, 0, dest ? m->op : GL_OP_COPY, {0, 0, 0, 0}, {0, 0, 0, 0}, -1, false, layer};
         if (clear) memcpy(batch[nbatch - 1].clear, view_rect, sizeof view_rect);
     }
     view_new = false;
@@ -384,7 +497,7 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m)
         if (iy1 > fh) iy1 = fh;
         b->rect[0] = ix0, b->rect[1] = iy0, b->rect[2] = ix1 - ix0, b->rect[3] = iy1 - iy0;
     }
-    if (t) b->tex = t;
+    if (t) b->tex = t, b->slot = slot, b->tiled = m->tiled;
     for (int i = 1; i + 1 < n; i++) {
         const GlVert *f[3] = {&v[0], &v[i], &v[i + 1]};
         for (int k = 0; k < 3; k++) {
@@ -500,13 +613,86 @@ static bool targets(int w, int h, int dw, int dh)
     return true;
 }
 
-bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pal_tex, int dw, int dh, GlPolyFrame *out)
+/* the lum rows as affine maps of the palette's colours (out = a * in + b per channel, least squares over
+   the 256 colours): the shade of a mip-mapped colour, whose index is gone */
+static void tint(const uint8_t pal[768])
+{
+    static float t[2][256][4];
+    float mx[3] = {0}, vx[3] = {0};
+    for (int c = 0; c < 256; c++)
+        for (int k = 0; k < 3; k++) mx[k] += pal[3 * c + k] / 255.0f / 256.0f;
+    for (int c = 0; c < 256; c++)
+        for (int k = 0; k < 3; k++) vx[k] += (pal[3 * c + k] / 255.0f - mx[k]) * (pal[3 * c + k] / 255.0f - mx[k]);
+    for (int r = 0; r < 256; r++) {
+        const uint8_t *row = g_lum + (r << 8);
+        float my[3] = {0}, cxy[3] = {0};
+        for (int c = 0; c < 256; c++)
+            for (int k = 0; k < 3; k++) my[k] += pal[3 * row[c] + k] / 255.0f / 256.0f;
+        for (int c = 0; c < 256; c++)
+            for (int k = 0; k < 3; k++) cxy[k] += (pal[3 * c + k] / 255.0f - mx[k]) * (pal[3 * row[c] + k] / 255.0f - my[k]);
+        for (int k = 0; k < 3; k++) {
+            float a = vx[k] > 1e-6f ? cxy[k] / vx[k] : 0.0f;
+            t[0][r][k] = a, t[1][r][k] = my[k] - a * mx[k];
+        }
+        t[0][r][3] = t[1][r][3] = 1.0f;
+    }
+    glBindTexture(GL_TEXTURE_2D, tint_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 2, GL_RGBA, GL_FLOAT, t);
+}
+
+/* the batch's texture's mip-mapped copy, made with this frame's palette if it has not been */
+static GLuint mipped(const Batch *b, unsigned pal_tex)
+{
+    if (b->slot < 0 || !b->tex) return 0;
+    TexEntry *e = &cache[b->slot];
+    if (e->tex != b->tex) return 0;   /* replaced within the frame */
+    if (e->rgba && e->rgba_pal == pal_hash) return e->rgba;
+    if (!e->rgba) {
+        glGenTextures(1, &e->rgba);
+        glBindTexture(GL_TEXTURE_2D, e->rgba);
+        glTexStorage2D(GL_TEXTURE_2D, 1 + (int)(31 - __builtin_clz((unsigned)(e->w > e->h ? e->w : e->h))), GL_RGBA8, e->w, e->h);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, mip_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, e->rgba, 0);
+    glViewport(0, 0, e->w, e->h);
+    glUseProgram(mip_prog);
+    glUniform1i(um_src, 0);
+    glUniform1i(um_pal, 3);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, pal_tex);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, e->tex);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindTexture(GL_TEXTURE_2D, e->rgba);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    e->rgba_pal = pal_hash;
+    return e->rgba;
+}
+
+bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768], unsigned pal_tex, int dw,
+                     int dh, GlPolyFrame *out)
 {
     if (enabled < 0) gl_poly_on(pixels);   /* reads the parameter */
     if (enabled <= 0 || failed) return false;
     bool have = ready && frame && pixels == frame && w == fw && h == fh && !overflow && nbatch;
     if (have && !targets(w, h, dw, dh)) have = false;
     if (have) {
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_BLEND);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_CULL_FACE);
+        GLuint *mips = NULL;
+        if (filter) {   /* the mip-mapped copies first: their pass has a framebuffer of its own */
+            uint32_t ph = 2166136261u;
+            for (int i = 0; i < 768; i++) ph = (ph ^ pal[i]) * 16777619u;
+            pal_hash = ph | 1;
+            tint(pal);
+            glBindVertexArray(mip_vao);   /* the pass reads no attributes */
+            mips = calloc((size_t)nbatch, sizeof *mips);
+            for (int i = 0; mips && i < nbatch; i++) mips[i] = batch[i].op < GL_OP_REMAP ? mipped(&batch[i], pal_tex) : 0;
+            glBindVertexArray(0);
+        }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glBindTexture(GL_TEXTURE_2D, rtab_tex);   /* the tables as they are at the end of the frame (their
                                                      changes within it are round 2D blits, put back after) */
@@ -538,6 +724,10 @@ bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pa
         glUniform1i(u_dest, 2);
         glUniform1i(u_pal, 3);
         glUniform1i(u_filter, filter);
+        glUniform1i(u_mip, 4);
+        glUniform1i(u_tint, 5);
+        glActiveTexture(GL_TEXTURE5);
+        glBindTexture(GL_TEXTURE_2D, tint_tex);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, rtab_tex);
         glActiveTexture(GL_TEXTURE2);
@@ -569,11 +759,18 @@ bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pa
             }
             if (b->op == GL_OP_SHADOW) glEnable(GL_STENCIL_TEST);
             if (depth) {   /* the ops over a destination test, not write, pulled to the camera a little: the
-                              shadows and the decals lie in the plane of what they darken */
-                glDepthMask(b->op < GL_OP_REMAP);
+                              shadows and the decals lie in the plane of what they darken; only the queue's
+                              objects write (gl_poly.h) */
+                glDepthMask(b->op < GL_OP_REMAP && b->layer == GL_LAYER_OBJECT);
                 if (b->op >= GL_OP_REMAP) glEnable(GL_POLYGON_OFFSET_FILL), glPolygonOffset(-2.0f, -256.0f);
                 else glDisable(GL_POLYGON_OFFSET_FILL);
             }
+            GLuint mt = mips ? mips[i] : 0;
+            glUniform1i(u_mipped, mt != 0);
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, mt ? mt : tint_tex);   /* unused without: any float texture */
+            glBindSampler(4, mt ? samplers[b->tiled] : 0);
+            glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, b->tex ? b->tex : rtab_tex);
             glDrawArrays(GL_TRIANGLES, b->first, b->count);
             if (b->op == GL_OP_SHADOW) glDisable(GL_STENCIL_TEST);
@@ -581,6 +778,8 @@ bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pa
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_POLYGON_OFFSET_FILL);
         glDepthMask(GL_TRUE);
+        glBindSampler(4, 0);
+        free(mips);
         glBindVertexArray(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         *out = (GlPolyFrame){index_tex, colour_tex, own_tex, hw, hh};

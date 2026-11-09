@@ -16,6 +16,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef OPENI76_GL
+#include "render/gl_poly.h"   /* the port's GL backend: which records write its depth */
+#endif
 
 typedef struct { QRec *head, *tail; int32_t count; } QBucket;   /* 12 bytes in the original */
 typedef struct QSpan { float x0, x1; int32_t bucket; struct QSpan *next; } QSpan;
@@ -294,13 +297,25 @@ void Queue_Flush(const View *view, int end_merges)
                 if (r->type >= 0xc || r->n >= 0x10) break;   /* ends the bucket */
                 QRec *next = r->next;
                 if (r->n) {
+#ifdef OPENI76_GL
+                    gl_poly_layer(r->type <= 1 ? GL_LAYER_GROUND : GL_LAYER_OBJECT);
+#endif
                     poly(view, r->u.v, r->n, r->arg, r->mode);
+#ifdef OPENI76_GL
+                    gl_poly_layer(GL_LAYER_NONE);
+#endif
                     r = next;
                     continue;
                 }
                 if (r->type == 6) {
                     if (r->u.obj.merge) {
+#ifdef OPENI76_GL
+                        gl_poly_layer(GL_LAYER_OBJECT);
+#endif
                         if (draw[6]) draw[6](r, view);
+#ifdef OPENI76_GL
+                        gl_poly_layer(GL_LAYER_NONE);
+#endif
                         r = next;
                         continue;
                     }
@@ -335,7 +350,13 @@ void Queue_Flush(const View *view, int end_merges)
                 } else
                     r->u.obj.merge = NULL;
                 /* a negative type indexes before the original's table; the port draws nothing */
+#ifdef OPENI76_GL
+                gl_poly_layer(GL_LAYER_OBJECT);
+#endif
                 if (r->type >= 0 && draw[r->type]) draw[r->type](r, view);
+#ifdef OPENI76_GL
+                gl_poly_layer(GL_LAYER_NONE);
+#endif
                 r = next;
             }
             bk->head = bk->tail = NULL;

@@ -63,6 +63,13 @@ typedef struct {
    frame (the mirror and the cockpit draw over the world) */
 void gl_poly_view(const void *key, int x0, int y0, int x1, int y1, float znear);
 
+/* what the next polygons are, as the queue's flush draws them: with the depth buffer only the objects and
+   the queue's other records write it; the ground (its records of types 0 and 1, the terrain and the roads)
+   and what is drawn outside the queue (the sky, whose depths mean nothing) are tested only, so they keep
+   the queue's order among themselves (the roads lie in the terrain's plane and, close up, below it) */
+enum { GL_LAYER_NONE, GL_LAYER_GROUND, GL_LAYER_OBJECT };
+void gl_poly_layer(int layer);
+
 /* true when the backend is on and pixels is the frame it draws for (the last one presented) */
 bool gl_poly_on(const uint8_t *pixels);
 /* records a convex polygon of n vertices; false if it cannot be drawn (its pixels then stay software's) */
@@ -80,10 +87,11 @@ typedef struct {
     int w, h;
 } GlPolyFrame;
 
-/* At presentation (gl_present.c): for a frame of pixels, draws the recorded polygons (pal_tex: the frame's
-   palette, RGBA8 256 x 1) and uploads the ownership plane; true with the textures if this frame has them.
+/* At presentation (gl_present.c): for a frame of pixels, draws the recorded polygons (pal: the frame's palette,
+   R G B, and pal_tex, as an RGBA8 256 x 1 texture) and uploads the ownership plane; true with the textures if this frame has them.
    dw, dh: the drawable, for glscale=fit. Then starts the next frame. */
-bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pal_tex, int dw, int dh, GlPolyFrame *out);
+bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768], unsigned pal_tex, int dw,
+                     int dh, GlPolyFrame *out);
 /* a frame that is not shown: what was recorded is dropped */
 void gl_poly_discard(void);
 
