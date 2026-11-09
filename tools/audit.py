@@ -162,6 +162,28 @@ def header_comment(text, comments, start):
     return "\n".join(reversed(blocks))
 
 
+def decl_comment(text, comments, start):
+    """The nearest full-line comment above offset start with only file-scope declarations between (no
+    function, no other full-line comment), or ''."""
+    for s, e, t in reversed(comments):
+        if e > start:
+            continue
+        line_start = text.rfind("\n", 0, s) + 1
+        if text[line_start:s].strip():
+            continue   # a trailing one, on a declaration's line
+        between = text[e:start]
+        for cs, ce, _ in comments:   # the trailing comments between dropped
+            if e <= cs and ce <= start:
+                between = between.replace(text[cs:ce], "")
+        if not between.strip() or len(between) > 800 or re.search(r"\)\s*\{", between):
+            return ""
+        lines = [l.strip() for l in between.split("\n") if l.strip()]
+        if all(l.endswith((";", "{", "}", ",")) or l.startswith(("#", "}")) for l in lines):
+            return t
+        return ""
+    return ""
+
+
 FUNC_DEF = re.compile(r"(?:^|\n)([A-Za-z_][\w \t\*]*?[\s\*])([A-Za-z_]\w*)\s*\(([^;{}]*?)\)\s*\{", re.S)
 PROTO = re.compile(r"(?:^|\n)[A-Za-z_][\w \t\*]*?[\s\*]([A-Za-z_]\w*)\s*\([^;{}]*?\)\s*(?:__attribute__\s*\(\(.*?\)\))?\s*;", re.S)
 
@@ -206,6 +228,7 @@ def parse_sources(funcs):
     proto_own = {}
     aliases = {}
     votes = {}
+    nears = {}
     statics = {}
     files = []
     for d, _, fs in os.walk(SRC):
@@ -282,6 +305,12 @@ def parse_sources(funcs):
                 tail = text[j + 1:eol if eol >= 0 else len(text)]
                 if text.count("\n", m.start(2), j) == 0:
                     f["own"] += [int(a, 16) for a in ADDR.findall(tail) if int(a, 16) in funcs][:1]
+            if not f["own"]:   # a comment above with only declarations between (`/* 0x428910 ... */ Node *g; f()`)
+                near = decl_comment(text, comments, start)
+                if near:
+                    got = own_addresses(name, near, funcs)
+                    if got:
+                        nears[key] = got
             f["addrs"] |= {int(a, 16) for a in ADDR.findall(body_text)}
             calls_code = strip_strings_chars(body_code)
             # every identifier: a call, or a function's name taken as a pointer ((p ? p : Weapon_Fire)(...));
@@ -322,6 +351,10 @@ def parse_sources(funcs):
     # not an address some function owns already (`if (n->flags & 0x10) user_start(n);   /* 0x42e620 */`
     # labels the test, Node_IsUser's, not the call)
     owned = {x for f in defs.values() for x in f["own"]}
+    for name, addrs in nears.items():
+        if name in defs and not defs[name]["own"] and not set(addrs) & owned:
+            defs[name]["own"] = list(addrs)
+            owned |= set(addrs)
     for name, addrs in votes.items():
         if name in defs and not defs[name]["own"] and len(addrs) == 1 and next(iter(addrs)) in funcs \
                 and next(iter(addrs)) not in owned:

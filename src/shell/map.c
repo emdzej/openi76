@@ -760,12 +760,14 @@ static void start(void)   /* button 6, a scenario's */
 static uint8_t team_saved[640 * 480];
 static int team_pick;
 
+/* 0x1000ff90 (its X by the team chosen) */
 static void team_mark(void)
 {
     const uint8_t *r = dll_data(0x1005f9c8 + 0x14 * (uint32_t)team_pick, 20);
     if (r) text(0xe4, rd32(r + 0xc) + 0x53, dll_str(0x1005fad4));   /* "X" */
 }
 
+/* 0x1000ff90 (its loop, a pass a frame) */
 static void team_pass(void)
 {
     Scr_Present();
@@ -793,6 +795,7 @@ static void team_pass(void)
     } else team = 0;   /* (the original's -1, then 0) */
 }
 
+/* 0x1000ff90 (the box opened) */
 static void team_open(void (*then)(void))
 {
     Scr_Frame(Shell_Set24(), 0x13, 0xbf, 0x53, 0x103, 0x13a);

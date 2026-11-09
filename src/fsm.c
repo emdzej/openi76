@@ -257,11 +257,7 @@ static void find_entities(void)
         /* a missing one and duplicate names go to the error reporter, a no-op (0x407470) */
         char nm[0x29];
         name_of(r, nm);
-#ifdef _WIN32
-        if (_stricmp(nm, exe_str(0x4a9194)) == 0) g_taurus = n;
-#else
-        if (strcasecmp(nm, exe_str(0x4a9194)) == 0) g_taurus = n;
-#endif
+        if (crt_stricmp(nm, exe_str(0x4a9194)) == 0) g_taurus = n;
     }
 }
 

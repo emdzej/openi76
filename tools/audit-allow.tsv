@@ -172,3 +172,7 @@
 0x100093a0	0x10034920	Controls_Open: as above
 0x10012d90	0x10034a30	Melee_Reset: the addon levels (addon\*.lvl) are not ported: the disc has none
 0x10012d90	0x10034920	Melee_Reset: as above
+0x1000ff90	0x1002fa48	the teams' box: the screen saved and put back by memcpy (team_saved)
+0x1000ff90	0x10034c60	the teams' box: its rows' rects hit in line
+0x1000d6d0	0x10034a30	pop_open: the pop-up's two rects in the port's array, not a list
+0x1000d6d0	0x10034920	pop_open: as above
