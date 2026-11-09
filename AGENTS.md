@@ -111,6 +111,10 @@ files share the `BWD2` tagged-chunk container (docs/formats/index.md).
 - `tools/ghidra/apply-names.sh [program]` applies the names files and regenerates `re/<program>.c` (all
   functions, for grepping), `re/<program>.meta.tsv` (size, callers, callees, strings) and
   `re/<program>.funcs.txt`.
+- `tools/audit.py` checks the port against the original's call graph (re/*.meta.tsv): for each original
+  function a port function cites as its own, the callees and strings the port never reaches (reports in
+  `out/audit/`: callees.tsv by class, ported elsewhere first; strings.tsv; unowned.tsv). Gaps that are
+  the port's on purpose go in `tools/audit-allow.tsv` with the reason.
 - Record findings in the matching `docs/` page with exact layouts and addresses; mark inferred vs confirmed.
 
 ## Unattended runs

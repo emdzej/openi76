@@ -1,0 +1,5 @@
+# tools/audit.py: gaps checked and found to be the port's on purpose (caller, callee or s:string, reason)
+0x44b9c0	0x426410	GameMenu_Close: a new screen mode remakes the display; the port has 640 x 480 alone
+0x44b9c0	0x4561f0	GameMenu_Close: as above (the weapons' dashboard set up again for the new mode)
+0x44b9c0	0x403360	GameMenu_Close: as above (the view set up again)
+0x1002c2c0	0x10034a30	marks_read: the port keeps the bookmarks in its own array, not the shell's list
