@@ -164,17 +164,28 @@ static FillFn *fill_table[512];
 enum { SH_NONE, SH_FLAT, SH_VERTEX };   /* the shade: none, vertex 0's for the polygon, each vertex's */
 static const struct {
     FillFn *fn;
-    uint8_t kind, persp, tiled, full, shade;   /* full: u, v times the size, else the size - 1 */
+    uint8_t kind, persp, tiled, full, shade, op;   /* full: u, v times the size, else the size - 1 */
 } gl_fills[] = {
-    {f_flat, GL_MAT_SOLID, 0, 0, 0, SH_FLAT},
-    {f_gouraud, GL_MAT_SHADED, 0, 0, 0, SH_VERTEX},
-    {f_affine, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE},
-    {f_persp, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE},
-    {f_persp_tiled, GL_MAT_TEXTURE, 1, 1, 1, SH_NONE},
-    {f_persp_shade, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_VERTEX},
-    {f_persp_shadetiled, GL_MAT_TEXTURE_SHADED, 1, 1, 0, SH_VERTEX},
-    {f_persp_flat, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_FLAT},
-    {f_persp_flattiled, GL_MAT_TEXTURE_SHADED, 1, 1, 1, SH_FLAT},
+    {f_flat, GL_MAT_SOLID, 0, 0, 0, SH_FLAT, GL_OP_COPY},
+    {f_gouraud, GL_MAT_SHADED, 0, 0, 0, SH_VERTEX, GL_OP_COPY},
+    {f_shadow, GL_MAT_SOLID, 0, 0, 0, SH_NONE, GL_OP_SHADOW},
+    {f_affine, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_COPY},
+    {f_remap, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_REMAP},
+    {f_tbl, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_TBL},
+    {f_tblrev, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_TBL_REV},
+    {f_glow, GL_MAT_TEXTURE, 0, 0, 0, SH_NONE, GL_OP_GLOW},
+    {f_persp, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE, GL_OP_COPY},
+    {f_persp_remap, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE, GL_OP_REMAP},
+    {f_persp_tbl, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE, GL_OP_TBL},
+    {f_persp_tblrev, GL_MAT_TEXTURE, 1, 0, 0, SH_NONE, GL_OP_TBL_REV},
+    {f_persp_tiled, GL_MAT_TEXTURE, 1, 1, 1, SH_NONE, GL_OP_COPY},
+    {f_persp_tiledkey, GL_MAT_TEXTURE, 1, 1, 1, SH_NONE, GL_OP_KEY},
+    {f_persp_shade, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_VERTEX, GL_OP_COPY},
+    {f_persp_shadekey, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_VERTEX, GL_OP_KEY},
+    {f_persp_shadetiled, GL_MAT_TEXTURE_SHADED, 1, 1, 0, SH_VERTEX, GL_OP_COPY},
+    {f_persp_shadetiledkey, GL_MAT_TEXTURE_SHADED, 1, 1, 0, SH_VERTEX, GL_OP_KEY},
+    {f_persp_flat, GL_MAT_TEXTURE_SHADED, 1, 0, 0, SH_FLAT, GL_OP_COPY},
+    {f_persp_flattiled, GL_MAT_TEXTURE_SHADED, 1, 1, 1, SH_FLAT, GL_OP_COPY},
 };
 static int8_t gl_fill[512];   /* the mode's entry in gl_fills, or -1 */
 
@@ -183,12 +194,12 @@ static int8_t gl_fill[512];   /* the mode's entry in gl_fills, or -1 */
 static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg a)
 {
     GlVert g[72];
-    GlMaterial m = {gl_fills[k].kind, (uint8_t)a.colour, NULL, gl_fills[k].persp, gl_fills[k].tiled};
+    GlMaterial m = {gl_fills[k].kind, gl_fills[k].op, (uint8_t)a.colour, NULL, gl_fills[k].persp, gl_fills[k].tiled};
     float su = 0, sv = 0, row = 0;
     int shade = gl_fills[k].shade;
     if (shade == SH_FLAT)   /* the flat fillers' row, round((1 - q0) * 7936) & 0xff00, held mid-row */
         row = (float)((fpu_int(fpu_mul(fpu_sub(1.0, v[0].q), 7936.0)) & 0xff00) >> 8) + 0.5f;
-    if (m.kind == GL_MAT_SOLID) m.colour = g_lum[((int)row << 8) + (uint8_t)a.colour];
+    if (m.kind == GL_MAT_SOLID && shade == SH_FLAT) m.colour = g_lum[((int)row << 8) + (uint8_t)a.colour];
     if (m.kind >= GL_MAT_TEXTURE) {
         if (a.tex->w < 1 || a.tex->h < 1) return false;
         m.tex = a.tex;
@@ -206,7 +217,7 @@ static bool gl_tap(const Surface *s, const ScreenVert *v, int n, int k, PolyArg 
         if (y > y1) y1 = y;
     }
     if (!(x0 > -1e6f && x1 < 1e6f && y0 > -1e6f && y1 < 1e6f) || !gl_poly_draw(g, n, &m)) return false;
-    gl_poly_cover_begin((int)x0 - 2, (int)y0 - 2, (int)x1 + 2, (int)y1 + 2);
+    gl_poly_cover_begin((int)x0 - 2, (int)y0 - 2, (int)x1 + 2, (int)y1 + 2, m.op >= GL_OP_REMAP);
     return true;
 }
 #endif

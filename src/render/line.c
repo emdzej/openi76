@@ -35,6 +35,7 @@ void Line_Draw(const Surface *s, int x0, int y0, int x1, int y1, uint8_t colour,
     int dx = x1 - x0, dy = y1 - y0;
     uint8_t *p = s->pixels + (s->y0 + y0) * s->pitch + s->x0 + x0;
     if (test) return;
+    surface_drawn(s, s->x0 + (x0 < x1 ? x0 : x1), s->y0 + (y0 < y1 ? y0 : y1), s->x0 + (x0 < x1 ? x1 : x0), s->y0 + (y0 < y1 ? y1 : y0));
     int xs = dx < 0 ? -1 : 1, ys = dy < 0 ? -s->pitch : s->pitch, a = dx < 0 ? -dx : dx, b = dy < 0 ? -dy : dy;
     /* the major axis's count of pixels; the error's sign picks the step: [0] both axes, [1] the major one */
     int n, err, inc[2], step[2];

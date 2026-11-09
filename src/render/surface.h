@@ -7,6 +7,7 @@
    rasterizer clips against the same rectangle in absolute coordinates and then adds left and top again
    (the same when the viewport is at 0, 0, as the game's is). The tables are in g_rtab below. */
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct {
@@ -45,4 +46,24 @@ typedef struct {
               (its row becomes the destination: see-through) or remapped (0x43b5a0, 0x43c100, 0x43c0c0) */
 enum { RT_GLOW = 0x0, RT_TBL = 0x1000, RT_LUM = 0x11300, RT_REMAP = 0x21300, RT_SIZE = 0x31300 };
 extern uint8_t g_rtab[RT_SIZE];
+
+/* The port's seam for its GL backend (render/gl_poly.h, openi76-gl.wasm; not the original's): the 2D
+   drawing tells it the rectangles it drew on a surface (absolute pixels, inclusive), which then show the
+   software's pixels. NULL without the backend. */
+extern void (*g_surface_drawn)(const Surface *s, int x0, int y0, int x1, int y1);
+static inline void surface_drawn(const Surface *s, int x0, int y0, int x1, int y1)
+{
+    if (g_surface_drawn) g_surface_drawn(s, x0, y0, x1, y1);
+}
+/* the same for len bytes from the pixels' start + at, by rows */
+static inline void surface_drawn_span(const Surface *s, size_t at, size_t len)
+{
+    if (!g_surface_drawn || !len || s->pitch <= 0) return;
+    int p = s->pitch, y0 = (int)(at / (size_t)p), y1 = (int)((at + len - 1) / (size_t)p);
+    int x0 = (int)(at % (size_t)p), x1 = (int)((at + len - 1) % (size_t)p);
+    if (y0 == y1) { g_surface_drawn(s, x0, y0, x1, y0); return; }
+    g_surface_drawn(s, x0, y0, p - 1, y0);
+    if (y1 > y0 + 1) g_surface_drawn(s, 0, y0 + 1, p - 1, y1 - 1);
+    g_surface_drawn(s, 0, y1, x1, y1);
+}
 #define g_lum (g_rtab + RT_LUM)

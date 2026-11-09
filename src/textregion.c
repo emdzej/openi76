@@ -83,6 +83,7 @@ static void glyph(BFont *f, Surface *s, int x, int y, unsigned char c)
     int w = rd32(g);
     int r[4] = {s->x0 + x, s->y0 + y, w + s->x0 + x - 1, f->height + s->y0 + y - 1};
     if (w < 1 || Rect_Clip(r, &s->x0) < 0) return;
+    surface_drawn(s, r[0], r[1], r[2], r[3]);
     for (int row = r[1]; row <= r[3]; row++)
         for (int col = r[0]; col <= r[2]; col++) {
             uint8_t *p = s->pixels + row * s->pitch + col;

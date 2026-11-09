@@ -6,7 +6,8 @@
    the frame's size, and an ownership plane records which pixels such a polygon wrote last, with the value.
    At presentation a pixel shows GL's index where it owns it and the frame still holds that value (nothing
    drawn over it since), else the software pixel: sprites, 2D, the translucent and the other modes keep the
-   ported fillers' look. At the frame's own size the picture is the software one but for the rasterizers'
+   ported fillers' look. The ops that read the destination (translucency, remap, glow, shadow) read GL's
+   own framebuffer, copied for each such polygon. At the frame's own size the picture is the software one but for the rasterizers'
    edges and rounding; step 4 (resolution) is what makes it differ.
 
    The interface is screen-space triangle fans and a material, not the fillers' vertex records, so a later
@@ -32,8 +33,21 @@ enum {
     GL_MAT_TEXTURE_SHADED,   /* lum[shade row][texel] */
 };
 
+/* what the pixel becomes, from the material's value i (and for the last five the destination d, the
+   index already there): as the textured fillers' pixel lines and the shadow filler's */
+enum {
+    GL_OP_COPY,      /* i */
+    GL_OP_KEY,       /* i, but a texel 0xff leaves the pixel (keyed before the shade) */
+    GL_OP_REMAP,     /* remap[i << 8 | d] */
+    GL_OP_TBL,       /* tbl[i << 8 | d] */
+    GL_OP_TBL_REV,   /* tbl[d << 8 | i], a texel 0xff leaving the pixel */
+    GL_OP_GLOW,      /* glow[i << 8 | d] (its rows past 15 run into tbl, as the block's) */
+    GL_OP_SHADOW,    /* the darker colour of d, each pixel once a frame */
+};
+
 typedef struct {
     int kind;
+    int op;
     uint8_t colour;
     const Texture *tex;   /* the textured kinds' */
     bool persp;           /* u, v interpolated in perspective (by w); else in screen space */
@@ -45,8 +59,9 @@ bool gl_poly_on(const uint8_t *pixels);
 /* records a convex polygon of n vertices; false if it cannot be drawn (its pixels then stay software's) */
 bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m);
 /* around a recorded polygon's software fill: the frame's rectangle x0..x1, y0..y1 (inclusive) before, then
-   the pixels the fill changed become the polygon's */
-void gl_poly_cover_begin(int x0, int y0, int x1, int y1);
+   the pixels the fill changed become the polygon's; for an op that reads the destination only where that
+   was GL's too (else GL's value would be from another destination: the pixel goes back to software) */
+void gl_poly_cover_begin(int x0, int y0, int x1, int y1, bool reads_dest);
 void gl_poly_cover_end(void);
 
 /* At presentation (gl_present.c): for a frame of pixels, draws the recorded polygons and uploads the

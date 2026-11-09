@@ -7,6 +7,7 @@
 #include <string.h>
 
 uint8_t g_rtab[RT_SIZE];
+void (*g_surface_drawn)(const Surface *s, int x0, int y0, int x1, int y1);
 int g_fpu_round = FPU_NEAREST;
 
 #define round_magic fpu_int

@@ -182,6 +182,7 @@ void Gdi_TextOut(Surface *s, const GdiFont *f, int x, int y, const char *str, in
     int base = y + f->ascent;
     for (int i = 0; i < n; i++) {
         const Glyph *g = glyph(f, (unsigned char)str[i]);
+        if (g->w > 0 && g->h > 0) surface_drawn(s, x + g->x0, base + g->y0, x + g->x0 + g->w - 1, base + g->y0 + g->h - 1);
         for (int r = 0; r < g->h; r++) {
             int py = base + g->y0 + r;
             if (py < 0 || py >= s->h) continue;
@@ -205,6 +206,7 @@ static void hline(Surface *s, int x0, int x1, int y, uint8_t c)
 void Gdi_Rectangle(Surface *s, int x0, int y0, int x1, int y1, uint8_t pen, uint8_t brush)
 {
     if (x1 - x0 < 1 || y1 - y0 < 1) return;
+    surface_drawn(s, x0, y0, x1 - 1, y1 - 1);
     for (int y = y0; y < y1; y++) {
         if (y == y0 || y == y1 - 1) {
             hline(s, x0, x1, y, pen);

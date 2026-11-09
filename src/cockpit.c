@@ -737,7 +737,7 @@ void Dash_Mask(const Surface *s)
         if (!w) break;
         size_t len = w & 0x7fff;
         if (p + len > end) len = (size_t)(end - p);   /* the port's bound */
-        if (w & 0x8000) memset(p, 0xfe, len);
+        if (w & 0x8000) memset(p, 0xfe, len), surface_drawn_span(s, (size_t)(p - s->pixels), len);
         p += len;
         if (p >= end) break;
     }

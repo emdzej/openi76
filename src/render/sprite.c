@@ -36,6 +36,7 @@ void Sprite_Draw(Surface *dst, const Surface *src, int x0, int y0, int x1, int y
     int w = r[2] - r[0] + 1, h = r[3] - r[1] + 1;
     uint8_t *d = dst->pixels + (intptr_t)r[1] * dst->pitch + r[0];
     if (mode != 3) return;   /* 1 (0x43e6e0), 2, 4 and 5: not ported yet */
+    surface_drawn(dst, r[0], r[1], r[2], r[3]);
     static uint32_t xs[2048];   /* the original's buffer on its stack */
     uint32_t ax = 0, ay = 0;
     for (int k = 0; k < skip_x; k++) ax += (uint32_t)sx;
@@ -75,6 +76,7 @@ void Surface_Blit(Surface *dst, const Surface *src, int x, int y, int mode)
     int w = r[2] - r[0] + 1, h = r[3] - r[1] + 1;
     uint8_t *d = dst->pixels + r[1] * dst->pitch + r[0];
     const uint8_t *s = src->pixels + src->pitch * sy + sx;
+    surface_drawn(dst, r[0], r[1], r[2], r[3]);
     int step = src->pitch;
     const uint8_t *t;
     switch (mode) {
@@ -99,6 +101,7 @@ void Surface_Blit(Surface *dst, const Surface *src, int x, int y, int mode)
 void Surface_FillRect(Surface *s, uint8_t c)
 {
     if (!s->on) return;
+    surface_drawn(s, s->x0, s->y0, s->x1, s->y1);
     uint8_t *p = s->pixels + s->pitch * s->y0 + s->x0;
     int w = s->x1 - s->x0 + 1;
     for (int h = s->y1 - s->y0 + 1; h > 0; h--, p += s->pitch) memset(p, c, (size_t)w);

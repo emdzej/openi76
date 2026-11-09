@@ -384,7 +384,9 @@ static void transform(void)
 
 void Surface_Fill(Surface *s, uint8_t c)
 {
-    if (s->on == 1) memset(s->pixels, c, (size_t)s->pitch * (size_t)s->h);
+    if (s->on != 1) return;
+    memset(s->pixels, c, (size_t)s->pitch * (size_t)s->h);
+    surface_drawn(s, 0, 0, s->pitch - 1, s->h - 1);
 }
 
 void Terrain_Draw(const View *v)

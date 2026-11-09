@@ -208,9 +208,20 @@ Write one page per format under `docs/formats/` (internal; not published).
      interpolated, then divided). Textures are cached by address with a sampled hash. Checked: t01's
      static view and a 400-frame drive differ from the software frame in 0.45% and 0.97% of pixels,
      scattered texels of the perspective fillers (their 16-pixel affine runs) and shade rounding; the
-     shell's frames are identical; about 12% slower. Left for later: the keyed (0x55-0x57), remap, tbl,
-     glow and shadow fillers (step 3), and the tiled affine filler (its stale-row bug).
-  3. `lum`, glow and `tbl` in shaders (`tbl` approximated by blending, or exact by reading back).
+     shell's frames are identical; about 12% slower. Left out: the tiled affine filler (its stale-row bug)
+     and the outline (lines).
+  3. `lum`, glow and `tbl` in shaders (done, exact in index space). The whole colour block goes up as an
+     integer texture each frame (its changes within a frame are round 2D blits and put back). The keyed
+     fillers discard texel 0xff; the remap, tbl, reversed tbl and glow fillers and the shadow read the
+     destination from GL's own framebuffer: each such polygon is drawn alone, after its rectangle is
+     blitted into a second texture. The shadow darkens each pixel once a frame through the stencil (the
+     original's bit mask). A pixel such a fill changes is GL's only when its destination was GL's too.
+     The 2D drawing (blits, sprites, fills, lines, text, the dashboard's mask) hands its rectangles back
+     to software through a seam in surface.h (`g_surface_drawn`, NULL in the faithful module), as the
+     value check cannot see 2D drawn over a pixel with the value it had. `--param drawfrom=<N>` (both
+     modules) draws only from the Nth frame, for long runs with a screenshot. Checked on t01's autopilot
+     run: the fireworks' explosion (frame 5790, remap and shadows) 0.79% of pixels differ, the contrails
+     (frame 9445, tbl) 0.40%, all scattered texels and edges.
   4. Resolution, filtering and an opt-in depth buffer, each a `--param`.
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.

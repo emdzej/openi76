@@ -79,6 +79,18 @@ void plat_set_frame_rate(double hz)
     frame_hz = hz;
     gasm_set_frame_rate(hz);
 }
+/* --param drawfrom=<N> (the port's, for long headless runs): the frames presented before the Nth draw
+   nothing, as a long run's drawing (its screenshot's) grows the GPU's memory */
+static bool draw_skipped(void)
+{
+    static int from = -1, count;
+    if (from < 0) {
+        char v[16];
+        from = plat_param("drawfrom", v, sizeof v) ? atoi(v) : 0;
+    }
+    return count < from && ++count;
+}
+
 /* The 8-bit frame through its palette to RGBA (byte order R, G, B, A), as the display hardware did. */
 #ifdef OPENI76_GL
 static bool gl_presented;   /* this frame drew into the drawable */
@@ -94,7 +106,7 @@ void gl_present_log(const char *what, const char *detail)
 void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768])
 {
     if (w <= 0 || h <= 0) return;
-    if (!gasm_gl_frame_shown()) { gl_poly_discard(); return; }
+    if (!gasm_gl_frame_shown() || draw_skipped()) { gl_poly_discard(); return; }
     if (gl_present(pixels, w, h, pitch, pal, (int)gasm_gl_width(), (int)gasm_gl_height())) gl_presented = true;
 }
 #else
@@ -102,7 +114,7 @@ void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t 
 {
     static uint32_t *rgba;
     static size_t cap;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0 || draw_skipped()) return;
     size_t n = (size_t)w * (size_t)h;
     if (n > cap) {
         uint32_t *b = realloc(rgba, n * sizeof *rgba);
