@@ -256,6 +256,7 @@ static const uint8_t *file_get(const char *name, size_t *size)   /* 0x492700 */
     return c->data;
 }
 
+/* Res_Get 0x492660 (0x492670 on the cache 0x5e3000): the pak's member, else the file (cached) */
 const uint8_t *Res_Get(const char *name, size_t *size)
 {
     if (!name || !*name || crt_strnicmp(name, "null", 4) == 0) return NULL;

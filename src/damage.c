@@ -1100,7 +1100,6 @@ double Vehicle_Whole(uint8_t *d)
 }
 
 /* 0x482f20: the state on the node and every node under it (Lod_SetState); true if any changed */
-/* 0x4286c0: the entity's cached sphere (+0x68 -1, +0x70 0) */
 static bool state_tree(Node *n, int state)
 {
     if (!n) return false;

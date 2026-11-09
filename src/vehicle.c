@@ -77,6 +77,7 @@ static void etbl_add(const uint8_t *t)
     }
 }
 
+/* Etbl_Region 0x481570 */
 const uint8_t *Etbl_Region(const char *table, const char *region)
 {
     const EffectTable *e = etables[1];
@@ -90,6 +91,7 @@ const uint8_t *Etbl_Region(const char *table, const char *region)
     return NULL;
 }
 
+/* Etbl_Source 0x4815f0 */
 EtblSource Etbl_Source(const char *region)
 {
     EtblSource out = {{0}, 0, 0, 0, 0};

@@ -187,3 +187,17 @@
 0x1002b090	0x10010480	Shnet_Poll: as above
 0x1002a4f0	0x10029e00	Shnet_InfoOpen: the info box drawn by the map (info_draw), the network module its data
 0x1002a4f0	0x10010970	Shnet_InfoOpen: the info box opened by the map (info_open)
+*	0x42e4a0	a wrapper of Pair_Angle (0x423220): the port calls Pair_Angle
+*	0x42e4c0	a wrapper of Pair_Dist (0x4227b0): the port calls Pair_Dist
+*	0x42e3f0	a wrapper of AI_Heading (0x422020): the port calls AI_Heading
+*	0x423b50	a frame's place copied: written in line
+*	0x42fae0	a field read (+0x24): written in line
+*	0x42d3b0	a timer set with its flags (+0x450, +0x454): written in line
+*	0x409a90	returns 0: written as the constant
+*	0x468a70	the force feedback's effect (I-Force's DLL): none in the port
+*	0x409a30	the search's turn test (g_nav_owner, g_nav_asked): written in line
+*	0x40faf0	the stuck ring refilled (+0x9d58-+0x9d64 1.0): written in line
+*	0x456890	a weapon instance's word by its gun's node: the port's weapon_of, then the field
+*	0x4568d0	as 0x456890 (the instance's definition's word)
+0x4286e0	0x492660	Dash_Setup: the mask taken again by Dash_Mask each frame (as the original's Dash_Mask does), not kept here
+0x492660	0x492670	Res_Get: 0x492670's body (on the cache 0x5e3000) is the port's Res_Get

@@ -148,12 +148,13 @@ void Window_Start(Node *n);
 void Window_Free(uint8_t *d);
 /* Window_Anim 0x433d10: each 0.1 s the frame one nearer the target; back up when the gun is in */
 void Window_Anim(Node *n, const char *name, void *arg);
-/* 0x433c50: the side's window there and shut (an AI's always), 0x433cb0: the user's window wound down
-   (frames 5), 0x433c10: its gun out */
+/* 0x433c50: the side's window there and shut (an AI's always) */
 int Window_Closed(Node *vehicle, int which);
 /* 0x455030: the kinds of the vehicle's weapon instances, or-ed (its hard points' +0x2c0) */
 uint32_t Hardpoints_Kinds(const Node *v);
+/* 0x433cb0: the user's window wound down (frames 5) */
 int Window_Open(Node *vehicle, int which);
+/* 0x433c10: the window's animation's state (its gun on the way out or in) */
 int Window_Busy(Node *vehicle, int which);
 
 /* Turrets_Aim 0x455560: the turrets turned towards the radar's chosen contact and ready (+0x3c, +0x40)
