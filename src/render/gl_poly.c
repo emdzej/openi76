@@ -631,9 +631,10 @@ static void next_frame(const uint8_t *pixels, int w, int h, int pitch, bool keep
     if (!++fno) fno = 1;
 }
 
-void gl_poly_discard(void)
+void gl_poly_discard(const uint8_t *pixels, int w, int h, int pitch)
 {
-    if (frame) next_frame(frame, fw, fh, fpitch, nbatch > 0);
+    if (enabled < 0) gl_poly_on(pixels);   /* reads the parameter */
+    if (enabled > 0) next_frame(pixels, w, h, pitch, nbatch > 0);
 }
 
 /* a rectangle of the frame in the framebuffer's pixels, outward */

@@ -104,7 +104,8 @@ bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, const uint8
 /* --param gldebug=1: the composite colours the pixels where GL's is not shown (gl_present.c) */
 bool gl_poly_debug(void);
 
-/* a frame that is not shown: what was recorded is dropped */
-void gl_poly_discard(void);
+/* a frame of pixels that is not shown: what was recorded is dropped (and the frame is the backend's to
+   record for, as when shown) */
+void gl_poly_discard(const uint8_t *pixels, int w, int h, int pitch);
 
 #endif

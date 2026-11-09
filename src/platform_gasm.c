@@ -106,7 +106,7 @@ void gl_present_log(const char *what, const char *detail)
 void plat_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pal[768])
 {
     if (w <= 0 || h <= 0) return;
-    if (!gasm_gl_frame_shown() || draw_skipped()) { gl_poly_discard(); return; }
+    if (!gasm_gl_frame_shown() || draw_skipped()) { gl_poly_discard(pixels, w, h, pitch); return; }
     if (gl_present(pixels, w, h, pitch, pal, (int)gasm_gl_width(), (int)gasm_gl_height())) gl_presented = true;
 }
 #else
