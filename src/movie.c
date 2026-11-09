@@ -94,7 +94,7 @@ static void close_movie(void)
 
 /* 0x44e6e0. The path is the CD's drive with \cutscene\, or the local smk\ without a CD drive (0x484bc0);
    the port's file layer has the disc at its root. The open's flags (0x60, with 0x2000 or 0x4000 by the
-   file's attributes from 0x44f2b0) and its buffer size (0xfa000) are smackw32's. The music (0x468a50) and
+   file's attributes from 0x44f2b0) and its buffer size (0xfa000) are smackw32's. The force feedback's off (0x468a50, none in the port) and
    the clearing of the mouse's and keys' messages are not ported */
 bool Movie_Play(const char *name)
 {
@@ -145,7 +145,7 @@ bool Movie_Frame(void)
     if (Smk_Frames(smk) - Smk_FrameNum(smk) == 1) {
         close_movie();
         Ds_SetPrimary(0x2b11, 8, 2);
-        Sound_Resume();   /* 0x4688e0; the music's 0x468a40 is not ported */
+        Sound_Resume();   /* 0x4688e0; the force feedback's 0x468a40: none in the port */
         return false;
     }
     Smk_NextFrame(smk);
@@ -167,7 +167,7 @@ void Movie_Skip(void)
 {
     Movie_End();
     Ds_SetPrimary(0x2b11, 8, 2);
-    Sound_Resume();   /* 0x4688e0; the music's 0x468a40 is not ported */
+    Sound_Resume();   /* 0x4688e0; the force feedback's 0x468a40: none in the port */
 }
 
 /* 0x44f570: SmackSoundOnOff off */
@@ -190,11 +190,11 @@ bool Movie_SoundOn(void)
 void Pause_Toggle(void)
 {
     if (g_play_state != 2) {
-        if (!Movie_SoundOff() && g_play_prev == 1) Sound_Pause();   /* and the music's 0x468a50 */
+        if (!Movie_SoundOff() && g_play_prev == 1) Sound_Pause();   /* and the force feedback off, 0x468a50 */
         g_play_prev = g_play_state;
         g_play_state = 2;
         return;
     }
-    if (!Movie_SoundOn() && g_play_prev == 1) Sound_Resume();   /* and the music's 0x468a40 */
+    if (!Movie_SoundOn() && g_play_prev == 1) Sound_Resume();   /* and the force feedback on, 0x468a40 */
     g_play_state = g_play_state == g_play_prev ? 1 : g_play_prev;
 }

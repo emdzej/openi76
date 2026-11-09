@@ -125,7 +125,7 @@ void Notepad_Toggle(void)
         if (notepad_open()) {
             Sound_PausePlaying();   /* 0x4679a0 */
             Play_SetState(8);       /* 0x44f7d0 */
-            /* 0x468a50: the music driver's pause (0x4dc8ac's table), not ported */
+            /* 0x468a50: the joystick's force feedback off (I-Force's DisableForces, 0x4dc8ac set when its DLL is there): none in the port */
         }
         return;
     }
@@ -133,7 +133,7 @@ void Notepad_Toggle(void)
     notepad_free();
     Sound_ResumePlaying();   /* 0x467a20 */
     Play_SetState(1);
-    /* 0x468a40: the music driver's resume, not ported */
+    /* 0x468a40: the force feedback on again (EnableForces): none in the port */
 }
 
 /* ---- the map (0x44f7f0) ---- */
@@ -187,7 +187,7 @@ void Map_Toggle(void)
             map_free();
             return;
         }
-        /* 0x468a50: the music driver's pause, not ported */
+        /* 0x468a50: the force feedback off: none in the port */
         Sound_PausePlaying();                                   /* 0x4679a0 */
         Sound_Play(exe_str(0x4db0c4), NULL, NULL, NULL);       /* cmap2.wav */
         Sound_Play(exe_str(0x4db0b8), NULL, NULL, NULL);       /* gdsgc26.wav */
@@ -199,5 +199,5 @@ void Map_Toggle(void)
     map_free();
     Sound_ResumePlaying();   /* 0x467a20 */
     Play_SetState(1);
-    /* 0x468a40: the music driver's resume, not ported */
+    /* 0x468a40: the force feedback on again (EnableForces): none in the port */
 }

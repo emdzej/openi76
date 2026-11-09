@@ -178,7 +178,7 @@ static void menu_free(void)
     free(text_bits);
     text_bits = NULL;
     s_text = s_pic = s_tick = (Surface){0};
-    /* 0x468a40: the CD's music resumed, not ported */
+    /* 0x468a40: the joystick's force feedback on (I-Force's EnableForces, when its DLL is there): none in the port */
     free_pic(&tick, tick_res);
     Gdi_FontFree(f_title), Gdi_FontFree(f_button), Gdi_FontFree(f_text), Gdi_FontFree(f_text2);
     Gdi_FontFree(f_small), Gdi_FontFree(f_value), Gdi_FontFree(f_id);
@@ -227,7 +227,7 @@ static int menu_open(uint32_t menu, int (*close)(void))
         menu_free();
         return 0;
     }
-    /* 0x468a50: the CD's music paused, not ported */
+    /* 0x468a50: the joystick's force feedback off (DisableForces): none in the port */
     closer = close;
     return 1;
 }

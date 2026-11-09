@@ -775,7 +775,7 @@ static void mission_finish(void)
         Music_Play(-1, 0);
     }
     Salvage_Free();          /* 0x488d60 */
-    /* 0x47ba70 (the cursor), 0x468a60, 0x468a50 (the music) */
+    /* 0x47ba70 (the cursor), 0x468a60, 0x468a50 (the joystick's force feedback off) */
     Input_Reset();           /* 0x480520 */
     Terrain_FreeTextures();  /* 0x48e650 */
     Light_Shutdown();        /* 0x43a1c0 */
