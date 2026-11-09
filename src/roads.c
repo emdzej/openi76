@@ -203,8 +203,12 @@ void Roads_Ground(void)
     g_roads_ready = 1;
 }
 
+/* Roads_Free 0x490da0: the road textures given back (Res_Release, the pointers left), then the pieces
+   (0x492f30) */
 void Roads_Free(void)
 {
+    for (int i = 0; i < 30; i++)
+        if (g_road_tex[i]) Res_Release(g_road_names[i]);
     while (g_roads) {
         RoadPiece *n = g_roads->next;
         free(g_roads);

@@ -481,7 +481,7 @@ void Bookmark_Restore(void)
 {
     g_sh_mode = -1;
     g_sh_car = 0;
-    Files_Remove(dll_str(0x100614f0));
+    Garage_RemoveStock();
     Garage_FreeStock();
     Garage_Reset();
     char path[32];

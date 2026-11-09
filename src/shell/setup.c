@@ -1235,11 +1235,11 @@ static void select_repairs(void)
     g_sh_modal = rp_pass;
 }
 
+static struct { int row, which, wait; } hold = {-1, 0, 0};   /* the armour button held */
+
 /* 0x1001e670: an armour's or chassis' minus and plus (the rects 0x100615bc and 0x100615d0, 0x2c a row;
    the chassis' the minus moved 100 and 0x92 right): 10 a step, from what is left (+0x81c), each kept to
    the total (the nine) times 0x10059138; while the button is held it steps each 100 ms */
-static struct { int row, which, wait; } hold = {-1, 0, 0};
-
 static void armour_step(void)
 {
     int32_t total = 0;
@@ -1269,7 +1269,9 @@ static void balance(void)
     *armour(8) = 0;
 }
 
-static int armour_click(int x, int y, const SBox *b)   /* 0x1001ee50 */
+/* armour_click 0x1001ee50 + 0x1001e670 (the buttons' hit tests, then the first step; the held button's
+   steps are the screen's pass) */
+static int armour_click(int x, int y, const SBox *b)
 {
     int row = (y - b->y0) / row_h;
     if (row < 4) {

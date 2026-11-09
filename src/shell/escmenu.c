@@ -335,7 +335,7 @@ static void credits_menu(int on)
     g_sh_menu_from = 0;
     g_shs.fill = -1;
     Scr_Present();
-    Files_Remove(dll_str(0x100614f0));   /* 0x1001d240 */
+    Garage_RemoveStock();
     MainMenu_Open();
 }
 

@@ -109,6 +109,7 @@ void Car_WriteVsf(const char *path, const char *name, const ShList *comps, const
 void Garage_Reset(void);
 void Garage_Open(void);
 void Garage_FreeStock(void);
+void Garage_RemoveStock(void);   /* i76shell 0x1001d240: user.rpr removed */
 void Garage_ReadStock(void);   /* i76shell 0x1001cc10: user.rpr into the lists */
 typedef struct {        /* the trip's screens' boxes (0x20 bytes: the garage's 0x10066e98, the set-up's 0x1005ca40) */
     int32_t id;         /* +0: what the hit test answers */

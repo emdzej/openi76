@@ -95,3 +95,59 @@
 0x4503a0	0x450df0	Regions_Free: the port's own singly linked list, its cells freed in line
 0x450cf0	0x450df0	EditLine_Free: as above
 0x407550	0x439390	viewer_frame: the shadow mask (0x58d890) cleared in line, Surface_Fill with 0
+0x1001e670	0x1003ca60	armour_step: the original's loop presents each step; the port's shell presents at the frame's end
+0x466b70	0x496200	Sound_Frame: the rand at 0x466cf2 is dead code (reached with +0x44 at 1, it tests for 2)
+0x47c030	0x496c00	Tex_Close: the material unlisted by pointer from the port's list, not found again by name in the hash
+*	0x401280	a global set (4 bytes of code): the port writes it
+*	0x407370	a global read (0x4a8760): the port reads it
+*	0x409b10	a global read (0x505454): the port reads it
+*	0x423ff0	the entities' iterator reset (0x4d3b60 = 0x100): the port loops over its array
+*	0x42d390	a field read (+0xe0, the steering): the port reads it
+*	0x42d4f0	a field read (the data's +0x104, the mode): the port reads it
+*	0x42d5f0	a field read (the data's slot +0x3ac's data): the port reads it
+*	0x42d600	as 0x42d5f0 (+0x3a8)
+*	0x42d610	as 0x42d5f0 (+0x3bc)
+*	0x42d620	as 0x42d5f0 (+0x3b8)
+*	0x42d650	as 0x42d5f0 (+0x3cc)
+*	0x4301e0	a field read (the data's +0x44): the port reads it
+*	0x450e60	the clock's 0x4db130 read: the port's g_clock_*
+*	0x450e70	the clock's 0x4db134 read (the game time): the port's g_clock_game
+*	0x450f30	the clock's 0x4db138 read (the step): the port's g_clock_step
+*	0x450f40	the clock's 0x4db140 read (the time): the port's g_clock_time
+*	0x484bc0	a global read (0x4e9b50, the CD's drive letter): the port's VFS
+0x48c290	0x492880	Res_AddPath: the cached file dropped (0x492880, 0x492890) by the port's own cache code
+*	0x468a50	the force feedback off (I-Force's DLL, 0x4dc8ac): none in the port
+*	0x468a60	the force feedback on (as 0x468a50): none in the port
+0x4072b0	0x4965f0	Melee_End: DeleteFileA on "NVCL*.vcf" removes nothing (no wildcards)
+0x492700	0x48c960	file_get: the file read whole through the port's VFS (0x48c960 its open)
+0x10034df0	0x10010d20	Garage_Reset: the cached sets' pointers zeroed (left unfreed); the port's sets stay loaded
+*	0x46b540	the has_a == 3 test around 0x46b560: written in line
+*	0x42e640	the moving classes' test (1, 7, 9): written in line
+*	0x432a70	a frame's place copied (60 bytes): written in line
+*	0x432ab0	a place put into a frame (26 bytes): written in line
+*	0x4561a0	a vector sum (74 bytes): written in line
+*	0x4392b0	a surface's pixels freed: the port's free
+*	0x439b80	a DIB section made: the port's calloc
+*	0x44e3e0	the mission heap's free: the port's free
+*	0x452a70	fsincos: the port's sin and cos
+*	0x1003d0e0	the palette kept (a copy of 0x300 bytes): the port's memcpy
+*	0x40a3f0	the steering cleared (+0xe0 = 0): written in line
+*	0x423f60	the entities' iterator's next: the port loops over its array
+*	0x463aa0	the scores' box freed: with the regions (Regions_Free)
+*	0x46b1e0	the moving entities' collision list's first: the port's list
+*	0x46b230	the static entities' collision list's first: the port's list
+*	0x471b30	an entity's centre and velocity (113 bytes): written in line
+*	0x478700	the CD's position, its result unused
+*	0x47cc00	a texture owner's record looked up: written in line
+*	0x497870	_toupper: the port's own (ASCII)
+*	0x495dd0	_exit: the port's exit, or its error to the caller
+*	0x10022210	an extended key's channel (0x100621e8 by scan code): written in line in Shell_Key
+*	0x40cbb0	the tactics restarted (+0x110 -1, +0x11c 1; the table's tags checked, never bad): written in line
+*	0x41c3a0	Road_War with 3 (a wrapper): the port calls Road_War
+*	0x455350	a weapon's trigger set (+0x44): written in line
+0x10001680	0x10039f30	the record written to I76PLYR.DEF for ShellMain to read back after the mission; the port keeps it in memory (read back only on a mission's return)
+0x100017b0	0x10039f30	the record written to I76PLYR.DEF for ShellMain to read back after the mission; the port keeps it in memory (read back only on a mission's return)
+0x10034460	0x10039f30	the record written to I76PLYR.DEF for ShellMain to read back after the mission; the port keeps it in memory (read back only on a mission's return)
+0x10033880	0x10039f30	the record written to I76PLYR.DEF for ShellMain to read back after the mission; the port keeps it in memory (read back only on a mission's return)
+*	0x42e5a0	a node's structure test: the port's Class_IsStructure(n->cls)
+0x425be0	0x42e5e0	Class_Velocity: a structure's class goes to 2, whose entry has no velocity: the port's default zero

@@ -72,6 +72,8 @@ static int cd_open(void)
     return 1;
 }
 
+static void cd_look(void) { cd_mode = cd_status(); }   /* 0x478640: the mode noted */
+
 static int cd_has(int t) { return toc[0] <= t && t <= toc[1]; }   /* 0x478a70 */
 
 /* 0x4787f0: track t played to the start of track 15 (t + 1 from 15 on) */
@@ -138,7 +140,7 @@ void Music_Play(int32_t t, int force)   /* 0x4686c0 */
     }
     if (g_sound_set[0] < 2 && !force) return;
     cd_play(track);
-    cd_mode = cd_status();   /* 0x478640 */
+    cd_look();
     if (cd_mode != 3) {
         track = -1;
         return;
@@ -193,6 +195,6 @@ void Music_Frame(void)   /* 0x468830, from Sound_Frame */
     if (paused || g_sound_set[0] < 2) return;
     if (cd_changed() && track != -1) {   /* run out: in the shell the same track again, in a mission track 2 */
         cd_play(in_shell ? track : 2);
-        cd_mode = cd_status();
+        cd_look();
     }
 }

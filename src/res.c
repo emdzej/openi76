@@ -274,6 +274,7 @@ const uint8_t *Res_Get(const char *name, size_t *size)
     return file_get(name, size);
 }
 
+/* Res_Release 0x492570 (0x492580 on the cache 0x5e3000): a count dropped */
 void Res_Release(const char *name)
 {
     if (!name || !*name) return;

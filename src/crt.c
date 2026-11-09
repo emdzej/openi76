@@ -4,6 +4,7 @@
 
 static uint32_t seed = 1;   /* 0x4ebc90 */
 
+/* _rand 0x496200 */
 int crt_rand(void)
 {
     seed = seed * 214013u + 2531011u;
@@ -110,6 +111,7 @@ void *crt_bsearch(const void *key, const void *base, size_t n, size_t size, CrtC
 
 static int lower(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
 
+/* __strnicmp 0x496140 */
 int crt_strnicmp(const char *a, const char *b, size_t n)
 {
     for (; n; n--, a++, b++) {
@@ -119,6 +121,7 @@ int crt_strnicmp(const char *a, const char *b, size_t n)
     return 0;
 }
 
+/* __strcmpi 0x496c00 */
 int crt_stricmp(const char *a, const char *b) { return crt_strnicmp(a, b, (size_t)-1); }
 
 void crt_splitname(const char *path, char *out, size_t cap)

@@ -235,6 +235,12 @@ static void special_toggle(Node *s)
     putf(s->data + 0x14, g_clock_game);
 }
 
+/* 0x42d970: a special's charge used (its data's +4 less one) */
+static void charge_use(Node *s)
+{
+    if (s) put32(s->data + 4, rd32(s->data + 4) - 1);
+}
+
 /* 0x421f30: the radar jammer (a special of kind 1) switched on with a charge and time left: the lock-on's
    warning (clockon.wav) stopped, cjamm.wav heard, the special on unless it is, a charge used (each press,
    on already or not: quirk, kept), and the vehicle hidden from radar (+0x454 0x40000) */
@@ -245,7 +251,7 @@ static void jammer_use(Node *n, Node *s)
     Sound_Free(Sound_FindPlaying(exe_str(0x4d3b38), NULL));   /* 0x467770, 0x467480 */
     Sound_PlayUser(exe_str(0x4d3b2c), n, NULL);             /* 0x4765d0 */
     if (!rd32(sd + 0x10)) special_toggle(s);
-    put32(sd + 4, rd32(sd + 4) - 1);   /* 0x42d970 */
+    charge_use(s);
     put32(d + 0x454, rd32(d + 0x454) | 0x40000);
 }
 
@@ -261,7 +267,7 @@ static void nitro_use(void)
     putf(d + 0x450, 15.0f);
     put32(d + 0x454, (int32_t)((uint32_t)rd32(d + 0x454) | 0x800 | 0x80000000u));
     Sound_PlayAt(exe_str(0x4dd9d4), n, NULL);   /* 0x468580 */
-    put32(s->data + 4, rd32(s->data + 4) - 1);
+    charge_use(s);
 }
 
 void Specials_Use(Node *n, const int keys[3])
@@ -569,11 +575,18 @@ static void sound_named(const char *name, Node *n)
     s[16] = 0;
     Sound_PlayAt(s, n, NULL);
 }
-/* 0x431320's: a puff of smoke, CHUNK1 (0x4d5394) or else CHUNK2 (0x4d538c), at at thrown at v, for life s */
+/* a puff of smoke (as 0x431320 throws them): CHUNK1 (0x4d5394) or else CHUNK2 (0x4d538c), at at thrown at
+   v, for life s */
 static void smoke_puff(int first, const float at[3], const float v[3], float life)
 {
     const uint8_t *name = exe_data(first ? 0x4d5394 : 0x4d538c, 8);
     if (name) Particle_New(name, at[0], at[1], at[2], v, life);   /* 0x45c780 */
+}
+
+/* 0x431320: eight puffs, each CHUNK1 or CHUNK2 by a random number's low bit, for 15 s */
+static void smoke_puffs(const float at[3], const float v[3])
+{
+    for (int i = 0; i < 8; i++) smoke_puff(crt_rand() % 2 != 0, at, v, 15.0f);
 }
 
 static int is_none(const char *s, int n) { return crt_strnicmp(s, exe_str(0x4a90f4), (size_t)n) == 0; }   /* "null" */
@@ -770,7 +783,7 @@ static void node_wrecks(Node *n, int child)
     }
     Chunk_Spawn(n);
     float up[3] = {0, 15.0f, 0};
-    for (int i = 0; i < 8; i++) smoke_puff(crt_rand() % 2 != 0, at, up, 15.0f);   /* 0x431320 */
+    smoke_puffs(at, up);
     if (Class_IsStructure(n->cls)) put32(d + 0x28, 2);
 }
 

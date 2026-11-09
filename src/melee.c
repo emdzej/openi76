@@ -477,7 +477,9 @@ void Melee_Results(const char *name, const char *car)
     Files_Write(exe_str(0x4dc63c), b, sizeof b);
 }
 
-void Melee_End(void)   /* 0x4072b0: and 0x463aa0, the scores' display freed, and NVCL*.vcf removed */
+/* Melee_End 0x4072b0: and 0x463aa0, the scores' display freed; "NVCL*.vcf" handed to the remove (0x4965f0,
+   DeleteFileA), which takes no wildcards: nothing removed (quirk, kept) */
+void Melee_End(void)
 {
     score_box = NULL;   /* freed with the regions (0x4503a0) */
     g_melee = 0;

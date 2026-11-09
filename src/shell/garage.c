@@ -5,6 +5,7 @@
 #include "shell/trip.h"
 #include "crt.h"
 #include "exe.h"
+#include "files.h"
 #include "platform.h"
 #include "shell/screen.h"
 #include "shell/shell.h"
@@ -200,6 +201,8 @@ void Garage_ReadStock(void)
 #undef TAKE
     free(f);
 }
+
+void Garage_RemoveStock(void) { Files_Remove(dll_str(0x1006150c)); }   /* i76shell 0x1001d240 */
 
 void Garage_FreeStock(void)   /* i76shell 0x1001d210 (its free 0x1001d1d0: the node and its part) */
 {

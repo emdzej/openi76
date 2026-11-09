@@ -60,7 +60,7 @@ void Motion_Init(uint8_t *p);
    not above 1e-4) */
 void Body_Set(uint8_t *p, float m, float i);
 
-/* Class_IsStructure 0x42e5a0 (a node's) and 0x42e5e0 (a class): 2, 3, 4, 0xb, 0xc */
+/* Class_IsStructure 0x42e5e0 (a class; 0x42e5a0 is a node's, the same on its class): 2, 3, 4, 0xb, 0xc */
 bool Class_IsStructure(int cls);
 /* Class_Set 0x425700: the node's class; structures but 4 use class 2's entry */
 void Class_Set(Node *n, int cls);

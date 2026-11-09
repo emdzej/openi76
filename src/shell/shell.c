@@ -150,8 +150,9 @@ void Shell_UnsetScreen(ShScreenFn fn)
     screen_fn = NULL;
 }
 
-/* the DLL's CRT rand (0x100414e0 srand, its rand): the Microsoft LCG, its own state */
-static uint32_t rand_state = 1;
+static uint32_t rand_state = 1;   /* the DLL's CRT's seed */
+
+/* _rand i76shell 0x10041500 (the DLL's CRT, 0x100414e0 its srand): the Microsoft LCG, its own state */
 int Shell_Rand(void)
 {
     rand_state = rand_state * 214013u + 2531011u;
@@ -516,8 +517,8 @@ static void message(uint32_t msg, uint32_t wparam)
     case 0xc002:   /* the shell's end: 0x1002a6d0, then the quit */
         Shell_Quit(0xc002);
         return;
-    case 0xc00e:   /* the main menu: user.rpr removed (0x1001d240) */
-        Files_Remove(dll_str(0x100614f0));
+    case 0xc00e:   /* the main menu: user.rpr removed */
+        Garage_RemoveStock();
         MainMenu_Open();
         return;
     case 0xc010:   /* the mission: a trip's or training's needs disc 2 in the drive (the exe's +0x44) */
@@ -622,7 +623,7 @@ bool Shell_Start(int prev_state)
             } else if (g_sh_rec.trip == 4 && !(g_game_options & 2)) {
                 /* the fourth part: the car of the third's end back from trip4.spc, user.rpr removed
                    (0x1001d240), the stock freed (0x1001d210) and the garage reset (0x10034df0) */
-                Files_Remove(dll_str(0x100614f0));
+                Garage_RemoveStock();
                 Garage_FreeStock();
                 Garage_Reset();
                 if (!Spc_Read(dll_str(0x100637f0))) {   /* 0x1002bf00 */

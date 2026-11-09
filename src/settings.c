@@ -37,7 +37,7 @@ void Settings_Init(void)
     Sound_Defaults();       /* 3, 5, 10, 8 */
     more[0] = 1, more[1] = 0;
     size_t n = 0;
-    uint8_t *f = vfs_read_all("I76PLYR.DEF", &n);
+    uint8_t *f = vfs_read_all(exe_str(0x4dad80), &n);
     if (f) {   /* fread of 0x58 bytes: a shorter file fills what it has */
         uint8_t b[0x58];
         pack(b);
@@ -55,11 +55,12 @@ void Settings_Init(void)
     /* 0x467100 and 0x4671d0 (the voices and the volumes) run in the port's Sound_Init */
 }
 
+/* Settings_Save 0x44d7b0 (the shell's i76shell 0x10039f30 writes the same file from its copy) */
 void Settings_Save(void)
 {
     uint8_t b[0x58];
     pack(b);
-    Files_Write("I76PLYR.DEF", b, sizeof b);
+    Files_Write(exe_str(0x4dad80), b, sizeof b);   /* I76PLYR.DEF */
 }
 
 void Settings_GetMore(uint8_t out[2]) { memcpy(out, more, 2); }
