@@ -222,7 +222,23 @@ Write one page per format under `docs/formats/` (internal; not published).
      modules) draws only from the Nth frame, for long runs with a screenshot. Checked on t01's autopilot
      run: the fireworks' explosion (frame 5790, remap and shadows) 0.79% of pixels differ, the contrails
      (frame 9445, tbl) 0.40%, all scattered texels and edges.
-  4. Resolution, filtering and an opt-in depth buffer, each a `--param`.
+  4. Resolution, filtering and an opt-in depth buffer (done, each a `--param` with `glpoly=1`).
+     `glscale=<N|fit>`: GL's framebuffer at N times the frame's size, or the drawable's 4:3 rectangle; the
+     polygons are already in NDC, so only the destination copies' and the depth clears' rectangles scale;
+     the ownership plane stays per frame pixel, so the composite takes GL's pixel at its own resolution
+     wherever the frame's pixel under it is owned. `glfilter=1`: a second attachment (RGBA8) takes the
+     pixel's colour through the frame's palette; filtered, it blends four texels (centres at k + 0.5) and
+     two shade rows (the flat fillers' row is held mid-row, so stays one), each tap through the same
+     tables, a keyed texel left out of the blend, while the index and the discard stay the nearest texel's
+     (the destination ops read the index). `gldepth=1`: a depth of 1/z, window depth 1 - w·near (linear in
+     screen space as w is, so the affine fillers' polygons get it right too), LEQUAL; the destination ops
+     test without writing, pulled to the camera by a polygon offset (the shadows lie in the ground's
+     plane and failed the test without it); a view's rectangle is cleared at its first polygon of the
+     frame (the mirror's, the cockpit's). Checked: `glpoly=1` alone still differs from the software frame
+     in 0.48% of t01's static view (step 3's); with all three, t01's frame 3000 (the 3D cockpit, the
+     panels, the Fireworks' car and its shadow) reads as the software frame, smoothed. Not done: mip-maps
+     (far textures shimmer when filtered); the sky and the tiled affine filler's polygons stay software's,
+     at the frame's resolution.
 - Each addition gets a launch parameter (`--param`, and a setting on the play
   page) and a line in `docs/guide/status.md`. The default stays the original.
 

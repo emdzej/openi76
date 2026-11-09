@@ -53,4 +53,7 @@ Additions come after the faithful game and are always opt-in: the default is the
   software path. With `--param glpoly=1` GL also draws the 3D polygons into an index framebuffer: every
   filler but one, with the translucency, glow, remap and shadow tables done in shaders. Its pixels are
   used wherever nothing 2D was drawn over them. At the original's resolution the picture is the software one but for about 1% of pixels, the
-  rasterizers' texel rounding. Higher resolutions and filtering are the next steps.
+  rasterizers' texel rounding. On top of it, each opt-in: `--param glscale=<N>` (or `fit`, the window's
+  size) draws the 3D polygons at N times the resolution (the 2D art, the sky and the few polygons GL does not
+  draw stay at the original's); `--param glfilter=1` smooths the textures and the shading in 24-bit colour;
+  `--param gldepth=1` adds a depth buffer, so polygons the game's sorting got wrong no longer show through.

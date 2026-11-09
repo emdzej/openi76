@@ -8,7 +8,11 @@
    drawn over it since), else the software pixel: sprites, 2D, the translucent and the other modes keep the
    ported fillers' look. The ops that read the destination (translucency, remap, glow, shadow) read GL's
    own framebuffer, copied for each such polygon. At the frame's own size the picture is the software one but for the rasterizers'
-   edges and rounding; step 4 (resolution) is what makes it differ.
+   edges and rounding. Step 4's parameters make it differ: `--param glscale=<N|fit>` draws GL's framebuffer at
+   N times the frame's size (fit: the drawable's), the ownership staying per frame pixel; `--param glfilter=1`
+   filters the texels and the shade rows (the result blended in RGB through the frame's palette, the index
+   kept for the ops that read the destination); `--param gldepth=1` tests a depth buffer of 1/z, so the
+   queue's sorting mistakes go.
 
    The interface is screen-space triangle fans and a material, not the fillers' vertex records, so a later
    camera-space producer can feed it too. */
@@ -54,6 +58,11 @@ typedef struct {
     bool tiled;           /* texel indices masked by the size - 1 (power-of-two textures) */
 } GlMaterial;
 
+/* the view the next polygons are drawn in (a key, its rectangle on the frame, inclusive, and its near
+   plane): with the depth buffer, the depth of a view's rectangle is cleared at its first polygon of a
+   frame (the mirror and the cockpit draw over the world) */
+void gl_poly_view(const void *key, int x0, int y0, int x1, int y1, float znear);
+
 /* true when the backend is on and pixels is the frame it draws for (the last one presented) */
 bool gl_poly_on(const uint8_t *pixels);
 /* records a convex polygon of n vertices; false if it cannot be drawn (its pixels then stay software's) */
@@ -64,10 +73,17 @@ bool gl_poly_draw(const GlVert *v, int n, const GlMaterial *m);
 void gl_poly_cover_begin(int x0, int y0, int x1, int y1, bool reads_dest);
 void gl_poly_cover_end(void);
 
-/* At presentation (gl_present.c): for a frame of pixels, draws the recorded polygons and uploads the
-   ownership plane; true with the two textures (RG8UI: index and coverage; value and owned) if this frame
-   has them. Then starts the next frame. */
-bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned *index_tex, unsigned *own_tex);
+/* what a frame's composite reads: index (RG8UI: the index, covered) and colour (RGBA8) at w x h, own (RG8UI:
+   the value, owned) at the frame's size */
+typedef struct {
+    unsigned index, colour, own;
+    int w, h;
+} GlPolyFrame;
+
+/* At presentation (gl_present.c): for a frame of pixels, draws the recorded polygons (pal_tex: the frame's
+   palette, RGBA8 256 x 1) and uploads the ownership plane; true with the textures if this frame has them.
+   dw, dh: the drawable, for glscale=fit. Then starts the next frame. */
+bool gl_poly_compose(const uint8_t *pixels, int w, int h, int pitch, unsigned pal_tex, int dw, int dh, GlPolyFrame *out);
 /* a frame that is not shown: what was recorded is dropped */
 void gl_poly_discard(void);
 

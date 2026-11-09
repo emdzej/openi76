@@ -270,7 +270,12 @@ void DrawPoly(const View *view, void *verts, int n, PolyArg arg, int mode)
     int saved = g_fpu_round;
     g_fpu_round = FPU_UP;
 #ifdef OPENI76_GL
-    bool gl = gl_fill[mode] >= 0 && gl_poly_on(view->surface->pixels) && gl_tap(view->surface, out, n, gl_fill[mode], arg);
+    bool gl = gl_fill[mode] >= 0 && gl_poly_on(view->surface->pixels);
+    if (gl) {
+        const Surface *sf = view->surface;
+        gl_poly_view(view, sf->x0, sf->y0, sf->x1, sf->y1, VIEW_ZNEAR(view));
+        gl = gl_tap(sf, out, n, gl_fill[mode], arg);
+    }
 #endif
     fill_table[mode](view->surface, out, n, arg);
 #ifdef OPENI76_GL

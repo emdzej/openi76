@@ -6,7 +6,8 @@
    drawable at 4:3 with nearest sampling (the look of the original's full-screen modes).
 
    With the polygon backend on (gl_poly.h, `--param glpoly=1`) the shader takes GL's index where the
-   backend owns the pixel and the frame still holds the value it owned, else the frame's. */
+   backend owns the pixel and the frame still holds the value it owned, else the frame's: GL's pixel is its
+   colour attachment's, at GL's framebuffer's size (step 4's glscale, glfilter). */
 #include "render/gl_present.h"
 #include "render/gl_poly.h"
 #include <GLES3/gl3.h>
@@ -14,10 +15,10 @@
 #include <string.h>
 
 static GLuint prog, vao, frame_tex, pal_tex;
-static GLint u_frame, u_pal, u_size, u_index, u_own, u_poly;
+static GLint u_frame, u_pal, u_size, u_index, u_own, u_colour, u_poly, u_psize;
 static int tex_w, tex_h;
 static bool ready, failed;
-static GLuint poly_index, poly_own;   /* the last frame's, 0 when it had no GL polygons */
+static GlPolyFrame poly;   /* the last frame's, index 0 when it had no GL polygons */
 
 static const char VS[] =
     "#version 300 es\n"
@@ -36,16 +37,18 @@ static const char FS[] =
     "uniform sampler2D u_pal;\n"
     "uniform mediump usampler2D u_index;\n"
     "uniform mediump usampler2D u_own;\n"
+    "uniform sampler2D u_colour;\n"
     "uniform bool u_poly;\n"
-    "uniform ivec2 u_size;\n"
+    "uniform ivec2 u_size, u_psize;\n"
     "in vec2 v_uv;\n"
     "out vec4 o;\n"
     "void main() {\n"
     "    ivec2 t = min(ivec2(v_uv * vec2(u_size)), u_size - 1);\n"
     "    uint i = texelFetch(u_frame, t, 0).r;\n"
     "    if (u_poly) {\n"
-    "        uvec2 w = texelFetch(u_own, t, 0).rg, g = texelFetch(u_index, t, 0).rg;\n"
-    "        if (w.y != 0u && w.x == i && g.y != 0u) i = g.x;\n"
+    "        ivec2 p = min(ivec2(v_uv * vec2(u_psize)), u_psize - 1);\n"
+    "        uvec2 w = texelFetch(u_own, t, 0).rg, g = texelFetch(u_index, p, 0).rg;\n"
+    "        if (w.y != 0u && w.x == i && g.y != 0u) { o = vec4(texelFetch(u_colour, p, 0).rgb, 1.0); return; }\n"
     "    }\n"
     "    o = vec4(texelFetch(u_pal, ivec2(int(i), 0), 0).rgb, 1.0);\n"
     "}\n";
@@ -91,6 +94,8 @@ static bool init(void)
     u_index = glGetUniformLocation(prog, "u_index");
     u_own = glGetUniformLocation(prog, "u_own");
     u_poly = glGetUniformLocation(prog, "u_poly");
+    u_colour = glGetUniformLocation(prog, "u_colour");
+    u_psize = glGetUniformLocation(prog, "u_psize");
     glGenVertexArrays(1, &vao);
     GLuint t[2];
     glGenTextures(2, t);
@@ -149,15 +154,19 @@ static void draw(int dw, int dh)
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, pal_tex);
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, poly_index ? poly_index : frame_tex);   /* unused without: any integer texture */
+    glBindTexture(GL_TEXTURE_2D, poly.index ? poly.index : frame_tex);   /* unused without: any integer texture */
     glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, poly_own ? poly_own : frame_tex);
+    glBindTexture(GL_TEXTURE_2D, poly.index ? poly.own : frame_tex);
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, poly.index ? poly.colour : pal_tex);
     glUniform1i(u_frame, 0);
     glUniform1i(u_pal, 1);
     glUniform1i(u_index, 2);
     glUniform1i(u_own, 3);
-    glUniform1i(u_poly, poly_index != 0);
+    glUniform1i(u_colour, 4);
+    glUniform1i(u_poly, poly.index != 0);
     glUniform2i(u_size, tex_w, tex_h);
+    glUniform2i(u_psize, poly.w, poly.h);
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glBindVertexArray(0);
@@ -193,9 +202,7 @@ bool gl_present(const uint8_t *pixels, int w, int h, int pitch, const uint8_t pa
     glBindTexture(GL_TEXTURE_2D, pal_tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 
-    unsigned pi = 0, po = 0;
-    if (!gl_poly_compose(pixels, w, h, pitch, &pi, &po)) pi = po = 0;
-    poly_index = pi, poly_own = po;
+    if (!gl_poly_compose(pixels, w, h, pitch, pal_tex, dw, dh, &poly)) poly.index = 0;
     draw(dw, dh);
     return true;
 }
