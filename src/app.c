@@ -264,6 +264,7 @@ dpid_t g_net_shell_id;          /* the shell's record's +0xc: this player's Acti
 static bool play_init2(void)
 {
     if (Net_On()) net_score_time = g_clock_time;
+    View_Reset();   /* 0x480920 */
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
     Input_MouseCapture(); /* 0x47ba00 */

@@ -1217,9 +1217,16 @@ static void cheats(uint16_t key)
     if (cheat_typed(exe_str(0x4e8a7c))) return;
 }
 
-/* 0x581ebc: the last view was preset 1 (the cockpit); 0x581ec0: the last other preset (read by 0x480940,
-   not ported yet) */
+/* 0x581ebc: the last view was preset 1 (the cockpit); 0x581ec0: the last other preset (read by the combat
+   view's toggle 0x480940) */
 int32_t g_view_cockpit, g_view_preset;
+
+/* View_Reset 0x480920: at a mission's start the view is the cockpit's and the other preset 0xe (F2) */
+void View_Reset(void)
+{
+    g_view_cockpit = 1;
+    g_view_preset = 0xe;
+}
 
 /* 0x423fd0: the user's vehicle is dead */
 static int user_dead(void)

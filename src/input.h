@@ -28,6 +28,8 @@ extern int32_t g_input_main;    /* 0x4df010: the menu's key (0x20, MAIN_MENU) wa
 /* Input_Reset 0x480520: the devices closed, every table emptied, the drivers listed (keyboard, mouse,
    joystick) */
 void Input_Reset(void);
+/* View_Reset 0x480920: the combat view's toggle (V) set up for a mission: the cockpit, the other view F2 */
+void View_Reset(void);
 /* Input_Init 0x480250: input.map (and each device's giddi\<name>.std) and gamekey.map read, the keyboard
    opened and its queue emptied. False without the action table (no exe) */
 bool Input_Init(void);

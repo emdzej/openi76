@@ -1554,3 +1554,4 @@
 00463180	NetCars_Next	net	high	the next vehicle of the list
 00463cb0	Net_ChatTo	net	high	the chat line opened: "To %s: " or "Say: "
 00463ef0	Net_ChatDone	net	high	the chat line's Enter: sent (CH) and shown as from the user
+00480920	View_Reset	input	high	at a mission start: the combat view toggle's last view the cockpit, the other preset 0xe
