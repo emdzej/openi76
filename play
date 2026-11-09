@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Build openi76.wasm and play it in a gasm-run window.
+#   ./play [disc 1 image or extracted CD dir] [gasm-run options...]
+# Disc 1: the first argument if it is a file or directory, else $OPENI76_DATA, else
+# ~/Downloads/interstate-76-activision-1997/I76_CD1.ISO, else ./cd.
+# Disc 2 (the missions' movies, the music): $OPENI76_CD2, else I76_CD2.BIN with its .CUE (the CD-audio
+# tracks: the music) next to disc 1's image, else I76_CD2.ISO there, else ./cd2; none is fine (no music).
+# Extra options go to gasm-run (--fullscreen, --window 1280x960, --param mission=t01.msn --param play=1 ...).
+# Fetches the gasm SDK and runner into .deps/ the first time; GASM_RUN=<path to gasm-run> uses another
+# runner (a local gasm build, say).
+set -euo pipefail
+cd "$(dirname "$0")"
+
+DISC=
+if [ $# -gt 0 ] && [ -e "$1" ]; then DISC=$1; shift; fi
+if [ -z "$DISC" ]; then
+  for d in "${OPENI76_DATA:-}" "$HOME/Downloads/interstate-76-activision-1997/I76_CD1.ISO" ./cd; do
+    if [ -n "$d" ] && [ -e "$d" ]; then DISC=$d; break; fi
+  done
+fi
+[ -n "$DISC" ] || { echo "play: no disc 1 found; pass the I76 image or set OPENI76_DATA" >&2; exit 1; }
+
+# a directory is offered file by file, an image as the single asset cd
+if [ -d "$DISC" ]; then ASSET=(--asset-dir "$DISC"); else ASSET=(--asset "cd=$DISC"); fi
+
+DIR=$(dirname "$DISC")
+CD2=${OPENI76_CD2:-}
+if [ -z "$CD2" ]; then
+  for d in "$DIR/I76_CD2.BIN" "$DIR/I76_CD2.ISO" ./cd2/I76_CD2.BIN ./cd2/I76_CD2.ISO; do
+    if [ -f "$d" ]; then CD2=$d; break; fi
+  done
+fi
+if [ -n "$CD2" ]; then
+  ASSET+=(--asset "cd2=$CD2")
+  CUE="${CD2%.*}.CUE"; [ -f "$CUE" ] || CUE="${CD2%.*}.cue"
+  case "$CD2" in *.BIN|*.bin) [ -f "$CUE" ] && ASSET+=(--asset "cd2cue=$CUE") ;; esac
+fi
+
+case "$(uname -s)-$(uname -m)" in
+  Darwin-*) PLATFORM=macos-universal ;;
+  Linux-x86_64) PLATFORM=linux-x86_64 ;;
+  Linux-aarch64|Linux-arm64) PLATFORM=linux-arm64 ;;
+  *) echo "play: unsupported platform $(uname -sm)" >&2; exit 1 ;;
+esac
+
+[ -d .deps/gasm-c-sdk ] || tools/fetch-gasm-sdk.sh >/dev/null
+if [ -n "${GASM_RUN:-}" ]; then RUN=$GASM_RUN; else RUN="$(tools/fetch-gasm-runner.sh "$PLATFORM")/gasm-run"; fi
+if [ ! -f build-gasm/CMakeCache.txt ]; then
+  cmake -S . -B build-gasm -DOPENI76_PLATFORM=gasm -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE=.deps/gasm-c-sdk/cmake/gasm-toolchain.cmake -DWASI_SDK_PREFIX="$PWD/.deps/wasi-sdk" >/dev/null
+fi
+cmake --build build-gasm --parallel >/dev/null
+
+exec "$RUN" build-gasm/openi76.wasm "${ASSET[@]}" --allow-net "$@"

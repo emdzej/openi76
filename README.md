@@ -7,9 +7,10 @@ natively on macOS, Linux and Windows, and in the browser.
 
 [![Built for gasm](https://gasm.emdzej.pl/badge/built-for-gasm-flat.svg)](https://gasm.emdzej.pl)
 
-**Status: research and groundwork.** The file layer reads disc 1 (as an image or its files) and the
-game's I76.ZFS archive, and the module checks the program and shows the disc's loading screen. Nothing of
-the game itself runs yet. The order of work is in the [port plan](docs/re/port-plan.md).
+**Status: in progress.** Every subsystem of the game and its front end is ported and runs: the shell,
+the trip, the missions with their scripts, the melee and network play, the movies, sound and music. The
+missions are being played through by hand; see the [status page](docs/guide/status.md) and the
+[port plan](docs/re/port-plan.md).
 
 - [What is on the discs](docs/re/inventory.md), [port plan](docs/re/port-plan.md)
 - [File formats](docs/formats/index.md)
@@ -19,7 +20,18 @@ the game itself runs yet. The order of work is in the [port plan](docs/re/port-p
 
 OpenI76 contains no code or data from the game and never will. You need your own Interstate '76 CDs
 (version 1.0). Disc 1 holds the program and the data; disc 2 holds the story movies and the soundtrack
-(as CD audio tracks), and is not used yet. `tools/zfs.py` lists and extracts the game's archive.
+(as CD audio tracks; pass the `.BIN` with its `.CUE` for the music). `tools/zfs.py` lists and extracts the
+game's archive.
+
+## Play (development)
+
+    ./play [disc 1 image or extracted CD dir] [gasm-run options...]
+
+builds `openi76.wasm` and runs it in a gasm-run window. Disc 1 defaults to `$OPENI76_DATA`, then
+`~/Downloads/interstate-76-activision-1997/I76_CD1.ISO`, then `./cd`; disc 2 (`$OPENI76_CD2`, else
+`I76_CD2.BIN` and `.CUE` or `I76_CD2.ISO` next to disc 1) is added when found. Extra options go to gasm-run,
+for example `./play --window 1280x960` or `./play --param shell=0 --param mission=t01.msn --param play=1`.
+The SDK and the runner are fetched into `.deps/` the first time.
 
 ## Sibling projects
 
