@@ -77,8 +77,21 @@ presses go first, then keys found down without a press, then the releases. Held 
 
 ### The mouse
 
-The mouse has 2 analog channels (`Down/Up`, `Left/Right`) and 3 buttons. The shipped map uses only the
-buttons. The port has no mouse yet: it reads as a window without the focus, with no buttons.
+The mouse has 2 analog channels (`Down/Up`, `Left/Right`) and 3 buttons (`LeftBtn`, `MiddleBtn`,
+`RightBtn`: bits 0, 1, 2). The shipped map uses only the buttons: the left fires, the right cycles the
+weapons (the axes' throttle and steering are there, commented out).
+
+The poll (0x47b7d0) reads nothing without the window's focus (no buttons, the axes kept). With it, the
+buttons come from `GetAsyncKeyState` and, with the cursor in the window's client area, the axes are its
+place: Down/Up `(2y - h) * 0x10000 / h`, Left/Right `(2x - w) * 0x10000 / w`; outside it the axes keep
+their last values. The game holds the cursor while it plays (0x47ba00: hidden, clipped to the window by
+0x47b960's rectangle, centred) and gives it back for the menus, the shell and at the mission's end
+(0x47ba70). Centring (0x47b720) moves the cursor's row to the middle on channel 0; channel 1's column is
+code the compiler left unreachable, so the column stays. 0x47b9f0 asks for the capture again at the next
+poll (after a new screen mode).
+
+The port's: a runner's pointer cannot be moved, so the centring is an offset on the pointer's row, and the
+clip a clamp of the offset place to the window while held. The runner has the focus always.
 
 ### The joystick
 

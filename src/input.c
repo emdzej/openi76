@@ -1,6 +1,7 @@
 /* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
    The mouse has no platform here: it reads as a window without the focus (no buttons). */
 #include "input.h"
+#include "camera.h"
 #include "textregion.h"
 #include "net/netgame.h"
 #include "melee.h"
@@ -414,16 +415,83 @@ static int ms_describe(int i, Device *d)
     d->handle = 0;
     return 0;
 }
+/* The cursor's capture: held (0x4de054: hidden and clipped to the window) and asked again (0x4de058). The
+   original moves the cursor itself (SetCursorPos) to centre it; a runner's pointer cannot be moved, so the
+   port keeps the move as an offset on the pointer's row (ms_dy), the window's clip as a clamp to it. */
+static int ms_held, ms_again, ms_dy;
+
 static int ms_open(Device *d) { (void)d; return 0; }   /* 0x47b6e0 */
-static int ms_close(Device *d) { (void)d; return 0; }  /* 0x47b6f0: the cursor freed and shown */
-static int ms_recenter(int32_t h, int c) { (void)h; (void)c; return 0; }   /* 0x47b720: the cursor centred */
-/* 0x47b7d0: without the focus, no buttons and the position kept */
-static int ms_poll(int32_t h, int32_t *analog, uint32_t *discrete)
+/* 0x47b6f0: the cursor freed and shown */
+static int ms_close(Device *d)
 {
-    (void)h; (void)analog;
-    *discrete = 0;
+    (void)d;
+    ms_held = 0;
     return 0;
 }
+/* 0x47b720: channel 0 (Down/Up) centres the cursor's row; channel 1's centring of the column is code the
+   compiler left out (unreachable), so the column stays where it is */
+static int ms_recenter(int32_t h, int c)
+{
+    (void)h;
+    int x, y;
+    uint32_t b;
+    if (c == 0 && plat_pointer(&x, &y, &b) && g_screen && g_screen->h > 0) ms_dy = g_screen->h / 2 - y;
+    return 0;
+}
+/* 0x47b7d0: a capture asked again is made (both channels centred); the buttons (bit 0 left, 1 middle, 2
+   right) and, with the cursor in the window, its place as Down/Up and Left/Right in -0x10000..0x10000 (the
+   window's height and width; outside it the position kept). The runner has the focus always */
+static int ms_poll(int32_t h, int32_t *analog, uint32_t *discrete)
+{
+    int x, y;
+    uint32_t b;
+    if (ms_again && ms_held) {
+        ms_recenter(h, 0);
+        ms_recenter(h, 1);
+        ms_held = 1;
+        ms_again = 0;
+    }
+    if (!plat_pointer(&x, &y, &b)) {
+        if (discrete) *discrete = 0;
+        return 0;
+    }
+    if (discrete) *discrete = (b & 1) | (b & 4) >> 1 | (b & 2) << 1;   /* the runner's: left, right, middle */
+    if (analog && g_screen && g_screen->w > 0 && g_screen->h > 0) {
+        int w = g_screen->w, hh = g_screen->h;
+        if (ms_held) {
+            y += ms_dy;
+            if (x < 0) x = 0;
+            if (x > w - 1) x = w - 1;
+            if (y < 0) y = 0;
+            if (y > hh - 1) y = hh - 1;
+        }
+        if (x >= 0 && x < w && y >= 0 && y < hh) {
+            analog[0] = (y * 2 - hh) * 0x10000 / hh;
+            analog[1] = (x * 2 - w) * 0x10000 / w;
+        }
+    }
+    return 0;
+}
+
+/* 0x47ba00: the cursor taken (hidden, clipped, centred) */
+void Input_MouseCapture(void)
+{
+    ms_recenter(0, 0);
+    ms_recenter(0, 1);
+    ms_held = 1;
+}
+
+/* 0x47ba70: the cursor given back (shown, free), centred as it goes */
+void Input_MouseRelease(void)
+{
+    ms_held = 0;
+    ms_recenter(0, 0);
+    ms_recenter(0, 1);
+    ms_dy = 0;
+}
+
+/* 0x47b9f0: the capture made again at the next poll */
+void Input_MouseRecapture(void) { ms_again = 1; }
 static int ms_key(uint16_t *k) { (void)k; return 0; }   /* 0x47b940 */
 static void ms_init(void) {}                            /* 0x47b950 */
 static const Driver ms_driver = {ms_count, ms_describe, ms_open, ms_close, ms_recenter, ms_poll, ms_key, ms_init};

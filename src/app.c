@@ -265,6 +265,7 @@ static bool play_init2(void)
     if (Net_On()) net_score_time = g_clock_time;
     AI_Begin();   /* 0x408cf0 */
     Artillery_Lookup();   /* 0x428db0 */
+    Input_MouseCapture(); /* 0x47ba00 */
     Objects_Detail();     /* 0x424320 */
     Skids_Init(16);      /* 0x46bba0, with WinMain's inits after the classes' start */
     Contrails_Init(8);   /* 0x46e980 */
@@ -547,6 +548,7 @@ bool app_init(void)
     char mission[32], v[16];
     Sound_Init();        /* 0x466ab0, before the intro */
     Movie_SoundUse();    /* 0x44e6b0 */
+    Input_MouseCapture();   /* 0x47ba00 */
     if (plat_param("mission", mission, sizeof mission)) {
         g_no_shell = 1;   /* 0x4a80e0: the command line's mission */
         if (plat_param("melee", v, sizeof v)) Melee_Set(atoi(v) != 0);   /* the port's, for tests */
@@ -799,7 +801,8 @@ static void mission_finish(void)
         Music_Play(-1, 0);
     }
     Salvage_Free();          /* 0x488d60 */
-    /* 0x47ba70 (the cursor), 0x468a60, 0x468a50 (the joystick's force feedback off) */
+    Input_MouseRelease();    /* 0x47ba70 */
+    /* 0x468a60, 0x468a50 (the joystick's force feedback off) */
     Input_Reset();           /* 0x480520 */
     Terrain_FreeTextures();  /* 0x48e650 */
     Light_Shutdown();        /* 0x43a1c0 */

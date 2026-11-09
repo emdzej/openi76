@@ -187,7 +187,7 @@ static void menu_free(void)
     open = 0;
     cur = 0, pic_name[0] = 0, ox = oy = ox1 = oy1 = 0, closer = NULL, pressed = 0;
     committed = keep;
-    /* 0x47ba00: the cursor hidden and clipped (the port's runner shows its own) */
+    Input_MouseCapture();   /* 0x47ba00: the cursor hidden and clipped (the port's runner shows its own) */
 }
 
 static int menu_set(uint32_t menu);
@@ -196,7 +196,7 @@ static int menu_set(uint32_t menu);
 static int menu_open(uint32_t menu, int (*close)(void))
 {
     md_load();
-    /* 0x47ba70: the cursor shown and freed */
+    Input_MouseRelease();   /* 0x47ba70: the cursor shown and freed */
     if (!rects_fixed) {   /* the boxes' sizes made corners, once */
         for (uint32_t t = RECTS_HI; t < RECTS_HI + 100 * 16; t += 16) W(t + 8, R(t + 8) + R(t)), W(t + 12, R(t + 12) + R(t + 4));
         for (uint32_t t = RECTS_LO; t < RECTS_LO + 100 * 16; t += 16) W(t + 8, R(t + 8) + R(t)), W(t + 12, R(t + 12) + R(t + 4));
@@ -801,8 +801,9 @@ void GameMenu_Close(void)
 {
     menu_free();
     if (res_new != g_detail.b[DET_SCREEN]) {
-        /* a new screen mode: the display remade (0x58dc68), the cockpit's, the view and the panels set up
-           again; the port has 640 x 480 alone, so it never differs */
+        /* a new screen mode: the display remade (0x58dc68), the cursor's capture asked again
+           (Input_MouseRecapture, 0x47b9f0), the cockpit's, the view and the panels set up again; the port
+           has 640 x 480 alone, so it never differs */
     }
     g_detail.b[DET_SCREEN] = res_new;
     settings_save();

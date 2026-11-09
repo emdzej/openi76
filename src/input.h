@@ -39,6 +39,10 @@ void Input_Mouse(void);
 /* the port's: the buttons as they are taken as already seen (a press the shell's window had as its message
    is not the game's: the button still held when the shell ends) */
 void Input_MouseSync(void);
+/* the in-game cursor's capture (0x47ba00), its release (0x47ba70) and a capture asked again (0x47b9f0) */
+void Input_MouseCapture(void);
+void Input_MouseRelease(void);
+void Input_MouseRecapture(void);
 /* a DIK code's Windows virtual key (the US layout, NumLock on), and MapVirtualKey(vk, MAPVK_VK_TO_CHAR)
    for the keys the exe's and the shell's tables leave out */
 int Input_DikVk(int c);
