@@ -95,7 +95,32 @@ clip a clamp of the offset place to the window while held. The runner has the fo
 
 ### The joystick
 
-The joystick driver (0x483190) is not ported; the port finds no joysticks.
+The joystick driver (0x4e94c0) is Windows' multimedia joystick API. `joyGetNumDevs` (0x483190) gives the
+count; describing joystick *i* (0x4831a0) reads its caps (`joyGetDevCapsA`, failing for an id with none):
+its name `joystick<i+1>`, its title the registry's OEM name (0x483c10) or `Joystick <i+1>`, its kind
+(0x483d50: `tracker`, `sidewind`, `fltstick`, `tmaster` by the name or by its caps and button count, else
+`joystick`), its axes Down/Up and Left/Right, then Throttle (HeadRoll on a tracker), Rudder, 5th and 6th
+axis as the caps have Z, R, U and V, and its buttons `Button1`... with a hat's `HatUp`, `HatRight`,
+`HatDown`, `HatLeft` after them.
+
+Opening (0x4834a0) calibrates each axis from the caps' range: the centre `min + ftol(range / 2)`, a dead
+zone `ftol(range / 16)` and a scale `2 / range` (range `max - min + 1`). It reads the caps and the position
+of joystick `id != 0`, so a third joystick reads the second's (quirk, kept). The poll (0x483880) reads
+`joyGetPosEx`; an error is reported ("Joystick may be unplugged" and four others) with everything zero.
+The axes come out Y first (Down/Up), then X, then the others the caps have, each through 0x483bb0:
+`sign(p - c) * min(ftol(((p - c) * scale)^2 * 65536), 0x10000)`, a square curve; the dead zone is passed
+and never used. The buttons are `dwButtons`; the hat sets one of its four buttons only at exactly 0, 9000,
+18000 or 27000 (its diagonals set nothing).
+
+The shipped input.map drives with joystick1: Down/Up the throttle, Left/Right the steering, Button1 fire
+and Button2 the weapons' cycle (Button3 and 4, the hat, commented out).
+
+The port's: a joystick is the runner's game controller in the same slot (four), each axis 0..65535. A
+standard pad is shown as Windows shows an XInput pad: X and Y the left stick, Z the triggers, R the right
+stick's y, U its x, ten buttons (south, east, west, north, the shoulders, select, start, the sticks'
+clicks) and the d-pad as the hat; any other controller its first six axes and its buttons, no hat. The
+title is the runner's name of the controller. As in the original, the devices are opened when a mission
+loads: a controller must be connected by then (a browser shows one only after a button press).
 
 ## The frame
 

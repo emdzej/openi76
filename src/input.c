@@ -1,7 +1,6 @@
-/* The input module (input.h). The joystick driver (0x483190) is not ported yet: it finds no joysticks.
-   The mouse has no platform here: it reads as a window without the focus (no buttons). */
+/* The input module (input.h): the keyboard's, the mouse's and the joystick's drivers (the last on the
+   runner's game controllers) and the actions input.map binds to them. */
 #include "input.h"
-#include "camera.h"
 #include "textregion.h"
 #include "net/netgame.h"
 #include "melee.h"
@@ -496,10 +495,236 @@ static int ms_key(uint16_t *k) { (void)k; return 0; }   /* 0x47b940 */
 static void ms_init(void) {}                            /* 0x47b950 */
 static const Driver ms_driver = {ms_count, ms_describe, ms_open, ms_close, ms_recenter, ms_poll, ms_key, ms_init};
 
-/* ---- the joystick (0x4e94c0): joyGetNumDevs, here none ---- */
+/* ---- the joystick (0x4e94c0): the Windows multimedia joystick API ----
 
-static int js_count(void) { return 0; }
-static const Driver js_driver = {js_count, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+   The port's: winmm's joystick is the runner's game controller in the same slot, as Windows shows a pad
+   through that API. A standard pad (the W3C mapping) has X and Y the left stick, Z the triggers (the left
+   up, the right down from the centre), R the right stick's y and U its x, ten buttons (south, east, west,
+   north, the shoulders, select, start, the sticks' clicks) and the d-pad as a hat; any other controller
+   its first six axes and its buttons, no hat. Each axis is 0..65535, the caps' range. */
+
+#define JS_SLOTS 4
+typedef struct {
+    int32_t caps;            /* JOYCAPS_HASZ 1, HASR 2, HASU 4, HASV 8, HASPOV 0x10 */
+    int32_t nbuttons;
+    char title[0x40];        /* the registry's OEM name (0x483c10): here the runner's */
+} JsCaps;
+
+/* the device record (0x88 bytes) open makes: the id, joyGetPosEx's flags, each axis's centre (+8), dead
+   zone (+0x20, never used) and scale (+0x38, a double), the hat's four buttons (word +0x68, bit +0x78) */
+typedef struct {
+    int32_t id, flags;
+    int32_t centre[6], dead[6];
+    double scale[6];
+    int32_t hat_word[4];
+    uint32_t hat_bit[4];
+} JsRec;
+static JsRec js_rec[JS_SLOTS];
+static const char *js_analog_titles[JS_SLOTS][6], *js_analog_names[JS_SLOTS][6];
+static const char *js_titles[JS_SLOTS][0x24], *js_names[JS_SLOTS][0x24];
+static char js_title_buf[JS_SLOTS][0x20][0xc], js_name_buf[JS_SLOTS][0x20][0xc];
+static int js_logged;
+
+/* joyGetDevCapsA: 0 with the caps, else an error (none in the slot) */
+static int js_caps(int id, JsCaps *c)
+{
+    PlatGamepad g;
+    memset(c, 0, sizeof *c);
+    if (!plat_gamepad(id, &g)) return 1;
+    if (g.standard) {
+        c->caps = 1 | 2 | 4 | 0x10;
+        c->nbuttons = 10;
+    } else {
+        static const int32_t more[4] = {1, 2, 4, 8};
+        for (int k = 0; k < 4 && k + 2 < g.naxes; k++) c->caps |= more[k];
+        c->nbuttons = g.nbuttons < 32 ? g.nbuttons : 32;
+    }
+    if (!plat_gamepad_name(id, c->title, sizeof c->title)) c->title[0] = 0;
+    return 0;
+}
+
+/* joyGetPosEx: the axes X Y Z R U V (0..65535), the buttons and the hat (hundredths of a degree, 0xffff
+   centred); 0, else JOYERR_UNPLUGGED (167) */
+static int js_pos(int id, uint32_t pos[6], uint32_t *buttons, uint32_t *pov)
+{
+    PlatGamepad g;
+    if (!plat_gamepad(id, &g)) return 167;
+    float a[6] = {0};
+    *buttons = 0;
+    *pov = 0xffff;
+    if (g.standard) {
+        static const int order[10] = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11};
+        a[0] = g.axis[0], a[1] = g.axis[1], a[2] = g.button[6] - g.button[7], a[3] = g.axis[3], a[4] = g.axis[2];
+        for (int k = 0; k < 10; k++)
+            if (g.button[order[k]] > 0.5f) *buttons |= 1u << k;
+        int up = g.button[12] > 0.5f, down = g.button[13] > 0.5f, left = g.button[14] > 0.5f, right = g.button[15] > 0.5f;
+        if (up && right) *pov = 4500;
+        else if (right && down) *pov = 13500;
+        else if (down && left) *pov = 22500;
+        else if (left && up) *pov = 31500;
+        else if (up) *pov = 0;
+        else if (right) *pov = 9000;
+        else if (down) *pov = 18000;
+        else if (left) *pov = 27000;
+    } else {
+        for (int k = 0; k < 6 && k < g.naxes; k++) a[k] = g.axis[k];
+        for (int k = 0; k < 32 && k < g.nbuttons; k++)
+            if (g.button[k] > 0.5f) *buttons |= 1u << k;
+    }
+    for (int k = 0; k < 6; k++) {
+        float v = a[k] < -1 ? -1 : a[k] > 1 ? 1 : a[k];
+        pos[k] = (uint32_t)((v + 1.0f) * 32767.5f + 0.5f);
+    }
+    return 0;
+}
+
+static int js_count(void) { return JS_SLOTS; }   /* joyGetNumDevs 0x483190 */
+
+/* 0x483d50: the device's kind by its name or its caps ("tracker", "sidewind", "fltstick", "tmaster",
+   else "joystick"), the base of its map */
+static void js_kind(Device *d, const JsCaps *c)
+{
+    int z = c->caps & 1, r = c->caps & 2, pov = c->caps & 0x10, pov4 = pov;   /* a hat: JOYCAPS_POV4DIR too */
+    uint32_t at;
+    if (strstr(d->title, exe_str(0x4e96f4))) at = 0x4e94f8;   /* "Tracker" */
+    else if (strstr(d->title, exe_str(0x4e96e8)) || (z && r && pov && pov4 && c->nbuttons == 8)) at = 0x4e96dc;
+    else if (strstr(d->title, exe_str(0x4e96cc)) || (z && pov && pov4 && c->nbuttons == 4)) at = 0x4e96c0;
+    else if (strstr(d->title, exe_str(0x4e96b0)) || (r && pov && pov4 && c->nbuttons == 4)) at = 0x4e96a8;
+    else at = 0x4e969c;
+    snprintf(d->base, sizeof d->base, "%s", exe_str(at));
+}
+
+/* 0x4831a0: joystick i+1, its title the OEM name (else "Joystick %d"), its axes Down/Up and Left/Right,
+   then Throttle (HeadRoll on a tracker), Rudder, 5th and 6th by the caps; its buttons "Button%d", then a
+   hat's four */
+static int js_describe(int i, Device *d)
+{
+    JsCaps c;
+    if (i < 0 || i >= JS_SLOTS || js_caps(i, &c)) return 1;
+    memset(d, 0, sizeof *d);
+    js_rec[i] = (JsRec){.id = i};
+    d->handle = i;
+    if (c.title[0]) snprintf(d->title, sizeof d->title, "%s", c.title);
+    else snprintf(d->title, sizeof d->title, exe_str(0x4e950c), i + 1);
+    snprintf(d->name, sizeof d->name, exe_str(0x4e9500), i + 1);
+    js_kind(d, &c);
+    const char **at = js_analog_titles[i], **an = js_analog_names[i];
+    at[0] = exe_str(0x4e9370), an[0] = exe_str(0x4e93f8);   /* Down/Up */
+    at[1] = exe_str(0x4e9388), an[1] = exe_str(0x4e9400);   /* Left/Right */
+    int n = 2;
+    if (c.caps & 1) {
+        if (!strcmp(d->base, exe_str(0x4e94f8))) at[n] = exe_str(0x4e9438), an[n] = exe_str(0x4e9450);
+        else at[n] = exe_str(0x4e93a0), an[n] = exe_str(0x4e9410);
+        n++;
+    }
+    if (c.caps & 2) at[n] = exe_str(0x4e93b8), an[n] = exe_str(0x4e9420), n++;
+    if (c.caps & 4) at[n] = exe_str(0x4e93c8), an[n] = exe_str(0x4e9428), n++;
+    if (c.caps & 8) at[n] = exe_str(0x4e93e0), an[n] = exe_str(0x4e9430), n++;
+    d->nanalog = n;
+    d->analog_titles = at, d->analog_names = an;
+    const char **bt = js_titles[i], **bn = js_names[i];
+    int nb = c.nbuttons;
+    for (int k = 0; k < nb; k++) {
+        snprintf(js_title_buf[i][k], sizeof js_title_buf[i][k], exe_str(0x4e94ec), k + 1);
+        snprintf(js_name_buf[i][k], sizeof js_name_buf[i][k], exe_str(0x4e94e0), k + 1);
+        bt[k] = js_title_buf[i][k], bn[k] = js_name_buf[i][k];
+    }
+    if (c.caps & 0x10) {
+        static const uint32_t hat_t[4] = {0x4e9460, 0x4e9468, 0x4e9478, 0x4e9488};   /* Hat Up, Right, Down, Left */
+        static const uint32_t hat_n[4] = {0x4e9498, 0x4e94a0, 0x4e94b0, 0x4e94b8};
+        for (int k = 0; k < 4; k++) bt[nb + k] = exe_str(hat_t[k]), bn[nb + k] = exe_str(hat_n[k]);
+        nb += 4;
+    }
+    d->ndiscrete = nb;
+    d->titles = bt, d->names = bn;
+    return 0;
+}
+
+/* 0x4834a0: the axes' calibration from the caps' range (each centre min + range / 2, dead zone range / 16,
+   scale 2 / range) and the hat's buttons after the others. The caps and position are read of joystick
+   (id != 0): a third joystick reads the second's (quirk, kept) */
+static int js_open(Device *d)
+{
+    if (d->handle < 0 || d->handle >= JS_SLOTS) return 1;
+    JsRec *r = &js_rec[d->handle];
+    int id = r->id != 0;
+    JsCaps c;
+    uint32_t pos[6], b, pov;
+    if (js_caps(id, &c) || js_pos(id, pos, &b, &pov)) return 1;
+    r->flags = 0x483;   /* JOY_RETURNX | Y | BUTTONS | CENTERED */
+    static const int32_t has[4] = {1, 2, 4, 8}, ret[4] = {4, 8, 0x10, 0x20};
+    for (int k = 0; k < 6; k++) {
+        if (k >= 2 && !(c.caps & has[k - 2])) continue;
+        if (k >= 2) r->flags |= ret[k - 2];
+        int32_t range = 65535 - 0 + 1;
+        r->centre[k] = 0 + (int32_t)fpu_mul((double)range, 0.5);
+        r->dead[k] = (int32_t)fpu_mul((double)range, 0.0625);
+        r->scale[k] = fpu_div(2.0, (double)range);
+    }
+    if (c.caps & 0x10) {
+        r->flags |= 0x40;
+        for (int k = 0; k < 4; k++) {
+            int at = c.nbuttons + k;
+            r->hat_word[k] = at > 31;
+            r->hat_bit[k] = 1u << (at & 31);
+        }
+    }
+    return 0;
+}
+
+static int js_close(Device *d) { (void)d; return 0; }   /* 0x4837e0: the record and the names freed */
+static int js_recenter(int32_t h, int c) { (void)h; (void)c; return 0; }   /* 0x483870 */
+
+/* 0x483bb0: an axis's value, the square of its offset from the centre in scale's units, signed, to
+   +-0x10000 (the dead zone passed but not used) */
+static int32_t js_axis(uint32_t pos, int32_t dead, int32_t centre, double scale)
+{
+    (void)dead;
+    int32_t off = (int32_t)pos - centre;
+    double v = fpu_mul((double)off, scale);
+    v = fpu_mul(fpu_mul(v, v), 65536.0);
+    if (off < 0) {
+        int32_t r = (int32_t)-v;
+        return r < -0x10000 ? -0x10000 : r;
+    }
+    int32_t r = (int32_t)v;
+    return r > 0x10000 ? 0x10000 : r;
+}
+
+/* 0x483880: the axes as Down/Up, Left/Right, then those the caps have; the buttons, the hat's at its four
+   straight positions alone. Without the focus nothing; an error is reported (unplugged: "Joystick may be
+   unplugged", the port's once until it reads again) with the values zero */
+static int js_poll(int32_t h, int32_t *analog, uint32_t *discrete)
+{
+    if (!discrete || !analog) return 1;
+    memset(analog, 0, 6 * sizeof *analog);
+    discrete[0] = discrete[1] = 0;
+    if (h < 0 || h >= JS_SLOTS) return 0;
+    JsRec *r = &js_rec[h];
+    uint32_t pos[6], b, pov;
+    if (js_pos(r->id, pos, &b, &pov)) {
+        if (!js_logged) plat_log(exe_str(0x4e9530));
+        js_logged = 1;
+        return 0;
+    }
+    js_logged = 0;
+    discrete[0] = b;
+    if (r->flags & 0x40) {
+        int k = pov == 0 ? 0 : pov == 9000 ? 1 : pov == 18000 ? 2 : pov == 27000 ? 3 : -1;
+        if (k >= 0) discrete[r->hat_word[k]] |= r->hat_bit[k];
+    }
+    analog[0] = js_axis(pos[1], r->dead[1], r->centre[1], r->scale[1]);
+    analog[1] = js_axis(pos[0], r->dead[0], r->centre[0], r->scale[0]);
+    int n = 2;
+    static const int32_t ret[4] = {4, 8, 0x10, 0x20};
+    for (int k = 0; k < 4; k++)
+        if (r->flags & ret[k]) analog[n++] = js_axis(pos[2 + k], r->dead[2 + k], r->centre[2 + k], r->scale[2 + k]);
+    return 0;
+}
+
+static int js_key(uint16_t *k) { (void)k; return 2; }   /* 0x483b90 */
+static void js_init(void) {}                             /* 0x483ba0 (returns 2) */
+static const Driver js_driver = {js_count, js_describe, js_open, js_close, js_recenter, js_poll, js_key, js_init};
 
 /* 0x47ed20: the device named, from the first driver that has it; a name no driver has is listed absent */
 static int device_open(const char *name)
