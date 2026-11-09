@@ -31,3 +31,4 @@
 0x4883f0	0x430650	Salvage_Parts: as above
 0x4883f0	0x4304a0	Salvage_Parts: as above
 0x4883f0	0x42fd90	Salvage_Parts: as above
+0x48f7b0	0x4409c0	draw_patches: the untextured run clips through Draw_Clip's table (mode 0 is Clip_Camera)

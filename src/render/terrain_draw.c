@@ -508,7 +508,7 @@ static void patch_poly(int n, const int16_t *vi, const int *slots, const TerrLev
     }
 }
 
-/* 0x48f7b0, the untextured renderer's polygon: colour 0xb4 by the shade q, type 0, queued at its farthest
+/* the untextured run's polygon (0x48f7b0's): colour 0xb4 by the shade q, type 0, queued at its farthest
    vertex once clipped and projected in place with the clip of mode 0 (the record's mode then 0xe8; a
    record not clipped in keeps the queue's last mode, unused) */
 static void flat_poly(int n, const int16_t *vi, const int *slots, const TerrLevel *l, float du, float dv,
@@ -544,7 +544,7 @@ static bool facing(const float p[4])
     return b > 0x80000000u;
 }
 
-/* Terrain_DrawPatches 0x48ffa0 (DET_TERRTEX): every leaf into the queue, textured by its level and shaded
+/* Terrain_DrawPatches 0x48ffa0 + 0x48f7b0 (DET_TERRTEX, else 0x48f7b0's untextured run): every leaf into the queue, textured by its level and shaded
    by the sun in camera space (0x5824b0) and Light_Strength2 (0x5824a0). A leaf without midpoints is one
    quad when its two triangles (v0 v2 v4, v0 v4 v6) are near coplanar (their normals' dot above 0.995) and
    both face the camera, else each triangle that faces it; one with midpoints is a fan about its last

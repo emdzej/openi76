@@ -203,6 +203,7 @@ def parse_sources(funcs):
     defs = {}
     proto_own = {}
     aliases = {}
+    votes = {}
     files = []
     for d, _, fs in os.walk(SRC):
         if "third_party" in d:
@@ -222,6 +223,12 @@ def parse_sources(funcs):
                 name = m.group(1)
                 c = header_comment(text, comments, m.start(0) + (1 if code[m.start(0)] == "\n" else 0))
                 own = own_addresses(name, c, funcs)
+                if not own:   # a trailing comment on the prototype's line: `void Region_Add(...);   /* 0x44ff70 */`
+                    eol = text.find("\n", m.end(0))
+                    tail = text[m.end(0):eol if eol >= 0 else len(text)]
+                    t = re.match(r"\s*/\*\s*(?:\w+\s+)?0x([0-9a-fA-F]{6,8})\b", tail)
+                    if t and int(t.group(1), 16) in funcs:
+                        own = [int(t.group(1), 16)]
                 if own:
                     proto_own.setdefault(name, []).extend(own)
             continue
@@ -274,6 +281,16 @@ def parse_sources(funcs):
             # only those that are port functions count (reach() looks them up)
             f["calls"] |= {n for n in re.findall(r"\b([A-Za-z_]\w*)\b", calls_code) if n not in KEYWORDS and n != name}
             f["lits"] |= {s for s in re.findall(r'"((?:\\.|[^"\\\n])*)"', body_code) if s}
+            # a call with its original's address after it, `NetPl_Score(...);   /* 0x464ca0 */`: a vote for
+            # the callee's own address (used for a callee citing none, when the votes agree)
+            for line in body_text.split("\n"):
+                cm = re.search(r";\s*/\*\s*0x([0-9a-fA-F]{6,8})\b[^*]*\*/\s*$", line)
+                if not cm:
+                    continue
+                code_part = line[:cm.start()]
+                called = [n for n in re.findall(r"\b([A-Za-z_]\w*)\s*\(", code_part) if n not in KEYWORDS]
+                if len(called) == 1:
+                    votes.setdefault(called[0], set()).add(int(cm.group(1), 16))
             f["strs"] |= {int(a, 16) for a in re.findall(r"exe_str\s*\(\s*0x([0-9a-fA-F]+)", body_code)}
             # macros' bodies are not followed: a function a macro wraps (FILL_TEX ...) counts at the macro's use
     # `void (*g_terr_patches)(void) = draw_patches;`: a call through the variable reaches the function
@@ -286,7 +303,10 @@ def parse_sources(funcs):
             for a in own:
                 if a not in defs[name]["own"]:
                     defs[name]["own"].append(a)
-    # a cited one-statement wrapper of an uncited helper (`Clip_Screen(...) { return clip_screen(...); }`):
+    for name, addrs in votes.items():
+        if name in defs and not defs[name]["own"] and len(addrs) == 1 and next(iter(addrs)) in funcs:
+            defs[name]["own"] = list(addrs)
+        # a cited one-statement wrapper of an uncited helper (`Clip_Screen(...) { return clip_screen(...); }`):
     # the helper is that function's body, so a call of the helper reaches the wrapper's address too
     for f in list(defs.values()):
         if not f["own"] or f.get("stmts", 0) != 1:
