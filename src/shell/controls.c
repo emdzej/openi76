@@ -4,10 +4,12 @@
    devices' (0x1000c020), a right click takes the next key or button pressed (0x1000b180); RESTORE reads
    keyboard.map back, DONE writes input.map (with input.def after it), CANCEL and Esc leave it as it was
    read. The game reads input.map at each mission's start. The shell has its own copy of the exe's
-   drivers (0x100623a8: the keyboard, the mouse, the joystick; the port's finds no joystick). */
+   drivers (0x100623a8: the keyboard, the mouse, the joystick; the joystick's on the runner's controllers,
+   joy.c). */
 #include "crt.h"
 #include "exe.h"
 #include "files.h"
+#include "joy.h"
 #include "platform.h"
 #include "shell/font.h"
 #include "shell/picker.h"
@@ -59,22 +61,57 @@ static void unbind(Bind *b) { set(b->name, none()), b->dev = 0; }
 typedef struct {
     const char *name;
     int nanalog, ndiscrete;
-    uint32_t analog_names, names;   /* the DLL's tables of string pointers */
+    uint32_t analog_names, names;   /* the DLL's tables of string pointers (the keyboard's, the mouse's) */
+    const char *const *janalog, *const *jnames;   /* a joystick's, made as it is described */
 } ShDev;
+
+#define SH_DEVS (2 + JOY_SLOTS)
+
+/* the shell's copy of the joystick driver (0x1005c5f8: 0x10001b40 joyGetNumDevs, 0x10001b50 describe),
+   with its own strings */
+static int joy_describe(int i, JoyDesc *d)
+{
+    static JoyStrings s;
+    if (!s.title_fmt) {
+        s = (JoyStrings){dll_str(0x1005c618), dll_str(0x1005c624), dll_str(0x1005c630),
+                         {dll_str(0x1005c74c), dll_str(0x1005c75c), dll_str(0x1005c774), dll_str(0x1005c790)},
+                         {dll_str(0x1005c754), dll_str(0x1005c768), dll_str(0x1005c784), dll_str(0x1005c7a0), dll_str(0x1005c7a8)},
+                         {dll_str(0x1005c4a8), dll_str(0x1005c4c0), dll_str(0x1005c570), dll_str(0x1005c4d8), dll_str(0x1005c4f0),
+                          dll_str(0x1005c500), dll_str(0x1005c518)},
+                         {dll_str(0x1005c530), dll_str(0x1005c538), dll_str(0x1005c588), dll_str(0x1005c548), dll_str(0x1005c558),
+                          dll_str(0x1005c560), dll_str(0x1005c568)},
+                         dll_str(0x1005c638), dll_str(0x1005c644),
+                         {dll_str(0x1005c598), dll_str(0x1005c5a0), dll_str(0x1005c5b0), dll_str(0x1005c5c0)},
+                         {dll_str(0x1005c5d0), dll_str(0x1005c5d8), dll_str(0x1005c5e8), dll_str(0x1005c5f0)}};
+    }
+    return Joy_Describe(i, d, &s);
+}
 
 static int devices(ShDev *d)
 {
-    d[0] = (ShDev){dll_str(0x10062370), 0, 0x79, 0, 0x10061c18};   /* keyboard */
-    d[1] = (ShDev){dll_str(0x10061230), 2, 3, 0x100611e0, 0x100611f8};   /* mouse */
-    return 2;   /* the joystick's (0x1005c5f8): joyGetNumDevs, none in the port */
+    static JoyDesc jd[JOY_SLOTS];
+    d[0] = (ShDev){dll_str(0x10062370), 0, 0x79, 0, 0x10061c18, NULL, NULL};   /* keyboard */
+    d[1] = (ShDev){dll_str(0x10061230), 2, 3, 0x100611e0, 0x100611f8, NULL, NULL};   /* mouse */
+    int n = 2;
+    for (int i = 0; i < JOY_SLOTS; i++)
+        if (!joy_describe(i, &jd[i]))
+            d[n++] = (ShDev){jd[i].name, jd[i].nanalog, jd[i].ndiscrete, 0, 0, jd[i].analog_names, jd[i].names};
+    return n;
 }
 
-static const char *dev_str(uint32_t table, int i) { return dll_str(dll_u32(table + 4 * (uint32_t)i)); }
+/* a device's analog (0) or discrete (1) control i's name */
+static const char *dev_str(const ShDev *d, int discrete, int i)
+{
+    const char *const *p = discrete ? d->jnames : d->janalog;
+    if (p) return p[i];
+    uint32_t table = discrete ? d->names : d->analog_names;
+    return table ? dll_str(dll_u32(table + 4 * (uint32_t)i)) : NULL;
+}
 
 /* 0x1000acc0: which devices there are, each one's name made its label */
 static void devices_check(void)
 {
-    ShDev d[3];
+    ShDev d[SH_DEVS];
     int n = devices(d);
     devs_there = 0;
     for (int i = 0; i < n; i++) {
@@ -377,7 +414,7 @@ static void list_add(const char *s)
    analog ones; each header's row and the row before the next noted (the last device's one short) */
 static void list_make(int axes)
 {
-    ShDev d[3];
+    ShDev d[SH_DEVS];
     int n = devices(d), *last = NULL;
     nlist = 0;
     while (--n >= 0) {
@@ -392,13 +429,13 @@ static void list_make(int axes)
             last = lasts[k];
             break;
         }
-        if (d[n].names)
+        if (d[n].names || d[n].jnames)
             for (int i = 0; i < d[n].ndiscrete; i++) {
-                const char *s = dev_str(d[n].names, i);
+                const char *s = dev_str(&d[n], 1, i);
                 if (s && s[0] && s[0] != '*') list_add(s);
             }
-        if (axes && d[n].analog_names)
-            for (int i = 0; i < d[n].nanalog; i++) list_add(dev_str(d[n].analog_names, i));
+        if (axes && (d[n].analog_names || d[n].janalog))
+            for (int i = 0; i < d[n].nanalog; i++) list_add(dev_str(&d[n], 0, i));
     }
     if (last) *last = nlist - 2;
 }
@@ -505,7 +542,8 @@ static void message(const char *s)
 
 /* 0x1000c160's wait, a pass at a time: a key (by its virtual key's DIK code, the shell's names by
    channel; the extended ones "Grey" before it, page up and down "*Grey" so not taken), the mouse's
-   buttons (with a mouse); the record's device set. -1 nothing yet, 0 a key with no code */
+   buttons (with a mouse), joystick 0's (with a joystick); the record's device set. -1 nothing yet, 0 a
+   key with no code */
 static int capture_poll(char *name)
 {
     int vk = Shell_Key();
@@ -534,7 +572,40 @@ static int capture_poll(char *name)
             return 1;
         }
     }
-    return -1;   /* the joystick's buttons and hat (joyGetPosEx, joyGetPos): none in the port */
+    if (devs_there & 0x4000) {   /* joystick 0: with four axes and buttons its buttons and hat, else four buttons */
+        JoyCaps c;
+        Joy_GetDevCaps(0, &c);
+        uint32_t pos[6], b, pov;
+        if (c.naxes >= 4 && c.maxbuttons >= 4) {
+            if (!Joy_GetPosEx(0, pos, &b, &pov)) {
+                uint32_t at = 0;
+                if (pov == 0xffff) {
+                    for (int k = 1; k < 0x20; k++)   /* bit 31 is never looked at */
+                        if (b & 1u << (k - 1)) {
+                            snprintf(name, 64, dll_str(0x1005ede0), k);   /* "Button%d" */
+                            sel->dev = 2;
+                            return 1;
+                        }
+                } else if (pov == 9000) at = 0x1005edc4;
+                else if (pov == 0) at = 0x1005edbc;
+                else if (pov == 18000) at = 0x1005edd0;
+                else if (pov == 27000) at = 0x1005edd8;
+                if (at) {
+                    snprintf(name, 64, "%s", dll_str(at));
+                    sel->dev = 2;
+                    return 1;
+                }
+            }
+        } else if (!Joy_GetPos(0, pos, &b)) {   /* joyGetPos: one button alone, exactly */
+            uint32_t at = b == 1 ? 0x1005ed9c : b == 2 ? 0x1005eda4 : b == 4 ? 0x1005edac : b == 8 ? 0x1005edb4 : 0;
+            if (at) {
+                snprintf(name, 64, "%s", dll_str(at));
+                sel->dev = 2;
+                return 1;
+            }
+        }
+    }
+    return -1;
 }
 
 /* 0x1000b180 after the wait: a control not starting '*' taken off the first record holding it (this one

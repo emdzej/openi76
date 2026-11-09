@@ -381,6 +381,9 @@ shell runs, in order:
   are there by their names' first letters (k 0x8000, j 0x4000, m 0x2000 in 0x1006b430) and copies each
   one's name over its label (0x1005e5e0: "", "keyboard        ", "Joystick        ", "Mouse           "),
   so the labels written are "keyboard" and "mouse", and the joystick's stays padded when there is none.
+  The shell's joystick driver is the exe's code again with its own strings (count 0x10001b40, describe
+  0x10001b50, the kind 0x10002860, the OEM name from the registry 0x10002720); the port has one
+  implementation of the describe for both (src/joy.c), on the runner's controllers.
 - **input.map's read (0x10009cb0):** a missing input.map is copied from keyboard.map (joystick.map with
   a joystick). Each line is cut at '#' and blank ones skipped. A line's first word finds the record by
   name (case-blind); its next line " %1[+-] %s %s" gives the device (m 3, j 2, else 1; a device not there
@@ -417,8 +420,10 @@ shell runs, in order:
   extended keys' channel noted by 0x10022210 in 0x1006b45c). A key's DIK code comes from 0x1005e1a0 (none
   or past 0xff: nothing bound) and its name from the shell's keyboard names (0x10061c18, by channel);
   the extended keypad keys get "Grey" before it, page up and down "*Grey" (so they are never bound); the
-  mouse's buttons are LeftBtn, RightBtn, MiddleBtn; a joystick's Button1-32 and its hat (HatUp ...),
-  none in the port. The record's device is set at once; a name starting '*' stops there. Otherwise the
+  mouse's buttons are LeftBtn, RightBtn, MiddleBtn; joystick 0's, when its caps have at least four axes and
+  four buttons (wMaxButtons), `joyGetPosEx`'s first button down as Button1-31 (bit 31 never looked at) with the hat
+  centred, else the hat at exactly 0, 9000, 18000 or 27000 as HatUp, HatRight, HatDown, HatLeft; a smaller
+  joystick's `joyGetPos` with exactly one of its four buttons down as Button1-4. The record's device is set at once; a name starting '*' stops there. Otherwise the
   name is taken off the first record holding it (quirk: when that is the record itself, its device goes
   to 0, so the binding is not saved), an axis half clears the axis's device and the other half unless it
   is a key, and the name is bound.
