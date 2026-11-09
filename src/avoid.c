@@ -397,8 +397,9 @@ static int face_holds(const CollFace *f, const float (*vs)[3], float pu, float p
     return 0;
 }
 
-/* 0x479160: the segment p + v through the face's plane from its front within the frame (the plane facing
-   it, at least 1e-4), the point within the face (0x479290: seen along its normal's largest axis) */
+/* face_sweep 0x479160 + 0x479290: the segment p + v through the face's plane from its front within the
+   frame (the plane facing it, at least 1e-4), the point within the face (0x479290: seen along its
+   normal's largest axis) */
 static int face_sweep(const float p[3], const float v[3], const CollFace *f, const float (*vs)[3], float *t,
                       float nrm[3])
 {
