@@ -8,6 +8,15 @@
 
 TexAnim *g_texanims;
 
+/* Tex_Open gives its animations a texture use's record for the node. The original's node functions then
+   work on the record's bytes: a reference adds one at +0xc (inside the frame's name, which the first
+   frame's set rewrites at once), the live test reads +8 (the name's fifth and sixth characters, never 1),
+   so the animation runs as long as the use; the reference's walk of the children reads past the record.
+   The port does the same without touching the record. */
+static void ref(Node *n) { if (!Tex_IsUse(n)) Node_Ref(n); }
+static void unref(Node *n) { if (!Tex_IsUse(n)) Node_Unref(n); }
+static Node *live(Node *n) { return Tex_IsUse(n) ? n : Node_Live(n); }
+
 void TexAnim_Init(void) { g_texanims = NULL; }   /* the original makes a new heap */
 
 /* 0x47ebe0 */
@@ -30,13 +39,13 @@ int TexAnim_Add(Node *n, const char *name, TexAnimFn fn, uint32_t fn_addr, void 
     for (TexAnim *a = g_texanims, *nx; a; a = nx) {
         nx = a->next;
         if (a->node == n && strcmp(a->name, name) == 0) {
-            Node_Unref(a->node);
+            unref(a->node);
             texanim_remove(a);
         }
     }
     TexAnim *a = calloc(1, sizeof *a);
     if (!a) return 0;
-    Node_Ref(n);
+    ref(n);
     a->node = n;
     strncpy(a->name, name, 15);
     a->fn = fn;
@@ -52,7 +61,7 @@ int TexAnim_Add(Node *n, const char *name, TexAnimFn fn, uint32_t fn_addr, void 
 void TexAnim_Run(void)
 {
     for (TexAnim *a = g_texanims, *nx; a; a = nx) {
-        a->node = Node_Live(a->node);
+        a->node = live(a->node);
         nx = a->next;
         if (!a->node) texanim_remove(a);
         else if (a->fn) a->fn(a->node, a->name, a->arg);
@@ -64,7 +73,7 @@ int TexAnim_Remove(Node *n, const char *name)
 {
     for (TexAnim *a = g_texanims; a; a = a->next)
         if (a->node == n && strcmp(a->name, name) == 0) {
-            Node_Unref(a->node);
+            unref(a->node);
             texanim_remove(a);
             return 1;
         }

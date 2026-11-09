@@ -23,6 +23,9 @@
 bool Tex_Bind(uintptr_t owner, const char *name, const char *material);
 /* Tex_Get 0x47c320: owner's texture name (a .tmt or a .map), its current frame's pixels; NULL if none */
 const Texture *Tex_Get(uintptr_t owner, const char *name);
+/* the port's: p is a texture use's record (Tex_Open's owner), which the original's texture animations
+   take for a node (texanim.c) */
+bool Tex_IsUse(const void *p);
 /* Tex_SetFrame 0x47c200: dimension d's counter to value; with update, the frame is recomputed */
 bool Tex_SetFrame(uintptr_t owner, const char *name, int d, int value, bool update);
 /* Tex_Writable 0x47c650: a surface over owner's texture name's current frame made the owner's own copy (the

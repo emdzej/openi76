@@ -98,6 +98,19 @@ The functions themselves (the treads 0x42feb0, 0x434430, 0x4208f0, 0x433d10) are
 - the frame, dimension 1's value (set once), the mode;
 - a function for the end.
 
+**Animated materials.** A `.tmt` whose flags (+0x2c in the file, the material's +0x18) have bit 0 set is
+animated: Tex_Bind 0x47bb20, Tex_Open 0x47bd70, Tex_CopyOwner 0x47bf10 and Tex_Get 0x47c320 (a model's
+face texture, first drawn) start a timer on the new use, a frame every 0x4a694c / its rate (+0x14) over
+dimension 0's count (+0x20): round and round with bit 1 (0x47eac0), else once (0x47eb50), ending in
+0x47cf90 (the node's entity's sphere dropped, the node freed). On disc 1 seven materials have flags 3
+(looped, 10 or 4 frames a second): the Huey's blades (blade101, blade201), the police car's light bar
+(cp11lbf1) and the signs of the gas station, the oil pump and a wreck (xsb1_101, xsb1_201, xfr1_401,
+xfr1_501). Quirk: Tex_Open's use is its own owner and is passed for the node, so the node functions work
+on the use record's bytes (a reference adds one inside the frame's name, rewritten at once; the live
+test reads two of its characters, never 1): the animation runs as long as the use. The port keeps that
+outcome without touching the record (texanim.c) and drops a use's animations when it is closed; a once
+on a use stops at its last frame (the original would free the record as a node).
+
 0x47eb50 runs the frames once (mode 2). Once the last frame is reached, the function is called with the
 node and the animation is removed. 0x47eac0 loops: its last argument 0 gives mode 1 (backwards, a
 quirk), anything else mode 0 (forwards).

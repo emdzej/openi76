@@ -1,6 +1,11 @@
 /* The texture manager (tex.h). The original's hash tables are lists here: only the found element
    matters, and names are unique within each. */
 #include "tex.h"
+#include "texanim.h"
+#include "exe.h"
+#include "render/fpu.h"
+#include "classes.h"
+#include "entity.h"
 #include "crt.h"
 #include "res.h"
 #include <stdio.h>
@@ -127,6 +132,33 @@ static TexUse *use_new(uintptr_t owner, const char *name, Material *m)
     return u;
 }
 
+/* 0x47cf90, a once's end: the node's entity's cached sphere dropped (0x424060, 0x4286c0), then the node
+   freed. Tex_Open's animations give it a texture use for the node: there the original finds no entity and
+   frees the use's record as a node, writing the freed mark (+8) into its frame's name; the port leaves the
+   use at its last frame instead. */
+static void anim_end(Node *n)
+{
+    if (Tex_IsUse(n)) return;
+    Entity *e = Entity_OfNode(n);
+    if (e) {
+        e->rest[(0x68 - 0x34) / 4] = 0xffffffffu;
+        e->rest[(0x70 - 0x34) / 4] = 0;
+    }
+    Node_Free(n);
+}
+
+/* the end of Tex_Bind 0x47bb20, Tex_Open 0x47bd70, Tex_CopyOwner 0x47bf10 and Tex_Get 0x47c320: an
+   animated material (+0x18 bit 0) starts its timer on (owner, name), round and round with bit 1
+   (0x47eac0), else once (0x47eb50, ending in 0x47cf90), a frame every 0x4a694c / its rate (+0x14), over
+   dimension 0's count (+0x20) */
+static void anim_start(uintptr_t owner, const char *name, const Material *m)
+{
+    if (!(m->flags & 1)) return;
+    float step = fpu_f32(fpu_div(exe_f32(0x4a694c), m->rate));
+    if (m->flags & 2) TexAnim_Loop((Node *)owner, name, step, 0, m->stride[0], 1);
+    else TexAnim_Once((Node *)owner, name, step, 0, m->stride[0], anim_end);
+}
+
 bool Tex_Bind(uintptr_t owner, const char *name, const char *material)
 {
     if (!owner || !name || !material) return false;
@@ -139,7 +171,7 @@ bool Tex_Bind(uintptr_t owner, const char *name, const char *material)
         if (!m) return false;
     }
     use_new(owner, name, m);
-    /* animated materials start a timer here (0x47eac0 / 0x47eb50): not yet ported */
+    anim_start(owner, name, m);
     return true;
 }
 
@@ -154,7 +186,7 @@ bool Tex_CopyOwner(uintptr_t from, uintptr_t to)
         if (u->owner != from) continue;
         u->mat->users++;
         TexUse *c = use_new(to, u->name, u->mat);
-        /* an animated material's timer (0x47eac0 / 0x47eb50): not yet ported */
+        anim_start(to, u->name, u->mat);   /* before the counts are copied, as the original */
         memcpy(c->count, u->count, sizeof c->count);
         memcpy(c->frame, u->frame, sizeof c->frame);
         c->flags = u->flags & ~1u;
@@ -177,7 +209,7 @@ const Texture *Tex_Get(uintptr_t owner, const char *name)
         }
         if (!m) return NULL;
         u = use_new(owner, name, m);
-        /* animated materials start a timer here (0x47eac0 / 0x47eb50): not yet ported */
+        anim_start(owner, name, m);
     }
     if (u->flags & 2) {
         u->pixels = Tex_Pixels(u->frame);
@@ -261,7 +293,7 @@ uintptr_t Tex_Open(const char *name)
         m = !dot || crt_stricmp(dot, ".map") == 0 ? mat_plain(name) : mat_tmt(name);
         if (!m) return 0;
     }
-    /* the use is its own owner (0x47ce00); animated materials start a timer here: not yet ported */
+    /* the use is its own owner (0x47ce00) */
     TexUse *u = calloc(1, sizeof *u);
     u->owner = (uintptr_t)u;
     copy15(u->name, name);
@@ -270,7 +302,15 @@ uintptr_t Tex_Open(const char *name)
     u->flags = 2;
     u->next = uses;
     uses = u;
+    anim_start(u->owner, name, m);   /* on the use, as if it were a node (texanim.c) */
     return u->owner;
+}
+
+bool Tex_IsUse(const void *p)
+{
+    for (TexUse *u = uses; u; u = u->next)
+        if ((const void *)u == p) return true;
+    return false;
 }
 
 bool Tex_Close(uintptr_t owner)
@@ -283,6 +323,8 @@ bool Tex_Close(uintptr_t owner)
             continue;
         }
         any = true;
+        /* the port's: its animations go with it (the original's run on over the freed record) */
+        while (TexAnim_Remove((Node *)u->owner, u->name)) {}
         if (u->flags & 1) free((void *)u->pixels);
         else if (!(u->flags & 2)) Tex_PixelsRelease(u->frame);
         Material *m = u->mat;
