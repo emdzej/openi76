@@ -447,11 +447,18 @@ static void redraw(void)   /* 0x100167c0 */
     text(0x1d6, y, (const char *)c_brk->part), y += row_h();
     for (int i = 0; i < l_cwheels->count && i < 4; i++, y += row_h())
         text(0x1d6, y, (const char *)((const ShPart *)l_cwheels->items[i])->part);
-    if (g_sh_mode == 1) {
+    switch (g_sh_mode) {   /* by the map's mode: the instant melee's, the scenarios', the network's */
+    case 0: players_draw(first); break;
+    case 1:
         list_draw();
-        text(0x120, 0x3a, name);   /* 0x10019520 */
-    } else if (g_sh_mode == 0)
-        players_draw(first);
+        text(0x120, 0x3a, name);   /* the name, as 0x10019520 draws it */
+        break;
+    case 2: levels_draw(first); break;
+    case 3: case 4: levels_draw(first), settings_draw(); break;
+    case 5: levels_draw(first), text(0x120, 0x3a, name); break;
+    case 6: case 9: text(0x120, 0x3a, name); break;
+    case 7: case 8: text(0x120, 0x3a, name), text(0xc, 0x2d, name); break;
+    }
 }
 
 void Map_TopPicture(void)   /* 0x10016d70 with 0x10010f40: entry 0x3d's frame of the type's picture */

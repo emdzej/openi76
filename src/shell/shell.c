@@ -294,11 +294,11 @@ static void note_pass(void)
     if (g_sh_redraw) g_sh_redraw();
 }
 
-/* a pass of the box's loop: the mouse, the exe's frame (done by the pass), a press on Yes (0x1005f8e0) or
-   No (0x1005f8f4), relative to the box */
 static int disc_wait;
 static void disc_pass(void);
 
+/* 0x1000fe00 (its wait, a pass a frame): the mouse, the exe's frame (done by the pass), a press on Yes
+   (0x1005f8e0) or No (0x1005f8f4), relative to the box; the disc box's and the note's passes in their turn */
 static void box_pass(void)
 {
     if (disc_wait) {

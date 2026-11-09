@@ -20,6 +20,7 @@ static const uint8_t *next(const uint8_t *p, const uint8_t *end, bool *ok)
     return p;
 }
 
+/* Bwd2_Walk 0x483ec0 (chunks.h) */
 const uint8_t *Bwd2_Walk(const uint8_t *p, ChunkDesc *t, int n, void *ctx, const char *name, bool seq,
                          const uint8_t *end)
 {

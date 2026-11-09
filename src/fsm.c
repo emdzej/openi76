@@ -560,8 +560,8 @@ static int32_t is_within(Node *a, Node *b, int32_t r)
     return d < (double)(r * r);
 }
 
-/* isWithinNav 0x40b010: n's place within r of the path's first point, in x and z; isWithinSqNav 0x40b060:
-   within r in x and in z */
+/* within_nav 0x40b010 + 0x40b060: isWithinNav, n's place within r of the path's first point, in x and z;
+   isWithinSqNav, within r in x and in z */
 static int32_t within_nav(uint32_t path, Node *n, int32_t r, int square)
 {
     if (!n) return 0;
@@ -807,8 +807,9 @@ static void label(Node *node, uint32_t out)
     if (k >= 0) SET(out, k);
 }
 
-/* the AI block's source at off (+0xa6e4 rammed, +0xa6e8 shot, +0xa6ec attacked); with none the original
-   stops on a fatal ("FSM whoRammed called but nobody has rammed") */
+/* who 0x40a670 + 0x40a770 + 0x40a870 (whoRammed, whoShot, whoAttacked): the AI block's source at off
+   (+0xa6e4 rammed, +0xa6e8 shot, +0xa6ec attacked); with none the original stops on a fatal ("FSM
+   whoRammed called but nobody has rammed") */
 static void who(Node *n, uint32_t off, uint32_t out)
 {
     uint8_t *ai = ai_block(n);
@@ -1044,6 +1045,7 @@ int Fsm_Warp(Node *n, const char *name)
 /* the port's (the autopilot's apkill test aid): the script's destroy */
 void Fsm_Destroy(Node *n) { if (n) destroy(n); }
 
+/* 0x40d0d0: action index, its arguments on the machine's stack */
 static void action(uint32_t m, int32_t index)
 {
     int32_t code = W(g_fsm.actions + (uint32_t)index * 0x54 + 0x50);
@@ -1252,7 +1254,7 @@ static void action(uint32_t m, int32_t index)
 
 /* ---- the machine (0x40ebb0) ---- */
 
-/* one machine until it yields (0) or returns from its start (1) */
+/* 0x40ebb0: one machine until it yields (0) or returns from its start (1) */
 static int run(uint32_t m)
 {
     /* a buffer of 0x50 bytes, its first the byte 0x4a8454, goes to the actions (unused by the port's) */

@@ -314,6 +314,7 @@ static void part_counts(const Node *p, int off, int32_t *cur, int32_t *full)
 
 static float pct_scale(int32_t full) { return F32(MUL(fpu_div(1.0f, (double)full), 100.0f)); }   /* 0x4a58d8, 0x4a58dc */
 
+/* 0x425e50, once at the first frame: the zones' percentages' scales (the data's +0x158), the speed's surface */
 static void scales(Node *n)
 {
     const uint8_t *d = n->data;
@@ -400,8 +401,7 @@ static int level_of(uint32_t table, int32_t v, int k)
 /* 0x427090: the damage diagram on the first zsy_ part (+0x420): the 8 zones (front, left, right, back
    armour, then the same of the chassis: the data's +0x138 words as percentages), each pasted in its
    level's picture when the level changes, the dark one with CWSTAT.WAV. In the original's order, each
-   level for every zone in turn */
-/* zone_last: 0x550180 */
+   level for every zone in turn (the last levels in zone_last, 0x550180) */
 static void damage_diagram(Node *n)
 {
     static const uint8_t order[8] = {0, 2, 3, 1, 4, 6, 7, 5};
@@ -424,8 +424,8 @@ static void damage_diagram(Node *n)
 
 /* 0x4274d0: the warning lights on the second zsy_ part (+0x424): the engine, the suspension, the brakes and
    the four tyres (rear right, rear left, front right, front left) as percentages of their full counts; the
-   dark ones with CWSTAT.WAV and the part's warning (GDSGC21-24.WAV) */
-/* light_last: 0x54fa20 (8 words, the eighth unused) */
+   dark ones with CWSTAT.WAV and the part's warning (GDSGC21-24.WAV); the last levels in light_last
+   (0x54fa20, 8 words, the eighth unused) */
 static void warning_lights(Node *n)
 {
     static const uint32_t levels[7] = {0x4d46e8, 0x4d4760, 0x4d47d8, 0x4d4850, 0x4d4850, 0x4d4850, 0x4d4850};

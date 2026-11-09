@@ -129,14 +129,15 @@ int Part_Throw(Node *n, const float *v, int own_box, const float *box);
 void Debris_Frame(Node *n);
 /* the node's chunk record freed (0x45b0a0's end) */
 void Chunk_Drop(const Node *n);
-/* Chunk_Add 0x45ae40: a destruction chunk of node: at most 10 a node, in the hash 0x570aa8 (0x71 buckets
-   by the node's address) */
+/* a destruction chunk (SCHK's record) */
 typedef struct Chunk {
     int32_t a, b;        /* the record's first two words */
     Frame frame;         /* its frame; the word at +0x24 is the original's stack */
     int32_t p[4];        /* 0, 0, 0, the record's +0x4c */
     float box[6];        /* -half, +half */
 } Chunk;
+/* Chunk_Add 0x45ae40: a destruction chunk of node: at most 10 a node, in the hash 0x570aa8 (0x71 buckets
+   by the node's address) */
 bool Chunk_Add(Node *n, int32_t a, int32_t b, const Frame *f, const int32_t p[4], const float box[6]);
 /* for tests: node's chunks (NULL and *count 0 if none) */
 /* 0x45afa0: the 13 names (16 bytes each, read 13 apart from names) of n's chunks; false without a record */

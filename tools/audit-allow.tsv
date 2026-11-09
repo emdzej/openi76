@@ -151,3 +151,24 @@
 0x10033880	0x10039f30	the record written to I76PLYR.DEF for ShellMain to read back after the mission; the port keeps it in memory (read back only on a mission's return)
 *	0x42e5a0	a node's structure test: the port's Class_IsStructure(n->cls)
 0x425be0	0x42e5e0	Class_Velocity: a structure's class goes to 2, whose entry has no velocity: the port's default zero
+*	0x42e440	a wrapper of Node_Heading (0x422200): the port calls Node_Heading
+*	0x450e80	the clock's total (0x55f73c) read: the port's g_clock_total
+0x494c80	0x494d50	c_zone: the .ter from the port's resources (Res_Get), not mapped from the disc's folders
+0x4a3c20	0x4a3a80	shadow_draw: as above (the vehicles' faces through shadow_tree)
+0x100114d0	0x1003c910	car_picture: the gun's picture marked dirty by pic_frame (0x100113c0)
+0x10008590	0x10033390	menu_free: the pieces taken off with Scr_Restore in line (0x10033390's body)
+0x10007590	0x10034a30	pick_gun: the picker's four rects made a list at each open; the port's picker takes the rects' table (Picker rects)
+0x10007930	0x10034a30	pick_wheel: as above
+0x10007360	0x10034c20	gun_done: the picker's rects' list freed (as above)
+0x10016d90	0x10034c20	types_done: the picker's rects' list freed (as above)
+0x10017100	0x10034c20	variants_done: as above
+0x1001aea0	0x10034a30	the bookmark's edit: the port's marks array, not the shell's list
+0x1001aea0	0x10034b70	as above
+0x1001aea0	0x10034bf0	as above
+0x1001ad30	0x10034a30	Bookmark_Save: as above
+0x1001ad30	0x10034920	Bookmark_Save: as above
+0x1000c020	0x10034a30	list_open: the controls' list is the port's array
+0x100093a0	0x10034a30	Controls_Open: as above
+0x100093a0	0x10034920	Controls_Open: as above
+0x10012d90	0x10034a30	Melee_Reset: the addon levels (addon\*.lvl) are not ported: the disc has none
+0x10012d90	0x10034920	Melee_Reset: as above

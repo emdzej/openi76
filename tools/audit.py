@@ -18,6 +18,7 @@ address reach. Callees are classed by where the port stands with them:
   ported      the callee is ported elsewhere (some port function owns it): most likely a missed call
   mentioned   cited somewhere in the port but owned by no function
   unported    not cited anywhere in the port
+  crt         unported, the C runtime's (the host's in the port)
 tools/audit-allow.tsv (caller address, callee address or "s:" string, reason) lists the gaps checked and
 found to be the port's on purpose; they are left out of the report. A caller "*" allows the callee from
 every caller (a few-byte accessor the port reads in line: a global, a field).
@@ -205,6 +206,7 @@ def parse_sources(funcs):
     proto_own = {}
     aliases = {}
     votes = {}
+    statics = {}
     files = []
     for d, _, fs in os.walk(SRC):
         if "third_party" in d:
@@ -215,10 +217,10 @@ def parse_sources(funcs):
         code, comments = split_comments(text)
         rel = os.path.relpath(path, os.path.dirname(SRC))
         for m in re.finditer(r"\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\([^;{}]*\)\s*=\s*([A-Za-z_]\w*)\s*;", code):
-            aliases[m.group(1)] = m.group(2)
+            aliases[m.group(1)] = (rel, m.group(2))
         # `static QPolyFn poly = DrawPoly;`: a typedef'd pointer at file scope
         for m in re.finditer(r"(?m)^(?:static\s+)?[A-Za-z_]\w*\s+\*?\s*([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*;", code):
-            aliases.setdefault(m.group(1), m.group(2))
+            aliases.setdefault(m.group(1), (rel, m.group(2)))
         if path.endswith(".h"):
             for m in PROTO.finditer(code):
                 name = m.group(1)
@@ -258,7 +260,11 @@ def parse_sources(funcs):
             body_text, body_code = text[open_brace:j + 1], code[open_brace:j + 1]
             start = m.start(1) if code[m.start(0)] != "\n" else m.start(0) + 1
             c = header_comment(text, comments, start)
-            f = defs.setdefault(name + "@" + rel if name in ("main",) else name, {
+            # a static is its file's: the same name in two files is two functions (`redraw`, `place`)
+            key = name + "@" + rel if name in ("main",) or re.search(r"\bstatic\b", ret) else name
+            if key != name:
+                statics.setdefault(rel, set()).add(name)
+            f = defs.setdefault(key, {
                 "name": name, "own": [], "addrs": set(), "calls": set(), "lits": set(), "strs": set(),
                 "file": rel, "line": text.count("\n", 0, m.start(2)) + 1, "stmts": 0})
             f["stmts"] += strip_strings_chars(body_code).count(";")
@@ -291,11 +297,20 @@ def parse_sources(funcs):
                 code_part = line[:cm.start()]
                 called = [n for n in re.findall(r"\b([A-Za-z_]\w*)\s*\(", code_part) if n not in KEYWORDS]
                 if len(called) == 1:
-                    votes.setdefault(called[0], set()).add(int(cm.group(1), 16))
+                    votes.setdefault((rel, called[0]), set()).add(int(cm.group(1), 16))
             f["strs"] |= {int(a, 16) for a in re.findall(r"exe_str\s*\(\s*0x([0-9a-fA-F]+)", body_code)}
             # macros' bodies are not followed: a function a macro wraps (FILL_TEX ...) counts at the macro's use
+    # the calls resolved: a name is the caller's file's static first, else the extern of that name
+    def resolve(rel, n):
+        return n + "@" + rel if n in statics.get(rel, ()) else n
+    for f in defs.values():
+        f["calls"] = {resolve(f["file"], n) for n in f["calls"]}
+        if "called" in f:
+            f["called"] = {resolve(f["file"], n) for n in f["called"]}
+    votes = {resolve(rel, n): v for (rel, n), v in votes.items()}
     # `void (*g_terr_patches)(void) = draw_patches;`: a call through the variable reaches the function
-    for var, fn in aliases.items():
+    for var, (rel, fn) in aliases.items():
+        fn = resolve(rel, fn)
         if fn in defs and var not in defs:
             defs[var] = {"name": var, "own": [], "addrs": set(), "calls": {fn}, "lits": set(), "strs": set(),
                          "file": defs[fn]["file"], "line": defs[fn]["line"], "stmts": 0}
@@ -453,15 +468,21 @@ def main():
             if not cf or cf["size"] < args.min_size:
                 continue
             cls = "ported" if c in owners else "mentioned" if c in mentioned else "unported"
-            gaps.append((cls, a, fo["name"], ",".join(names), defs[names[0]]["file"], defs[names[0]]["line"],
-                         c, cf["name"], cf["size"], ",".join(owners.get(c, [])), deep.get(c, 0)))
+            # the C runtime's (a name Ghidra's library matching gave: _sprintf, __ftol, FID_conflict:...),
+            # not cited: the port has the host's; one the port has its own copy of (crt.c) cites it
+            if cls == "unported" and re.match(r"_|FID_conflict", cf["name"]):
+                cls = "crt"
+            gaps.append((cls, a, fo["name"], ",".join(defs[n]["name"] for n in names), defs[names[0]]["file"],
+                         defs[names[0]]["line"], c, cf["name"], cf["size"],
+                         ",".join(defs[n]["name"] for n in owners.get(c, [])), deep.get(c, 0)))
         for s in fo["strings"]:
             if s.lower() in r_text or (a, "s:" + s) in allow:
                 continue
             # a string the port has under any address it reads counts (the same text twice in the exe)
-            sgaps.append((a, fo["name"], ",".join(names), defs[names[0]]["file"], defs[names[0]]["line"], s))
+            sgaps.append((a, fo["name"], ",".join(defs[n]["name"] for n in names), defs[names[0]]["file"],
+                          defs[names[0]]["line"], s))
 
-    order = {"ported": 0, "mentioned": 1, "unported": 2}
+    order = {"ported": 0, "mentioned": 1, "unported": 2, "crt": 3}
     gaps.sort(key=lambda g: (order[g[0]], g[4], g[5], -g[8]))
     with open(os.path.join(args.out, "callees.tsv"), "w") as f:
         f.write("class\tcaller\tcaller_name\tport_functions\tfile\tline\tcallee\tcallee_name\tcallee_size\tcallee_port\tdeeper\n")
@@ -489,8 +510,8 @@ def main():
     print("original functions: %d (%d bytes); owned by a port function: %d (%d bytes, %.0f%%)"
           % (len(funcs), size_all, len(owners), size_owned, 100.0 * size_owned / max(1, size_all)))
     print("port functions: %d, citing an own address: %d" % (len(defs), sum(1 for f in defs.values() if f["own"])))
-    print("callee gaps: %d (ported elsewhere %d, mentioned %d, unported %d); string gaps: %d"
-          % (len(gaps), by["ported"], by["mentioned"], by["unported"], len(sgaps)))
+    print("callee gaps: %d (ported elsewhere %d, mentioned %d, unported %d, the C runtime's %d); string gaps: %d"
+          % (len(gaps), by["ported"], by["mentioned"], by["unported"], by["crt"], len(sgaps)))
     print("reports in %s: callees.tsv, strings.tsv, unowned.tsv" % os.path.relpath(args.out, ROOT))
 
 

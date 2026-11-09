@@ -73,8 +73,8 @@ static int shadow_frame(Frame *out, const Node *n, const Frame *m)
     return 1;
 }
 
-/* 0x4a36f0 (solid 0: every face mode 0xc0) and 0x4a3a80 (a vehicle's, solid 1: mode 0xc0 for faces with
-   their third flag, 0 for the others): n's faces turned to the light, projected */
+/* shadow_faces 0x4a36f0 + 0x4a3a80: n's faces turned to the light, projected; 0x4a36f0's (solid 0) every
+   face mode 0xc0, 0x4a3a80's (a vehicle's, solid 1) 0xc0 for faces with their third flag, 0 for the others */
 static void shadow_faces(Node *n, const Frame *m, int vehicle)
 {
     Frame f;
