@@ -23,7 +23,7 @@ void Camera_PilotStart(Entity *e);
    the short way round) and swayed by the body (Cockpit_Sway) */
 void Camera_Pilot(void);
 /* Camera_SetMode 0x407010: the mode's start on the entity (none while the sub-mode is 5), then, unless the
-   sub-mode is now 2, the HUD's (0x428890, not ported yet) and zoom 1 */
+   sub-mode is now 2, the HUD's (Dash_Off 0x428890) and zoom 1 */
 void Camera_SetMode(Entity *e, int32_t mode);
 /* Camera_CockpitStart 0x404380 (mode 0xd, F1): the pilot's view, the HUD toggled when already in it */
 void Camera_CockpitStart(Entity *e);

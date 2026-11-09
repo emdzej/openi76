@@ -791,7 +791,7 @@ static void destroy_part(Node *n)
 /* Structure_Destroy 0x430750 (the script's destroy): a crash packet (mask 8, the points plus one at +0x14)
    at no place (0x425df0). A structure is then marked (+0x28 = 1) and its first node flagged 0x1000000
    explodes: a class 3 does not; the others by the data's +0x10 (x1_bldx1, 0x4d539c, for "null") with the
-   data's +0x18 sound (not ported), and +0x28 = 2. Its light goes (flag 0x800), and in network play the
+   data's +0x18 sound (the vehicles' sound 7 for "null"), and +0x28 = 2. Its light goes (flag 0x800), and in network play the
    others are told (0x465520 with the data's +8) */
 void Structure_Destroy(Node *n)
 {
@@ -814,7 +814,9 @@ void Structure_Destroy(Node *n)
             if (crt_strnicmp((const char *)d + 0x10, exe_str(0x4a90f4), 8) == 0) memcpy(name, exe_str(0x4d539c), 8);
             else memcpy(name, d + 0x10, 8);
             Explosion_Spawn(name, x, w[0], w[1], w[2], NULL);   /* 0x4540d0 */
-            /* the sound: 0x4683c0 (7) for "null", else 0x468580 by the data's +0x18 */
+            /* the sound at x: the vehicles' sound 7 for "null" (0x4683c0), else the data's +0x18 by name */
+            if (crt_stricmp((const char *)d + 0x18, exe_str(0x4a90f4)) == 0) Sound_Event(7, x, NULL);
+            else Sound_PlayAt((const char *)d + 0x18, x, NULL);
         }
         put32(d + 0x28, 2);
     }

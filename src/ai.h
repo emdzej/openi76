@@ -1,6 +1,6 @@
 /* The AI's set-up for a mission (0x4088a0) and its entity callback (0x408510; docs/re/ai.md): the
    vehicles by team, each vehicle's AI block (its data's 0x108) told where its vehicle is. The driving
-   is not ported yet. */
+   and fighting are orders.c, drive.c, combat.c (docs/re/ai.md). */
 #pragma once
 #include "entity.h"
 

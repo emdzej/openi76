@@ -125,7 +125,7 @@ typedef struct {            /* 0x458710's record for the launch 0x458f40 */
     float v[3];             /* +0x2c: the vehicle's velocity */
 } Launch;
 extern void (*g_weapon_launch)(Launch *l, float late);
-/* Weapon_Fire 0x458710: n shots of w: the flash and the sound (not ported), the ammunition, the radar's
+/* Weapon_Fire 0x458710: n shots of w: the flash and the sound, the ammunition, the radar's
    target by the ordnance's type, then the launch (0x458f40) late s into the frame */
 void Weapon_Fire(WeaponInst *w, const WeaponDef *d, int n, float late);
 

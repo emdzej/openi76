@@ -1,7 +1,7 @@
 /* A vehicle's state from step to step (0x42b830-0x42d800, docs/re/vehicles.md "The state"): the engine
    started and stopped, the lights, and the wreck's timer; the damage on sides and parts, the health,
-   rough ground's wear, a vehicle's damage and death (0x429eb0) and an impact's (0x45d7c0). The effects
-   (explosions, debris, sparks, smoke, the cockpit's knock) are not ported yet. */
+   rough ground's wear, a vehicle's damage and death (0x429eb0) and an impact's (0x45d7c0), with their effects (explosions, debris, sparks,
+   smoke; effects.c, docs/re/effects.md). */
 #pragma once
 #include "scene.h"
 

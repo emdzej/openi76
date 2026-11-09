@@ -12,7 +12,7 @@ void Contrails_Init(int n);
 /* Contrails_Free 0x46eb70 */
 void Contrails_Free(void);
 /* Contrail_Start 0x46ef60: the ring's next trail on shot s (its kind below 7), its first section at the
-   shot. Kind 2's chime when the shot's target is the user (clockon.wav) is not ported */
+   shot. Kind 2 chimes (clockon.wav) when the shot's target is the user */
 void Contrail_Start(Node *s, int kind);
 /* Contrail_Step 0x46f170 (the guided shots' flights): s's newest trail goes on to the shot, in 2 m
    sections along a straight line or, when the direction turned, a cubic curve */

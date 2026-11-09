@@ -1,7 +1,7 @@
 /* The light environment (0x43a090-0x43a1c0): the time of day picks one of eight environments of the table
    at 0x4d6858 (read from the exe), each {sun or moon, its sky map, its elevation, two strengths}; the sun's
-   direction is the elevation turned about z. The dynamic lights (Light_Add 0x43a1f0) are kept; their
-   lighting (0x43a7c0 on) is not ported yet. */
+   direction is the elevation turned about z. The dynamic lights (Light_Add 0x43a1f0) light the objects
+   (Light_Node 0x43a7c0 on). */
 #pragma once
 #include <stdint.h>
 #include "math3d.h"

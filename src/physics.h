@@ -23,7 +23,7 @@ void Vehicle_Steer(Node *n);
    within [+0x3c, +0x38]) and the wheel's height (+0x28 plus the travel); +0x40 1 at the top */
 void Wheel_Contact(Node *w, int hold, float force, int tclass);
 /* Vehicle_Brake 0x475c10: +0x454 bit 2 while braking (unless flags has 0x8020), and the rear wheels'
-   skids (0x4301f0, not ported yet) */
+   skids (0x4301f0) */
 void Vehicle_Brake(Node *n, uint32_t flags, int braking);
 /* Frame_Yaw 0x451820: the identity turned by a about y */
 void Frame_Yaw(Frame *out, float a);

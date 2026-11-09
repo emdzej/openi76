@@ -12,8 +12,8 @@
      <base>.vqm decoded with its codebook (0x482f80), else from the .map, whose bytes are already a
      Texture (u32 w, u32 h, pixels).
 
-   Not yet ported: the animation timers (0x47eac0, 0x47eb50, registered for animated materials) and the
-   pixel cache's eviction when the heap runs out (0x47e7c0). */
+   Animated materials start their timers (texanim.c) when a use is made. Not ported: the pixel cache's
+   eviction when the heap runs out (0x47e7c0). */
 #pragma once
 #include "render/surface.h"
 #include <stdbool.h>

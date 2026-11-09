@@ -1,6 +1,6 @@
 /* A mission's objects (ODEF, 0x494140-0x494b40; docs/re/objects.md): each OBJ record becomes a node tree
-   and an entity. Structures come from their .sdf; vehicles (.vcf, 0x485030) are not ported yet, and
-   their nodes are dropped as the original drops a vehicle that fails to load. */
+   and an entity. Structures come from their .sdf, vehicles from their .vcf (Vehicle_Load 0x485030;
+   docs/re/vehicles.md); a vehicle that fails to load has its node dropped, as the original's. */
 #pragma once
 #include "chunks.h"
 #include "scene.h"

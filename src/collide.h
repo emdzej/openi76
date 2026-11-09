@@ -5,7 +5,7 @@
    on a list; the roads and bridges (classes 11-13) keep their walkable faces (normal y above 0.4) in the
    entity's +0x18.
 
-   Vehicles' registration (0x46b950) is not ported yet. */
+   Vehicles' registration is 0x46b950's (their radius over the COLP box). */
 #pragma once
 #include "entity.h"
 
