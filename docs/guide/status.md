@@ -1,7 +1,9 @@
 # Status
 
 OpenI76 is **in progress**. The game's subsystems are ported and run; the missions are being played
-through and checked against the original. There are no releases yet.
+through and checked against the original. There are no releases yet; every push builds the gasm
+bundles for macOS (universal), Linux (x86_64 and arm64) and Windows (x86_64) and smoke-tests each on its
+own system, and they can be downloaded from the run's artifacts on GitHub Actions.
 
 ## What runs
 
@@ -29,8 +31,10 @@ through and checked against the original. There are no releases yet.
 
 ## Played through
 
-The first four missions of the trip play to a win from start to end. The rest of the trip, the training and
-the melee's arenas run and are being played through; the details of each are still being checked.
+The first four missions of the trip play to a win from start to end, driven by the port's autopilot.
+Every other mission's script has been run to its win too (with the port's test aids standing in for a
+player's fights), and each is now being played by hand. The melee's arenas run and are being played
+through. How it all works is in [How the game works](./theory.md).
 
 - **Network play.** Hosting and joining a melee through the shell (every transport runs over the gasm
   relay), the players' cars, shots, kills, scores, respawns, joins approved by the host, the chat and the

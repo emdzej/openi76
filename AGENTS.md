@@ -64,9 +64,10 @@ pins), then the `build-gasm` commands in `CMakeLists.txt`, run with
 `.deps/gasm-runner-macos-universal/gasm-run build-gasm/openi76.wasm --headless 10 --asset cd=I76_CD1.ISO
 --screenshot out/x.png` (or `--asset-dir cd`; both must give the same `video_fnv32`).
 
-**Bundles and releases are not used yet.** `tools/package-gasm.sh`, `tools/smoke-gasm-bundle.sh`,
-`tools/gasm-bundle/` and `.github/workflows/release.yml` exist for later; don't run them, don't add them to
-CI and don't tag releases until the game is ported and the user asks.
+**Bundles are built in CI, releases are not made yet.** `ci.yml` packages every platform's gasm bundle
+(`tools/package-gasm.sh`, macOS universal, Linux x86_64 and arm64, Windows x86_64) and smoke-tests each on
+its own OS (`tools/smoke-gasm-bundle.sh`, the Windows launcher's checks); the bundles are the run's
+artifacts. `.github/workflows/release.yml` is for later: don't tag releases until the user asks.
 
 ## Hard rules
 
