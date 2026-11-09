@@ -1102,14 +1102,15 @@ static bool state_tree(Node *n, int state)
     return r;
 }
 
-/* 0x4301a0: a tyre blown, once: its radius (+0x1c) times 0x4a5cec, +0x44 set (the sound tblow.wav is not
-   ported yet) */
+/* 0x4301a0: a tyre blown, once: its radius (+0x1c) times 0x4a5cec, +0x44 set, and tblow.wav at the wheel
+   (0x468580; the name is the string at 0x4d5cd2 from its third character) */
 static void tyre_blow(Node *w)
 {
     uint8_t *e = w->data;
     if (rd32(e + 0x44)) return;
     putf(e + 0x1c, fpu_f32(fpu_mul(rdf(e + 0x1c), exe_f32(0x4a5cec))));
     put32(e + 0x44, 1);
+    Sound_PlayAt(exe_str(0x4d5cd2 + 2), w, NULL);
 }
 
 void Damage_Look(uint8_t *d, uint32_t part, uint32_t level)
