@@ -223,7 +223,11 @@ a command byte), into the byte array 0x4e6fe8 indexed by the code.
 
 **The first switch.** It handles commands up to 0x2d and ends there:
 
-- 0xa (0x4a3f00, on the surface);
+- 0xa `SAVE_SCREEN` (Ctrl+P): 0x4a3f00 writes the display record's surface as `SCR%04d.pcx`, counting
+  from 0 in the run, with the palette shown (its +0xe0). The writer 0x43c590 makes an 8-bit version 5
+  PCX (RLE, one plane, 320 x 200 dpi) as wide as the pitch and one row taller than the surface (the row
+  after it read too; the port writes zeros there); a run reaching 63 is written and its count starts
+  again from 0. The port saves it among the player's files;
 - 0x20 `MAIN_MENU`;
 - 0x24 (network play);
 - 0x2c, the pause (0x44fc00);

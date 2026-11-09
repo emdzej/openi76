@@ -2,6 +2,8 @@
    runner's game controllers) and the actions input.map binds to them. */
 #include "input.h"
 #include "joy.h"
+#include "screenshot.h"
+#include "world.h"
 #include "textregion.h"
 #include "net/netgame.h"
 #include "melee.h"
@@ -1460,7 +1462,7 @@ void Cockpit_Views(void)
 }
 
 
-/* 0x4809b0: a typed key's command. Ported but for the screenshot (0xa, 0x4a3f00) and the video mode (0x55) */
+/* 0x4809b0: a typed key's command. Ported but for the video mode (0x55; the port has 640 x 480 alone) */
 static void game_command(int c)
 {
     Entity *u = g_user_entity;
@@ -1470,7 +1472,9 @@ static void game_command(int c)
     }
     switch (c) {   /* the first table's */
     case 0:
-    case 0xa:
+        return;
+    case 0xa:   /* 0x4a3f00 on the display record (its +0xe0 the palette shown) */
+        Pcx_Screenshot(g_screen, g_shown_pal);
         return;
     case 0x20:   /* the menu: opened, or closed when it is open */
         if (!(g_play_state & 0x10)) GameMenu_Open();   /* 0x44b8f0 */
