@@ -129,9 +129,33 @@ def header_comment(text, comments, start):
         if e > pos:
             continue
         line_start = text.rfind("\n", 0, s) + 1
-        if text[e:pos].strip() != "" or text[line_start:s].strip() != "":
+        between = text[e:pos].strip()
+        # a header's group of prototypes under one comment: `/* A 0x.. and B 0x.. */ void A(); void B();`;
+        # marked with the prototype's place in the group, for a lead that lists one address each
+        group = None
+        if between and not blocks and all(PROTO.fullmatch("\n" + l.strip()) for l in between.split("\n")):
+            k = len(between.split("\n"))
+            nl = text.find("\n", start)
+            n = k + 1
+            for l in text[nl + 1:].split("\n"):
+                if not PROTO.fullmatch("\n" + l.strip()):
+                    break
+                n += 1
+            group = (k, n)
+            between = ""
+        elif not between and not blocks:   # the group's first: the prototypes after it
+            nl = text.find("\n", start)
+            if PROTO.fullmatch("\n" + text[start:nl if nl >= 0 else len(text)].strip()):
+                n = 1
+                for l in text[nl + 1:].split("\n"):
+                    if not PROTO.fullmatch("\n" + l.strip()):
+                        break
+                    n += 1
+                if n > 1:
+                    group = (0, n)
+        if between != "" or text[line_start:s].strip() != "":
             break
-        blocks.append(t)
+        blocks.append(t if not group else "\0G%d/%d\0" % group + t)
         pos = s
     return "\n".join(reversed(blocks))
 
@@ -153,9 +177,19 @@ def own_addresses(name, comment, funcs):
                 own.append(a)
     if own:
         return own
+    if re.search(r"\b" + re.escape(name) + r"\b\s+0x[0-9a-fA-F]{6,8}\b", comment):
+        return own   # the name's own address is one Ghidra has no function at: not a neighbour's
+    g = re.search(r"\0G(\d+)/(\d+)\0", comment)
+    comment = re.sub(r"\0G\d+/\d+\0", "", comment)
     starts = [m.start() for m in re.finditer(r"/\*", comment)]
     last = comment[starts[-1]:] if starts else comment
     lead = re.match(r"\s*/\*\s*(?:[^(:.;]*?0x[0-9a-fA-F]{6,8}[^(:.;]*?)(?=[(:.;]|\*/|$)", last)
+    if lead and g:   # a group's lead: one address a prototype, by place, else none
+        got = [int(m.group(1), 16) for m in ADDR.finditer(lead.group(0))]
+        k, n = int(g.group(1)), int(g.group(2))
+        if len(got) == n and got[k] in funcs:
+            own.append(got[k])
+        return own
     if lead:
         for m in ADDR.finditer(lead.group(0)):
             a = int(m.group(1), 16)

@@ -1135,6 +1135,8 @@ void Sound_StopAll(void)
 /* Sound_Close 0x466d80 */
 void Sound_Close(void)
 {
+    Music_Stop();       /* 0x468800 */
+    Music_CdClose();    /* 0x478560 */
     if (!sys) return;
     Sound_StopAll();
     Ds_Reset();

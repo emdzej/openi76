@@ -702,7 +702,8 @@ static bool enemy(const Contact *c, uint32_t own)
     return t != 0 && t != ((own & 0x70000) >> 16);
 }
 
-/* where 0x421540 and 0x421640 start: the chosen one (from the one after it) or the list's head */
+/* where Radar_Next's and Radar_Prev's walks start (0x421540, 0x421640): the chosen one (from the one
+   after it) or the list's head */
 static Contact *step_start(uint8_t *r, Contact **from)
 {
     Contact *head = *contacts(r), *ch = *chosen(r);

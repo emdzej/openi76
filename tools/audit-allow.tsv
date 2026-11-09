@@ -3,3 +3,31 @@
 0x44b9c0	0x4561f0	GameMenu_Close: as above (the weapons' dashboard set up again for the new mode)
 0x44b9c0	0x403360	GameMenu_Close: as above (the view set up again)
 0x1002c2c0	0x10034a30	marks_read: the port keeps the bookmarks in its own array, not the shell's list
+0x41e950	0x43df60	Notepad_Toggle: the picture scaled (Sprite_Draw mode 0) only when its size is not the screen's; the port has 640 x 480 alone
+0x41e8c0	0x43df60	screen_show: as above
+0x100298b8	0x1002b090	Shnet_Start: the original's loops are the port's later passes (Shnet_Poll)
+0x100298b8	0x10010330	Shnet_Start: as above (the wait's box)
+0x10038d60	0x100223b0	Edit_Begin: the original's modal loop is Edit_Pass, a pass a frame (Shell_KbRead)
+0x10005f30	0x10015a90	setup_free: the garage's lists, freed with the port's next reset (memory only)
+0x45b0a0	0x47bb20	Chunk_Spawn: the first face's skin in line, then 0x45c030 for the rest; the port's chunk_skin walks them all
+0x45b3f0	0x47bb20	Chunk_SpawnOne: as above
+0x45b760	0x47d850	Part_Throw: the original copies the top node in line, then Node_CopyTree for its children; the port's copy_tree does both
+0x45b760	0x47bf10	Part_Throw: as above
+0x4551d0	0x42e6d0	weapon_slot_id: the port has the part of 0x4551d0 its callers read (the id; the record's words are Weapon_Triggered's)
+0x4624a0	0x4551d0	Net_Fire: each instance's trigger as 0x4551d0 copies it (Weapon_Triggered)
+0x492b00	0x492c50	Names_Add: the name only for the duplicate's warning (to the no-op reporter)
+0x465cd0	0x492c50	Net_CarFile: the name made from the file's (Res_AddPath drops the cached bytes)
+0x409fe0	0x425be0	heli_steer: the velocity read and not used
+0x484d10	0x4784b0	Cd_Disc2: the drive opened and closed to look; the port's Music_Play opens it as it plays
+0x466ab0	0x4784b0	Sound_Init: as above
+0x47ed20	0x480dc0	device_open: the drivers' describe through their tables
+0x44f7f0	0x4928f0	Map_Toggle: Res_LoadScreen's name by the screen mode is Tex_Pixels' lookup
+0x425580	0x450df0	Class_EndAll: the class list's cells (memory only; the list is made again)
+0x40aae0	0x42f480	Vehicle_Health: the parts' getters read in line (cockpit.c's part_counts)
+0x40aae0	0x430650	Vehicle_Health: as above
+0x40aae0	0x4304a0	Vehicle_Health: as above
+0x40aae0	0x42fd90	Vehicle_Health: as above
+0x4883f0	0x42f480	Salvage_Parts: as above
+0x4883f0	0x430650	Salvage_Parts: as above
+0x4883f0	0x4304a0	Salvage_Parts: as above
+0x4883f0	0x42fd90	Salvage_Parts: as above

@@ -592,7 +592,9 @@ static bool shell_open(void)
     }
     Sound_FreeParked();   /* 0x468340 */
     Sound_Enable(1);      /* 0x466dd0 */
+    Melee_Set(0);         /* 0x4072d0 */
     g_game_state = 6;
+    Input_MouseRelease(); /* 0x47ba70 */
     if (!Shell_Start(prev)) return false;
     phase = S_SHELL;
     return true;
@@ -662,6 +664,7 @@ static bool net_aid_frame(void)
     return true;
 }
 
+/* the shell's frames, then Shell_Load 0x401000's end */
 static void shell_frame(void)
 {
     Input_Keys();
