@@ -240,8 +240,11 @@ chat line takes the keys (0x462690, network play):
   mode.
 - **0xe-0x18, the other presets.** 0x581ec0 = the command, 0x581ebc = 0, and the same call.
 - **0x23 `SELF_DESTRUCT`.** It sets the kill key 0x4deff9.
-- **Not ported:** 0xb `TOGGLE_REARVIEW` (0x4712e0, the cockpit's), 0x25-0x2b (network play) and 0x55
-  `TOGGLE_VIDEOMODE`.
+- **0xb `TOGGLE_REARVIEW`.** The mirror (`Mirror_Toggle` 0x4712e0, docs/re/cockpit.md).
+- **0x25-0x2b, network play's:** the chat line (0x463e80), a message to everyone (0x463cb0), the scores
+  (with the melee too), the name tags (0x428580), and the keeper's answers to a join (0x465a80, 0x465b40,
+  0x465bf0; docs/re/network.md).
+- **Not ported:** 0x55 `TOGGLE_VIDEOMODE` (the port has 640 x 480 alone).
 
 The handled commands are kept in 0x4e8ab4; the port doesn't keep it. The port's view modes are those of
 docs/re/camera.md.
